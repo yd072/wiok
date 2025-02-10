@@ -44,113 +44,60 @@ let 网络备案 = `<a href='https://t.me/CMLiussss'>萌ICP备-20240707号</a>`;
 let 额外ID = '0';
 let 加密方式 = 'auto';
 let 网站图标, 网站头像, 网站背景;
-
-// 将配置相关的常量集中管理
-const CONFIG = {
-	DEFAULT_PORTS: {
-		HTTPS: ["2053", "2083", "2087", "2096", "8443"],
-		HTTP: ["8080", "8880", "2052", "2082", "2086", "2095"]
-	},
-	TIMEOUTS: {
-		FETCH: 2000,
-		SUB_UPDATE: 6
-	},
-	DEFAULTS: {
-		DLS: 7,
-		REMARK_INDEX: 1,
-		VALID_TIME: 7,
-		UPDATE_TIME: 3
-	}
-};
-
-// 将工具函数抽离
-const utils = {
-	isValidIPv4(address) {
-		return /^(\d{1,3}\.){3}\d{1,3}$/.test(address) && 
-			   address.split('.').every(num => parseInt(num) >= 0 && parseInt(num) <= 255);
-	},
-	
-	async MD5MD5(text) {
-		const encoder = new TextEncoder();
-		const firstPass = await crypto.subtle.digest('MD5', encoder.encode(text));
-		const firstHex = Array.from(new Uint8Array(firstPass))
-			.map(b => b.toString(16).padStart(2, '0')).join('');
-		const secondPass = await crypto.subtle.digest('MD5', encoder.encode(firstHex.slice(7, 27)));
-		return Array.from(new Uint8Array(secondPass))
-			.map(b => b.toString(16).padStart(2, '0')).join('').toLowerCase();
-	}
-};
-
 async function 整理优选列表(api) {
 	if (!api || api.length === 0) return [];
 
 	let newapi = "";
+
+	// 创建一个AbortController对象，用于控制fetch请求的取消
 	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), 2000);
+
+	const timeout = setTimeout(() => {
+		controller.abort(); // 取消所有请求
+	}, 2000); // 2秒后触发
 
 	try {
-		// 添加日志输出
-		console.log("开始处理API列表:", api);
+		// 使用Promise.allSettled等待所有API请求完成，无论成功或失败
+		// 对api数组进行遍历，对每个API地址发起fetch请求
+		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
+			method: 'get',
+			headers: {
+				'Accept': 'text/html,application/xhtml+xml,application/xml;',
+				'User-Agent': FileName + atob('IGNtbGl1L1dvcmtlclZsZXNzMnN1Yg==')
+			},
+			signal: controller.signal // 将AbortController的信号量添加到fetch请求中，以便于需要时可以取消请求
+		}).then(response => response.ok ? response.text() : Promise.reject())));
 
-		const responses = await Promise.all(api.map(apiUrl => 
-			fetch(apiUrl, {
-				method: 'get',
-				headers: {
-					'Accept': 'text/html,application/xhtml+xml,application/xml;',
-					'User-Agent': FileName + atob('IGNtbGl1L1dvcmtlclZsZXNzMnN1Yg==')
-				},
-				signal: controller.signal
-			})
-			.then(async response => {
-				if (!response.ok) {
-					console.log(`API请求失败: ${apiUrl}, 状态码: ${response.status}`);
-					return null;
-				}
-				return response.text();
-			})
-			.catch(error => {
-				console.log(`API请求出错: ${apiUrl}`, error);
-				return null;
-			})
-		));
+		// 遍历所有响应
+		for (const [index, response] of responses.entries()) {
+			// 检查响应状态是否为'fulfilled'，即请求成功完成
+			if (response.status === 'fulfilled') {
+				// 获取响应的内容
+				const content = await response.value;
 
-		// 添加处理结果日志
-		console.log("API响应数量:", responses.filter(r => r !== null).length);
+				const lines = content.split(/\r?\n/);
+				let 节点备注 = '';
+				let 测速端口 = '443';
 
-		for (let i = 0; i < responses.length; i++) {
-			const content = responses[i];
-			if (!content) {
-				console.log(`跳过无效响应: index ${i}`);
-				continue;
-			}
+				if (lines[0].split(',').length > 3) {
+					const idMatch = api[index].match(/id=([^&]*)/);
+					if (idMatch) 节点备注 = idMatch[1];
 
-			const lines = content.split(/\r?\n/);
-			let 节点备注 = '';
-			let 测速端口 = '443';
+					const portMatch = api[index].match(/port=([^&]*)/);
+					if (portMatch) 测速端口 = portMatch[1];
 
-			// 添加CSV格式检查日志
-			console.log(`处理响应 ${i}, 首行列数: ${lines[0].split(',').length}`);
-
-			if (lines[0].split(',').length > 3) {
-				const idMatch = api[i].match(/id=([^&]*)/);
-				if (idMatch) 节点备注 = idMatch[1];
-
-				const portMatch = api[i].match(/port=([^&]*)/);
-				if (portMatch) 测速端口 = portMatch[1];
-
-				for (let j = 1; j < lines.length; j++) {
-					const columns = lines[j].split(',')[0];
-					if (columns) {
-						newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
-						if (api[i].includes('proxyip=true')) {
-							proxyIPPool.push(`${columns}:${测速端口}`);
+					for (let i = 1; i < lines.length; i++) {
+						const columns = lines[i].split(',')[0];
+						if (columns) {
+							newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
+							if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
 						}
 					}
-				}
-			} else {
-				if (api[i].includes('proxyip=true')) {
-					const validItems = (await 整理(content))
-						.map(item => {
+				} else {
+					// 验证当前apiUrl是否带有'proxyip=true'
+					if (api[index].includes('proxyip=true')) {
+						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
+						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
 							const baseItem = item.split('#')[0] || item;
 							if (baseItem.includes(':')) {
 								const port = baseItem.split(':')[1];
@@ -160,46 +107,48 @@ async function 整理优选列表(api) {
 							} else {
 								return `${baseItem}:443`;
 							}
-							return null;
-						})
-						.filter(Boolean);
-					
-					proxyIPPool.push(...validItems);
+							return null; // 不符合条件时返回 null
+						}).filter(Boolean)); // 过滤掉 null 值
+					}
+					// 将内容添加到newapi中
+					newapi += content + '\n';
 				}
-				newapi += content + '\n';
 			}
 		}
-
-		// 添加最终结果日志
-		console.log("整理后的节点数量:", newapi.split('\n').filter(line => line.trim()).length);
-		
 	} catch (error) {
-		console.error("整理优选列表出错:", error);
+		console.error(error);
 	} finally {
+		// 无论成功或失败，最后都清除设置的超时定时器
 		clearTimeout(timeout);
 	}
 
-	return await 整理(newapi);
+	const newAddressesapi = await 整理(newapi);
+
+	// 返回处理后的结果
+	return newAddressesapi;
 }
 
 async function 整理测速结果(tls) {
-	if (!tls || !Array.isArray(addressescsv) || addressescsv.length === 0) {
+	// 参数验证
+	if (!tls) {
+		console.error('TLS参数不能为空');
 		return [];
 	}
 
-	// 使用 Map 缓存已解析的数据
-	const csvCache = new Map();
+	// 检查CSV地址列表
+	if (!Array.isArray(addressescsv) || addressescsv.length === 0) {
+		console.warn('没有可用的CSV地址列表');
+		return [];
+	}
 
-	// 优化CSV解析
+	// CSV解析函数
 	function parseCSV(text) {
-		if (csvCache.has(text)) {
-			return csvCache.get(text);
-		}
-		const result = text.split(/\r?\n/)
-			.filter(line => line.trim())
+		return text
+			.replace(/\r\n/g, '\n')   // 统一Windows换行
+			.replace(/\r/g, '\n')	 // 处理老Mac换行
+			.split('\n')			   // 按Unix/Linux风格分割
+			.filter(line => line.trim() !== '')  // 移除空行
 			.map(line => line.split(',').map(cell => cell.trim()));
-		csvCache.set(text, result);
-		return result;
 	}
 
 	// 并行处理CSV
@@ -269,38 +218,31 @@ async function 整理(内容) {
 	return 地址数组;
 }
 
-// 添加统一的错误处理
-async function handleErrors(promise, errorMessage) {
-    try {
-        return await promise;
-    } catch (error) {
-        console.error(`${errorMessage}: `, error);
-        // 可以添加错误上报逻辑
-        return null;
-    }
-}
-
-// 在关键操作处使用
 async function sendMessage(type, ip, add_data = "") {
-    if (!BotToken || !ChatID) return;
+	if (!BotToken || !ChatID) return;
 
-    return handleErrors(async () => {
-        const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
-        if (!response.ok) {
-            throw new Error(`IP API request failed: ${response.status}`);
-        }
-        const ipInfo = await response.json();
-        let msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n<tg-spoiler>城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
-        const url = `https://api.telegram.org/bot${BotToken}/sendMessage?chat_id=${ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`;
-        return fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'User-Agent': 'Mozilla/5.0 Chrome/90.0.4430.72'
-            }
-        });
-    }, "Error in sendMessage");
+	try {
+		let msg = "";
+		const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
+		if (response.ok) {
+			const ipInfo = await response.json();
+			msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n<tg-spoiler>城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
+		} else {
+			msg = `${type}\nIP: ${ip}\n<tg-spoiler>${add_data}`;
+		}
+
+		const url = `https://api.telegram.org/bot${BotToken}/sendMessage?chat_id=${ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`;
+		return fetch(url, {
+			method: 'GET',
+			headers: {
+				'Accept': 'text/html,application/xhtml+xml,application/xml;',
+				'Accept-Encoding': 'gzip, deflate, br',
+				'User-Agent': 'Mozilla/5.0 Chrome/90.0.4430.72'
+			}
+		});
+	} catch (error) {
+		console.error('Error sending message:', error);
+	}
 }
 
 async function nginx() {
@@ -380,6 +322,20 @@ function getRandomProxyByMatch(CC, socks5Data) {
 	return randomProxy;
 }
 
+async function MD5MD5(text) {
+	const encoder = new TextEncoder();
+
+	const firstPass = await crypto.subtle.digest('MD5', encoder.encode(text));
+	const firstPassArray = Array.from(new Uint8Array(firstPass));
+	const firstHex = firstPassArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+	const secondPass = await crypto.subtle.digest('MD5', encoder.encode(firstHex.slice(7, 27)));
+	const secondPassArray = Array.from(new Uint8Array(secondPass));
+	const secondHex = secondPassArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+	return secondHex.toLowerCase();
+}
+
 function revertFakeInfo(content, userID, hostName) {
 	content = content.replace(new RegExp(fakeUserID, 'g'), userID).replace(new RegExp(fakeHostName, 'g'), hostName);
 	return content;
@@ -431,12 +387,8 @@ function 生成动态UUID(密钥) {
 }
 
 async function getLink(重新汇总所有链接) {
-	console.log("开始处理链接列表, 总数:", 重新汇总所有链接.length);
-	
 	let 节点LINK = [];
 	let 订阅链接 = [];
-	
-	// 分类链接
 	for (let x of 重新汇总所有链接) {
 		if (x.toLowerCase().startsWith('http')) {
 			订阅链接.push(x);
@@ -445,65 +397,64 @@ async function getLink(重新汇总所有链接) {
 		}
 	}
 
-	console.log("直接节点数:", 节点LINK.length);
-	console.log("订阅链接数:", 订阅链接.length);
+	if (订阅链接 && 订阅链接.length !== 0) {
+		function base64Decode(str) {
+			const bytes = new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
+			const decoder = new TextDecoder('utf-8');
+			return decoder.decode(bytes);
+		}
+		const controller = new AbortController(); // 创建一个AbortController实例，用于取消请求
 
-	if (订阅链接.length > 0) {
-		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 2000);
+		const timeout = setTimeout(() => {
+			controller.abort(); // 2秒后取消所有请求
+		}, 2000);
 
 		try {
-			const responses = await Promise.allSettled(订阅链接.map(async apiUrl => {
-				try {
-					const response = await fetch(apiUrl, {
-						method: 'get',
-						headers: {
-							'Accept': 'text/html,application/xhtml+xml,application/xml;',
-							'User-Agent': `\u0076\u0032\u0072\u0061\u0079\u004e\u002f${FileName + atob('IGNtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}`
-						},
-						signal: controller.signal
-					});
+			// 使用Promise.allSettled等待所有API请求完成，无论成功或失败
+			const responses = await Promise.allSettled(订阅链接.map(apiUrl => fetch(apiUrl, {
+				method: 'get',
+				headers: {
+					'Accept': 'text/html,application/xhtml+xml,application/xml;',
+					'User-Agent': `\u0076\u0032\u0072\u0061\u0079\u004e\u002f${FileName + atob('IGNtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}`
+				},
+				signal: controller.signal // 将AbortController的信号量添加到fetch请求中
+			}).then(response => response.ok ? response.text() : Promise.reject())));
 
-					if (!response.ok) {
-						throw new Error(`HTTP error! status: ${response.status}`);
-					}
+			// 遍历所有响应
+			const modifiedResponses = responses.map((response, index) => {
+				// 检查是否请求成功
+				return {
+					status: response.status,
+					value: response.status === 'fulfilled' ? response.value : null,
+					apiUrl: 订阅链接[index] // 将原始的apiUrl添加到返回对象中
+				};
+			});
 
-					const content = await response.text();
-					return { content, apiUrl };
-				} catch (error) {
-					console.error(`订阅请求失败: ${apiUrl}`, error);
-					return null;
-				}
-			}));
+			console.log(modifiedResponses); // 输出修改后的响应数组
 
-			for (const result of responses) {
-				if (result.status === 'fulfilled' && result.value) {
-					const { content } = result.value;
-					
+			for (const response of modifiedResponses) {
+				// 检查响应状态是否为'fulfilled'
+				if (response.status === 'fulfilled') {
+					const content = await response.value || 'null'; // 获取响应的内容
 					if (content.includes('://')) {
-						const lines = content.split(/\r?\n/).filter(line => line.trim());
-						节点LINK.push(...lines);
+						const lines = content.includes('\r\n') ? content.split('\r\n') : content.split('\n');
+						节点LINK = 节点LINK.concat(lines);
 					} else {
-						try {
-							const decodedContent = atob(content);
-							if (decodedContent.includes('://')) {
-								const lines = decodedContent.split(/\r?\n/).filter(line => line.trim());
-								节点LINK.push(...lines);
-							}
-						} catch (error) {
-							console.error("Base64解码失败:", error);
+						const 尝试base64解码内容 = base64Decode(content);
+						if (尝试base64解码内容.includes('://')) {
+							const lines = 尝试base64解码内容.includes('\r\n') ? 尝试base64解码内容.split('\r\n') : 尝试base64解码内容.split('\n');
+							节点LINK = 节点LINK.concat(lines);
 						}
 					}
 				}
 			}
 		} catch (error) {
-			console.error("处理订阅链接时出错:", error);
+			console.error(error); // 捕获并输出错误信息
 		} finally {
-			clearTimeout(timeout);
+			clearTimeout(timeout); // 清除定时器
 		}
 	}
 
-	console.log("最终节点数量:", 节点LINK.length);
 	return 节点LINK;
 }
 
@@ -511,10 +462,75 @@ function utf8ToBase64(str) {
 	return btoa(unescape(encodeURIComponent(str)));
 }
 
-// 添加输入验证
-function validateInput(input) {
-    // 移除潜在的危险字符
-    return input.replace(/[<>'"]/g, '');
+// 新增工具函数
+function parseAddress(address) {
+  let port = "-1";
+  let addressid = address;
+  let parsedAddress = address;
+
+  const match = addressid.match(regex);
+  if (!match) {
+    if (address.includes(':') && address.includes('#')) {
+      const [addr, rest] = address.split(':');
+      parsedAddress = addr;
+      const [p, id] = rest.split('#');
+      port = p;
+      addressid = id;
+    } else if (address.includes(':')) {
+      const [addr, p] = address.split(':');
+      parsedAddress = addr;
+      port = p;
+    } else if (address.includes('#')) {
+      const [addr, id] = address.split('#');
+      parsedAddress = addr;
+      addressid = id;
+    }
+
+    if (addressid.includes(':')) {
+      addressid = addressid.split(':')[0];
+    }
+  } else {
+    parsedAddress = match[1];
+    port = match[2] || port;
+    addressid = match[3] || parsedAddress;
+  }
+
+  return { address: parsedAddress, port, addressid };
+}
+
+// 处理代理IP的函数
+function handleProxyIP(addressid, address) {
+  if (隧道版本作者.trim() !== atob('Y21saXU=') || 获取代理IP.trim() !== 'true') {
+    return path;
+  }
+
+  let lowerAddressid = addressid.toLowerCase();
+  let foundProxyIP = null;
+
+  if (socks5Data) {
+    const socks5 = getRandomProxyByMatch(lowerAddressid, socks5Data);
+    return `/${socks5}`;
+  }
+
+  for (let item of 匹配PROXYIP) {
+    if ((item.includes('#') && item.split('#')[1] && lowerAddressid.includes(item.split('#')[1].toLowerCase())) ||
+        (item.includes(':') && item.split(':')[1] && lowerAddressid.includes(item.split(':')[1].toLowerCase()))) {
+      foundProxyIP = item.split(/[:#]/)[0];
+      break;
+    }
+  }
+
+  const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
+  if (matchingProxyIP) {
+    return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + matchingProxyIP;
+  }
+  
+  if (foundProxyIP) {
+    return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + foundProxyIP;
+  }
+
+  const randomProxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+  return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + randomProxyIP;
 }
 
 export default {
@@ -550,7 +566,7 @@ export default {
 		if (env.UA) MamaJustKilledAMan = MamaJustKilledAMan.concat(await 整理(env.UA));
 
 		const currentDate = new Date();
-		const fakeUserIDMD5 = await utils.MD5MD5(Math.ceil(currentDate.getTime()));
+		const fakeUserIDMD5 = await MD5MD5(Math.ceil(currentDate.getTime()));
 		fakeUserID = fakeUserIDMD5.slice(0, 8) + "-" + fakeUserIDMD5.slice(8, 12) + "-" + fakeUserIDMD5.slice(12, 16) + "-" + fakeUserIDMD5.slice(16, 20) + "-" + fakeUserIDMD5.slice(20);
 		fakeHostName = fakeUserIDMD5.slice(6, 9) + "." + fakeUserIDMD5.slice(13, 19) + ".xyz";
 
@@ -786,7 +802,7 @@ export default {
 					}
 
 					const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
-					if (!utils.isValidIPv4(address) && port == "-1") {
+					if (!isValidIPv4(address) && port == "-1") {
 						for (let httpPort of httpPorts) {
 							if (address.includes(httpPort)) {
 								port = httpPort;
@@ -841,107 +857,44 @@ export default {
 			}
 
 			const responseBody = uniqueAddresses.map(address => {
-				let port = "-1";
-				let addressid = address;
-
-				const match = addressid.match(regex);
-				if (!match) {
-					if (address.includes(':') && address.includes('#')) {
-						const parts = address.split(':');
-						address = parts[0];
-						const subParts = parts[1].split('#');
-						port = subParts[0];
-						addressid = subParts[1];
-					} else if (address.includes(':')) {
-						const parts = address.split(':');
-						address = parts[0];
-						port = parts[1];
-					} else if (address.includes('#')) {
-						const parts = address.split('#');
-						address = parts[0];
-						addressid = parts[1];
-					}
-
-					if (addressid.includes(':')) {
-						addressid = addressid.split(':')[0];
-					}
-				} else {
-					address = match[1];
-					port = match[2] || port;
-					addressid = match[3] || address;
-				}
-
-				if (!utils.isValidIPv4(address) && port == "-1") {
+				const { address: parsedAddress, port: initialPort, addressid } = parseAddress(address);
+				
+				let port = initialPort;
+				if (!isValidIPv4(parsedAddress) && port === "-1") {
 					for (let httpsPort of httpsPorts) {
-						if (address.includes(httpsPort)) {
+						if (parsedAddress.includes(httpsPort)) {
 							port = httpsPort;
 							break;
 						}
 					}
 				}
-				if (port == "-1") port = "443";
+				if (port === "-1") port = "443";
 
-				//console.log(address, port, addressid);
-
-				if (隧道版本作者.trim() === atob('Y21saXU=') && 获取代理IP.trim() === 'true') {
-					// 将addressid转换为小写
-					let lowerAddressid = addressid.toLowerCase();
-					// 初始化找到的proxyIP为null
-					let foundProxyIP = null;
-
-					if (socks5Data) {
-						const socks5 = getRandomProxyByMatch(lowerAddressid, socks5Data);
-						path = `/${socks5}`;
-					} else {
-						// 遍历匹配PROXYIP数组查找匹配项
-						for (let item of 匹配PROXYIP) {
-							if (item.includes('#') && item.split('#')[1] && lowerAddressid.includes(item.split('#')[1].toLowerCase())) {
-								foundProxyIP = item.split('#')[0];
-								break; // 找到匹配项，跳出循环
-							} else if (item.includes(':') && item.split(':')[1] && lowerAddressid.includes(item.split(':')[1].toLowerCase())) {
-								foundProxyIP = item.split(':')[0];
-								break; // 找到匹配项，跳出循环
-							}
-						}
-
-						const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-						if (matchingProxyIP) {
-							path = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + matchingProxyIP;
-						} else if (foundProxyIP) {
-							// 如果找到匹配的proxyIP，赋值给path
-							path = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + foundProxyIP;
-						} else {
-							// 如果没有找到匹配项，随机选择一个proxyIP
-							const randomProxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
-							path = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + randomProxyIP;
-						}
-					}
-				}
+				const newPath = handleProxyIP(addressid, parsedAddress);
 
 				let 伪装域名 = host;
-				let 最终路径 = path;
+				let 最终路径 = newPath;
 				let 节点备注 = EndPS;
 				if (临时中转域名.length > 0 && (host.includes('.workers.dev'))) {
-					最终路径 = `/${host}${path}`;
+					最终路径 = `/${host}${newPath}`;
 					伪装域名 = 临时中转域名[Math.floor(Math.random() * 临时中转域名.length)];
 					节点备注 = EndPS + atob('IOW3suWQr+eUqOS4tOaXtuWfn+WQjeS4rei9rOacjeWKoe+8jOivt+WwveW/q+e7keWumuiHquWumuS5ieWfn++8gQ==');
 					sni = 伪装域名;
 				}
 
 				if (协议类型 == 'VMess') {
-					const vmessLink = `vmess://${utf8ToBase64(`{"v":"2","ps":"${addressid + 节点备注}","add":"${address}","port":"${port}","id":"${uuid}","aid":"${额外ID}","scy":"${加密方式}","net":"ws","type":"${type}","host":"${伪装域名}","path":"${最终路径}","tls":"tls","sni":"${sni}","alpn":"${encodeURIComponent(alpn)}","fp":""}`)}`;
+					const vmessLink = `vmess://${utf8ToBase64(`{"v":"2","ps":"${addressid + 节点备注}","add":"${parsedAddress}","port":"${port}","id":"${uuid}","aid":"${额外ID}","scy":"${加密方式}","net":"ws","type":"${type}","host":"${伪装域名}","path":"${最终路径}","tls":"tls","sni":"${sni}","alpn":"${encodeURIComponent(alpn)}","fp":""}`)}`;
 					return vmessLink;
 				} else if (协议类型 == atob('VHJvamFu')) {
-					const 特洛伊Link = `${atob('dHJvamFuOi8v') + uuid}@${address}:${port + atob('P3NlY3VyaXR5PXRscyZzbmk9') + sni}&alpn=${encodeURIComponent(alpn)}&fp=randomized&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
+					const 特洛伊Link = `${atob('dHJvamFuOi8v') + uuid}@${parsedAddress}:${port + atob('P3NlY3VyaXR5PXRscyZzbmk9') + sni}&alpn=${encodeURIComponent(alpn)}&fp=randomized&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
 					return 特洛伊Link;
 				} else {
-					const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${address}:${port + atob('P2VuY3J5cHRpb249bm9uZSZzZWN1cml0eT10bHMmc25pPQ==') + sni}&alpn=${encodeURIComponent(alpn)}&fp=random&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
+					const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${parsedAddress}:${port + atob('P2VuY3J5cHRpb249bm9uZSZzZWN1cml0eT10bHMmc25pPQ==') + sni}&alpn=${encodeURIComponent(alpn)}&fp=random&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
 					return 维列斯Link;
 				}
+			});
 
-			}).join('\n');
-
-			let combinedContent = responseBody; // 合并内容
+			let combinedContent = responseBody.join('\n'); // 合并内容
 
 			if (link) {
 				const links = await 整理(link);
@@ -1494,15 +1447,4 @@ async function subHtml(request) {
 			"content-type": "text/html;charset=UTF-8",
 		},
 	});
-}
-
-// 在处理用户输入时使用
-async function fetch(request, env) {
-    const url = new URL(request.url);
-    const userInput = url.searchParams.get('someParam');
-    if (userInput) {
-        const sanitizedInput = validateInput(userInput);
-        // 使用清理后的输入继续处理
-    }
-    // ... 其余代码
 }
