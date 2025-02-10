@@ -1244,13 +1244,6 @@ async function subHtml(request) {
 						border-bottom-style: solid;
 					}
 
-					#qrcode {
-						display: flex;
-						justify-content: center;
-						align-items: center;
-						margin-top: 20px;
-					}
-
 					.info-icon {
 						display: inline-flex;
 						align-items: center;
@@ -1296,7 +1289,6 @@ async function subHtml(request) {
 						display: none;
 					}
 				</style>
-				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
 			</head>
 			<body>
 				<a href="${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}" target="_blank" class="github-corner" aria-label="View source on Github">
@@ -1332,7 +1324,6 @@ async function subHtml(request) {
 							</div>
 						</div>
 						<input type="text" id="result" readonly onclick="copyToClipboard()">
-						<label id="qrcode" style="margin: 15px 10px -15px 10px;"></label>
 					</div>
 					<div class="beian-info" style="text-align: center; font-size: 13px;">${网络备案}</div>
 				</div>
@@ -1420,31 +1411,10 @@ async function subHtml(request) {
 								subLink = \`https://\${domain}/sub?\${uuidType}=\${uuid}&\${search}\`;
 							}
 							document.getElementById('result').value = subLink;
-							generateQRCode(subLink);
 						} catch (error) {
 							alert('链接格式错误，请检查输入');
 						}
 					}
-
-					// 新增生成二维码的独立函数
-					function generateQRCode(text) {
-						const qrcodeDiv = document.getElementById('qrcode');
-						qrcodeDiv.innerHTML = '';
-						new QRCode(qrcodeDiv, {
-							text: text || window.location.href,  // 如果没有传入文本，则使用当前页面URL
-							width: 220,
-							height: 220,
-							colorDark: "#4a60ea",
-							colorLight: "#ffffff",
-							correctLevel: QRCode.CorrectLevel.L,
-							scale: 1
-						});
-					}
-
-					// 在页面加载完成后立即生成二维码
-					document.addEventListener('DOMContentLoaded', function() {
-						generateQRCode();
-					});
 				</script>
 			</body>
 			</html>
