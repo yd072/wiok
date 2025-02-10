@@ -987,9 +987,9 @@ export default {
 
 async function subHtml(request) {
 	const url = new URL(request.url);
-	const password = url.searchParams.get('password'); // 获取URL参数中的密码
+	const password = url.searchParams.get('password'); // 获取URL中的password参数
 	
-	// 如果设置了环境变量中的密码且URL中没有正确的密码，显示密码输入页面
+	// 如果设置了环境变量PASSWORD且密码不匹配，显示密码输入页面
 	if (env.PASSWORD && password !== env.PASSWORD) {
 		const loginHTML = `
 			<!DOCTYPE html>
@@ -1000,7 +1000,7 @@ async function subHtml(request) {
 				<title>${FileName} - 访问验证</title>
 				${网站图标}
 				<style>
-					/* 复用原有的样式 */
+					/* 复用原有样式 */
 					:root {
 						--primary-color: #4361ee;
 						--hover-color: #3b4fd3;
@@ -1045,7 +1045,6 @@ async function subHtml(request) {
 						text-align: center;
 						color: var(--primary-color);
 						margin-bottom: 2rem;
-						font-size: 1.8rem;
 					}
 					
 					.input-group {
@@ -1069,7 +1068,6 @@ async function subHtml(request) {
 						border: none;
 						border-radius: 10px;
 						font-size: 1rem;
-						font-weight: 600;
 						cursor: pointer;
 						transition: all 0.3s ease;
 					}
@@ -1114,7 +1112,7 @@ async function subHtml(request) {
 		});
 	}
 
-	// 如果密码正确或未设置密码，显示原始页面
+	// 如果密码正确或未设置密码，显示原有页面
 	const HTML = `
 			<!DOCTYPE html>
 			<html>
