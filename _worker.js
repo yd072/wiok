@@ -498,44 +498,39 @@ function parseAddress(address) {
   return { address: parsedAddress, port, addressid };
 }
 
-// 修改处理代理IP的函数
+// 处理代理IP的函数
 function handleProxyIP(addressid, address, defaultPath) {
-  // 如果不需要处理代理IP，直接返回默认路径
   if (隧道版本作者.trim() !== atob('Y21saXU=') || 获取代理IP.trim() !== 'true') {
-    return defaultPath;
+    return defaultPath; // 返回默认路径而不是全局path
   }
 
   let lowerAddressid = addressid.toLowerCase();
-  let proxyPath = defaultPath; // 初始化为默认路径
+  let foundProxyIP = null;
 
   if (socks5Data) {
     const socks5 = getRandomProxyByMatch(lowerAddressid, socks5Data);
-    proxyPath = `/${socks5}`;
-  } else {
-    // 尝试从匹配PROXYIP中找到匹配项
-    for (let item of 匹配PROXYIP) {
-      if ((item.includes('#') && item.split('#')[1] && lowerAddressid.includes(item.split('#')[1].toLowerCase())) ||
-          (item.includes(':') && item.split(':')[1] && lowerAddressid.includes(item.split(':')[1].toLowerCase()))) {
-        const foundProxyIP = item.split(/[:#]/)[0];
-        proxyPath = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + foundProxyIP;
-        break;
-      }
-    }
+    return `/${socks5}`;
+  }
 
-    // 如果没有找到匹配项，检查proxyIPPool
-    if (proxyPath === defaultPath) {
-      const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-      if (matchingProxyIP) {
-        proxyPath = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + matchingProxyIP;
-      } else {
-        // 如果还是没有找到，使用随机proxyIP
-        const randomProxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
-        proxyPath = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + randomProxyIP;
-      }
+  for (let item of 匹配PROXYIP) {
+    if ((item.includes('#') && item.split('#')[1] && lowerAddressid.includes(item.split('#')[1].toLowerCase())) ||
+        (item.includes(':') && item.split(':')[1] && lowerAddressid.includes(item.split(':')[1].toLowerCase()))) {
+      foundProxyIP = item.split(/[:#]/)[0];
+      break;
     }
   }
 
-  return proxyPath;
+  const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
+  if (matchingProxyIP) {
+    return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + matchingProxyIP;
+  }
+  
+  if (foundProxyIP) {
+    return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + foundProxyIP;
+  }
+
+  const randomProxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+  return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + randomProxyIP;
 }
 
 export default {
@@ -605,33 +600,7 @@ export default {
 		if (env.PROXYIP) proxyIPs = await 整理(env.PROXYIP);
 		//console.log(proxyIPs);
 
-		// 修改快速订阅访问入口的验证逻辑
-		if (快速订阅访问入口.length > 0) {
-			// 如果设置了TOKEN但路径不匹配任何token,返回错误提示
-			if (!快速订阅访问入口.some(token => url.pathname.includes(token))) {
-				const responseText = `
-				缺少访问权限：请使用正确的访问入口
-				Missing access permission: Please use the correct access entry
-				دسترسی مجاز نیست: لطفا از ورودی صحیح استفاده کنید
-				
-				${url.origin}/[your access token]
-				
-				
-				
-				
-				
-				
-				    
-				    ${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L3dvcmtlclZsZXNzMnN1Yg==')}
-				    `;
-
-				return new Response(responseText, {
-					status: 403,
-					headers: { 'content-type': 'text/plain; charset=utf-8' },
-				});
-			}
-
-			// TOKEN验证通过，设置内置节点参数
+		if (快速订阅访问入口.length > 0 && 快速订阅访问入口.some(token => url.pathname.includes(token))) {
 			host = "null";
 			if (env.HOST) {
 				const hosts = await 整理(env.HOST);
@@ -669,7 +638,6 @@ export default {
 
 			await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${userAgentHeader}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 		} else {
-			// 没有设置TOKEN，使用URL参数
 			host = url.searchParams.get('host');
 			uuid = url.searchParams.get('uuid') || url.searchParams.get('password') || url.searchParams.get('pw');
 			path = url.searchParams.get('path');
@@ -1452,23 +1420,31 @@ async function subHtml(request) {
 								subLink = \`https://\${domain}/sub?\${uuidType}=\${uuid}&\${search}\`;
 							}
 							document.getElementById('result').value = subLink;
-	
-							// 更新二维码
-							const qrcodeDiv = document.getElementById('qrcode');
-							qrcodeDiv.innerHTML = '';
-							new QRCode(qrcodeDiv, {
-								text: subLink,
-								width: 220, // 调整宽度
-								height: 220, // 调整高度
-								colorDark: "#4a60ea", // 二维码颜色
-								colorLight: "#ffffff", // 背景颜色
-								correctLevel: QRCode.CorrectLevel.L, // 设置纠错级别
-								scale: 1 // 调整像素颗粒度
-							});
+							generateQRCode(subLink);
 						} catch (error) {
 							alert('链接格式错误，请检查输入');
 						}
 					}
+
+					// 新增生成二维码的独立函数
+					function generateQRCode(text) {
+						const qrcodeDiv = document.getElementById('qrcode');
+						qrcodeDiv.innerHTML = '';
+						new QRCode(qrcodeDiv, {
+							text: text || window.location.href,  // 如果没有传入文本，则使用当前页面URL
+							width: 220,
+							height: 220,
+							colorDark: "#4a60ea",
+							colorLight: "#ffffff",
+							correctLevel: QRCode.CorrectLevel.L,
+							scale: 1
+						});
+					}
+
+					// 在页面加载完成后立即生成二维码
+					document.addEventListener('DOMContentLoaded', function() {
+						generateQRCode();
+					});
 				</script>
 			</body>
 			</html>
