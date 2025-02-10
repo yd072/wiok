@@ -601,31 +601,32 @@ export default {
 		//console.log(proxyIPs);
 
 		// 修改快速订阅访问入口的验证逻辑
-		if (快速订阅访问入口.length > 0 && !快速订阅访问入口.some(token => url.pathname.includes(token))) {
+		if (快速订阅访问入口.length > 0) {
 			// 如果设置了TOKEN但路径不匹配任何token,返回错误提示
-			const responseText = `
-			缺少访问权限：请使用正确的访问入口
-			Missing access permission: Please use the correct access entry
-			دسترسی مجاز نیست: لطفا از ورودی صحیح استفاده کنید
-			
-			${url.origin}/[your access token]
-			
-			
-			
-			
-			
-			
-			    
-			    ${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L3dvcmtlclZsZXNzMnN1Yg==')}
-			    `;
+			if (!快速订阅访问入口.some(token => url.pathname.includes(token))) {
+				const responseText = `
+				缺少访问权限：请使用正确的访问入口
+				Missing access permission: Please use the correct access entry
+				دسترسی مجاز نیست: لطفا از ورودی صحیح استفاده کنید
+				
+				${url.origin}/[your access token]
+				
+				
+				
+				
+				
+				
+				    
+				    ${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L3dvcmtlclZsZXNzMnN1Yg==')}
+				    `;
 
-			return new Response(responseText, {
-				status: 403,
-				headers: { 'content-type': 'text/plain; charset=utf-8' },
-			});
-		}
+				return new Response(responseText, {
+					status: 403,
+					headers: { 'content-type': 'text/plain; charset=utf-8' },
+				});
+			}
 
-		if (快速订阅访问入口.length > 0 && 快速订阅访问入口.some(token => url.pathname.includes(token))) {
+			// TOKEN验证通过，设置内置节点参数
 			host = "null";
 			if (env.HOST) {
 				const hosts = await 整理(env.HOST);
@@ -663,6 +664,7 @@ export default {
 
 			await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${userAgentHeader}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 		} else {
+			// 没有设置TOKEN，使用URL参数
 			host = url.searchParams.get('host');
 			uuid = url.searchParams.get('uuid') || url.searchParams.get('password') || url.searchParams.get('pw');
 			path = url.searchParams.get('path');
