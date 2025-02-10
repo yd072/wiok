@@ -89,7 +89,9 @@ async function 整理优选列表(api) {
 	const timeout = setTimeout(() => controller.abort(), 2000);
 
 	try {
-		// 使用 Promise.all 替代 Promise.allSettled 以提高性能
+		// 添加日志输出
+		console.log("开始处理API列表:", api);
+
 		const responses = await Promise.all(api.map(apiUrl => 
 			fetch(apiUrl, {
 				method: 'get',
@@ -99,18 +101,35 @@ async function 整理优选列表(api) {
 				},
 				signal: controller.signal
 			})
-			.then(response => response.ok ? response.text() : Promise.reject())
-			.catch(() => null) // 处理失败的请求返回 null
+			.then(async response => {
+				if (!response.ok) {
+					console.log(`API请求失败: ${apiUrl}, 状态码: ${response.status}`);
+					return null;
+				}
+				return response.text();
+			})
+			.catch(error => {
+				console.log(`API请求出错: ${apiUrl}`, error);
+				return null;
+			})
 		));
 
-		// 过滤掉失败的请求
+		// 添加处理结果日志
+		console.log("API响应数量:", responses.filter(r => r !== null).length);
+
 		for (let i = 0; i < responses.length; i++) {
 			const content = responses[i];
-			if (!content) continue;
+			if (!content) {
+				console.log(`跳过无效响应: index ${i}`);
+				continue;
+			}
 
 			const lines = content.split(/\r?\n/);
 			let 节点备注 = '';
 			let 测速端口 = '443';
+
+			// 添加CSV格式检查日志
+			console.log(`处理响应 ${i}, 首行列数: ${lines[0].split(',').length}`);
 
 			if (lines[0].split(',').length > 3) {
 				const idMatch = api[i].match(/id=([^&]*)/);
@@ -123,32 +142,39 @@ async function 整理优选列表(api) {
 					const columns = lines[j].split(',')[0];
 					if (columns) {
 						newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
-						if (api[i].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
+						if (api[i].includes('proxyip=true')) {
+							proxyIPPool.push(`${columns}:${测速端口}`);
+						}
 					}
 				}
 			} else {
-				// 验证当前apiUrl是否带有'proxyip=true'
 				if (api[i].includes('proxyip=true')) {
-					// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
-					proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
-						const baseItem = item.split('#')[0] || item;
-						if (baseItem.includes(':')) {
-							const port = baseItem.split(':')[1];
-							if (!httpsPorts.includes(port)) {
-								return baseItem;
+					const validItems = (await 整理(content))
+						.map(item => {
+							const baseItem = item.split('#')[0] || item;
+							if (baseItem.includes(':')) {
+								const port = baseItem.split(':')[1];
+								if (!httpsPorts.includes(port)) {
+									return baseItem;
+								}
+							} else {
+								return `${baseItem}:443`;
 							}
-						} else {
-							return `${baseItem}:443`;
-						}
-						return null; // 不符合条件时返回 null
-					}).filter(Boolean)); // 过滤掉 null 值
+							return null;
+						})
+						.filter(Boolean);
+					
+					proxyIPPool.push(...validItems);
 				}
-				// 将内容添加到newapi中
 				newapi += content + '\n';
 			}
 		}
+
+		// 添加最终结果日志
+		console.log("整理后的节点数量:", newapi.split('\n').filter(line => line.trim()).length);
+		
 	} catch (error) {
-		console.error(error);
+		console.error("整理优选列表出错:", error);
 	} finally {
 		clearTimeout(timeout);
 	}
@@ -405,8 +431,12 @@ function 生成动态UUID(密钥) {
 }
 
 async function getLink(重新汇总所有链接) {
+	console.log("开始处理链接列表, 总数:", 重新汇总所有链接.length);
+	
 	let 节点LINK = [];
 	let 订阅链接 = [];
+	
+	// 分类链接
 	for (let x of 重新汇总所有链接) {
 		if (x.toLowerCase().startsWith('http')) {
 			订阅链接.push(x);
@@ -415,64 +445,65 @@ async function getLink(重新汇总所有链接) {
 		}
 	}
 
-	if (订阅链接 && 订阅链接.length !== 0) {
-		function base64Decode(str) {
-			const bytes = new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
-			const decoder = new TextDecoder('utf-8');
-			return decoder.decode(bytes);
-		}
-		const controller = new AbortController(); // 创建一个AbortController实例，用于取消请求
+	console.log("直接节点数:", 节点LINK.length);
+	console.log("订阅链接数:", 订阅链接.length);
 
-		const timeout = setTimeout(() => {
-			controller.abort(); // 2秒后取消所有请求
-		}, 2000);
+	if (订阅链接.length > 0) {
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 2000);
 
 		try {
-			// 使用Promise.allSettled等待所有API请求完成，无论成功或失败
-			const responses = await Promise.allSettled(订阅链接.map(apiUrl => fetch(apiUrl, {
-				method: 'get',
-				headers: {
-					'Accept': 'text/html,application/xhtml+xml,application/xml;',
-					'User-Agent': `\u0076\u0032\u0072\u0061\u0079\u004e\u002f${FileName + atob('IGNtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}`
-				},
-				signal: controller.signal // 将AbortController的信号量添加到fetch请求中
-			}).then(response => response.ok ? response.text() : Promise.reject())));
+			const responses = await Promise.allSettled(订阅链接.map(async apiUrl => {
+				try {
+					const response = await fetch(apiUrl, {
+						method: 'get',
+						headers: {
+							'Accept': 'text/html,application/xhtml+xml,application/xml;',
+							'User-Agent': `\u0076\u0032\u0072\u0061\u0079\u004e\u002f${FileName + atob('IGNtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}`
+						},
+						signal: controller.signal
+					});
 
-			// 遍历所有响应
-			const modifiedResponses = responses.map((response, index) => {
-				// 检查是否请求成功
-				return {
-					status: response.status,
-					value: response.status === 'fulfilled' ? response.value : null,
-					apiUrl: 订阅链接[index] // 将原始的apiUrl添加到返回对象中
-				};
-			});
+					if (!response.ok) {
+						throw new Error(`HTTP error! status: ${response.status}`);
+					}
 
-			console.log(modifiedResponses); // 输出修改后的响应数组
+					const content = await response.text();
+					return { content, apiUrl };
+				} catch (error) {
+					console.error(`订阅请求失败: ${apiUrl}`, error);
+					return null;
+				}
+			}));
 
-			for (const response of modifiedResponses) {
-				// 检查响应状态是否为'fulfilled'
-				if (response.status === 'fulfilled') {
-					const content = await response.value || 'null'; // 获取响应的内容
+			for (const result of responses) {
+				if (result.status === 'fulfilled' && result.value) {
+					const { content } = result.value;
+					
 					if (content.includes('://')) {
-						const lines = content.includes('\r\n') ? content.split('\r\n') : content.split('\n');
-						节点LINK = 节点LINK.concat(lines);
+						const lines = content.split(/\r?\n/).filter(line => line.trim());
+						节点LINK.push(...lines);
 					} else {
-						const 尝试base64解码内容 = base64Decode(content);
-						if (尝试base64解码内容.includes('://')) {
-							const lines = 尝试base64解码内容.includes('\r\n') ? 尝试base64解码内容.split('\r\n') : 尝试base64解码内容.split('\n');
-							节点LINK = 节点LINK.concat(lines);
+						try {
+							const decodedContent = atob(content);
+							if (decodedContent.includes('://')) {
+								const lines = decodedContent.split(/\r?\n/).filter(line => line.trim());
+								节点LINK.push(...lines);
+							}
+						} catch (error) {
+							console.error("Base64解码失败:", error);
 						}
 					}
 				}
 			}
 		} catch (error) {
-			console.error(error); // 捕获并输出错误信息
+			console.error("处理订阅链接时出错:", error);
 		} finally {
-			clearTimeout(timeout); // 清除定时器
+			clearTimeout(timeout);
 		}
 	}
 
+	console.log("最终节点数量:", 节点LINK.length);
 	return 节点LINK;
 }
 
