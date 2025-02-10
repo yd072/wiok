@@ -499,9 +499,9 @@ function parseAddress(address) {
 }
 
 // 处理代理IP的函数
-function handleProxyIP(addressid, address) {
+function handleProxyIP(addressid, address, defaultPath) {
   if (隧道版本作者.trim() !== atob('Y21saXU=') || 获取代理IP.trim() !== 'true') {
-    return path;
+    return defaultPath; // 返回默认路径而不是全局path
   }
 
   let lowerAddressid = addressid.toLowerCase();
@@ -870,7 +870,7 @@ export default {
 				}
 				if (port === "-1") port = "443";
 
-				const newPath = handleProxyIP(addressid, parsedAddress);
+				const newPath = handleProxyIP(addressid, parsedAddress, path); // 传入path作为默认值
 
 				let 伪装域名 = host;
 				let 最终路径 = newPath;
