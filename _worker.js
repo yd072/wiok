@@ -600,6 +600,31 @@ export default {
 		if (env.PROXYIP) proxyIPs = await 整理(env.PROXYIP);
 		//console.log(proxyIPs);
 
+		// 修改快速订阅访问入口的验证逻辑
+		if (快速订阅访问入口.length > 0 && !快速订阅访问入口.some(token => url.pathname.includes(token))) {
+			// 如果设置了TOKEN但路径不匹配任何token,返回错误提示
+			const responseText = `
+			缺少访问权限：请使用正确的访问入口
+			Missing access permission: Please use the correct access entry
+			دسترسی مجاز نیست: لطفا از ورودی صحیح استفاده کنید
+			
+			${url.origin}/[your access token]
+			
+			
+			
+			
+			
+			
+			    
+			    ${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L3dvcmtlclZsZXNzMnN1Yg==')}
+			    `;
+
+			return new Response(responseText, {
+				status: 403,
+				headers: { 'content-type': 'text/plain; charset=utf-8' },
+			});
+		}
+
 		if (快速订阅访问入口.length > 0 && 快速订阅访问入口.some(token => url.pathname.includes(token))) {
 			host = "null";
 			if (env.HOST) {
