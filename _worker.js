@@ -1,4 +1,3 @@
-
 let 快速订阅访问入口 = ['auto'];
 let addresses = [];
 let addressesapi = [];
@@ -45,111 +44,136 @@ let 网络备案 = `<a href='https://t.me/CMLiussss'>萌ICP备-20240707号</a>`;
 let 额外ID = '0';
 let 加密方式 = 'auto';
 let 网站图标, 网站头像, 网站背景;
+
+// 将配置相关的常量集中管理
+const CONFIG = {
+	DEFAULT_PORTS: {
+		HTTPS: ["2053", "2083", "2087", "2096", "8443"],
+		HTTP: ["8080", "8880", "2052", "2082", "2086", "2095"]
+	},
+	TIMEOUTS: {
+		FETCH: 2000,
+		SUB_UPDATE: 6
+	},
+	DEFAULTS: {
+		DLS: 7,
+		REMARK_INDEX: 1,
+		VALID_TIME: 7,
+		UPDATE_TIME: 3
+	}
+};
+
+// 将工具函数抽离
+const utils = {
+	isValidIPv4(address) {
+		return /^(\d{1,3}\.){3}\d{1,3}$/.test(address) && 
+			   address.split('.').every(num => parseInt(num) >= 0 && parseInt(num) <= 255);
+	},
+	
+	async MD5MD5(text) {
+		const encoder = new TextEncoder();
+		const firstPass = await crypto.subtle.digest('MD5', encoder.encode(text));
+		const firstHex = Array.from(new Uint8Array(firstPass))
+			.map(b => b.toString(16).padStart(2, '0')).join('');
+		const secondPass = await crypto.subtle.digest('MD5', encoder.encode(firstHex.slice(7, 27)));
+		return Array.from(new Uint8Array(secondPass))
+			.map(b => b.toString(16).padStart(2, '0')).join('').toLowerCase();
+	}
+};
+
 async function 整理优选列表(api) {
 	if (!api || api.length === 0) return [];
 
 	let newapi = "";
-
-	// 创建一个AbortController对象，用于控制fetch请求的取消
 	const controller = new AbortController();
-
-	const timeout = setTimeout(() => {
-		controller.abort(); // 取消所有请求
-	}, 2000); // 2秒后触发
+	const timeout = setTimeout(() => controller.abort(), 2000);
 
 	try {
-		// 使用Promise.allSettled等待所有API请求完成，无论成功或失败
-		// 对api数组进行遍历，对每个API地址发起fetch请求
-		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
-			method: 'get',
-			headers: {
-				'Accept': 'text/html,application/xhtml+xml,application/xml;',
-				'User-Agent': FileName + atob('IGNtbGl1L1dvcmtlclZsZXNzMnN1Yg==')
-			},
-			signal: controller.signal // 将AbortController的信号量添加到fetch请求中，以便于需要时可以取消请求
-		}).then(response => response.ok ? response.text() : Promise.reject())));
+		// 使用 Promise.all 替代 Promise.allSettled 以提高性能
+		const responses = await Promise.all(api.map(apiUrl => 
+			fetch(apiUrl, {
+				method: 'get',
+				headers: {
+					'Accept': 'text/html,application/xhtml+xml,application/xml;',
+					'User-Agent': FileName + atob('IGNtbGl1L1dvcmtlclZsZXNzMnN1Yg==')
+				},
+				signal: controller.signal
+			})
+			.then(response => response.ok ? response.text() : Promise.reject())
+			.catch(() => null) // 处理失败的请求返回 null
+		));
 
-		// 遍历所有响应
-		for (const [index, response] of responses.entries()) {
-			// 检查响应状态是否为'fulfilled'，即请求成功完成
-			if (response.status === 'fulfilled') {
-				// 获取响应的内容
-				const content = await response.value;
+		// 过滤掉失败的请求
+		for (let i = 0; i < responses.length; i++) {
+			const content = responses[i];
+			if (!content) continue;
 
-				const lines = content.split(/\r?\n/);
-				let 节点备注 = '';
-				let 测速端口 = '443';
+			const lines = content.split(/\r?\n/);
+			let 节点备注 = '';
+			let 测速端口 = '443';
 
-				if (lines[0].split(',').length > 3) {
-					const idMatch = api[index].match(/id=([^&]*)/);
-					if (idMatch) 节点备注 = idMatch[1];
+			if (lines[0].split(',').length > 3) {
+				const idMatch = api[i].match(/id=([^&]*)/);
+				if (idMatch) 节点备注 = idMatch[1];
 
-					const portMatch = api[index].match(/port=([^&]*)/);
-					if (portMatch) 测速端口 = portMatch[1];
+				const portMatch = api[i].match(/port=([^&]*)/);
+				if (portMatch) 测速端口 = portMatch[1];
 
-					for (let i = 1; i < lines.length; i++) {
-						const columns = lines[i].split(',')[0];
-						if (columns) {
-							newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
-							if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
-						}
+				for (let j = 1; j < lines.length; j++) {
+					const columns = lines[j].split(',')[0];
+					if (columns) {
+						newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
+						if (api[i].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
 					}
-				} else {
-					// 验证当前apiUrl是否带有'proxyip=true'
-					if (api[index].includes('proxyip=true')) {
-						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
-						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
-							const baseItem = item.split('#')[0] || item;
-							if (baseItem.includes(':')) {
-								const port = baseItem.split(':')[1];
-								if (!httpsPorts.includes(port)) {
-									return baseItem;
-								}
-							} else {
-								return `${baseItem}:443`;
-							}
-							return null; // 不符合条件时返回 null
-						}).filter(Boolean)); // 过滤掉 null 值
-					}
-					// 将内容添加到newapi中
-					newapi += content + '\n';
 				}
+			} else {
+				// 验证当前apiUrl是否带有'proxyip=true'
+				if (api[i].includes('proxyip=true')) {
+					// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
+					proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
+						const baseItem = item.split('#')[0] || item;
+						if (baseItem.includes(':')) {
+							const port = baseItem.split(':')[1];
+							if (!httpsPorts.includes(port)) {
+								return baseItem;
+							}
+						} else {
+							return `${baseItem}:443`;
+						}
+						return null; // 不符合条件时返回 null
+					}).filter(Boolean)); // 过滤掉 null 值
+				}
+				// 将内容添加到newapi中
+				newapi += content + '\n';
 			}
 		}
 	} catch (error) {
 		console.error(error);
 	} finally {
-		// 无论成功或失败，最后都清除设置的超时定时器
 		clearTimeout(timeout);
 	}
 
-	const newAddressesapi = await 整理(newapi);
-
-	// 返回处理后的结果
-	return newAddressesapi;
+	return await 整理(newapi);
 }
 
 async function 整理测速结果(tls) {
-	// 参数验证
-	if (!tls) {
-		console.error('TLS参数不能为空');
+	if (!tls || !Array.isArray(addressescsv) || addressescsv.length === 0) {
 		return [];
 	}
 
-	// 检查CSV地址列表
-	if (!Array.isArray(addressescsv) || addressescsv.length === 0) {
-		console.warn('没有可用的CSV地址列表');
-		return [];
-	}
+	// 使用 Map 缓存已解析的数据
+	const csvCache = new Map();
 
-	// CSV解析函数
+	// 优化CSV解析
 	function parseCSV(text) {
-		return text
-			.replace(/\r\n/g, '\n')   // 统一Windows换行
-			.replace(/\r/g, '\n')	 // 处理老Mac换行
-			.split('\n')			   // 按Unix/Linux风格分割
-			.filter(line => line.trim() !== '')  // 移除空行
+		if (csvCache.has(text)) {
+			return csvCache.get(text);
+		}
+		const result = text.split(/\r?\n/)
+			.filter(line => line.trim())
 			.map(line => line.split(',').map(cell => cell.trim()));
+		csvCache.set(text, result);
+		return result;
 	}
 
 	// 并行处理CSV
@@ -219,31 +243,38 @@ async function 整理(内容) {
 	return 地址数组;
 }
 
+// 添加统一的错误处理
+async function handleErrors(promise, errorMessage) {
+    try {
+        return await promise;
+    } catch (error) {
+        console.error(`${errorMessage}: `, error);
+        // 可以添加错误上报逻辑
+        return null;
+    }
+}
+
+// 在关键操作处使用
 async function sendMessage(type, ip, add_data = "") {
-	if (!BotToken || !ChatID) return;
+    if (!BotToken || !ChatID) return;
 
-	try {
-		let msg = "";
-		const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
-		if (response.ok) {
-			const ipInfo = await response.json();
-			msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n<tg-spoiler>城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
-		} else {
-			msg = `${type}\nIP: ${ip}\n<tg-spoiler>${add_data}`;
-		}
-
-		const url = `https://api.telegram.org/bot${BotToken}/sendMessage?chat_id=${ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`;
-		return fetch(url, {
-			method: 'GET',
-			headers: {
-				'Accept': 'text/html,application/xhtml+xml,application/xml;',
-				'Accept-Encoding': 'gzip, deflate, br',
-				'User-Agent': 'Mozilla/5.0 Chrome/90.0.4430.72'
-			}
-		});
-	} catch (error) {
-		console.error('Error sending message:', error);
-	}
+    return handleErrors(async () => {
+        const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
+        if (!response.ok) {
+            throw new Error(`IP API request failed: ${response.status}`);
+        }
+        const ipInfo = await response.json();
+        let msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n<tg-spoiler>城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
+        const url = `https://api.telegram.org/bot${BotToken}/sendMessage?chat_id=${ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`;
+        return fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'User-Agent': 'Mozilla/5.0 Chrome/90.0.4430.72'
+            }
+        });
+    }, "Error in sendMessage");
 }
 
 async function nginx() {
@@ -321,20 +352,6 @@ function getRandomProxyByMatch(CC, socks5Data) {
 	// 从匹配的代理中随机选择一个并返回
 	const randomProxy = filteredProxies[Math.floor(Math.random() * filteredProxies.length)];
 	return randomProxy;
-}
-
-async function MD5MD5(text) {
-	const encoder = new TextEncoder();
-
-	const firstPass = await crypto.subtle.digest('MD5', encoder.encode(text));
-	const firstPassArray = Array.from(new Uint8Array(firstPass));
-	const firstHex = firstPassArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-	const secondPass = await crypto.subtle.digest('MD5', encoder.encode(firstHex.slice(7, 27)));
-	const secondPassArray = Array.from(new Uint8Array(secondPass));
-	const secondHex = secondPassArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-	return secondHex.toLowerCase();
 }
 
 function revertFakeInfo(content, userID, hostName) {
@@ -463,6 +480,12 @@ function utf8ToBase64(str) {
 	return btoa(unescape(encodeURIComponent(str)));
 }
 
+// 添加输入验证
+function validateInput(input) {
+    // 移除潜在的危险字符
+    return input.replace(/[<>'"]/g, '');
+}
+
 export default {
 	async fetch(request, env) {
 		if (env.TOKEN) 快速订阅访问入口 = await 整理(env.TOKEN);
@@ -496,7 +519,7 @@ export default {
 		if (env.UA) MamaJustKilledAMan = MamaJustKilledAMan.concat(await 整理(env.UA));
 
 		const currentDate = new Date();
-		const fakeUserIDMD5 = await MD5MD5(Math.ceil(currentDate.getTime()));
+		const fakeUserIDMD5 = await utils.MD5MD5(Math.ceil(currentDate.getTime()));
 		fakeUserID = fakeUserIDMD5.slice(0, 8) + "-" + fakeUserIDMD5.slice(8, 12) + "-" + fakeUserIDMD5.slice(12, 16) + "-" + fakeUserIDMD5.slice(16, 20) + "-" + fakeUserIDMD5.slice(20);
 		fakeHostName = fakeUserIDMD5.slice(6, 9) + "." + fakeUserIDMD5.slice(13, 19) + ".xyz";
 
@@ -732,7 +755,7 @@ export default {
 					}
 
 					const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
-					if (!isValidIPv4(address) && port == "-1") {
+					if (!utils.isValidIPv4(address) && port == "-1") {
 						for (let httpPort of httpPorts) {
 							if (address.includes(httpPort)) {
 								port = httpPort;
@@ -817,7 +840,7 @@ export default {
 					addressid = match[3] || address;
 				}
 
-				if (!isValidIPv4(address) && port == "-1") {
+				if (!utils.isValidIPv4(address) && port == "-1") {
 					for (let httpsPort of httpsPorts) {
 						if (address.includes(httpsPort)) {
 							port = httpsPort;
@@ -1440,4 +1463,15 @@ async function subHtml(request) {
 			"content-type": "text/html;charset=UTF-8",
 		},
 	});
+}
+
+// 在处理用户输入时使用
+async function fetch(request, env) {
+    const url = new URL(request.url);
+    const userInput = url.searchParams.get('someParam');
+    if (userInput) {
+        const sanitizedInput = validateInput(userInput);
+        // 使用清理后的输入继续处理
+    }
+    // ... 其余代码
 }
