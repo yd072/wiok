@@ -498,39 +498,44 @@ function parseAddress(address) {
   return { address: parsedAddress, port, addressid };
 }
 
-// 处理代理IP的函数
+// 修改处理代理IP的函数
 function handleProxyIP(addressid, address, defaultPath) {
+  // 如果不需要处理代理IP，直接返回默认路径
   if (隧道版本作者.trim() !== atob('Y21saXU=') || 获取代理IP.trim() !== 'true') {
-    return defaultPath; // 返回默认路径而不是全局path
+    return defaultPath;
   }
 
   let lowerAddressid = addressid.toLowerCase();
-  let foundProxyIP = null;
+  let proxyPath = defaultPath; // 初始化为默认路径
 
   if (socks5Data) {
     const socks5 = getRandomProxyByMatch(lowerAddressid, socks5Data);
-    return `/${socks5}`;
-  }
+    proxyPath = `/${socks5}`;
+  } else {
+    // 尝试从匹配PROXYIP中找到匹配项
+    for (let item of 匹配PROXYIP) {
+      if ((item.includes('#') && item.split('#')[1] && lowerAddressid.includes(item.split('#')[1].toLowerCase())) ||
+          (item.includes(':') && item.split(':')[1] && lowerAddressid.includes(item.split(':')[1].toLowerCase()))) {
+        const foundProxyIP = item.split(/[:#]/)[0];
+        proxyPath = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + foundProxyIP;
+        break;
+      }
+    }
 
-  for (let item of 匹配PROXYIP) {
-    if ((item.includes('#') && item.split('#')[1] && lowerAddressid.includes(item.split('#')[1].toLowerCase())) ||
-        (item.includes(':') && item.split(':')[1] && lowerAddressid.includes(item.split(':')[1].toLowerCase()))) {
-      foundProxyIP = item.split(/[:#]/)[0];
-      break;
+    // 如果没有找到匹配项，检查proxyIPPool
+    if (proxyPath === defaultPath) {
+      const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
+      if (matchingProxyIP) {
+        proxyPath = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + matchingProxyIP;
+      } else {
+        // 如果还是没有找到，使用随机proxyIP
+        const randomProxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+        proxyPath = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + randomProxyIP;
+      }
     }
   }
 
-  const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-  if (matchingProxyIP) {
-    return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + matchingProxyIP;
-  }
-  
-  if (foundProxyIP) {
-    return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + foundProxyIP;
-  }
-
-  const randomProxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
-  return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + randomProxyIP;
+  return proxyPath;
 }
 
 export default {
