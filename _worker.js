@@ -1053,7 +1053,7 @@ function 生成配置信息(UUID, 域名地址, sub, UA, RproxyIP, url, fakeUser
     // 改进的clash配置
     const clash = {
         name: 别名,
-        type: 协议类型,  // 使用 tunnel 替代 vless
+        type: 协议类型,
         server: 地址,
         port: 端口,
         uuid: 用户ID,
@@ -1069,41 +1069,23 @@ function 生成配置信息(UUID, 域名地址, sub, UA, RproxyIP, url, fakeUser
             path: 路径,
             headers: {
                 Host: 伪装域名
-            },
-            "max-early-data": 2560,
-            "early-data-header-name": "Sec-WebSocket-Protocol"
-        },
-        // 添加更多优化配置
-        "interface-name": "",
-        routing: "IPIfNonMatch",
-        "routing-mark": 0,
-        mux: {
-            enabled: true,
-            concurrency: 8,
-            "idle-timeout": 60
-        },
-        "tcp-fast-open": true,
-        "keep-alive": true,
-        "heartbeat-interval": 30,
-        "health-check": {
-            enable: true,
-            interval: 30,
-            url: "https://www.gstatic.com/generate_204"
+            }
         }
     };
 
-    // 转换为clash格式的字符串
-    const clashStr = `- ${JSON.stringify(clash)}`;
+    // 转换为clash格式的字符串 - 修改这里的格式
+    const clashStr = `proxies:
+  - ${JSON.stringify(clash, null, 2)}`;
 
-    // 生成标准链接,使用 tunnel 替代 vless
+    // 生成标准链接
     const tunnelLink = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&alpn=${encodeURIComponent(协议.join(','))}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
 
+    // 返回格式化后的配置
     return {
-        tunnel: tunnelLink, // 改名为 tunnel
+        tunnel: tunnelLink,
         clash: clashStr,
-        // 保留原有的outbounds配置
         outbounds: [{
-            protocol: 协议类型, // 使用 tunnel 替代 vless
+            protocol: 协议类型,
             settings: {
                 vnext: [{
                     address: 地址,
