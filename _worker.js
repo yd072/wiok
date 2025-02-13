@@ -1157,31 +1157,82 @@ function 生成VLESS配置(UUID, 域名地址, proxyIP = '', customSettings = {}
     return config;
 }
 
-// 改进的配置生成函数
+// 修改生成配置信息函数
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
     try {
-        // ... 现有代码 ...
+        let content = '';
+        let isBase64 = true;
         
-        // 使用改进的 VLESS 配置
-        const vlessConfig = 生成VLESS配置(userID, hostName, proxyIP, {
-            path: `/?ed=2560${proxyIP ? `/${btoa(proxyIP)}` : ''}`,
-            port: port || 443,
-            // 可以添加其他自定义设置
-        });
+        // 处理地址和端口
+        let addresses = [];
+        let ports = httpsPorts;
+        
+        // 获取地址列表
+        if (addresses.length === 0) {
+            if (RproxyIP === 'true') {
+                addresses = proxyIPPool;
+            } else if (proxyIP) {
+                addresses = [proxyIP];
+            }
+        }
+        
+        // 确保至少有一个地址
+        if (addresses.length === 0) {
+            addresses = [hostName];
+        }
 
-        // 转换配置为链接格式
-        const vlessLink = `vless://${vlessConfig.uuid}@${vlessConfig.address}:${vlessConfig.port}?` + 
-            `encryption=${vlessConfig.security.encryption}&` +
-            `security=tls&` +
-            `sni=${vlessConfig.tls.serverName}&` +
-            `fp=${vlessConfig.tls.fingerprint}&` +
-            `type=${vlessConfig.network}&` +
-            `path=${encodeURIComponent(vlessConfig.ws.path)}&` +
-            `host=${encodeURIComponent(vlessConfig.ws.headers.Host)}#${encodeURIComponent(vlessConfig.name)}`;
+        // 生成所有节点配置
+        let configs = [];
+        for (const address of addresses) {
+            for (const port of ports) {
+                // 生成基础配置
+                const config = {
+                    protocol: atob("dmxlc3M="),
+                    uuid: userID,
+                    address: address,
+                    port: port,
+                    params: {
+                        encryption: "none",
+                        security: "tls",
+                        type: "ws",
+                        host: hostName,
+                        path: `/?ed=2560${proxyIP ? `/${btoa(proxyIP)}` : ''}`,
+                        sni: hostName,
+                        fp: "randomized",
+                        alpn: "h2,http/1.1",
+                        allowInsecure: false
+                    }
+                };
 
-        // ... 其余代码 ...
+                // 生成节点名称
+                const remark = `${FileName} - ${address}:${port}`;
 
-        return vlessLink;
+                // 生成 vless 链接
+                const vlessLink = `${config.protocol}://${config.uuid}@${config.address}:${config.port}?` +
+                    `encryption=${config.params.encryption}&` +
+                    `security=${config.params.security}&` +
+                    `type=${config.params.type}&` +
+                    `host=${encodeURIComponent(config.params.host)}&` +
+                    `path=${encodeURIComponent(config.params.path)}&` +
+                    `sni=${encodeURIComponent(config.params.sni)}&` +
+                    `fp=${config.params.fp}&` +
+                    `alpn=${encodeURIComponent(config.params.alpn)}` +
+                    `#${encodeURIComponent(remark)}`;
+
+                configs.push(vlessLink);
+            }
+        }
+
+        // 合并所有配置
+        content = configs.join('\n');
+
+        // 如果需要 base64 编码
+        if (isBase64) {
+            content = btoa(content);
+        }
+
+        return content;
+
     } catch (error) {
         console.error('配置生成错误:', error);
         throw error;
@@ -1841,4 +1892,42 @@ async function 处理地址列表(地址列表) {
 	}
 	
 	return 分类地址;
+}
+
+// 添加辅助函数
+function isValidIP(ip) {
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
+    return ipv4Regex.test(ip) || ipv6Regex.test(ip);
+}
+
+// 修改 handleRequest 函数中的相关部分
+async function handleRequest(request) {
+    // ... 其他代码 ...
+
+    if (url.pathname === `/${userID}`) {
+        const config = await 生成配置信息(
+            userID,
+            request.headers.get('Host'),
+            sub,
+            request.headers.get('User-Agent'),
+            RproxyIP,
+            url,
+            fakeUserID,
+            fakeHostName,
+            env
+        );
+
+        return new Response(config, {
+            status: 200,
+            headers: {
+                "Content-Type": "text/plain;charset=utf-8",
+                "Profile-Update-Interval": "6",
+                "Subscription-Userinfo": `upload=0; download=0; total=0; expire=${expire}`,
+                "Cache-Control": "no-store"
+            }
+        });
+    }
+
+    // ... 其他代码 ...
 }
