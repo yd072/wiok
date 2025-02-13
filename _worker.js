@@ -1025,14 +1025,26 @@ async function 代理URL(代理网址, 目标网址) {
 }
 
 const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
-function 生成配置信息(UUID, 域名地址, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
-    // 改进后的配置结构
-    const config = {
-        log: {
-            loglevel: "warning",
-            access: "none",
-            error: "none"
-        },
+function 配置信息(UUID, 域名地址) {
+    const 协议类型 = atob(啥啥啥_写的这是啥啊);
+    const 别名 = FileName;
+    let 地址 = 域名地址;
+    let 端口 = 443;
+    
+    // 基础配置保持不变
+    const 用户ID = UUID;
+    const 加密方式 = 'none';
+    const 传输层协议 = 'ws';
+    const 伪装域名 = 域名地址;
+    const 路径 = path;
+    let 传输层安全 = ['tls', true];
+    const SNI = 域名地址;
+    const 指纹 = 'randomized';
+    const 协议 = ['h3,h2,http/1.1'];
+
+    // 添加完整的xray配置对象
+    const xray配置 = {
+        log: { loglevel: "warning" },
         inbounds: [{
             port: 10808,
             protocol: "socks",
@@ -1042,136 +1054,84 @@ function 生成配置信息(UUID, 域名地址, sub, UA, RproxyIP, url, fakeUser
                 userLevel: 8
             },
             sniffing: {
+                destOverride: ["http", "tls"],
                 enabled: true,
-                destOverride: ["http", "tls", "quic"],
                 routeOnly: true
             }
         }],
         outbounds: [{
-            protocol: atob(啥啥啥_写的这是啥啊), 
+            protocol: 协议类型,
             settings: {
                 vnext: [{
-                    address: 域名地址,
-                    port: 443,
+                    address: 地址,
+                    port: 端口,
                     users: [{
-                        id: UUID,
-                        encryption: "none",
-                        flow: "",
+                        id: 用户ID,
+                        encryption: 加密方式,
                         level: 8
                     }]
                 }]
             },
             streamSettings: {
-                network: "ws",
-                security: "tls",
+                network: 传输层协议,
+                security: 传输层安全[0],
                 tlsSettings: {
-                    serverName: 域名地址,
-                    alpn: ["h3", "h2", "http/1.1"],
-                    fingerprint: "randomized",
-                    allowInsecure: false
+                    serverName: SNI,
+                    fingerprint: 指纹,
+                    alpn: 协议
                 },
                 wsSettings: {
-                    path: path + (proxyIP ? `/${btoa(proxyIP)}` : ""),
-                    headers: {
-                        Host: 域名地址
-                    },
-                    maxEarlyData: 2560,
-                    earlyDataHeaderName: "Sec-WebSocket-Protocol"
+                    path: 路径,
+                    headers: { Host: 伪装域名 }
                 }
-            },
-            tag: "proxy"
-        },
-        {
-            protocol: "freedom",
-            tag: "direct"
-        },
-        {
-            protocol: "blackhole",
-            tag: "block"
+            }
         }],
+        policy: {
+            levels: {
+                8: {
+                    connIdle: 300,
+                    downlinkOnly: 1,
+                    handshake: 4,
+                    uplinkOnly: 1
+                }
+            }
+        },
         routing: {
             domainStrategy: "IPIfNonMatch",
-            rules: [
-                {
-                    type: "field",
-                    domain: ["geosite:category-ads-all"],
-                    outboundTag: "block"
-                },
-                {
-                    type: "field",
-                    domain: ["geosite:cn"],
-                    outboundTag: "direct"
-                },
-                {
-                    type: "field",
-                    ip: ["geoip:cn", "geoip:private"],
-                    outboundTag: "direct"
-                }
-            ],
+            rules: [],
             balancers: [{
                 tag: "all",
-                selector: ["proxy"],
-                strategy: {
-                    type: "leastPing"
-                }
+                selector: ["prox"],
+                strategy: { type: "leastPing" }
             }]
         },
         observatory: {
-            subjectSelector: ["proxy"],
-            probeUrl: "https://www.google.com/generate_204",
-            probeInterval: "30s",
+            subjectSelector: ["prox"],
             pingConfig: {
                 destination: "https://connectivitycheck.gstatic.com/generate_204",
                 connectivity: "https://www.google.com/generate_204",
                 interval: "30s"
             }
-        },
-        policy: {
-            levels: {
-                8: {
-                    handshake: 4,
-                    connIdle: 300,
-                    uplinkOnly: 1,
-                    downlinkOnly: 1,
-                    bufferSize: 4096
-                }
-            },
-            system: {
-                statsInboundUplink: true,
-                statsInboundDownlink: true,
-                statsOutboundUplink: true,
-                statsOutboundDownlink: true
-            }
-        },
-        stats: {}
-    };
-
-    // DNS 配置
-    config.dns = {
-        servers: [
-            "https+local://dns.google/dns-query",
-            "https+local://cloudflare-dns.com/dns-query",
-            "localhost"
-        ],
-        queryStrategy: "UseIPv4",
-        disableCache: false,
-        disableFallbackIfMatch: true
-    };
-
-    // 添加高级性能优化
-    config.transport = {
-        tcpSettings: {
-            keepAliveInterval: 25,
-            keepAliveTimeout: 125
-        },
-        wsSettings: {
-            maxEarlyData: 2560,
-            earlyDataHeaderName: "Sec-WebSocket-Protocol",
-            maxConnectionPool: 4
         }
     };
 
-    return config;
+    if (域名地址.includes('.workers.dev')) {
+        地址 = atob('dmlzYS5jbg==');
+        端口 = 80;
+        传输层安全 = ['', false];
+        // 更新xray配置中的相应值
+        xray配置.outbounds[0].settings.vnext[0].address = 地址;
+        xray配置.outbounds[0].settings.vnext[0].port = 端口;
+        xray配置.outbounds[0].streamSettings.security = '';
+    }
+
+    // 生成分享链接
+    const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&alpn=${encodeURIComponent(协议.join(','))}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
+    
+    // 生成clash配置
+    const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3,h2,http/1.1], udp: true, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {host: ${伪装域名}}}}`;
+
+    return [威图瑞, 猫猫猫, xray配置];
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
@@ -1234,9 +1194,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 	const uuid = (_url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
 	const userAgent = UA.toLowerCase();
-	const Config = 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env);
-	const proxyConfig = Config.outbounds[0];
-	const clash = Config.outbounds[0];
+	const Config = 配置信息(userID, hostName);
+	const proxyConfig = Config[0];
+	const clash = Config[1];
 	let proxyhost = "";
 	if (hostName.includes(".workers.dev")) {
 		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
