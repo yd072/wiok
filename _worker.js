@@ -574,6 +574,10 @@ function process维列斯Header(维列斯Buffer, userID) {
 }
 
 // 修改变量名称
+let responseHeader;  // 添加这行
+let version;        // 添加这行
+
+// 然后再重命名
 let 维列斯ResponseHeader = responseHeader;
 let 维列斯Version = version;
 
@@ -627,7 +631,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 }
 
 // 修改 handleTCPOutBound 函数,只移除连接质量监控部分
-async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log) {
+async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
     // 保持原有的 useSocks5Pattern 函数不变
     async function useSocks5Pattern(address) {
         if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
@@ -691,10 +695,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             tcpSocket.readable.pipeTo(new WritableStream({
                 write(chunk) {
                     if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                        const buffer = vlessResponseHeader ? 
-                            mergeUint8Arrays(vlessResponseHeader, chunk) : chunk;
+                        const buffer = 维列斯ResponseHeader ? 
+                            mergeUint8Arrays(维列斯ResponseHeader, chunk) : chunk;
                         webSocket.send(buffer);
-                        if (vlessResponseHeader) vlessResponseHeader = null;
+                        if (维列斯ResponseHeader) 维列斯ResponseHeader = null;
                     }
                 },
                 close() {
@@ -731,10 +735,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         tcpSocket.readable.pipeTo(new WritableStream({
             write(chunk) {
                 if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                    const buffer = vlessResponseHeader ? 
-                        mergeUint8Arrays(vlessResponseHeader, chunk) : chunk;
+                    const buffer = 维列斯ResponseHeader ? 
+                        mergeUint8Arrays(维列斯ResponseHeader, chunk) : chunk;
                     webSocket.send(buffer);
-                    if (vlessResponseHeader) vlessResponseHeader = null;
+                    if (维列斯ResponseHeader) 维列斯ResponseHeader = null;
                 }
             },
             close() {
