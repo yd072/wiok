@@ -1060,7 +1060,131 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+// 添加新的配置生成函数
+async function buildOptimizedConfig(addresses, ports, proxyIP, host, UUID) {
+    const configs = [];
+    let proxyIndex = 1;
+    
+    // 为每个地址和端口生成配置
+    for (const addr of addresses) {
+        for (const port of ports) {
+            // 生成随机路径
+            const path = `/${getRandomPath(16)}${proxyIP ? `/${btoa(proxyIP)}` : ""}`;
+            
+            // 构建基础配置
+            const baseConfig = {
+                tag: `proxy-${proxyIndex}`,
+                type: "vless",
+                address: addr,
+                port: parseInt(port),
+                uuid: UUID,
+                flow: "",
+                network: "ws",
+                tls: globalThis.defaultHttpsPorts.includes(port),
+                udp: true,
+                wsSettings: {
+                    path: path,
+                    headers: {
+                        Host: host
+                    },
+                    maxEarlyData: 2560,
+                    earlyDataHeaderName: "Sec-WebSocket-Protocol"
+                }
+            };
+
+            // 如果是TLS端口,添加TLS配置
+            if (baseConfig.tls) {
+                baseConfig.tlsSettings = {
+                    serverName: host,
+                    allowInsecure: false,
+                    fingerprint: "randomized", 
+                    alpn: ["h2", "http/1.1"]
+                };
+            }
+
+            configs.push(baseConfig);
+            proxyIndex++;
+        }
+    }
+
+    return configs;
+}
+
+// 修改生成配置信息函数
+async function 生成配置信息(userID, host, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
+    try {
+        // ... 现有代码 ...
+
+        // 使用新的配置生成函数
+        const configs = await buildOptimizedConfig(
+            addresses,
+            ports,
+            proxyIP,
+            host,
+            userID
+        );
+
+        // 生成配置字符串
+        let configStr = '';
+        
+        // 添加所有节点
+        configs.forEach((config) => {
+            configStr += generateConfigString(config) + '\n';
+        });
+
+        return configStr;
+    } catch (error) {
+        console.error('生成配置信息时出错:', error);
+        throw error;
+    }
+}
+
+// 辅助函数:生成配置字符串
+function generateConfigString(config) {
+    const protocol = config.type;
+    const remark = `${protocol}-${config.address}:${config.port}`;
+    
+    let configStr = `${protocol}://${config.uuid}@${config.address}:${config.port}?`;
+    configStr += `type=ws&`;
+    configStr += `path=${encodeURIComponent(config.wsSettings.path)}&`;
+    configStr += `host=${encodeURIComponent(config.wsSettings.headers.Host)}&`;
+    
+    if (config.tls) {
+        configStr += `security=tls&`;
+        configStr += `sni=${config.tlsSettings.serverName}&`;
+        configStr += `fp=${config.tlsSettings.fingerprint}&`;
+        configStr += `alpn=${encodeURIComponent(config.tlsSettings.alpn.join(','))}&`;
+    }
+    
+    configStr += `#${encodeURIComponent(remark)}`;
+    
+    return configStr;
+}
+
+// 添加延迟测试功能
+async function testNodeDelay(config) {
+    try {
+        const startTime = Date.now();
+        const response = await fetch(config.testUrl, {
+            method: 'HEAD',
+            headers: {
+                'User-Agent': 'Mozilla/5.0',
+                'Accept': '*/*'
+            },
+            signal: AbortSignal.timeout(3000) // 3秒超时
+        });
+        
+        if (response.ok) {
+            return Date.now() - startTime;
+        }
+        return Infinity;
+    } catch (error) {
+        console.warn(`测试节点 ${config.address}:${config.port} 延迟失败:`, error);
+        return Infinity;
+    }
+}
+
+async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
 
 	if (sub) {
@@ -2037,41 +2161,4 @@ async function 处理地址列表(地址列表) {
 	}
 	
 	return 分类地址;
-}
-
-async function measureLatency(address) {
-    // 使用 fetch 或其他方法测量延迟
-    const start = Date.now();
-    try {
-        await fetch(`https://${address}`, { method: 'HEAD' });
-        return Date.now() - start;
-    } catch (error) {
-        console.error(`Error measuring latency for ${address}:`, error);
-        return Infinity; // 如果请求失败，返回一个很大的值
-    }
-}
-
-async function selectBestNode(nodes) {
-    const latencies = await Promise.all(nodes.map(node => measureLatency(node)));
-    const bestIndex = latencies.indexOf(Math.min(...latencies));
-    return nodes[bestIndex];
-}
-
-async function generateBestPingConfig(nodes) {
-    const bestNode = await selectBestNode(nodes);
-    console.log(`Selected best node: ${bestNode}`);
-    // 使用 bestNode 生成配置
-    const config = {
-        // 配置内容...
-        server: bestNode,
-        // 其他配置项...
-    };
-    return config;
-}
-
-// 在需要生成配置的地方调用 generateBestPingConfig
-async function main() {
-    const nodes = ['node1.example.com', 'node2.example.com', 'node3.example.com'];
-    const config = await generateBestPingConfig(nodes);
-    console.log('Generated config:', config);
 }
