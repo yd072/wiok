@@ -1774,245 +1774,180 @@ async function handlePostRequest(request, env, txt) {
 }
 
 async function handleGetRequest(env, txt) {
-	let content = '';
-	let hasKV = !!env.KV;
+    const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>编辑优选列表</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+        <style>
+            :root {
+                --background-color: #ffffff;
+                --color: #000000;
+                --button-color: #4CAF50;
+                --button-hover: #45a049;
+                --button-active: #3d8b40;
+            }
+            
+            body.dark-mode {
+                --background-color: #333;
+                --color: #fff;
+                --button-color: #45a049;
+                --button-hover: #3d8b40;
+                --button-active: #357a38;
+            }
 
-	if (hasKV) {
-		try {
-			content = await env.KV.get(txt) || '';
-		} catch (error) {
-			console.error('读取KV时发生错误:', error);
-			content = '读取数据时发生错误: ' + error.message;
-		}
-	}
+            body {
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                margin: 0;
+                padding: 20px;
+                background-color: var(--background-color);
+                color: var(--color);
+            }
 
-	const html = `
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<title>优选订阅列表</title>
-			<meta charset="utf-8">
-			<meta name="viewport" content="width=device-width, initial-scale=1">
-			<style>
-				body {
-					margin: 0;
-					padding: 15px; /* 调整padding */
-					box-sizing: border-box;
-					font-size: 13px; /* 设置全局字体大小 */
-				}
-				.editor-container {
-					width: 100%;
-					max-width: 100%;
-					margin: 0 auto;
-				}
-				.editor {
-					width: 100%;
-					height: 520px; /* 调整高度 */
-					margin: 15px 0; /* 调整margin */
-					padding: 10px; /* 调整padding */
-					box-sizing: border-box;
-					border: 1px solid #ccc;
-					border-radius: 4px;
-					font-size: 13px;
-					line-height: 1.5;
-					overflow-y: auto;
-					resize: none;
-				}
-				.save-container {
-					margin-top: 8px; /* 调整margin */
-					display: flex;
-					align-items: center;
-					gap: 10px; /* 调整gap */
-				}
-				.save-btn, .back-btn {
-					padding: 6px 15px; /* 调整padding */
-					color: white;
-					border: none;
-					border-radius: 4px;
-					cursor: pointer;
-				}
-				.save-btn {
-					background: #4CAF50;
-				}
-				.save-btn:hover {
-					background: #45a049;
-				}
-				.back-btn {
-					background: #666;
-				}
-				.back-btn:hover {
-					background: #555;
-				}
-				.save-status {
-					color: #666;
-				}
-				.notice-content {
-					display: none;
-					margin-top: 10px;
-					font-size: 13px;
-					color: #333;
-				}
-			</style>
-		</head>
-		<body>
-			################################################################<br>
-			${FileName} 优选订阅列表:<br>
-			---------------------------------------------------------------<br>
-			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
-			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRnJhdyUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
-			</div>
-			<div class="editor-container">
-				${hasKV ? `
-				<textarea class="editor" 
-					placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
-					id="content">${content}</textarea>
-				<div class="save-container">
-					<button class="back-btn" onclick="goBack()">返回配置页</button>
-					<button class="save-btn" onclick="saveContent(this)">保存</button>
-					<span class="save-status" id="saveStatus"></span>
-				</div>
-				<br>
-				################################################################<br>
-				${cmad}
-				` : '<p>未绑定KV空间</p>'}
-			</div>
-	
-			<script>
-			if (document.querySelector('.editor')) {
-				let timer;
-				const textarea = document.getElementById('content');
-				const originalContent = textarea.value;
-		
-				function goBack() {
-					const currentUrl = window.location.href;
-					const parentUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/'));
-					window.location.href = parentUrl;
-				}
-		
-				function replaceFullwidthColon() {
-					const text = textarea.value;
-					textarea.value = text.replace(/：/g, ':');
-				}
-				
-				function saveContent(button) {
-					try {
-						const updateButtonText = (step) => {
-							button.textContent = \`保存中: \${step}\`;
-						};
-						// 检测是否为iOS设备
-						const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-						
-						// 仅在非iOS设备上执行replaceFullwidthColon
-						if (!isIOS) {
-							replaceFullwidthColon();
-						}
-						updateButtonText('开始保存');
-						button.disabled = true;
-						// 获取textarea内容和原始内容
-						const textarea = document.getElementById('content');
-						if (!textarea) {
-							throw new Error('找不到文本编辑区域');
-						}
-						updateButtonText('获取内容');
-						let newContent;
-						let originalContent;
-						try {
-							newContent = textarea.value || '';
-							originalContent = textarea.defaultValue || '';
-						} catch (e) {
-							console.error('获取内容错误:', e);
-							throw new Error('无法获取编辑内容');
-						}
-						updateButtonText('准备状态更新函数');
-						const updateStatus = (message, isError = false) => {
-							const statusElem = document.getElementById('saveStatus');
-							if (statusElem) {
-								statusElem.textContent = message;
-								statusElem.style.color = isError ? 'red' : '#666';
-							}
-						};
-						updateButtonText('准备按钮重置函数');
-						const resetButton = () => {
-							button.textContent = '保存';
-							button.disabled = false;
-						};
-						if (newContent !== originalContent) {
-							updateButtonText('发送保存请求');
-							fetch(window.location.href, {
-								method: 'POST',
-								body: newContent,
-								headers: {
-									'Content-Type': 'text/plain;charset=UTF-8'
-								},
-								cache: 'no-cache'
-							})
-							.then(response => {
-								updateButtonText('检查响应状态');
-								if (!response.ok) {
-									throw new Error(\`HTTP error! status: \${response.status}\`);
-								}
-								updateButtonText('更新保存状态');
-								const now = new Date().toLocaleString();
-								document.title = \`编辑已保存 \${now}\`;
-								updateStatus(\`已保存 \${now}\`);
-							})
-							.catch(error => {
-								updateButtonText('处理错误');
-								console.error('Save error:', error);
-								updateStatus(\`保存失败: \${error.message}\`, true);
-							})
-							.finally(() => {
-								resetButton();
-							});
-						} else {
-							updateButtonText('检查内容变化');
-							updateStatus('内容未变化');
-							resetButton();
-						}
-					} catch (error) {
-						console.error('保存过程出错:', error);
-						button.textContent = '保存';
-						button.disabled = false;
-						const statusElem = document.getElementById('saveStatus');
-						if (statusElem) {
-							statusElem.textContent = \`错误: \${error.message}\`;
-							statusElem.style.color = 'red';
-						}
-					}
-				}
-		
-				textarea.addEventListener('blur', saveContent);
-				textarea.addEventListener('input', () => {
-					clearTimeout(timer);
-					timer = setTimeout(saveContent, 5000);
-				});
-			}
-		
-			function toggleNotice() {
-				const noticeContent = document.getElementById('noticeContent');
-				const noticeToggle = document.getElementById('noticeToggle');
-				if (noticeContent.style.display === 'none' || noticeContent.style.display === '') {
-					noticeContent.style.display = 'block';
-					noticeToggle.textContent = '注意事项∧';
-				} else {
-					noticeContent.style.display = 'none';
-					noticeToggle.textContent = '注意事项∨';
-				}
-			}
-		
-			// 初始化 noticeContent 的 display 属性
-			document.addEventListener('DOMContentLoaded', () => {
-				document.getElementById('noticeContent').style.display = 'none';
-			});
-			</script>
-		</body>
-		</html>
-	`;
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+            }
 
-	return new Response(html, {
-		headers: { "Content-Type": "text/html;charset=utf-8" }
-	});
+            .header-container {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 20px;
+            }
+
+            textarea {
+                width: 100%;
+                height: 500px;
+                padding: 10px;
+                margin-bottom: 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                resize: vertical;
+                background-color: var(--background-color);
+                color: var(--color);
+            }
+
+            .button {
+                background-color: var(--button-color);
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+                margin: 5px;
+            }
+
+            .button:hover {
+                background-color: var(--button-hover);
+            }
+
+            .button:active {
+                background-color: var(--button-active);
+            }
+
+            .button.disabled {
+                background-color: #cccccc;
+                cursor: not-allowed;
+            }
+
+            #saveStatus {
+                margin-top: 10px;
+                color: #666;
+            }
+
+            .notice {
+                margin: 20px 0;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+            }
+
+            #noticeToggle {
+                background: none;
+                border: none;
+                color: var(--color);
+                cursor: pointer;
+                padding: 5px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+
+            #noticeContent {
+                margin-top: 10px;
+                display: none;
+            }
+
+            .floating-button {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                width: 50px;
+                height: 50px;
+                border-radius: 25px;
+                background-color: var(--button-color);
+                border: none;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header-container">
+                <h1>编辑优选列表</h1>
+                <button id="saveButton" class="button">保存</button>
+            </div>
+
+            <div class="notice">
+                <button id="noticeToggle" onclick="toggleNotice()">注意事项∨</button>
+                <div id="noticeContent">
+                    <p>1. 每行一个地址，支持域名或IP</p>
+                    <p>2. 支持 # 添加注释</p>
+                    <p>3. 内容会自动保存</p>
+                    <p>4. 建议使用电脑编辑</p>
+                </div>
+            </div>
+
+            <textarea id="content" spellcheck="false">${txt}</textarea>
+            <div id="saveStatus"></div>
+        </div>
+
+        <button id="darkModeToggle" class="floating-button">
+            <i id="modeIcon" class="fa fa-2x fa-adjust" style="color: var(--background-color);" aria-hidden="true"></i>
+        </button>
+
+        <script>
+            // ... 保持原有的 JavaScript 代码 ...
+
+            // 添加深色模式切换功能
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            darkModeToggle.addEventListener('click', () => {
+                const isDarkMode = document.body.classList.toggle('dark-mode');
+                localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
+            });
+
+            // 页面加载时检查深色模式设置
+            if (localStorage.getItem('darkMode') === 'enabled') {
+                document.body.classList.add('dark-mode');
+            }
+        </script>
+    </body>
+    </html>
+    `;
+
+    return new Response(html, {
+        headers: { "Content-Type": "text/html;charset=utf-8" }
+    });
 }
 
 async function 处理地址列表(地址列表) {
