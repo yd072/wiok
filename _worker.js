@@ -1027,89 +1027,33 @@ async function 代理URL(代理网址, 目标网址) {
 const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
 function 配置信息(UUID, 域名地址) {
     const 协议类型 = atob(啥啥啥_写的这是啥啊);
+  
     const 别名 = FileName;
     let 地址 = 域名地址;
     let 端口 = 443;
-    
+  
     const 用户ID = UUID;
-    // 修改加密方式为aes-128-gcm提供更好的安全性
-    const 加密方式 = 'aes-128-gcm';
-    
-    // 优化传输协议配置
+    const 加密方式 = 'none';
+  
     const 传输层协议 = 'ws';
     const 伪装域名 = 域名地址;
-    // 添加随机path参数增加隐蔽性
-    const randomPath = Math.random().toString(36).substring(2, 8);
-    const 路径 = `${path}?ed=2048&pb=${randomPath}`;
-    
-    // 增强TLS配置
+    const 路径 = path;
+  
     let 传输层安全 = ['tls', true];
     const SNI = 域名地址;
-    // 使用更安全的指纹
-    const 指纹 = 'chrome';
-    // 优化ALPN配置顺序
-    const 协议 = ['h2,http/1.1'];
-    
-    // 添加多路复用配置
-    const mux = {
-        enabled: true,
-        concurrency: 8
-    };
-    
-    // 添加容错配置
-    const 故障转移 = {
-        enabled: true,
-        retryCount: 3,
-        timeout: 5
-    };
-
+    const 指纹 = 'randomized';
+    // 添加 ALPN 配置
+    const 协议 = ['h3,h2,http/1.1'];
+  
     if (域名地址.includes('.workers.dev')) {
         地址 = atob('dmlzYS5jbg==');
         端口 = 80;
         传输层安全 = ['', false];
     }
-
-    // 优化URL参数拼接
-    const 配置参数 = new URLSearchParams({
-        encryption: 加密方式,
-        security: 传输层安全[0],
-        sni: SNI,
-        fp: 指纹,
-        alpn: 协议.join(','),
-        type: 传输层协议,
-        host: 伪装域名,
-        path: encodeURIComponent(路径),
-        mux: JSON.stringify(mux),
-        fallback: JSON.stringify(故障转移)
-    }).toString();
-
-    const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}?${配置参数}#${encodeURIComponent(别名)}`;
-    
-    // 优化Clash配置
-    const 猫猫猫 = `
-- name: ${FileName}
-  type: ${协议类型}
-  server: ${地址}
-  port: ${端口}
-  uuid: ${用户ID}
-  tls: ${传输层安全[1]}
-  servername: ${伪装域名}
-  network: ${传输层协议}
-  client-fingerprint: ${指纹}
-  alpn: 
-    - h2
-    - http/1.1
-  ws-opts:
-    path: "${路径}"
-    headers:
-      Host: ${伪装域名}
-  mux:
-    enabled: ${mux.enabled}
-    concurrency: ${mux.concurrency}
-  udp: true
-  skip-cert-verify: false
-`;
-
+  
+    const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&alpn=${encodeURIComponent(协议.join(','))}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
+    const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3,h2,http/1.1], udp: true, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
+  
     return [威图瑞, 猫猫猫];
 }
 
@@ -2093,4 +2037,41 @@ async function 处理地址列表(地址列表) {
 	}
 	
 	return 分类地址;
+}
+
+async function measureLatency(address) {
+    // 使用 fetch 或其他方法测量延迟
+    const start = Date.now();
+    try {
+        await fetch(`https://${address}`, { method: 'HEAD' });
+        return Date.now() - start;
+    } catch (error) {
+        console.error(`Error measuring latency for ${address}:`, error);
+        return Infinity; // 如果请求失败，返回一个很大的值
+    }
+}
+
+async function selectBestNode(nodes) {
+    const latencies = await Promise.all(nodes.map(node => measureLatency(node)));
+    const bestIndex = latencies.indexOf(Math.min(...latencies));
+    return nodes[bestIndex];
+}
+
+async function generateBestPingConfig(nodes) {
+    const bestNode = await selectBestNode(nodes);
+    console.log(`Selected best node: ${bestNode}`);
+    // 使用 bestNode 生成配置
+    const config = {
+        // 配置内容...
+        server: bestNode,
+        // 其他配置项...
+    };
+    return config;
+}
+
+// 在需要生成配置的地方调用 generateBestPingConfig
+async function main() {
+    const nodes = ['node1.example.com', 'node2.example.com', 'node3.example.com'];
+    const config = await generateBestPingConfig(nodes);
+    console.log('Generated config:', config);
 }
