@@ -1025,166 +1025,159 @@ async function 代理URL(代理网址, 目标网址) {
 }
 
 const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
-function 配置信息(UUID, 域名地址) {
-    const 协议类型 = atob(啥啥啥_写的这是啥啊);
-  
-    const 别名 = FileName;
-    let 地址 = 域名地址;
-    let 端口 = 443;
-  
-    const 用户ID = UUID;
-    const 加密方式 = 'none';
-  
-    const 传输层协议 = 'ws';
-    const 伪装域名 = 域名地址;
-    const 路径 = path;
-  
-    let 传输层安全 = ['tls', true];
-    const SNI = 域名地址;
-    const 指纹 = 'randomized';
-    // 添加 ALPN 配置
-    const 协议 = ['h3,h2,http/1.1'];
-  
-    if (域名地址.includes('.workers.dev')) {
-        地址 = atob('dmlzYS5jbg==');
-        端口 = 80;
-        传输层安全 = ['', false];
-    }
-  
-    const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&alpn=${encodeURIComponent(协议.join(','))}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
-    const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3,h2,http/1.1], udp: true, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
-  
-    return [威图瑞, 猫猫猫];
+function 生成配置信息(UUID, 域名地址, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
+    // 改进后的配置结构
+    const config = {
+        log: {
+            loglevel: "warning",
+            access: "none",
+            error: "none"
+        },
+        inbounds: [{
+            port: 10808,
+            protocol: "socks",
+            settings: {
+                auth: "noauth",
+                udp: true,
+                userLevel: 8
+            },
+            sniffing: {
+                enabled: true,
+                destOverride: ["http", "tls", "quic"],
+                routeOnly: true
+            }
+        }],
+        outbounds: [{
+            protocol: atob(啥啥啥_写的这是啥啊), 
+            settings: {
+                vnext: [{
+                    address: 域名地址,
+                    port: 443,
+                    users: [{
+                        id: UUID,
+                        encryption: "none",
+                        flow: "",
+                        level: 8
+                    }]
+                }]
+            },
+            streamSettings: {
+                network: "ws",
+                security: "tls",
+                tlsSettings: {
+                    serverName: 域名地址,
+                    alpn: ["h3", "h2", "http/1.1"],
+                    fingerprint: "randomized",
+                    allowInsecure: false
+                },
+                wsSettings: {
+                    path: path + (proxyIP ? `/${btoa(proxyIP)}` : ""),
+                    headers: {
+                        Host: 域名地址
+                    },
+                    maxEarlyData: 2560,
+                    earlyDataHeaderName: "Sec-WebSocket-Protocol"
+                }
+            },
+            tag: "proxy"
+        },
+        {
+            protocol: "freedom",
+            tag: "direct"
+        },
+        {
+            protocol: "blackhole",
+            tag: "block"
+        }],
+        routing: {
+            domainStrategy: "IPIfNonMatch",
+            rules: [
+                {
+                    type: "field",
+                    domain: ["geosite:category-ads-all"],
+                    outboundTag: "block"
+                },
+                {
+                    type: "field",
+                    domain: ["geosite:cn"],
+                    outboundTag: "direct"
+                },
+                {
+                    type: "field",
+                    ip: ["geoip:cn", "geoip:private"],
+                    outboundTag: "direct"
+                }
+            ],
+            balancers: [{
+                tag: "all",
+                selector: ["proxy"],
+                strategy: {
+                    type: "leastPing"
+                }
+            }]
+        },
+        observatory: {
+            subjectSelector: ["proxy"],
+            probeUrl: "https://www.google.com/generate_204",
+            probeInterval: "30s",
+            pingConfig: {
+                destination: "https://connectivitycheck.gstatic.com/generate_204",
+                connectivity: "https://www.google.com/generate_204",
+                interval: "30s"
+            }
+        },
+        policy: {
+            levels: {
+                8: {
+                    handshake: 4,
+                    connIdle: 300,
+                    uplinkOnly: 1,
+                    downlinkOnly: 1,
+                    bufferSize: 4096
+                }
+            },
+            system: {
+                statsInboundUplink: true,
+                statsInboundDownlink: true,
+                statsOutboundUplink: true,
+                statsOutboundDownlink: true
+            }
+        },
+        stats: {}
+    };
+
+    // DNS 配置
+    config.dns = {
+        servers: [
+            "https+local://dns.google/dns-query",
+            "https+local://cloudflare-dns.com/dns-query",
+            "localhost"
+        ],
+        queryStrategy: "UseIPv4",
+        disableCache: false,
+        disableFallbackIfMatch: true
+    };
+
+    // 添加高级性能优化
+    config.transport = {
+        tcpSettings: {
+            keepAliveInterval: 25,
+            keepAliveTimeout: 125
+        },
+        wsSettings: {
+            maxEarlyData: 2560,
+            earlyDataHeaderName: "Sec-WebSocket-Protocol",
+            maxConnectionPool: 4
+        }
+    };
+
+    return config;
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-// 添加新的配置生成函数
-async function buildOptimizedConfig(addresses, ports, proxyIP, host, UUID) {
-    const configs = [];
-    let proxyIndex = 1;
-    
-    // 为每个地址和端口生成配置
-    for (const addr of addresses) {
-        for (const port of ports) {
-            // 生成随机路径
-            const path = `/${getRandomPath(16)}${proxyIP ? `/${btoa(proxyIP)}` : ""}`;
-            
-            // 构建基础配置
-            const baseConfig = {
-                tag: `proxy-${proxyIndex}`,
-                type: "vless",
-                address: addr,
-                port: parseInt(port),
-                uuid: UUID,
-                flow: "",
-                network: "ws",
-                tls: globalThis.defaultHttpsPorts.includes(port),
-                udp: true,
-                wsSettings: {
-                    path: path,
-                    headers: {
-                        Host: host
-                    },
-                    maxEarlyData: 2560,
-                    earlyDataHeaderName: "Sec-WebSocket-Protocol"
-                }
-            };
-
-            // 如果是TLS端口,添加TLS配置
-            if (baseConfig.tls) {
-                baseConfig.tlsSettings = {
-                    serverName: host,
-                    allowInsecure: false,
-                    fingerprint: "randomized", 
-                    alpn: ["h2", "http/1.1"]
-                };
-            }
-
-            configs.push(baseConfig);
-            proxyIndex++;
-        }
-    }
-
-    return configs;
-}
-
-// 修改生成配置信息函数
-async function 生成配置信息(userID, host, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
-    try {
-        // ... 现有代码 ...
-
-        // 使用新的配置生成函数
-        const configs = await buildOptimizedConfig(
-            addresses,
-            ports,
-            proxyIP,
-            host,
-            userID
-        );
-
-        // 生成配置字符串
-        let configStr = '';
-        
-        // 添加所有节点
-        configs.forEach((config) => {
-            configStr += generateConfigString(config) + '\n';
-        });
-
-        return configStr;
-    } catch (error) {
-        console.error('生成配置信息时出错:', error);
-        throw error;
-    }
-}
-
-// 辅助函数:生成配置字符串
-function generateConfigString(config) {
-    const protocol = config.type;
-    const remark = `${protocol}-${config.address}:${config.port}`;
-    
-    let configStr = `${protocol}://${config.uuid}@${config.address}:${config.port}?`;
-    configStr += `type=ws&`;
-    configStr += `path=${encodeURIComponent(config.wsSettings.path)}&`;
-    configStr += `host=${encodeURIComponent(config.wsSettings.headers.Host)}&`;
-    
-    if (config.tls) {
-        configStr += `security=tls&`;
-        configStr += `sni=${config.tlsSettings.serverName}&`;
-        configStr += `fp=${config.tlsSettings.fingerprint}&`;
-        configStr += `alpn=${encodeURIComponent(config.tlsSettings.alpn.join(','))}&`;
-    }
-    
-    configStr += `#${encodeURIComponent(remark)}`;
-    
-    return configStr;
-}
-
-// 添加延迟测试功能
-async function testNodeDelay(config) {
-    try {
-        const startTime = Date.now();
-        const response = await fetch(config.testUrl, {
-            method: 'HEAD',
-            headers: {
-                'User-Agent': 'Mozilla/5.0',
-                'Accept': '*/*'
-            },
-            signal: AbortSignal.timeout(3000) // 3秒超时
-        });
-        
-        if (response.ok) {
-            return Date.now() - startTime;
-        }
-        return Infinity;
-    } catch (error) {
-        console.warn(`测试节点 ${config.address}:${config.port} 延迟失败:`, error);
-        return Infinity;
-    }
-}
-
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
+async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
 
 	if (sub) {
@@ -1241,9 +1234,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fake
 
 	const uuid = (_url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
 	const userAgent = UA.toLowerCase();
-	const Config = 配置信息(userID, hostName);
-	const proxyConfig = Config[0];
-	const clash = Config[1];
+	const Config = 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env);
+	const proxyConfig = Config.outbounds[0];
+	const clash = Config.outbounds[0];
 	let proxyhost = "";
 	if (hostName.includes(".workers.dev")) {
 		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
