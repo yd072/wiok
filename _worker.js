@@ -496,11 +496,12 @@ function mergeData(header, chunk) {
     return merged;
 }
 
-// 优化 fetchWithTimeout 函数，添加默认超时和错误处理
+// 添加更好的错误处理和超时控制的 fetch 函数
 async function fetchWithTimeout(resource, options = {}) {
     const { timeout = 3000 } = options;
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
+
     try {
         const response = await fetch(resource, {
             ...options,
@@ -510,14 +511,113 @@ async function fetchWithTimeout(resource, options = {}) {
                 'Upgrade-Insecure-Requests': '1',
                 'Accept': 'application/json',
                 'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'ALPN': 'h2,h3', // 添加 ALPN 参数以支持 HTTP/2 和 HTTP/3
+                'Connection': 'keep-alive'
             }
         });
         clearTimeout(id);
         return response;
     } catch (error) {
-        console.error(`Fetch error: ${error.message}`);
+        clearTimeout(id);
+        if (error.name === 'AbortError') {
+            throw new Error(`Request timeout after ${timeout}ms`);
+        }
+        throw error;
+    }
+}
+
+// 优化数据流处理
+function processDataStream(stream) {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let result = '';
+
+    return new Promise((resolve, reject) => {
+        function processChunk({ done, value }) {
+            if (done) {
+                return resolve(result);
+            }
+            result += decoder.decode(value, { stream: true });
+            return reader.read().then(processChunk).catch(reject);
+        }
+
+        reader.read().then(processChunk).catch(reject);
+    });
+}
+
+// 优化代理URL函数
+async function 代理URL(代理网址, 目标网址) {
+    try {
+        const 网址列表 = await 整理(代理网址);
+        const 完整网址 = 网址列表[Math.floor(Math.random() * 网址列表.length)];
+        
+        const 解析后的网址 = new URL(完整网址);
+        const 协议 = 解析后的网址.protocol.slice(0, -1) || 'https';
+        const 主机名 = 解析后的网址.hostname;
+        let 路径名 = 解析后的网址.pathname.endsWith('/') 
+            ? 解析后的网址.pathname.slice(0, -1) 
+            : 解析后的网址.pathname;
+        
+        路径名 += 目标网址.pathname;
+        const 查询参数 = 解析后的网址.search;
+        const 新网址 = `${协议}://${主机名}${路径名}${查询参数}`;
+
+        const 响应 = await fetchWithTimeout(新网址, {
+            timeout: 5000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        });
+
+        if (!响应.ok) {
+            throw new Error(`HTTP error! status: ${响应.status}`);
+        }
+
+        const 新响应 = new Response(响应.body, {
+            status: 响应.status,
+            statusText: 响应.statusText,
+            headers: new Headers(响应.headers)
+        });
+
+        新响应.headers.set('X-New-URL', 新网址);
+        return 新响应;
+
+    } catch (error) {
+        console.error('代理URL错误:', error);
+        throw error;
+    }
+}
+
+// 优化配置信息生成函数
+function 配置信息(UUID, 域名地址) {
+    try {
+        const 协议类型 = atob('ZG14bGMzTT0=');
+        const 配置 = {
+            别名: FileName,
+            地址: 域名地址,
+            端口: 443,
+            用户ID: UUID,
+            加密方式: 'none',
+            传输层协议: 'ws',
+            伪装域名: 域名地址,
+            路径: path,
+            传输层安全: ['tls', true],
+            SNI: 域名地址,
+            指纹: 'randomized'
+        };
+
+        if (域名地址.includes('.workers.dev')) {
+            配置.地址 = atob('dmlzYS5jbg==');
+            配置.端口 = 80;
+            配置.传输层安全 = ['', false];
+        }
+
+        const 威图瑞 = `${协议类型}://${配置.用户ID}@${配置.地址}:${配置.端口}?encryption=${配置.加密方式}&security=${配置.传输层安全[0]}&sni=${配置.SNI}&fp=${配置.指纹}&type=${配置.传输层协议}&host=${配置.伪装域名}&path=${encodeURIComponent(配置.路径)}#${encodeURIComponent(配置.别名)}`;
+        
+        const 猫猫猫 = `- {name: ${配置.别名}, server: ${配置.地址}, port: ${配置.端口}, type: ${协议类型}, uuid: ${配置.用户ID}, tls: ${配置.传输层安全[1]}, alpn: [h3], udp: false, sni: ${配置.SNI}, tfo: false, skip-cert-verify: true, servername: ${配置.伪装域名}, client-fingerprint: ${配置.指纹}, network: ${配置.传输层协议}, ws-opts: {path: "${配置.路径}", headers: {${配置.伪装域名}}}}`;
+
+        return [威图瑞, 猫猫猫];
+    } catch (error) {
+        console.error('配置信息生成错误:', error);
         throw error;
     }
 }
@@ -991,71 +1091,6 @@ async function 双重哈希(文本) {
 
     return 第二次十六进制.toLowerCase();
 }
-
-async function 代理URL(代理网址, 目标网址) {
-    const 网址列表 = await 整理(代理网址);
-    const 完整网址 = 网址列表[Math.floor(Math.random() * 网址列表.length)];
-
-    const 解析后的网址 = new URL(完整网址);
-    console.log(解析后的网址);
-
-    const 协议 = 解析后的网址.protocol.slice(0, -1) || 'https';
-    const 主机名 = 解析后的网址.hostname;
-    let 路径名 = 解析后的网址.pathname;
-    const 查询参数 = 解析后的网址.search;
-
-    if (路径名.endsWith('/')) {
-        路径名 = 路径名.slice(0, -1);
-    }
-    路径名 += 目标网址.pathname;
-
-    const 新网址 = `${协议}://${主机名}${路径名}${查询参数}`;
-
-    const 响应 = await fetch(新网址);
-
-    const 新响应 = new Response(响应.body, {
-        status: 响应.status,
-        statusText: 响应.statusText,
-        headers: 响应.headers
-    });
-
-    新响应.headers.set('X-New-URL', 新网址);
-
-    return 新响应;
-}
-
-const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
-function 配置信息(UUID, 域名地址) {
-    const 协议类型 = atob(啥啥啥_写的这是啥啊);
-  
-    const 别名 = FileName;
-    let 地址 = 域名地址;
-    let 端口 = 443;
-  
-    const 用户ID = UUID;
-    const 加密方式 = 'none';
-  
-    const 传输层协议 = 'ws';
-    const 伪装域名 = 域名地址;
-    const 路径 = path;
-  
-    let 传输层安全 = ['tls', true];
-    const SNI = 域名地址;
-    const 指纹 = 'randomized';
-  
-    if (域名地址.includes('.workers.dev')) {
-        地址 = atob('dmlzYS5jbg==');
-        端口 = 80;
-        传输层安全 = ['', false];
-    }
-  
-	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
-	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
-    return [威图瑞, 猫猫猫];
-}
-
-let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
@@ -1774,180 +1809,245 @@ async function handlePostRequest(request, env, txt) {
 }
 
 async function handleGetRequest(env, txt) {
-    const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>编辑优选列表</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-        <style>
-            :root {
-                --background-color: #ffffff;
-                --color: #000000;
-                --button-color: #4CAF50;
-                --button-hover: #45a049;
-                --button-active: #3d8b40;
-            }
-            
-            body.dark-mode {
-                --background-color: #333;
-                --color: #fff;
-                --button-color: #45a049;
-                --button-hover: #3d8b40;
-                --button-active: #357a38;
-            }
+	let content = '';
+	let hasKV = !!env.KV;
 
-            body {
-                font-family: Arial, sans-serif;
-                line-height: 1.6;
-                margin: 0;
-                padding: 20px;
-                background-color: var(--background-color);
-                color: var(--color);
-            }
+	if (hasKV) {
+		try {
+			content = await env.KV.get(txt) || '';
+		} catch (error) {
+			console.error('读取KV时发生错误:', error);
+			content = '读取数据时发生错误: ' + error.message;
+		}
+	}
 
-            .container {
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 20px;
-            }
+	const html = `
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<title>优选订阅列表</title>
+			<meta charset="utf-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<style>
+				body {
+					margin: 0;
+					padding: 15px; /* 调整padding */
+					box-sizing: border-box;
+					font-size: 13px; /* 设置全局字体大小 */
+				}
+				.editor-container {
+					width: 100%;
+					max-width: 100%;
+					margin: 0 auto;
+				}
+				.editor {
+					width: 100%;
+					height: 520px; /* 调整高度 */
+					margin: 15px 0; /* 调整margin */
+					padding: 10px; /* 调整padding */
+					box-sizing: border-box;
+					border: 1px solid #ccc;
+					border-radius: 4px;
+					font-size: 13px;
+					line-height: 1.5;
+					overflow-y: auto;
+					resize: none;
+				}
+				.save-container {
+					margin-top: 8px; /* 调整margin */
+					display: flex;
+					align-items: center;
+					gap: 10px; /* 调整gap */
+				}
+				.save-btn, .back-btn {
+					padding: 6px 15px; /* 调整padding */
+					color: white;
+					border: none;
+					border-radius: 4px;
+					cursor: pointer;
+				}
+				.save-btn {
+					background: #4CAF50;
+				}
+				.save-btn:hover {
+					background: #45a049;
+				}
+				.back-btn {
+					background: #666;
+				}
+				.back-btn:hover {
+					background: #555;
+				}
+				.save-status {
+					color: #666;
+				}
+				.notice-content {
+					display: none;
+					margin-top: 10px;
+					font-size: 13px;
+					color: #333;
+				}
+			</style>
+		</head>
+		<body>
+			################################################################<br>
+			${FileName} 优选订阅列表:<br>
+			---------------------------------------------------------------<br>
+			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
+			<div id="noticeContent" class="notice-content">
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRnJhdyUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
+			</div>
+			<div class="editor-container">
+				${hasKV ? `
+				<textarea class="editor" 
+					placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+					id="content">${content}</textarea>
+				<div class="save-container">
+					<button class="back-btn" onclick="goBack()">返回配置页</button>
+					<button class="save-btn" onclick="saveContent(this)">保存</button>
+					<span class="save-status" id="saveStatus"></span>
+				</div>
+				<br>
+				################################################################<br>
+				${cmad}
+				` : '<p>未绑定KV空间</p>'}
+			</div>
+	
+			<script>
+			if (document.querySelector('.editor')) {
+				let timer;
+				const textarea = document.getElementById('content');
+				const originalContent = textarea.value;
+		
+				function goBack() {
+					const currentUrl = window.location.href;
+					const parentUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/'));
+					window.location.href = parentUrl;
+				}
+		
+				function replaceFullwidthColon() {
+					const text = textarea.value;
+					textarea.value = text.replace(/：/g, ':');
+				}
+				
+				function saveContent(button) {
+					try {
+						const updateButtonText = (step) => {
+							button.textContent = \`保存中: \${step}\`;
+						};
+						// 检测是否为iOS设备
+						const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+						
+						// 仅在非iOS设备上执行replaceFullwidthColon
+						if (!isIOS) {
+							replaceFullwidthColon();
+						}
+						updateButtonText('开始保存');
+						button.disabled = true;
+						// 获取textarea内容和原始内容
+						const textarea = document.getElementById('content');
+						if (!textarea) {
+							throw new Error('找不到文本编辑区域');
+						}
+						updateButtonText('获取内容');
+						let newContent;
+						let originalContent;
+						try {
+							newContent = textarea.value || '';
+							originalContent = textarea.defaultValue || '';
+						} catch (e) {
+							console.error('获取内容错误:', e);
+							throw new Error('无法获取编辑内容');
+						}
+						updateButtonText('准备状态更新函数');
+						const updateStatus = (message, isError = false) => {
+							const statusElem = document.getElementById('saveStatus');
+							if (statusElem) {
+								statusElem.textContent = message;
+								statusElem.style.color = isError ? 'red' : '#666';
+							}
+						};
+						updateButtonText('准备按钮重置函数');
+						const resetButton = () => {
+							button.textContent = '保存';
+							button.disabled = false;
+						};
+						if (newContent !== originalContent) {
+							updateButtonText('发送保存请求');
+							fetch(window.location.href, {
+								method: 'POST',
+								body: newContent,
+								headers: {
+									'Content-Type': 'text/plain;charset=UTF-8'
+								},
+								cache: 'no-cache'
+							})
+							.then(response => {
+								updateButtonText('检查响应状态');
+								if (!response.ok) {
+									throw new Error(\`HTTP error! status: \${response.status}\`);
+								}
+								updateButtonText('更新保存状态');
+								const now = new Date().toLocaleString();
+								document.title = \`编辑已保存 \${now}\`;
+								updateStatus(\`已保存 \${now}\`);
+							})
+							.catch(error => {
+								updateButtonText('处理错误');
+								console.error('Save error:', error);
+								updateStatus(\`保存失败: \${error.message}\`, true);
+							})
+							.finally(() => {
+								resetButton();
+							});
+						} else {
+							updateButtonText('检查内容变化');
+							updateStatus('内容未变化');
+							resetButton();
+						}
+					} catch (error) {
+						console.error('保存过程出错:', error);
+						button.textContent = '保存';
+						button.disabled = false;
+						const statusElem = document.getElementById('saveStatus');
+						if (statusElem) {
+							statusElem.textContent = \`错误: \${error.message}\`;
+							statusElem.style.color = 'red';
+						}
+					}
+				}
+		
+				textarea.addEventListener('blur', saveContent);
+				textarea.addEventListener('input', () => {
+					clearTimeout(timer);
+					timer = setTimeout(saveContent, 5000);
+				});
+			}
+		
+			function toggleNotice() {
+				const noticeContent = document.getElementById('noticeContent');
+				const noticeToggle = document.getElementById('noticeToggle');
+				if (noticeContent.style.display === 'none' || noticeContent.style.display === '') {
+					noticeContent.style.display = 'block';
+					noticeToggle.textContent = '注意事项∧';
+				} else {
+					noticeContent.style.display = 'none';
+					noticeToggle.textContent = '注意事项∨';
+				}
+			}
+		
+			// 初始化 noticeContent 的 display 属性
+			document.addEventListener('DOMContentLoaded', () => {
+				document.getElementById('noticeContent').style.display = 'none';
+			});
+			</script>
+		</body>
+		</html>
+	`;
 
-            .header-container {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                margin-bottom: 20px;
-            }
-
-            textarea {
-                width: 100%;
-                height: 500px;
-                padding: 10px;
-                margin-bottom: 10px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                resize: vertical;
-                background-color: var(--background-color);
-                color: var(--color);
-            }
-
-            .button {
-                background-color: var(--button-color);
-                color: white;
-                padding: 10px 20px;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 16px;
-                margin: 5px;
-            }
-
-            .button:hover {
-                background-color: var(--button-hover);
-            }
-
-            .button:active {
-                background-color: var(--button-active);
-            }
-
-            .button.disabled {
-                background-color: #cccccc;
-                cursor: not-allowed;
-            }
-
-            #saveStatus {
-                margin-top: 10px;
-                color: #666;
-            }
-
-            .notice {
-                margin: 20px 0;
-                padding: 10px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-            }
-
-            #noticeToggle {
-                background: none;
-                border: none;
-                color: var(--color);
-                cursor: pointer;
-                padding: 5px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-
-            #noticeContent {
-                margin-top: 10px;
-                display: none;
-            }
-
-            .floating-button {
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                width: 50px;
-                height: 50px;
-                border-radius: 25px;
-                background-color: var(--button-color);
-                border: none;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header-container">
-                <h1>编辑优选列表</h1>
-                <button id="saveButton" class="button">保存</button>
-            </div>
-
-            <div class="notice">
-                <button id="noticeToggle" onclick="toggleNotice()">注意事项∨</button>
-                <div id="noticeContent">
-                    <p>1. 每行一个地址，支持域名或IP</p>
-                    <p>2. 支持 # 添加注释</p>
-                    <p>3. 内容会自动保存</p>
-                    <p>4. 建议使用电脑编辑</p>
-                </div>
-            </div>
-
-            <textarea id="content" spellcheck="false">${txt}</textarea>
-            <div id="saveStatus"></div>
-        </div>
-
-        <button id="darkModeToggle" class="floating-button">
-            <i id="modeIcon" class="fa fa-2x fa-adjust" style="color: var(--background-color);" aria-hidden="true"></i>
-        </button>
-
-        <script>
-            // ... 保持原有的 JavaScript 代码 ...
-
-            // 添加深色模式切换功能
-            const darkModeToggle = document.getElementById('darkModeToggle');
-            darkModeToggle.addEventListener('click', () => {
-                const isDarkMode = document.body.classList.toggle('dark-mode');
-                localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
-            });
-
-            // 页面加载时检查深色模式设置
-            if (localStorage.getItem('darkMode') === 'enabled') {
-                document.body.classList.add('dark-mode');
-            }
-        </script>
-    </body>
-    </html>
-    `;
-
-    return new Response(html, {
-        headers: { "Content-Type": "text/html;charset=utf-8" }
-    });
+	return new Response(html, {
+		headers: { "Content-Type": "text/html;charset=utf-8" }
+	});
 }
 
 async function 处理地址列表(地址列表) {
