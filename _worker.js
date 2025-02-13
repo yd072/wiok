@@ -2030,10 +2030,14 @@ async function buildXrayBestPingConfig(nodes) {
     const results = await Promise.all(nodes.map(async (node) => {
         const start = Date.now();
         try {
-            await fetch(`https://${node}/ping`, { method: 'HEAD' });
+            const response = await fetch(`https://${node}/ping`, { method: 'HEAD' });
+            if (!response.ok) {
+                throw new Error(`Failed to reach ${node}`);
+            }
             const latency = Date.now() - start;
             return { node, latency };
         } catch (error) {
+            console.error(`Error fetching ${node}:`, error);
             return { node, latency: Infinity }; // 如果请求失败，设置为无穷大
         }
     }));
@@ -2048,5 +2052,19 @@ async function getBestNodeConfig() {
     const nodes = ['node1.example.com', 'node2.example.com', 'node3.example.com'];
     const bestNode = await buildXrayBestPingConfig(nodes);
     console.log(`最佳节点是: ${bestNode}`);
+    
     // 在这里生成并返回 Xray 配置
+    if (bestNode) {
+        const xrayConfig = {
+            // 这里填写生成 Xray 配置的逻辑
+            server: bestNode,
+            port: 443,
+            uuid: 'your-uuid',
+            // 其他配置项...
+        };
+        console.log('Xray 配置:', xrayConfig);
+        return xrayConfig;
+    } else {
+        console.error('未找到可用节点');
+    }
 }
