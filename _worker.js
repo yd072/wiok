@@ -412,7 +412,10 @@ const dnsConfig = {
 async function 维列斯OverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
-
+    
+    // 添加 responseHeader 的初始化
+    let responseHeader = null;
+    
     webSocket.accept();
 
     let address = '';
@@ -433,7 +436,7 @@ async function 维列斯OverWSHandler(request) {
         async write(chunk, controller) {
             try {
                 if (isDns) {
-                    return handleDNSQuery(chunk, webSocket, null, log);
+                    return handleDNSQuery(chunk, webSocket, responseHeader, log);
                 }
                 if (remoteSocketWrapper.value) {
                     const writer = remoteSocketWrapper.value.writable.getWriter();
@@ -476,6 +479,11 @@ async function 维列斯OverWSHandler(request) {
                     handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log);
                 } else {
                     throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
+                }
+
+                // 处理 responseHeader
+                if (!responseHeader) {
+                    responseHeader = 维列斯ResponseHeader;
                 }
             } catch (error) {
                 log('处理数据时发生错误', error.message);
@@ -573,12 +581,12 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 }
 
-// 修改变量名称
-let 维列斯ResponseHeader = responseHeader;
-let 维列斯Version = version;
+// 修改变量名称 - 移除未定义的变量引用
+let 维列斯ResponseHeader = null; // 改为初始化为 null
+let 维列斯Version = null; // 改为初始化为 null
 
 // 在其他地方也相应修改变量名称
-async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
+async function handleDNSQuery(udpChunk, webSocket, responseHeader, log) {
     const WS_READY_STATE_OPEN = 1;
     
     try {
@@ -586,7 +594,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         const dnsServer = '8.8.4.4';
         const dnsPort = 53;
         
-        let 维列斯Header = 维列斯ResponseHeader;
+        let header = responseHeader; // 使用传入的 responseHeader
         
         // 使用Promise.race设置2秒超时
         const tcpSocket = await Promise.race([
@@ -604,9 +612,9 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
             async write(chunk) {
                 if (webSocket.readyState === WS_READY_STATE_OPEN) {
                     try {
-                        const combinedData = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
+                        const combinedData = header ? mergeData(header, chunk) : chunk;
                         webSocket.send(combinedData);
-                        if (维列斯Header) 维列斯Header = null;
+                        if (header) header = null;
                     } catch (error) {
                         console.error(`发送数据时发生错误: ${error.message}`);
                         safeCloseWebSocket(webSocket);
