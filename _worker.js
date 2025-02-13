@@ -612,124 +612,6 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
     }
 }
 
-// 添加节点配置优化
-function buildNodeConfig(address, port, host, sni, path, isCustomAddr) {
-    return {
-        // 基础配置
-        type: "vless",
-        address: address,
-        port: parseInt(port),
-        id: globalThis.userID,
-        flow: "", // 不启用 XTLS-Vision
-        
-        // 传输层配置
-        network: "ws",
-        tls: globalThis.defaultHttpsPorts.includes(port) ? true : false,
-        
-        // TLS配置优化
-        security: globalThis.defaultHttpsPorts.includes(port) ? "tls" : "none",
-        allowInsecure: false, // 禁止不安全连接
-        alpn: ["h2", "http/1.1"], // 支持 HTTP/2
-        fingerprint: "chrome", // 模拟Chrome指纹
-        
-        // SNI优化
-        sni: sni,
-        serverName: sni,
-        
-        // WebSocket配置优化  
-        wsSettings: {
-            path: `/${path}`,
-            headers: {
-                Host: host
-            },
-            maxEarlyData: 2048,
-            earlyDataHeaderName: "Sec-WebSocket-Protocol"
-        },
-
-        // 多路复用与并发
-        mux: {
-            enabled: true,
-            concurrency: 8,
-            xudpConcurrency: 8 
-        },
-
-        // 性能优化
-        sockopt: {
-            tcpFastOpen: true, // 启用TCP快速打开
-            tcpKeepAlive: true, // 保持TCP连接
-            tcpNoDelay: true,   // 禁用Nagle算法
-            mark: 255,          // 流量标记
-            domainStrategy: "UseIPv4" // 优先IPv4
-        },
-
-        // 传输优化
-        packet_encoding: "xudp", // 启用xudp
-        udp: true,              // 启用UDP
-        
-        // 健康检查
-        healthCheck: {
-            enable: true,
-            interval: 30,  // 每30秒检查一次
-            timeout: 3,    // 超时3秒
-            threshold: 3   // 3次失败后切换节点
-        }
-    };
-}
-
-// 添加节点管理
-class NodeManager {
-    constructor() {
-        this.nodes = new Map();
-        this.activeNode = null;
-        this.healthCheckTimer = null;
-    }
-
-    addNode(node) {
-        this.nodes.set(node.address, node);
-    }
-
-    async selectBestNode() {
-        let bestNode = null;
-        let bestLatency = Infinity;
-
-        for (const [_, node] of this.nodes) {
-            try {
-                const start = Date.now();
-                const response = await fetch(`${node.security}://${node.address}`, {
-                    timeout: 2000
-                });
-                const latency = Date.now() - start;
-                
-                if (latency < bestLatency && response.ok) {
-                    bestLatency = latency;
-                    bestNode = node;
-                }
-            } catch (error) {
-                console.log(`Node ${node.address} health check failed:`, error);
-            }
-        }
-
-        this.activeNode = bestNode;
-        return bestNode;
-    }
-
-    startHealthCheck() {
-        this.healthCheckTimer = setInterval(() => {
-            this.selectBestNode();
-        }, 30000); // 每30秒检查一次
-    }
-
-    stopHealthCheck() {
-        if (this.healthCheckTimer) {
-            clearInterval(this.healthCheckTimer);
-        }
-    }
-}
-
-// 使用示例
-const nodeManager = new NodeManager();
-
-// 在handleTCPOutBound中使用
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
     async function useSocks5Pattern(address) {
         if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
@@ -743,98 +625,61 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     async function connectAndWrite(address, port, socks = false) {
         log(`正在连接 ${address}:${port}`);
         
-        // 添加更多连接优化选项
-        const tcpOptions = {
-            hostname: address,
-            port: port,
-            allowHalfOpen: false,
-            keepAlive: true,
-            keepAliveInitialDelay: 60000,
-            // 添加更多性能参数
-            noDelay: true,           // 禁用Nagle算法
-            reuseAddr: true,         // 允许地址重用
-            timeout: 5000,           // 连接超时时间
-            // 添加传输优化
-            tcpNoDelay: true,        // TCP无延迟
-            tcpFastOpen: true,       // TCP快速打开
-            tcpCongestion: 'bbr',    // 使用BBR拥塞控制
-            // 添加TLS优化
-            alpn: ['h2', 'http/1.1'],
-            minVersion: 'TLSv1.2',
-            maxVersion: 'TLSv1.3',
-            cipherSuites: [          // 优化加密套件
-                'TLS_AES_128_GCM_SHA256',
-                'TLS_AES_256_GCM_SHA384',
-                'TLS_CHACHA20_POLY1305_SHA256'
-            ]
-        };
-
+        // 添加连接超时处理
         const tcpSocket = await Promise.race([
             socks ? 
                 await socks5Connect(addressType, address, port, log) :
-                connect(tcpOptions),
+                connect({ 
+                    hostname: address, 
+                    port: port,
+                    // 添加 TCP 连接优化选项
+                    allowHalfOpen: false,
+                    keepAlive: true,
+                    keepAliveInitialDelay: 60000
+                }),
             new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('连接超时')), 3000)
             )
         ]);
 
-        // 添加错误处理和重试机制
-        tcpSocket.closed
-            .catch(error => {
-                log('TCP连接关闭:', error);
-                if (error.code === 'ECONNRESET') {
-                    return retry();
-                }
-            })
-            .finally(() => {
-                safeCloseWebSocket(webSocket);
-            });
-
-        // 添加流量控制
-        const writer = tcpSocket.writable.getWriter();
-        const writableStreamDefaultController = writer.desiredSize;
-        if (writableStreamDefaultController > 1024 * 1024) { // 1MB缓冲区
-            await new Promise(resolve => setTimeout(resolve, 100)); // 流量控制
-        }
+        remoteSocket.value = tcpSocket;
         
+        // 使用更大的写入缓冲区
+        const writer = tcpSocket.writable.getWriter();
         await writer.write(rawClientData);
         writer.releaseLock();
         
         return tcpSocket;
     }
 
-    // 添加自动重试和故障转移
-    async function retry(retryCount = 0, maxRetries = 3) {
-        if (retryCount >= maxRetries) {
-            log('达到最大重试次数');
-            return;
-        }
-
+    async function retry() {
         try {
-            log(`第${retryCount + 1}次重试连接`);
-            
             if (enableSocks) {
                 tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
             } else {
-                // 智能选择代理服务器
-                const proxyServers = getAvailableProxyServers();
-                for (const proxy of proxyServers) {
-                    try {
-                        tcpSocket = await connectAndWrite(proxy.ip, proxy.port);
-                        break;
-                    } catch (error) {
-                        log(`代理服务器 ${proxy.ip} 连接失败:`, error);
-                        continue;
+                if (!proxyIP || proxyIP === '') {
+                    proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
+                } else {
+                    const proxyParts = proxyIP.split(':');
+                    if (proxyIP.includes(']:')) {
+                        [proxyIP, portRemote] = proxyIP.split(']:');
+                    } else if (proxyParts.length === 2) {
+                        [proxyIP, portRemote] = proxyParts;
+                    }
+                    if (proxyIP.includes('.tp')) {
+                        portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
                     }
                 }
+                tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
             }
-
-            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, 
-                () => retry(retryCount + 1, maxRetries), log);
-                
+            tcpSocket.closed.catch(error => {
+                console.log('Retry tcpSocket closed error', error);
+            }).finally(() => {
+                safeCloseWebSocket(webSocket);
+            });
+            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
-            log('重试失败:', error);
-            setTimeout(() => retry(retryCount + 1, maxRetries), 1000 * (retryCount + 1));
+            log('Retry error:', error);
         }
     }
 
@@ -844,20 +689,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     }
     let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
     remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
-
-    // 创建节点配置
-    const nodeConfig = buildNodeConfig(addressRemote, portRemote, host, sni, path, isCustomAddr);
-    nodeManager.addNode(nodeConfig);
-
-    // 选择最佳节点
-    const bestNode = await nodeManager.selectBestNode();
-    if (bestNode) {
-        // 使用最佳节点配置进行连接
-        tcpSocket = await connectAndWrite(bestNode.address, bestNode.port);
-    }
-
-    // 启动健康检查
-    nodeManager.startHealthCheck();
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
@@ -935,67 +766,39 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    
-    // 添加心跳检测
-    const heartbeat = setInterval(() => {
-        if (webSocket.readyState === WS_READY_STATE_OPEN) {
-            webSocket.ping();
-        }
-    }, 30000);
-
-    // 添加流量统计
-    let bytesReceived = 0;
-    let bytesSent = 0;
 
     await remoteSocket.readable
-        .pipeThrough(new TransformStream({
-            transform(chunk, controller) {
-                bytesReceived += chunk.byteLength;
-                controller.enqueue(chunk);
-            }
-        }))
         .pipeTo(
             new WritableStream({
                 async write(chunk, controller) {
                     hasIncomingData = true;
-                    
+
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                         controller.error('WebSocket not open');
                     }
 
-                    try {
-                        if (header) {
-                            const data = await new Blob([header, chunk]).arrayBuffer();
-                            webSocket.send(data);
-                            bytesSent += data.byteLength;
-                            header = null;
-                        } else {
-                            webSocket.send(chunk);
-                            bytesSent += chunk.byteLength;
-                        }
-                    } catch (error) {
-                        log('发送数据错误:', error);
-                        controller.error(error);
+                    if (header) {
+                        webSocket.send(await new Blob([header, chunk]).arrayBuffer());
+                        header = null;
+                    } else {
+                        webSocket.send(chunk);
                     }
                 },
                 close() {
-                    clearInterval(heartbeat);
-                    log(`连接关闭. 接收: ${bytesReceived}字节, 发送: ${bytesSent}字节`);
+                    log(`Remote connection closed, data received: ${hasIncomingData}`);
                 },
                 abort(reason) {
-                    clearInterval(heartbeat);
-                    log(`连接中断:`, reason);
-                }
+                    console.error(`Remote connection aborted`);
+                },
             })
         )
         .catch((error) => {
-            clearInterval(heartbeat);
-            log(`传输错误:`, error);
+            console.error(`remoteSocketToWS exception`);
             safeCloseWebSocket(webSocket);
         });
 
     if (!hasIncomingData && retry) {
-        log(`无数据收到,开始重试`);
+        log(`Retrying connection`);
         retry();
     }
 }
@@ -1221,37 +1024,121 @@ async function 代理URL(代理网址, 目标网址) {
     return 新响应;
 }
 
-const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
-function 配置信息(UUID, 域名地址) {
-    const 协议类型 = atob(啥啥啥_写的这是啥啊);
-  
+// 将 啥啥啥_写的这是啥啊 的值改为 tunnel 的 base64 编码
+const 啥啥啥_写的这是啥啊 = atob('dHVubmVs'); 
+
+function 生成配置信息(UUID, 域名地址, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
+    // 基础配置
+    const 协议类型 = atob(啥啥啥_写的这是啥啊); // 解码后是 tunnel
     const 别名 = FileName;
     let 地址 = 域名地址;
     let 端口 = 443;
-  
     const 用户ID = UUID;
     const 加密方式 = 'none';
-  
     const 传输层协议 = 'ws';
     const 伪装域名 = 域名地址;
-    const 路径 = path;
-  
+    const 路径 = `${path}${RproxyIP === 'true' ? `&proxyip=${proxyIP}` : ''}`;
     let 传输层安全 = ['tls', true];
     const SNI = 域名地址;
-    const 指纹 = 'randomized';
-    // 添加 ALPN 配置
-    const 协议 = ['h3,h2,http/1.1'];
-  
+    const 指纹 = 'chrome';
+    const 协议 = ['h2', 'http/1.1'];
+
+    // workers.dev 域名特殊处理
     if (域名地址.includes('.workers.dev')) {
         地址 = atob('dmlzYS5jbg==');
         端口 = 80;
         传输层安全 = ['', false];
     }
-  
-    const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&alpn=${encodeURIComponent(协议.join(','))}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
-    const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3,h2,http/1.1], udp: true, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
-  
-    return [威图瑞, 猫猫猫];
+
+    // 改进的clash配置
+    const clash = {
+        name: 别名,
+        type: 协议类型,  // 使用 tunnel 替代 vless
+        server: 地址,
+        port: 端口,
+        uuid: 用户ID,
+        tls: 传输层安全[1],
+        alpn: 协议,
+        udp: true,
+        sni: SNI,
+        "skip-cert-verify": false,
+        servername: 伪装域名,
+        "client-fingerprint": 指纹,
+        network: 传输层协议,
+        "ws-opts": {
+            path: 路径,
+            headers: {
+                Host: 伪装域名
+            },
+            "max-early-data": 2560,
+            "early-data-header-name": "Sec-WebSocket-Protocol"
+        },
+        // 添加更多优化配置
+        "interface-name": "",
+        routing: "IPIfNonMatch",
+        "routing-mark": 0,
+        mux: {
+            enabled: true,
+            concurrency: 8,
+            "idle-timeout": 60
+        },
+        "tcp-fast-open": true,
+        "keep-alive": true,
+        "heartbeat-interval": 30,
+        "health-check": {
+            enable: true,
+            interval: 30,
+            url: "https://www.gstatic.com/generate_204"
+        }
+    };
+
+    // 转换为clash格式的字符串
+    const clashStr = `- ${JSON.stringify(clash)}`;
+
+    // 生成标准链接,使用 tunnel 替代 vless
+    const tunnelLink = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&alpn=${encodeURIComponent(协议.join(','))}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
+
+    return {
+        tunnel: tunnelLink, // 改名为 tunnel
+        clash: clashStr,
+        // 保留原有的outbounds配置
+        outbounds: [{
+            protocol: 协议类型, // 使用 tunnel 替代 vless
+            settings: {
+                vnext: [{
+                    address: 地址,
+                    port: 端口,
+                    users: [{
+                        id: 用户ID,
+                        encryption: 加密方式,
+                        flow: "",
+                        level: 0
+                    }]
+                }]
+            },
+            streamSettings: {
+                network: 传输层协议,
+                security: 传输层安全[0],
+                wsSettings: {
+                    path: 路径,
+                    headers: {
+                        Host: 伪装域名
+                    },
+                    maxEarlyData: 2560,
+                    earlyDataHeaderName: "Sec-WebSocket-Protocol"
+                },
+                tlsSettings: {
+                    serverName: SNI,
+                    allowInsecure: false,
+                    fingerprint: 指纹,
+                    alpn: 协议,
+                    minVersion: "1.2",
+                    maxVersion: "1.3",
+                    cipherSuites: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+                }
+            }
+        }]
+    };
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
@@ -1314,9 +1201,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 	const uuid = (_url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
 	const userAgent = UA.toLowerCase();
-	const Config = 配置信息(userID, hostName);
-	const proxyConfig = Config[0];
-	const clash = Config[1];
+	const Config = 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env);
+	const proxyConfig = Config.tunnel; // 使用 tunnel 替代 vless
+	const clash = Config.clash;
 	let proxyhost = "";
 	if (hostName.includes(".workers.dev")) {
 		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
@@ -1549,7 +1436,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
 			} else {
 				const response = await fetch(url, {
-					headers: {
+                    headers: {
 						'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
 					}
 				});
