@@ -45,6 +45,9 @@ let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 
+// 添加变量定义
+const 啥啥啥_写的这是啥啊 = 'dmxlc3M='; // base64编码的'vless'
+
 // 添加工具函数
 const utils = {
 	// UUID校验
@@ -590,7 +593,7 @@ async function 代理URL(代理网址, 目标网址) {
 // 优化配置信息生成函数
 function 配置信息(UUID, 域名地址) {
     try {
-        const 协议类型 = atob('ZG14bGMzTT0=');
+        const 协议类型 = atob(啥啥啥_写的这是啥啊);
         const 配置 = {
             别名: FileName,
             地址: 域名地址,
@@ -613,7 +616,7 @@ function 配置信息(UUID, 域名地址) {
 
         const 威图瑞 = `${协议类型}://${配置.用户ID}@${配置.地址}:${配置.端口}?encryption=${配置.加密方式}&security=${配置.传输层安全[0]}&sni=${配置.SNI}&fp=${配置.指纹}&type=${配置.传输层协议}&host=${配置.伪装域名}&path=${encodeURIComponent(配置.路径)}#${encodeURIComponent(配置.别名)}`;
         
-        const 猫猫猫 = `- {name: ${配置.别名}, server: ${配置.地址}, port: ${配置.端口}, type: ${协议类型}, uuid: ${配置.用户ID}, tls: ${配置.传输层安全[1]}, alpn: [h3], udp: false, sni: ${配置.SNI}, tfo: false, skip-cert-verify: true, servername: ${配置.伪装域名}, client-fingerprint: ${配置.指纹}, network: ${配置.传输层协议}, ws-opts: {path: "${配置.路径}", headers: {${配置.伪装域名}}}}`;
+        const 猫猫猫 = `- {name: ${配置.别名}, server: ${配置.地址}, port: ${配置.端口}, type: ${协议类型}, uuid: ${配置.用户ID}, tls: ${配置.传输层安全[1]}, alpn: [h3], udp: false, sni: ${配置.SNI}, tfo: false, skip-cert-verify: true, servername: ${配置.伪装域名}, client-fingerprint: ${配置.指纹}, network: ${配置.传输层协议}, ws-opts: {path: "${配置.路径}", headers: {Host: ${配置.伪装域名}}}}`;
 
         return [威图瑞, 猫猫猫];
     } catch (error) {
