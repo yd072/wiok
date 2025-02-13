@@ -1024,36 +1024,94 @@ async function 代理URL(代理网址, 目标网址) {
     return 新响应;
 }
 
-const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
 function 配置信息(UUID, 域名地址) {
-    const 协议类型 = atob(啥啥啥_写的这是啥啊);
-  
+    const 协议类型 = atob('ZG14bGMzTT0');  // 保持不变
+    
     const 别名 = FileName;
     let 地址 = 域名地址;
     let 端口 = 443;
-  
+    
     const 用户ID = UUID;
     const 加密方式 = 'none';
-  
+    
+    // 1. 改进传输层配置
     const 传输层协议 = 'ws';
     const 伪装域名 = 域名地址;
     const 路径 = path;
-  
+    
+    // 2. 增强TLS配置
     let 传输层安全 = ['tls', true];
     const SNI = 域名地址;
-    const 指纹 = 'randomized';
-    // 添加 ALPN 配置
-    const 协议 = ['h3,h2,http/1.1'];
-  
+    const 指纹 = 'chrome';  // 改用更真实的浏览器指纹
+    
+    // 3. 增加多协议支持和优先级
+    const 协议 = ['h2,http/1.1'];  // 移除h3,专注于更稳定的协议
+    
+    // 4. 增加传输优化参数
+    const 传输优化 = {
+        tcp_fast_open: true,
+        tcp_keep_alive: true,
+        连接空闲超时: 300,
+        并发连接数: 8
+    };
+
+    // 5. 增加容错配置
+    const 容错配置 = {
+        允许不安全: false,
+        跳过证书验证: false,
+        自动重连: true,
+        重连间隔: 5
+    };
+
     if (域名地址.includes('.workers.dev')) {
         地址 = atob('dmlzYS5jbg==');
         端口 = 80;
         传输层安全 = ['', false];
     }
-  
-    const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&alpn=${encodeURIComponent(协议.join(','))}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
-    const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3,h2,http/1.1], udp: true, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
-  
+
+    // 6. 构建增强版配置字符串
+    const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}?` + 
+        `encryption=${加密方式}&` +
+        `security=${传输层安全[0]}&` +
+        `sni=${SNI}&` +
+        `fp=${指纹}&` +
+        `alpn=${encodeURIComponent(协议.join(','))}&` +
+        `type=${传输层协议}&` +
+        `host=${伪装域名}&` +
+        `path=${encodeURIComponent(路径)}&` +
+        `headerType=none&` +
+        `flow=xtls-rprx-vision&` + // 增加 XTLS Vision 流控
+        `allowInsecure=${容错配置.允许不安全}&` +
+        `#${encodeURIComponent(别名)}`;
+
+    // 7. 构建增强版Clash配置
+    const 猫猫猫 = `
+- name: ${FileName}
+  type: ${协议类型}
+  server: ${地址}
+  port: ${端口}
+  uuid: ${用户ID}
+  tls: ${传输层安全[1]}
+  servername: ${伪装域名}
+  network: ${传输层协议}
+  client-fingerprint: ${指纹}
+  alpn: 
+    - h2
+    - http/1.1
+  udp: true
+  skip-cert-verify: ${容错配置.跳过证书验证}
+  ws-opts:
+    path: "${路径}"
+    headers:
+      host: ${伪装域名}
+  tcp-fast-open: ${传输优化.tcp_fast_open}
+  tcp-keep-alive: ${传输优化.tcp_keep_alive}
+  idle-timeout: ${传输优化.连接空闲超时}
+  max-connections: ${传输优化.并发连接数}
+  auto-reconnect: ${容错配置.自动重连}
+  reconnect-interval: ${容错配置.重连间隔}
+    `.trim();
+
     return [威图瑞, 猫猫猫];
 }
 
