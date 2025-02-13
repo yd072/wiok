@@ -1268,7 +1268,25 @@ async function 生成订阅配置(userID, hostName, sub, UA, RproxyIP, _url, fak
         else 订阅器 += `<br>SUBAPI（订阅转换后端）: ${subProtocol}://${subConverter}<br>SUBCONFIG（订阅转换配置文件）: ${subConfig}`;
         const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${有效时间} 天<br>UPTIME（动态UUID更新时间）: ${更新时间} 时（北京时间）<br><br>` : `${userIDTime}`;
         const 节点配置页 = `
-            #################################################################<br>
+<style>
+img, video, canvas {
+  overflow: hidden;
+  max-width: 100%;
+  height: auto;
+}
+
+#qrcode_0, #qrcode_1, #qrcode_proxyConfig {
+  overflow: hidden;
+  margin: 10px;
+}
+
+@font-face {
+  font-family: 'system-ui';
+  font-display: swap;
+}
+</style>
+
+#################################################################<br>
             Subscribe / sub 订阅地址, 点击链接自动 <strong>复制订阅链接</strong> 并 <strong>生成订阅二维码</strong> <br>
             ---------------------------------------------------------------<br>
             自适应订阅地址:<br>
