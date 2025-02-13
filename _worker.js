@@ -1053,110 +1053,7 @@ async function 代理URL(代理网址, 目标网址) {
     return 新响应;
 }
 
-const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
-function 配置信息(UUID, 域名地址) {
-    const 协议类型 = atob(啥啥啥_写的这是啥啊); // 维列斯的 base64
-    
-    const 别名 = FileName;
-    let 地址 = 域名地址;
-    let 端口 = 443;
-    
-    const 用户ID = UUID;
-    const 加密方式 = 'none';
-    
-    const 传输层协议 = 'ws';
-    const 伪装域名 = 域名地址;
-    const 路径 = path;
-    
-    let 传输层安全 = ['tls', true];
-    const SNI = 域名地址;
-    const 指纹 = 'randomized';
-    const 协议 = ['h3,h2,http/1.1'];
-    
-    if (域名地址.includes('.workers.dev')) {
-        地址 = atob('dmlzYS5jbg==');
-        端口 = 80;
-        传输层安全 = ['', false];
-    }
-    
-    const 维列斯配置 = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&alpn=${encodeURIComponent(协议.join(','))}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
-    const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3,h2,http/1.1], udp: true, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
-    
-    return [维列斯配置, 猫猫猫];
-}
-
-let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
-
-// 改进的 vless 配置生成函数
-function 生成VLESS配置(UUID, 域名地址, proxyIP = '', customSettings = {}) {
-    const config = {
-        // 基础配置
-        protocol: atob("dmxlc3M="), // vless
-        name: FileName,
-        address: 域名地址,
-        port: customSettings.port || 443,
-        uuid: UUID,
-        
-        // 传输层配置
-        network: "ws",
-        tls: {
-            enabled: true,
-            serverName: 域名地址, // SNI
-            fingerprint: utils.getRandomFingerprint(),
-            alpn: utils.getOptimizedALPN(),
-            allowInsecure: false,
-            minVersion: "1.2",
-            maxVersion: "1.3",
-            cipherSuites: [
-                "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
-                "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
-                "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
-            ]
-        },
-
-        // WebSocket 配置
-        ws: {
-            path: customSettings.path || utils.getRandomPath(),
-            headers: {
-                Host: 域名地址,
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br"
-            },
-            maxEarlyData: 2560,
-            earlyDataHeaderName: "Sec-WebSocket-Protocol"
-        },
-
-        // 安全配置
-        security: {
-            encryption: "none",
-            allowInsecure: false
-        },
-
-        // 性能优化
-        tcpFastOpen: true,
-        keepAlive: true,
-        congestionControl: "bbr",
-        udpRelay: true,
-        
-        // 代理设置
-        proxySettings: proxyIP ? {
-            enabled: true,
-            proxyIP: proxyIP,
-            proxyPort: customSettings.proxyPort || 443
-        } : null
-    };
-
-    // 如果有自定义设置，合并它们
-    if (customSettings) {
-        Object.assign(config, customSettings);
-    }
-
-    return config;
-}
-
-// 修改生成配置信息函数
+// 保留并优化新的生成配置信息函数
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
     try {
         let content = '';
@@ -1199,7 +1096,12 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fake
                         sni: hostName,
                         fp: "randomized",
                         alpn: "h2,http/1.1",
-                        allowInsecure: false
+                        allowInsecure: false,
+                        // 添加性能优化参数
+                        tcpFastOpen: true,
+                        keepAlive: true,
+                        congestionControl: "bbr",
+                        udpRelay: true
                     }
                 };
 
