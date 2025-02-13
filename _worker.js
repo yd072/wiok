@@ -612,6 +612,124 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
     }
 }
 
+// 添加节点配置优化
+function buildNodeConfig(address, port, host, sni, path, isCustomAddr) {
+    return {
+        // 基础配置
+        type: "vless",
+        address: address,
+        port: parseInt(port),
+        id: globalThis.userID,
+        flow: "", // 不启用 XTLS-Vision
+        
+        // 传输层配置
+        network: "ws",
+        tls: globalThis.defaultHttpsPorts.includes(port) ? true : false,
+        
+        // TLS配置优化
+        security: globalThis.defaultHttpsPorts.includes(port) ? "tls" : "none",
+        allowInsecure: false, // 禁止不安全连接
+        alpn: ["h2", "http/1.1"], // 支持 HTTP/2
+        fingerprint: "chrome", // 模拟Chrome指纹
+        
+        // SNI优化
+        sni: sni,
+        serverName: sni,
+        
+        // WebSocket配置优化  
+        wsSettings: {
+            path: `/${path}`,
+            headers: {
+                Host: host
+            },
+            maxEarlyData: 2048,
+            earlyDataHeaderName: "Sec-WebSocket-Protocol"
+        },
+
+        // 多路复用与并发
+        mux: {
+            enabled: true,
+            concurrency: 8,
+            xudpConcurrency: 8 
+        },
+
+        // 性能优化
+        sockopt: {
+            tcpFastOpen: true, // 启用TCP快速打开
+            tcpKeepAlive: true, // 保持TCP连接
+            tcpNoDelay: true,   // 禁用Nagle算法
+            mark: 255,          // 流量标记
+            domainStrategy: "UseIPv4" // 优先IPv4
+        },
+
+        // 传输优化
+        packet_encoding: "xudp", // 启用xudp
+        udp: true,              // 启用UDP
+        
+        // 健康检查
+        healthCheck: {
+            enable: true,
+            interval: 30,  // 每30秒检查一次
+            timeout: 3,    // 超时3秒
+            threshold: 3   // 3次失败后切换节点
+        }
+    };
+}
+
+// 添加节点管理
+class NodeManager {
+    constructor() {
+        this.nodes = new Map();
+        this.activeNode = null;
+        this.healthCheckTimer = null;
+    }
+
+    addNode(node) {
+        this.nodes.set(node.address, node);
+    }
+
+    async selectBestNode() {
+        let bestNode = null;
+        let bestLatency = Infinity;
+
+        for (const [_, node] of this.nodes) {
+            try {
+                const start = Date.now();
+                const response = await fetch(`${node.security}://${node.address}`, {
+                    timeout: 2000
+                });
+                const latency = Date.now() - start;
+                
+                if (latency < bestLatency && response.ok) {
+                    bestLatency = latency;
+                    bestNode = node;
+                }
+            } catch (error) {
+                console.log(`Node ${node.address} health check failed:`, error);
+            }
+        }
+
+        this.activeNode = bestNode;
+        return bestNode;
+    }
+
+    startHealthCheck() {
+        this.healthCheckTimer = setInterval(() => {
+            this.selectBestNode();
+        }, 30000); // 每30秒检查一次
+    }
+
+    stopHealthCheck() {
+        if (this.healthCheckTimer) {
+            clearInterval(this.healthCheckTimer);
+        }
+    }
+}
+
+// 使用示例
+const nodeManager = new NodeManager();
+
+// 在handleTCPOutBound中使用
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
     async function useSocks5Pattern(address) {
         if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
@@ -726,6 +844,20 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     }
     let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
     remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
+
+    // 创建节点配置
+    const nodeConfig = buildNodeConfig(addressRemote, portRemote, host, sni, path, isCustomAddr);
+    nodeManager.addNode(nodeConfig);
+
+    // 选择最佳节点
+    const bestNode = await nodeManager.selectBestNode();
+    if (bestNode) {
+        // 使用最佳节点配置进行连接
+        tcpSocket = await connectAndWrite(bestNode.address, bestNode.port);
+    }
+
+    // 启动健康检查
+    nodeManager.startHealthCheck();
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
