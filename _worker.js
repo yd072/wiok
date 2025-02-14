@@ -2066,7 +2066,7 @@ function buildXrayWarpOutbound(warpConfigs, remark, endpoint, chain) {
 }
 
 // 添加 buildXrayBestPingConfig 函数
-function buildXrayBestPingConfig(proxySettings) {
+async function buildXrayBestPingConfig(proxySettings) {
     const { warpEndpoints } = proxySettings;
     const config = structuredClone(clashConfigTemp);
     config.dns = await buildClashDNS(proxySettings, true, true);
