@@ -929,7 +929,7 @@ export default {
 						`path=${encodeURIComponent(最终路径)}&` +
 						`alpn=${encodeURIComponent(alpn)}&` +
 						`fp=randomized&` +
-						`allowInsecure=false&`+  
+						`allowInsecure=false&` +  
 						`tfo=true&` +
 						`keepAlive=true&` +
 						`congestion_control=bbr&` +
