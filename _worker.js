@@ -1551,7 +1551,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	const uniqueAddresses = [...new Set(addresses)];
 
 	const responseBody = uniqueAddresses.map(address => {
-		let port = "-1";
+		let port = "443"; // 默认端口改为443而不是-1
 		let addressid = address;
 
 		const match = addressid.match(regex);
@@ -1577,11 +1577,12 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			}
 		} else {
 			address = match[1];
-			port = match[2] || port;
+			port = match[2] || "443"; // 如果没有端口则使用443
 			addressid = match[3] || address;
 		}
 
-		if (!isValidIPv4(address) && port == "-1") {
+		// 检查是否需要使用 httpsPorts 中的端口
+		if (!port || port === "443") {
 			for (let httpsPort of httpsPorts) {
 				if (address.includes(httpsPort)) {
 					port = httpsPort;
@@ -1589,7 +1590,6 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				}
 			}
 		}
-		if (port == "-1") port = "443";
 
 		let 伪装域名 = host;
 		let 最终路径 = path;
