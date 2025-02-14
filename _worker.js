@@ -410,13 +410,35 @@ async function 维列斯OverWSHandler(request) {
                 if (isDns) {
                     return handleDNSQuery(chunk, webSocket, null, log);
                 }
+
                 if (remoteSocketWrapper.value) {
+                    // 处理已建立的连接
                     const writer = remoteSocketWrapper.value.writable.getWriter();
-                    await writer.write(chunk);
+                    
+                    // 添加分片处理
+                    const fragmentConfig = {
+                        enabled: true,
+                        packets: "10-20",
+                        length: "100-200",
+                        interval: "10-20"
+                    };
+
+                    const fragments = handleFragmentation(chunk, fragmentConfig);
+                    
+                    if (Array.isArray(fragments)) {
+                        // 发送分片数据
+                        for (const fragment of fragments) {
+                            await writer.write(fragment);
+                        }
+                    } else {
+                        await writer.write(chunk);
+                    }
+                    
                     writer.releaseLock();
                     return;
                 }
 
+                // 处理新连接
                 const {
                     hasError,
                     message,
@@ -430,9 +452,11 @@ async function 维列斯OverWSHandler(request) {
 
                 address = addressRemote;
                 portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
+                
                 if (hasError) {
                     throw new Error(message);
                 }
+                
                 if (isUDP) {
                     if (portRemote === 53) {
                         isDns = true;
@@ -440,12 +464,14 @@ async function 维列斯OverWSHandler(request) {
                         throw new Error('UDP 代理仅对 DNS（53 端口）启用');
                     }
                 }
+
                 const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
                 const rawClientData = chunk.slice(rawDataIndex);
 
                 if (isDns) {
                     return handleDNSQuery(rawClientData, webSocket, 维列斯ResponseHeader, log);
                 }
+
                 if (!banHostsSet.has(addressRemote)) {
                     log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
                     handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log);
@@ -456,17 +482,9 @@ async function 维列斯OverWSHandler(request) {
                 log('处理数据时发生错误', error.message);
                 webSocket.close(1011, '内部错误');
             }
-        },
-        close() {
-            log(`readableWebSocketStream 已关闭`);
-        },
-        abort(reason) {
-            log(`readableWebSocketStream 已中止`, JSON.stringify(reason));
-        },
-    })).catch((err) => {
-        log('readableWebSocketStream 管道错误', err);
-        webSocket.close(1011, '管道错误');
-    });
+        }
+        // ... 保留其他代码 ...
+    }));
 
     return new Response(null, {
         status: 101,
@@ -1531,14 +1549,11 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	}
 
 	const uniqueAddresses = [...new Set(addresses)];
-	
-	// 添加 Best Ping 配置组
-	let bestPingGroup = [];
-	
+
 	const responseBody = uniqueAddresses.map(address => {
 		let port = "-1";
 		let addressid = address;
-		
+
 		const match = addressid.match(regex);
 		if (!match) {
 			if (address.includes(':') && address.includes('#')) {
@@ -1581,52 +1596,41 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		let 节点备注 = '';
 		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
 		if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
-		
+
 		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
 			最终路径 = `/${伪装域名}${最终路径}`;
 			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
 			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
 		}
-		
-		const 协议类型 = atob(啥啥啥_写的这是啥啊);
-		const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
-			`${atob('ZW5jcnlwdGlvbj1ub25l')}&` + 
-			`${atob('c2VjdXJpdHk9dGxz')}&` + 
-			`${atob('c25pPQ==')}${伪装域名}&` + 
-			`fp=randomized&` + 
-			`type=ws&` + 
-			`host=${伪装域名}&` + 
-			`path=${encodeURIComponent(最终路径)}&` + 
-			`alpn=h3&` + 
-			`allowInsecure=false&` + 
-			`tfo=true&` + 
-			`keepAlive=true&` +  
-			`congestion_control=bbr&` + 
-			`udp_relay=true` + 
-			`#${encodeURIComponent(addressid + ' - ' + port)}&timeout=5&interval=300&tolerance=50&testing=true`;  // 修改备注格式
 
-		// 将节点添加到 Best Ping 组
-		bestPingGroup.push(维列斯Link);
-		
+		const 协议类型 = atob(啥啥啥_写的这是啥啊);
+        const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
+            `${atob('ZW5jcnlwdGlvbj1ub25l')}&` + 
+            `${atob('c2VjdXJpdHk9dGxz')}&` + 
+            `${atob('c25pPQ==')}${伪装域名}&` + 
+            `fp=randomized&` + 
+            `type=ws&` + 
+            `host=${伪装域名}&` + 
+            `path=${encodeURIComponent(最终路径)}&` + 
+            // 添加分片参数
+            `fragment=true&` +
+            `fragmentPackets=${fragmentConfig.packets}&` +
+            `fragmentLength=${fragmentConfig.length}&` +
+            `fragmentInterval=${fragmentConfig.interval}&` +
+            `alpn=h3&` + 
+            `allowInsecure=false&` + 
+            `tfo=true&` +  
+            `keepAlive=true&` +  
+            `congestion_control=bbr&` + 
+            `udp_relay=true` + 
+            `#${encodeURIComponent(addressid + 节点备注)}`;
+
 		return 维列斯Link;
 	}).join('\n');
-
-	// 修改 Best Ping 配置格式
-	const bestPingConfig = bestPingGroup.map((node, index) => {
-		const nodeName = `BP_${index + 1}`;
-		return node.replace(/#[^#]+$/, `#${nodeName}`);
-	}).join('\n');
-
-	// 修改自动切换策略格式
-	const autoSwitchConfig = `vless://auto-switch?name=🌊BestPing&type=urltest&interval=300&tolerance=50&url=http://www.gstatic.com/generate_204&${bestPingConfig}`;
 
 	let base64Response = responseBody; 
 	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
 	if (link.length > 0) base64Response += '\n' + link.join('\n');
-	
-	// 添加自动切换配置到最终响应
-	base64Response += '\n' + autoSwitchConfig;
-	
 	return btoa(base64Response);
 }
 
@@ -1995,6 +1999,7 @@ async function handleGetRequest(env, txt) {
 		headers: { "Content-Type": "text/html;charset=utf-8" }
 	});
 }
+
 async function 处理地址列表(地址列表) {
 	const 分类地址 = {
 		接口地址: new Set(),
@@ -2016,31 +2021,37 @@ async function 处理地址列表(地址列表) {
 	return 分类地址;
 }
 
-// 添加延迟测试相关函数
-async function testLatency(url) {
-    try {
-        const start = Date.now();
-        await fetch(url, {
-            method: 'HEAD',
-            signal: AbortSignal.timeout(5000)  // 5秒超时
-        });
-        return Date.now() - start;
-    } catch {
-        return Infinity;
+// 添加分片处理函数
+function handleFragmentation(chunk, fragmentConfig) {
+    if (!fragmentConfig.enabled) {
+        return chunk;
     }
-}
 
-// 添加自动选择最佳节点的函数
-async function selectBestNode(nodes) {
-    const testUrl = 'https://www.gstatic.com/generate_204';
-    const results = await Promise.all(
-        nodes.map(async node => {
-            const latency = await testLatency(testUrl);
-            return { node, latency };
-        })
-    );
+    const [minPackets, maxPackets] = fragmentConfig.packets.split('-').map(Number);
+    const [minLength, maxLength] = fragmentConfig.length.split('-').map(Number);
+    const [minInterval, maxInterval] = fragmentConfig.interval.split('-').map(Number);
+
+    // 实现分片逻辑
+    const fragments = [];
+    let offset = 0;
     
-    return results
-        .filter(r => r.latency !== Infinity)
-        .sort((a, b) => a.latency - b.latency)[0]?.node;
+    while (offset < chunk.length) {
+        // 随机生成分片大小
+        const packetSize = Math.floor(Math.random() * (maxPackets - minPackets + 1)) + minPackets;
+        const fragmentLength = Math.floor(Math.random() * (maxLength - minLength + 1)) + minLength;
+        
+        // 创建分片
+        const fragment = chunk.slice(offset, offset + Math.min(fragmentLength, chunk.length - offset));
+        fragments.push(fragment);
+        
+        offset += fragmentLength;
+        
+        // 添加分片间隔
+        if (offset < chunk.length) {
+            const interval = Math.floor(Math.random() * (maxInterval - minInterval + 1)) + minInterval;
+            setTimeout(() => {}, interval);
+        }
+    }
+
+    return fragments;
 }
