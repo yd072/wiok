@@ -26,7 +26,7 @@ let 临时中转域名 = [];
 let 临时中转域名接口 = '';
 let EndPS = '';
 let 协议类型 = atob(`\u0056\u006b\u0078\u0046\u0055\u0031\u004d\u003d`);
-let FileName = '404';
+let FileName = '优选订阅生成器';
 let SUBUpdateTime = 6;
 let total = 24;
 let timestamp = 4102329600000;
@@ -40,7 +40,7 @@ let MamaJustKilledAMan = ['telegram', 'twitter', 'miaoko'];
 let proxyIPPool = [];
 let socks5Data;
 let alpn = 'h3';
-let 网络备案 = `<a href='404'>优雅永不过时</a>`;//写你自己的维护者广告
+let 网络备案 = `<a href='https://t.me/CMLiussss'>萌ICP备-20240707号</a>`;//写你自己的维护者广告
 let 额外ID = '0';
 let 加密方式 = 'auto';
 let 网站图标, 网站头像, 网站背景;
@@ -1307,12 +1307,137 @@ async function subHtml(request) {
 					</svg>
 				</a>
 				<div class="container">
-					<div class="logo-title">
-						${网站头像}
-						<h1>${FileName}</h1>
+						<div class="logo-title">
+							${网站头像}
+							<h1>${FileName}</h1>
+						</div>
+					<div class="input-group">
+						<label for="link">节点链接</label>
+						<input type="text" id="link" placeholder="${decodeURIComponent(atob('JUU4JUFGJUI3JUU4JUJFJTkzJUU1JTg1JUE1JTIwVk1lc3MlMjAlMkYlMjBWTEVTUyUyMCUyRiUyMFRyb2phbiUyMCVFOSU5MyVCRSVFNiU4RSVBNQ=='))}">
+					</div>
+					
+					<button onclick="generateLink()">生成优选订阅</button>
+					
+					<div class="input-group">
+						<div style="display: flex; align-items: center;">
+							<label for="result">优选订阅</label>
+							<div style="position: relative;">
+								<span class="info-icon" onclick="toggleTooltip(event)">!</span>
+								<div class="info-tooltip" id="infoTooltip">
+									<strong>安全提示</strong>：使用优选订阅生成器时，需要您提交 <strong>节点配置信息</strong> 用于生成优选订阅链接。这意味着订阅器的维护者可能会获取到该节点信息。<strong>请自行斟酌使用风险。</strong><br>
+									<br>
+									订阅转换后端：<strong>${subConverter}</strong><br>
+									订阅转换配置文件：<strong>${subConfig}</strong>
+								</div>
+							</div>
+						</div>
+						<input type="text" id="result" readonly onclick="copyToClipboard()">
+						<label id="qrcode" style="margin: 15px 10px -15px 10px;"></label>
 					</div>
 					<div class="beian-info" style="text-align: center; font-size: 13px;">${网络备案}</div>
 				</div>
+	
+				<script>
+					function toggleTooltip(event) {
+						event.stopPropagation(); // 阻止事件冒泡
+						const tooltip = document.getElementById('infoTooltip');
+						tooltip.style.display = tooltip.style.display === 'block' ? 'none' : 'block';
+					}
+					
+					// 点击页面其他区域关闭提示框
+					document.addEventListener('click', function(event) {
+						const tooltip = document.getElementById('infoTooltip');
+						const infoIcon = document.querySelector('.info-icon');
+						
+						if (!tooltip.contains(event.target) && !infoIcon.contains(event.target)) {
+							tooltip.style.display = 'none';
+						}
+					});
+
+					function copyToClipboard() {
+						const resultInput = document.getElementById('result');
+						if (!resultInput.value) {
+							return;
+						}
+						
+						resultInput.select();
+						navigator.clipboard.writeText(resultInput.value).then(() => {
+							const tooltip = document.createElement('div');
+							tooltip.style.position = 'fixed';
+							tooltip.style.left = '50%';
+							tooltip.style.top = '20px';
+							tooltip.style.transform = 'translateX(-50%)';
+							tooltip.style.padding = '8px 16px';
+							tooltip.style.background = '#4361ee';
+							tooltip.style.color = 'white';
+							tooltip.style.borderRadius = '4px';
+							tooltip.style.zIndex = '1000';
+							tooltip.textContent = '已复制到剪贴板';
+							
+							document.body.appendChild(tooltip);
+							
+							setTimeout(() => {
+								document.body.removeChild(tooltip);
+							}, 2000);
+						}).catch(err => {
+							alert('复制失败，请手动复制');
+						});
+					}
+	
+					function generateLink() {
+						const link = document.getElementById('link').value;
+						if (!link) {
+							alert('请输入节点链接');
+							return;
+						}
+						
+						let uuidType = 'uuid';
+						const isTrojan = link.startsWith(\`\${atob('dHJvamFuOi8v')}\`);
+						if (isTrojan) uuidType = 'password';
+						let subLink = '';
+						try {
+							const isVMess = link.startsWith('vmess://');
+							if (isVMess){
+								const vmessLink = link.split('vmess://')[1];
+								const vmessJson = JSON.parse(atob(vmessLink));
+								
+								const host = vmessJson.host;
+								const uuid = vmessJson.id;
+								const path = vmessJson.path || '/';
+								const sni = vmessJson.sni || host;
+								const type = vmessJson.type || 'none';
+								const alpn = vmessJson.alpn || '';
+								const alterId = vmessJson.aid || 0;
+								const security = vmessJson.scy || 'auto';
+								const domain = window.location.hostname;
+								
+								subLink = \`https://\${domain}/sub?host=\${host}&uuid=\${uuid}&path=\${encodeURIComponent(path)}&sni=\${sni}&type=\${type}&alpn=\${encodeURIComponent(alpn)}&alterid=\${alterId}&security=\${security}\`;
+							} else {
+								const uuid = link.split("//")[1].split("@")[0];
+								const search = link.split("?")[1].split("#")[0];
+								const domain = window.location.hostname;
+								
+								subLink = \`https://\${domain}/sub?\${uuidType}=\${uuid}&\${search}\`;
+							}
+							document.getElementById('result').value = subLink;
+	
+							// 更新二维码
+							const qrcodeDiv = document.getElementById('qrcode');
+							qrcodeDiv.innerHTML = '';
+							new QRCode(qrcodeDiv, {
+								text: subLink,
+								width: 220, // 调整宽度
+								height: 220, // 调整高度
+								colorDark: "#4a60ea", // 二维码颜色
+								colorLight: "#ffffff", // 背景颜色
+								correctLevel: QRCode.CorrectLevel.L, // 设置纠错级别
+								scale: 1 // 调整像素颗粒度
+							});
+						} catch (error) {
+							alert('链接格式错误，请检查输入');
+						}
+					}
+				</script>
 			</body>
 			</html>
 			`;
