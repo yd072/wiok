@@ -1522,23 +1522,23 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			let 节点备注 = '';
 			const 协议类型 = atob(啥啥啥_写的这是啥啊);
 
-			// 添加分片配置
 			const fragmentConfig = {
 				enabled: true,
-				packets: "tlshello", // 分片数量范围
-				length: "100-200", // 每个分片的长度范围
-				interval: "10-20" // 分片发送间隔(ms)
+				packets: "tlshello", 
+				length: "100-200", 
+				interval: "10-20" 
 			};
 
 			const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
 				`${atob('ZW5jcnlwdGlvbj1ub25l')}&` + 
-				`type=ws&` + 
-				`host=${伪装域名}&` + 
-				`path=${encodeURIComponent(最终路径)}&` + 
-				`tfo=true&` + // TCP Fast Open
-				`keepAlive=true&` +  
-				`congestion_control=bbr&` + // BBR拥塞控制
-				`udp_relay=true&` + // UDP转发
+				`type=ws&` +
+				`host=${伪装域名}&` +
+				`path=${encodeURIComponent(最终路径)}&` +
+				`security=none&` + 
+				`tfo=true&` + 
+				`keepAlive=true&` + 
+				`congestion_control=bbr&` + 
+				`udp_relay=true&` + 
 				// 添加分片参数
 				`fragment=true&` +
 				`fragmentPackets=${fragmentConfig.packets}&` +
@@ -1607,12 +1607,11 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
 		}
 
-		// 添加分片配置
 		const fragmentConfig = {
 			enabled: true,
-			packets: "tlshello", // 分片数量范围
-			length: "100-200", // 每个分片的长度范围
-			interval: "10-20" // 分片发送间隔(ms)
+			packets: "tlshello", 
+			length: "100-200", 
+			interval: "10-20" 
 		};
 
 		const 协议类型 = atob(啥啥啥_写的这是啥啊);
@@ -1621,21 +1620,21 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
             `${atob('c2VjdXJpdHk9dGxz')}&` + 
             `${atob('c25pPQ==')}${伪装域名}&` + 
             `fp=randomized&` + 
-            `type=ws&` + 
-            `host=${伪装域名}&` + 
-            `path=${encodeURIComponent(最终路径)}&` + 
-            `alpn=h3&` + 
-            `allowInsecure=false&` + 
-            `tfo=true&` + // TCP Fast Open
-            `keepAlive=true&` +  
+            `type=ws&` +
+            `host=${伪装域名}&` +
+            `path=${encodeURIComponent(最终路径)}&` +
+            `alpn=h3&` +
+            `allowInsecure=false&` +
+            `tfo=true&` + 
+            `keepAlive=true&` + // 保持连接
             `congestion_control=bbr&` + // BBR拥塞控制
-			`udp_relay=true&` + // UDP转发
-			// 添加分片参数
-			`fragment=true&` +
-			`fragmentPackets=${fragmentConfig.packets}&` +
-			`fragmentLength=${fragmentConfig.length}&` +
-			`fragmentInterval=${fragmentConfig.interval}` +
-			`#${encodeURIComponent(addressid + 节点备注)}`;
+            `udp_relay=true&` + // UDP转发
+            // 添加分片参数
+            `fragment=true&` +
+            `fragmentPackets=${fragmentConfig.packets}&` +
+            `fragmentLength=${fragmentConfig.length}&` +
+            `fragmentInterval=${fragmentConfig.interval}` +
+            `#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
 	}).join('\n');
