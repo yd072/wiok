@@ -1109,35 +1109,30 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
   // 如果没有现成的地址，则生成随机节点
   if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-    const { proxySettings } = await getDataset(_url, env);
-    const {
-      cleanIPs,
-      enableIPv6
-    } = proxySettings;
+    // 使用 crypto.getRandomValues 生成随机字节
+    const randomBytes = new Uint8Array(4);
+    crypto.getRandomValues(randomBytes);
 
-    // 获取地址列表
-    let cfips = [
-      '103.21.244.0/23',
-      '104.16.0.0/13',
-      '104.24.0.0/14',
-      '141.101.64.0/19',
-      '172.64.0.0/14',
-      '188.114.96.0/21',
-      '190.93.240.0/21'
+    // 生成随机IP
+    const ip1 = randomBytes[0];
+    const ip2 = randomBytes[1];
+    const ip3 = randomBytes[2];
+    const ip4 = randomBytes[3];
+
+    // 生成CF的IP范围
+    const cfips = [
+      `104.${ip2 & 31}.${ip3}.${ip4}`,  // 104.16.0.0/13
+      `172.${64 + (ip2 & 3)}.${ip3}.${ip4}`,  // 172.64.0.0/14
+      `104.${24 + (ip2 & 7)}.${ip3}.${ip4}`   // 104.24.0.0/14
     ];
-
-    // 如果有自定义IP，使用自定义IP
-    if(cleanIPs) {
-      cfips = cleanIPs.split(',');
-    }
 
     if (hostName.includes(".workers.dev")) {
       addressesnotls = addressesnotls.concat(
-        cfips.map(cidr => generateRandomNode(cidr) + '#CF随机节点')
+        cfips.map(ip => ip + '#CF随机节点')
       );
     } else {
       addresses = addresses.concat(
-        cfips.map(cidr => generateRandomNode(cidr) + '#CF随机节点')
+        cfips.map(ip => ip + '#CF随机节点')
       );
     }
   }
