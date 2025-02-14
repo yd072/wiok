@@ -2040,8 +2040,10 @@ async function 处理地址列表(地址列表) {
 // 添加一个函数来解析DNS并获取IP地址
 async function resolveDNS(hostName) {
     try {
-        const addresses = await dns.resolve4(hostName);
-        return { ipv4: addresses };
+        const response = await fetch(`https://dns.google/resolve?name=${hostName}&type=A`);
+        const data = await response.json();
+        const ipv4Addresses = data.Answer ? data.Answer.map(answer => answer.data) : [];
+        return { ipv4: ipv4Addresses };
     } catch (error) {
         console.error('DNS解析失败:', error);
         return { ipv4: [] };
