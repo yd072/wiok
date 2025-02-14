@@ -418,9 +418,9 @@ async function 维列斯OverWSHandler(request) {
                     // 添加分片处理
                     const fragmentConfig = {
                         enabled: true,
-                        packets: "tlshello",  // 修改为 tlshello 模式
-                        length: "100-200",    // 保持原有长度范围
-                        interval: "10-20"     // 保持原有间隔范围
+                        packets: "10-20",
+                        length: "100-200",
+                        interval: "10-20"
                     };
 
                     const fragments = handleFragmentation(chunk, fragmentConfig);
@@ -1551,7 +1551,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	const uniqueAddresses = [...new Set(addresses)];
 
 	const responseBody = uniqueAddresses.map(address => {
-		let port = "443"; // 默认端口改为443而不是-1
+		let port = "-1";
 		let addressid = address;
 
 		const match = addressid.match(regex);
@@ -1577,12 +1577,11 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			}
 		} else {
 			address = match[1];
-			port = match[2] || "443"; // 如果没有端口则使用443
+			port = match[2] || port;
 			addressid = match[3] || address;
 		}
 
-		// 检查是否需要使用 httpsPorts 中的端口
-		if (!port || port === "443") {
+		if (!isValidIPv4(address) && port == "-1") {
 			for (let httpsPort of httpsPorts) {
 				if (address.includes(httpsPort)) {
 					port = httpsPort;
@@ -1590,6 +1589,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				}
 			}
 		}
+		if (port == "-1") port = "443";
 
 		let 伪装域名 = host;
 		let 最终路径 = path;
@@ -1606,9 +1606,9 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		// 添加分片配置
 		const fragmentConfig = {
 			enabled: true,
-			packets: "tlshello",  // 修改为 tlshello 模式
-			length: "100-200",    // 保持原有长度范围
-			interval: "10-20"     // 保持原有间隔范围
+			packets: "10-20",
+			length: "100-200",
+			interval: "10-20"
 		};
 
 		const 协议类型 = atob(啥啥啥_写的这是啥啊);
@@ -2035,39 +2035,29 @@ function handleFragmentation(chunk, fragmentConfig) {
         return chunk;
     }
 
+    const [minPackets, maxPackets] = fragmentConfig.packets.split('-').map(Number);
+    const [minLength, maxLength] = fragmentConfig.length.split('-').map(Number);
+    const [minInterval, maxInterval] = fragmentConfig.interval.split('-').map(Number);
+
+    // 实现分片逻辑
     const fragments = [];
     let offset = 0;
     
-    if (fragmentConfig.packets === "tlshello") {
-        // TLS Hello 分片模式
-        // 第一个分片模拟 Client Hello (通常在 200-300 字节之间)
-        const clientHelloSize = Math.floor(Math.random() * 100) + 200;
-        fragments.push(chunk.slice(0, Math.min(clientHelloSize, chunk.length)));
-        offset = clientHelloSize;
+    while (offset < chunk.length) {
+        // 随机生成分片大小
+        const packetSize = Math.floor(Math.random() * (maxPackets - minPackets + 1)) + minPackets;
+        const fragmentLength = Math.floor(Math.random() * (maxLength - minLength + 1)) + minLength;
         
-        // 后续分片模拟 TLS 记录层
-        while (offset < chunk.length) {
-            // TLS 记录通常不超过 16KB
-            const recordSize = Math.min(
-                Math.floor(Math.random() * 1000) + 100, 
-                chunk.length - offset
-            );
-            fragments.push(chunk.slice(offset, offset + recordSize));
-            offset += recordSize;
-            
-            // 模拟 TLS 握手延迟
-            if (offset < chunk.length) {
-                const interval = Math.floor(Math.random() * 10) + 5;
-                setTimeout(() => {}, interval);
-            }
-        }
-    } else {
-        // 保持原有的数字范围分片逻辑
-        const [minLength, maxLength] = fragmentConfig.length.split('-').map(Number);
-        while (offset < chunk.length) {
-            const fragmentLength = Math.floor(Math.random() * (maxLength - minLength + 1)) + minLength;
-            fragments.push(chunk.slice(offset, offset + Math.min(fragmentLength, chunk.length - offset)));
-            offset += fragmentLength;
+        // 创建分片
+        const fragment = chunk.slice(offset, offset + Math.min(fragmentLength, chunk.length - offset));
+        fragments.push(fragment);
+        
+        offset += fragmentLength;
+        
+        // 添加分片间隔
+        if (offset < chunk.length) {
+            const interval = Math.floor(Math.random() * (maxInterval - minInterval + 1)) + minInterval;
+            setTimeout(() => {}, interval);
         }
     }
 
