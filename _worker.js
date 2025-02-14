@@ -410,35 +410,13 @@ async function 维列斯OverWSHandler(request) {
                 if (isDns) {
                     return handleDNSQuery(chunk, webSocket, null, log);
                 }
-
                 if (remoteSocketWrapper.value) {
-                    // 处理已建立的连接
                     const writer = remoteSocketWrapper.value.writable.getWriter();
-                    
-                    // 添加分片处理
-                    const fragmentConfig = {
-                        enabled: true,
-                        packets: "10-20",
-                        length: "100-200",
-                        interval: "10-20"
-                    };
-
-                    const fragments = handleFragmentation(chunk, fragmentConfig);
-                    
-                    if (Array.isArray(fragments)) {
-                        // 发送分片数据
-                        for (const fragment of fragments) {
-                            await writer.write(fragment);
-                        }
-                    } else {
-                        await writer.write(chunk);
-                    }
-                    
+                    await writer.write(chunk);
                     writer.releaseLock();
                     return;
                 }
 
-                // 处理新连接
                 const {
                     hasError,
                     message,
@@ -452,11 +430,9 @@ async function 维列斯OverWSHandler(request) {
 
                 address = addressRemote;
                 portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
-                
                 if (hasError) {
                     throw new Error(message);
                 }
-                
                 if (isUDP) {
                     if (portRemote === 53) {
                         isDns = true;
@@ -464,14 +440,12 @@ async function 维列斯OverWSHandler(request) {
                         throw new Error('UDP 代理仅对 DNS（53 端口）启用');
                     }
                 }
-
                 const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
                 const rawClientData = chunk.slice(rawDataIndex);
 
                 if (isDns) {
                     return handleDNSQuery(rawClientData, webSocket, 维列斯ResponseHeader, log);
                 }
-
                 if (!banHostsSet.has(addressRemote)) {
                     log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
                     handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log);
@@ -482,9 +456,17 @@ async function 维列斯OverWSHandler(request) {
                 log('处理数据时发生错误', error.message);
                 webSocket.close(1011, '内部错误');
             }
-        }
-        // ... 保留其他代码 ...
-    }));
+        },
+        close() {
+            log(`readableWebSocketStream 已关闭`);
+        },
+        abort(reason) {
+            log(`readableWebSocketStream 已中止`, JSON.stringify(reason));
+        },
+    })).catch((err) => {
+        log('readableWebSocketStream 管道错误', err);
+        webSocket.close(1011, '管道错误');
+    });
 
     return new Response(null, {
         status: 101,
@@ -1550,7 +1532,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 
 	const uniqueAddresses = [...new Set(addresses)];
 
-	const responseBody = uniqueAddresses.map(address => {
+	const responseBody = uniqueAddresses.map((address, index) => {
 		let port = "-1";
 		let addressid = address;
 
@@ -1606,10 +1588,14 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		// 添加分片配置
 		const fragmentConfig = {
 			enabled: true,
-			packets: "10-20",
-			length: "100-200",
-			interval: "10-20"
+			packets: "10-20", // 分片数量范围
+			length: "100-200", // 每个分片的长度范围
+			interval: "10-20" // 分片发送间隔(ms)
 		};
+
+		// 添加节点序号
+		const nodeIndex = index + 1;
+		const 节点备注WithFragment = ` [Fragment ${nodeIndex}]${节点备注}`;
 
 		const 协议类型 = atob(啥啥啥_写的这是啥啊);
 		const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
@@ -1620,18 +1606,18 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`type=ws&` + 
 			`host=${伪装域名}&` + 
 			`path=${encodeURIComponent(最终路径)}&` + 
+			`alpn=h3&` + 
+			`allowInsecure=false&` + 
+			`tfo=true&` + // TCP Fast Open
+			`keepAlive=true&` +  
+			`congestion_control=bbr&` + // BBR拥塞控制
+			`udp_relay=true&` + // UDP转发
 			// 添加分片参数
 			`fragment=true&` +
 			`fragmentPackets=${fragmentConfig.packets}&` +
 			`fragmentLength=${fragmentConfig.length}&` +
-			`fragmentInterval=${fragmentConfig.interval}&` +
-			`alpn=h3&` + 
-			`allowInsecure=false&` + 
-			`tfo=true&` +  
-			`keepAlive=true&` +  
-			`congestion_control=bbr&` + 
-			`udp_relay=true` + 
-			`#${encodeURIComponent(addressid + 节点备注)}`;
+			`fragmentInterval=${fragmentConfig.interval}` +
+			`#${encodeURIComponent(addressid + 节点备注WithFragment)}`;
 
 		return 维列斯Link;
 	}).join('\n');
@@ -1858,7 +1844,7 @@ async function handleGetRequest(env, txt) {
 			<div class="editor-container">
 				${hasKV ? `
 				<textarea class="editor" 
-					placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+					placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRnJhdyUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
 					id="content">${content}</textarea>
 				<div class="save-container">
 					<button class="back-btn" onclick="goBack()">返回配置页</button>
@@ -2007,7 +1993,6 @@ async function handleGetRequest(env, txt) {
 		headers: { "Content-Type": "text/html;charset=utf-8" }
 	});
 }
-
 async function 处理地址列表(地址列表) {
 	const 分类地址 = {
 		接口地址: new Set(),
@@ -2027,39 +2012,4 @@ async function 处理地址列表(地址列表) {
 	}
 	
 	return 分类地址;
-}
-
-// 添加分片处理函数
-function handleFragmentation(chunk, fragmentConfig) {
-    if (!fragmentConfig.enabled) {
-        return chunk;
-    }
-
-    const [minPackets, maxPackets] = fragmentConfig.packets.split('-').map(Number);
-    const [minLength, maxLength] = fragmentConfig.length.split('-').map(Number);
-    const [minInterval, maxInterval] = fragmentConfig.interval.split('-').map(Number);
-
-    // 实现分片逻辑
-    const fragments = [];
-    let offset = 0;
-    
-    while (offset < chunk.length) {
-        // 随机生成分片大小
-        const packetSize = Math.floor(Math.random() * (maxPackets - minPackets + 1)) + minPackets;
-        const fragmentLength = Math.floor(Math.random() * (maxLength - minLength + 1)) + minLength;
-        
-        // 创建分片
-        const fragment = chunk.slice(offset, offset + Math.min(fragmentLength, chunk.length - offset));
-        fragments.push(fragment);
-        
-        offset += fragmentLength;
-        
-        // 添加分片间隔
-        if (offset < chunk.length) {
-            const interval = Math.floor(Math.random() * (maxInterval - minInterval + 1)) + minInterval;
-            setTimeout(() => {}, interval);
-        }
-    }
-
-    return fragments;
 }
