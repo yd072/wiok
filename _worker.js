@@ -1,4 +1,5 @@
 import { connect } from 'cloudflare:sockets';
+import dns from 'dns/promises';
 
 let userID = '';
 let proxyIP = '';
@@ -2038,38 +2039,13 @@ async function 处理地址列表(地址列表) {
 
 // 添加一个函数来解析DNS并获取IP地址
 async function resolveDNS(hostName) {
-    // 这里假设有一个现有的DNS解析函数
-    const resolved = await someDNSResolveFunction(hostName);
-    return resolved; // 返回解析后的IP地址列表
-}
-
-// 使用解析得到的IP地址生成节点
-async function 生成节点配置(域名) {
-    const resolved = await resolveDNS(域名);
-    const ipv4Addresses = resolved.ipv4; // 假设解析结果包含ipv4字段
-
-    const 节点配置列表 = ipv4Addresses.map(ip => {
-        return `节点配置: ${ip}`; // 这里根据需要生成具体的节点配置
-    });
-
-    return 节点配置列表;
-}
-
-// 示例调用
-async function main() {
-    const 域名 = "www.speedtest.net"; // 在这里填入你想要解析的域名
-    const 节点配置 = await 生成节点配置(域名);
-    console.log("生成的节点配置:", 节点配置);
-}
-
-main();
-
-// 假设有一个现有的DNS解析函数
-async function someDNSResolveFunction(hostName) {
-    // 模拟DNS解析，返回一个包含IPv4地址的对象
-    return {
-        ipv4: ["192.0.2.1", "192.0.2.2"] // 示例IP地址
-    };
+    try {
+        const addresses = await dns.resolve4(hostName);
+        return { ipv4: addresses };
+    } catch (error) {
+        console.error('DNS解析失败:', error);
+        return { ipv4: [] };
+    }
 }
 
 // 使用解析得到的IP地址生成节点
