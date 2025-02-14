@@ -1,4 +1,3 @@
-
 let 快速订阅访问入口 = ['auto'];
 let addresses = [];
 let addressesapi = [];
@@ -27,7 +26,7 @@ let 临时中转域名 = [];
 let 临时中转域名接口 = '';
 let EndPS = '';
 let 协议类型 = atob(`\u0056\u006b\u0078\u0046\u0055\u0031\u004d\u003d`);
-let FileName = '优选订阅生成器';
+let FileName = '404';
 let SUBUpdateTime = 6;
 let total = 24;
 let timestamp = 4102329600000;
@@ -41,7 +40,7 @@ let MamaJustKilledAMan = ['telegram', 'twitter', 'miaoko'];
 let proxyIPPool = [];
 let socks5Data;
 let alpn = 'h3';
-let 网络备案 = `<a href='https://t.me/CMLiussss'>萌ICP备-20240707号</a>`;//写你自己的维护者广告
+let 网络备案 = `<a href='404'>优雅永不过时</a>`;//写你自己的维护者广告
 let 额外ID = '0';
 let 加密方式 = 'auto';
 let 网站图标, 网站头像, 网站背景;
@@ -463,6 +462,77 @@ function utf8ToBase64(str) {
 	return btoa(unescape(encodeURIComponent(str)));
 }
 
+// 新增工具函数
+function parseAddress(address) {
+  let port = "-1";
+  let addressid = address;
+  let parsedAddress = address;
+
+  const match = addressid.match(regex);
+  if (!match) {
+    if (address.includes(':') && address.includes('#')) {
+      const [addr, rest] = address.split(':');
+      parsedAddress = addr;
+      const [p, id] = rest.split('#');
+      port = p;
+      addressid = id;
+    } else if (address.includes(':')) {
+      const [addr, p] = address.split(':');
+      parsedAddress = addr;
+      port = p;
+    } else if (address.includes('#')) {
+      const [addr, id] = address.split('#');
+      parsedAddress = addr;
+      addressid = id;
+    }
+
+    if (addressid.includes(':')) {
+      addressid = addressid.split(':')[0];
+    }
+  } else {
+    parsedAddress = match[1];
+    port = match[2] || port;
+    addressid = match[3] || parsedAddress;
+  }
+
+  return { address: parsedAddress, port, addressid };
+}
+
+// 处理代理IP的函数
+function handleProxyIP(addressid, address, defaultPath) {
+  if (隧道版本作者.trim() !== atob('Y21saXU=') || 获取代理IP.trim() !== 'true') {
+    return defaultPath; // 返回默认路径而不是全局path
+  }
+
+  let lowerAddressid = addressid.toLowerCase();
+  let foundProxyIP = null;
+
+  if (socks5Data) {
+    const socks5 = getRandomProxyByMatch(lowerAddressid, socks5Data);
+    return `/${socks5}`;
+  }
+
+  for (let item of 匹配PROXYIP) {
+    if ((item.includes('#') && item.split('#')[1] && lowerAddressid.includes(item.split('#')[1].toLowerCase())) ||
+        (item.includes(':') && item.split(':')[1] && lowerAddressid.includes(item.split(':')[1].toLowerCase()))) {
+      foundProxyIP = item.split(/[:#]/)[0];
+      break;
+    }
+  }
+
+  const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
+  if (matchingProxyIP) {
+    return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + matchingProxyIP;
+  }
+  
+  if (foundProxyIP) {
+    return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + foundProxyIP;
+  }
+
+  const randomProxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+  return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + randomProxyIP;
+}
+
 export default {
 	async fetch(request, env) {
 		if (env.TOKEN) 快速订阅访问入口 = await 整理(env.TOKEN);
@@ -779,7 +849,18 @@ export default {
 						const vmessLink = `vmess://${utf8ToBase64(`{"v":"2","ps":"${addressid + EndPS}","add":"${address}","port":"${port}","id":"${uuid}","aid":"${额外ID}","scy":"${加密方式}","net":"ws","type":"${type}","host":"${host}","path":"${path}","tls":"","sni":"","alpn":"${encodeURIComponent(alpn)}","fp":""}`)}`;
 						return vmessLink;
 					} else {
-						const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${address}:${port + atob('P2VuY3J5cHRpb249bm9uZSZzZWN1cml0eT0mdHlwZT0=') + type}&host=${host}&path=${encodeURIComponent(path)}#${encodeURIComponent(addressid + EndPS)}`;
+						const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${address}:${port}?` + 
+							`${atob('ZW5jcnlwdGlvbj1ub25l')}&` +  // encryption=none
+							`${atob('c2VjdXJpdHk9')}&` +          // security=
+							`type=${type}&` +
+							`host=${host}&` +
+							`path=${encodeURIComponent(path)}&` +
+							`fp=randomized&` +
+							`tfo=true&` +
+							`keepAlive=true&` +
+							`congestion_control=bbr&` +
+							`udp_relay=true` +
+							`#${encodeURIComponent(addressid + EndPS)}`;
 						return 维列斯Link;
 					}
 
@@ -787,107 +868,57 @@ export default {
 			}
 
 			const responseBody = uniqueAddresses.map(address => {
-				let port = "-1";
-				let addressid = address;
-
-				const match = addressid.match(regex);
-				if (!match) {
-					if (address.includes(':') && address.includes('#')) {
-						const parts = address.split(':');
-						address = parts[0];
-						const subParts = parts[1].split('#');
-						port = subParts[0];
-						addressid = subParts[1];
-					} else if (address.includes(':')) {
-						const parts = address.split(':');
-						address = parts[0];
-						port = parts[1];
-					} else if (address.includes('#')) {
-						const parts = address.split('#');
-						address = parts[0];
-						addressid = parts[1];
-					}
-
-					if (addressid.includes(':')) {
-						addressid = addressid.split(':')[0];
-					}
-				} else {
-					address = match[1];
-					port = match[2] || port;
-					addressid = match[3] || address;
-				}
-
-				if (!isValidIPv4(address) && port == "-1") {
+				const { address: parsedAddress, port: initialPort, addressid } = parseAddress(address);
+				
+				let port = initialPort;
+				if (!isValidIPv4(parsedAddress) && port === "-1") {
 					for (let httpsPort of httpsPorts) {
-						if (address.includes(httpsPort)) {
+						if (parsedAddress.includes(httpsPort)) {
 							port = httpsPort;
 							break;
 						}
 					}
 				}
-				if (port == "-1") port = "443";
+				if (port === "-1") port = "443";
 
-				//console.log(address, port, addressid);
-
-				if (隧道版本作者.trim() === atob('Y21saXU=') && 获取代理IP.trim() === 'true') {
-					// 将addressid转换为小写
-					let lowerAddressid = addressid.toLowerCase();
-					// 初始化找到的proxyIP为null
-					let foundProxyIP = null;
-
-					if (socks5Data) {
-						const socks5 = getRandomProxyByMatch(lowerAddressid, socks5Data);
-						path = `/${socks5}`;
-					} else {
-						// 遍历匹配PROXYIP数组查找匹配项
-						for (let item of 匹配PROXYIP) {
-							if (item.includes('#') && item.split('#')[1] && lowerAddressid.includes(item.split('#')[1].toLowerCase())) {
-								foundProxyIP = item.split('#')[0];
-								break; // 找到匹配项，跳出循环
-							} else if (item.includes(':') && item.split(':')[1] && lowerAddressid.includes(item.split(':')[1].toLowerCase())) {
-								foundProxyIP = item.split(':')[0];
-								break; // 找到匹配项，跳出循环
-							}
-						}
-
-						const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-						if (matchingProxyIP) {
-							path = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + matchingProxyIP;
-						} else if (foundProxyIP) {
-							// 如果找到匹配的proxyIP，赋值给path
-							path = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + foundProxyIP;
-						} else {
-							// 如果没有找到匹配项，随机选择一个proxyIP
-							const randomProxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
-							path = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + randomProxyIP;
-						}
-					}
-				}
+				const newPath = handleProxyIP(addressid, parsedAddress, path); // 传入path作为默认值
 
 				let 伪装域名 = host;
-				let 最终路径 = path;
+				let 最终路径 = newPath;
 				let 节点备注 = EndPS;
 				if (临时中转域名.length > 0 && (host.includes('.workers.dev'))) {
-					最终路径 = `/${host}${path}`;
+					最终路径 = `/${host}${newPath}`;
 					伪装域名 = 临时中转域名[Math.floor(Math.random() * 临时中转域名.length)];
 					节点备注 = EndPS + atob('IOW3suWQr+eUqOS4tOaXtuWfn+WQjeS4rei9rOacjeWKoe+8jOivt+WwveW/q+e7keWumuiHquWumuS5ieWfn++8gQ==');
 					sni = 伪装域名;
 				}
 
 				if (协议类型 == 'VMess') {
-					const vmessLink = `vmess://${utf8ToBase64(`{"v":"2","ps":"${addressid + 节点备注}","add":"${address}","port":"${port}","id":"${uuid}","aid":"${额外ID}","scy":"${加密方式}","net":"ws","type":"${type}","host":"${伪装域名}","path":"${最终路径}","tls":"tls","sni":"${sni}","alpn":"${encodeURIComponent(alpn)}","fp":""}`)}`;
+					const vmessLink = `vmess://${utf8ToBase64(`{"v":"2","ps":"${addressid + 节点备注}","add":"${parsedAddress}","port":"${port}","id":"${uuid}","aid":"${额外ID}","scy":"${加密方式}","net":"ws","type":"${type}","host":"${伪装域名}","path":"${最终路径}","tls":"tls","sni":"${sni}","alpn":"${encodeURIComponent(alpn)}","fp":""}`)}`;
 					return vmessLink;
 				} else if (协议类型 == atob('VHJvamFu')) {
-					const 特洛伊Link = `${atob('dHJvamFuOi8v') + uuid}@${address}:${port + atob('P3NlY3VyaXR5PXRscyZzbmk9') + sni}&alpn=${encodeURIComponent(alpn)}&fp=randomized&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
+					const 特洛伊Link = `${atob('dHJvamFuOi8v') + uuid}@${parsedAddress}:${port + atob('P3NlY3VyaXR5PXRscyZzbmk9') + sni}&alpn=${encodeURIComponent(alpn)}&fp=randomized&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
 					return 特洛伊Link;
 				} else {
-					const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${address}:${port + atob('P2VuY3J5cHRpb249bm9uZSZzZWN1cml0eT10bHMmc25pPQ==') + sni}&alpn=${encodeURIComponent(alpn)}&fp=random&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
+					const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${parsedAddress}:${port}?` + 
+						`${atob('ZW5jcnlwdGlvbj1ub25l')}&` +  // encryption=none
+						`${atob('c2VjdXJpdHk9dGxz')}&` +      // security=tls
+						`${atob('c25pPQ==')}${sni}&` +        // sni=
+						`type=${type}&` +
+						`host=${伪装域名}&` +
+						`path=${encodeURIComponent(最终路径)}&` +
+						`alpn=${encodeURIComponent(alpn)}&` +
+						`fp=randomized&` +
+						`tfo=true&` +
+						`keepAlive=true&` +
+						`congestion_control=bbr&` +
+						`udp_relay=true` +
+						`#${encodeURIComponent(addressid + 节点备注)}`;
 					return 维列斯Link;
 				}
+			});
 
-			}).join('\n');
-
-			let combinedContent = responseBody; // 合并内容
+			let combinedContent = responseBody.join('\n'); // 合并内容
 
 			if (link) {
 				const links = await 整理(link);
@@ -1300,137 +1331,12 @@ async function subHtml(request) {
 					</svg>
 				</a>
 				<div class="container">
-						<div class="logo-title">
-							${网站头像}
-							<h1>${FileName}</h1>
-						</div>
-					<div class="input-group">
-						<label for="link">节点链接</label>
-						<input type="text" id="link" placeholder="${decodeURIComponent(atob('JUU4JUFGJUI3JUU4JUJFJTkzJUU1JTg1JUE1JTIwVk1lc3MlMjAlMkYlMjBWTEVTUyUyMCUyRiUyMFRyb2phbiUyMCVFOSU5MyVCRSVFNiU4RSVBNQ=='))}">
-					</div>
-					
-					<button onclick="generateLink()">生成优选订阅</button>
-					
-					<div class="input-group">
-						<div style="display: flex; align-items: center;">
-							<label for="result">优选订阅</label>
-							<div style="position: relative;">
-								<span class="info-icon" onclick="toggleTooltip(event)">!</span>
-								<div class="info-tooltip" id="infoTooltip">
-									<strong>安全提示</strong>：使用优选订阅生成器时，需要您提交 <strong>节点配置信息</strong> 用于生成优选订阅链接。这意味着订阅器的维护者可能会获取到该节点信息。<strong>请自行斟酌使用风险。</strong><br>
-									<br>
-									订阅转换后端：<strong>${subConverter}</strong><br>
-									订阅转换配置文件：<strong>${subConfig}</strong>
-								</div>
-							</div>
-						</div>
-						<input type="text" id="result" readonly onclick="copyToClipboard()">
-						<label id="qrcode" style="margin: 15px 10px -15px 10px;"></label>
+					<div class="logo-title">
+						${网站头像}
+						<h1>${FileName}</h1>
 					</div>
 					<div class="beian-info" style="text-align: center; font-size: 13px;">${网络备案}</div>
 				</div>
-	
-				<script>
-					function toggleTooltip(event) {
-						event.stopPropagation(); // 阻止事件冒泡
-						const tooltip = document.getElementById('infoTooltip');
-						tooltip.style.display = tooltip.style.display === 'block' ? 'none' : 'block';
-					}
-					
-					// 点击页面其他区域关闭提示框
-					document.addEventListener('click', function(event) {
-						const tooltip = document.getElementById('infoTooltip');
-						const infoIcon = document.querySelector('.info-icon');
-						
-						if (!tooltip.contains(event.target) && !infoIcon.contains(event.target)) {
-							tooltip.style.display = 'none';
-						}
-					});
-
-					function copyToClipboard() {
-						const resultInput = document.getElementById('result');
-						if (!resultInput.value) {
-							return;
-						}
-						
-						resultInput.select();
-						navigator.clipboard.writeText(resultInput.value).then(() => {
-							const tooltip = document.createElement('div');
-							tooltip.style.position = 'fixed';
-							tooltip.style.left = '50%';
-							tooltip.style.top = '20px';
-							tooltip.style.transform = 'translateX(-50%)';
-							tooltip.style.padding = '8px 16px';
-							tooltip.style.background = '#4361ee';
-							tooltip.style.color = 'white';
-							tooltip.style.borderRadius = '4px';
-							tooltip.style.zIndex = '1000';
-							tooltip.textContent = '已复制到剪贴板';
-							
-							document.body.appendChild(tooltip);
-							
-							setTimeout(() => {
-								document.body.removeChild(tooltip);
-							}, 2000);
-						}).catch(err => {
-							alert('复制失败，请手动复制');
-						});
-					}
-	
-					function generateLink() {
-						const link = document.getElementById('link').value;
-						if (!link) {
-							alert('请输入节点链接');
-							return;
-						}
-						
-						let uuidType = 'uuid';
-						const isTrojan = link.startsWith(\`\${atob('dHJvamFuOi8v')}\`);
-						if (isTrojan) uuidType = 'password';
-						let subLink = '';
-						try {
-							const isVMess = link.startsWith('vmess://');
-							if (isVMess){
-								const vmessLink = link.split('vmess://')[1];
-								const vmessJson = JSON.parse(atob(vmessLink));
-								
-								const host = vmessJson.host;
-								const uuid = vmessJson.id;
-								const path = vmessJson.path || '/';
-								const sni = vmessJson.sni || host;
-								const type = vmessJson.type || 'none';
-								const alpn = vmessJson.alpn || '';
-								const alterId = vmessJson.aid || 0;
-								const security = vmessJson.scy || 'auto';
-								const domain = window.location.hostname;
-								
-								subLink = \`https://\${domain}/sub?host=\${host}&uuid=\${uuid}&path=\${encodeURIComponent(path)}&sni=\${sni}&type=\${type}&alpn=\${encodeURIComponent(alpn)}&alterid=\${alterId}&security=\${security}\`;
-							} else {
-								const uuid = link.split("//")[1].split("@")[0];
-								const search = link.split("?")[1].split("#")[0];
-								const domain = window.location.hostname;
-								
-								subLink = \`https://\${domain}/sub?\${uuidType}=\${uuid}&\${search}\`;
-							}
-							document.getElementById('result').value = subLink;
-	
-							// 更新二维码
-							const qrcodeDiv = document.getElementById('qrcode');
-							qrcodeDiv.innerHTML = '';
-							new QRCode(qrcodeDiv, {
-								text: subLink,
-								width: 220, // 调整宽度
-								height: 220, // 调整高度
-								colorDark: "#4a60ea", // 二维码颜色
-								colorLight: "#ffffff", // 背景颜色
-								correctLevel: QRCode.CorrectLevel.L, // 设置纠错级别
-								scale: 1 // 调整像素颗粒度
-							});
-						} catch (error) {
-							alert('链接格式错误，请检查输入');
-						}
-					}
-				</script>
 			</body>
 			</html>
 			`;
