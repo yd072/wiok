@@ -849,18 +849,7 @@ export default {
 						const vmessLink = `vmess://${utf8ToBase64(`{"v":"2","ps":"${addressid + EndPS}","add":"${address}","port":"${port}","id":"${uuid}","aid":"${额外ID}","scy":"${加密方式}","net":"ws","type":"${type}","host":"${host}","path":"${path}","tls":"","sni":"","alpn":"${encodeURIComponent(alpn)}","fp":""}`)}`;
 						return vmessLink;
 					} else {
-						const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${address}:${port}?` + 
-							`${atob('ZW5jcnlwdGlvbj1ub25l')}&` +  // encryption=none
-							`${atob('c2VjdXJpdHk9')}&` +          // security=
-							`type=${type}&` +
-							`host=${host}&` +
-							`path=${encodeURIComponent(path)}&` +
-							`fp=randomized&` +
-							`tfo=true&` +
-							`keepAlive=true&` +
-							`congestion_control=bbr&` +
-							`udp_relay=true` +
-							`#${encodeURIComponent(addressid + EndPS)}`;
+						const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${address}:${port + atob('P2VuY3J5cHRpb249bm9uZSZzZWN1cml0eT0mdHlwZT0=') + type}&host=${host}&path=${encodeURIComponent(path)}#${encodeURIComponent(addressid + EndPS)}`;
 						return 维列斯Link;
 					}
 
@@ -900,20 +889,7 @@ export default {
 					const 特洛伊Link = `${atob('dHJvamFuOi8v') + uuid}@${parsedAddress}:${port + atob('P3NlY3VyaXR5PXRscyZzbmk9') + sni}&alpn=${encodeURIComponent(alpn)}&fp=randomized&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
 					return 特洛伊Link;
 				} else {
-					const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${parsedAddress}:${port}?` + 
-						`${atob('ZW5jcnlwdGlvbj1ub25l')}&` +  // encryption=none
-						`${atob('c2VjdXJpdHk9dGxz')}&` +      // security=tls
-						`${atob('c25pPQ==')}${sni}&` +        // sni=
-						`type=${type}&` +
-						`host=${伪装域名}&` +
-						`path=${encodeURIComponent(最终路径)}&` +
-						`alpn=${encodeURIComponent(alpn)}&` +
-						`fp=randomized&` +
-						`tfo=true&` +
-						`keepAlive=true&` +
-						`congestion_control=bbr&` +
-						`udp_relay=true` +
-						`#${encodeURIComponent(addressid + 节点备注)}`;
+					const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${parsedAddress}:${port + atob('P2VuY3J5cHRpb249bm9uZSZzZWN1cml0eT10bHMmc25pPQ==') + sni}&alpn=${encodeURIComponent(alpn)}&fp=random&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
 					return 维列斯Link;
 				}
 			});
