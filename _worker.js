@@ -1057,7 +1057,7 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
 
 	if (sub) {
@@ -2131,10 +2131,59 @@ async function 生成配置信息(userID, host, sub, UA, RproxyIP, url, fakeUser
     // ... 其他代码 ...
     
     // 获取地址列表
-    const addressList = await 获取地址列表(); // 你需要实现这个函数来获取地址列表
+    const addressList = await 获取地址列表(env);
+    const cfNodes = processCFNodes(addressList);
     
     // 生成配置
-    const config = await buildXrayBestPingConfig(proxySettings, addressList);
+    const config = await buildXrayBestPingConfig(proxySettings);
     
-    // ... 其他代码 ...
+    // 添加CF节点组
+    const cfUrlTest = {
+        "name": "🌐 CF节点 - Best Ping",
+        "type": "url-test",
+        "url": "https://www.gstatic.com/generate_204",
+        "interval": 300,
+        "tolerance": 50,
+        "proxies": []
+    };
+    
+    // 处理CF节点
+    const cfRemarks = [];
+    cfNodes.forEach((node, index) => {
+        const cfRemark = `🌐 CF节点 ${index + 1}`;
+        config.proxies.push({
+            "name": cfRemark,
+            "type": "http",
+            "server": node.server,
+            "port": node.port,
+            "tls": true
+        });
+        cfRemarks.push(cfRemark);
+        cfUrlTest.proxies.push(cfRemark);
+    });
+
+    // 将CF节点组添加到配置中
+    if (cfRemarks.length > 0) {
+        config["proxy-groups"].push(cfUrlTest);
+        // 在选择器的开头添加CF节点组
+        config["proxy-groups"][0].proxies.unshift("🌐 CF节点 - Best Ping");
+        // 添加CF节点到选择器
+        config["proxy-groups"][0].proxies.push(...cfRemarks);
+    }
+
+    // ... 继续原有代码 ...
+
+    return config;
+}
+
+// 获取地址列表的辅助函数
+async function 获取地址列表(env) {
+    try {
+        // 从环境变量或其他来源获取地址列表
+        const addressList = env.ADD || ''; // 这里根据你的实际情况获取地址列表
+        return addressList;
+    } catch (error) {
+        console.error('获取地址列表失败:', error);
+        return '';
+    }
 }
