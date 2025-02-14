@@ -1301,36 +1301,86 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fake
 		let isBase64 = true;
 
 		if (!sub || sub == "") {
-			if (hostName.includes('workers.dev')) {
-				if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
-					try {
-						const response = await fetch(proxyhostsURL);
-
-						if (!response.ok) {
-							console.error('获取地址时出错:', response.status, response.statusText);
-							return; 
-						}
-
-						const text = await response.text();
-						const lines = text.split('\n');
-						const nonEmptyLines = lines.filter(line => line.trim() !== '');
-
-						proxyhosts = proxyhosts.concat(nonEmptyLines);
-					} catch (error) {
-						console.error('获取地址时出错:', error);
-					}
+			let nodeConfigs = [];
+			
+			// 生成基础节点配置
+			const baseConfig = {
+				protocol: atob("dmxlc3M="), // vless
+				uuid: userID,
+				port: 443,
+				params: {
+					encryption: "none",
+					security: "tls",
+					type: "ws",
+					host: hostName,
+					path: `/?ed=2560${proxyIP ? `/${btoa(proxyIP)}` : ''}`,
+					sni: hostName,
+					fp: "randomized",
+					alpn: "h2,http/1.1",
+					allowInsecure: false
 				}
-				proxyhosts = [...new Set(proxyhosts)];
+			};
+
+			// 添加固定节点
+			if (addresses && addresses.length > 0) {
+				for (const address of addresses) {
+					const config = {...baseConfig};
+					config.address = address;
+					const remark = `${FileName} - ${address}`;
+					
+					const vlessLink = `${config.protocol}://${config.uuid}@${config.address}:${config.port}?` +
+						`encryption=${config.params.encryption}&` +
+						`security=${config.params.security}&` +
+						`type=${config.params.type}&` +
+						`host=${encodeURIComponent(config.params.host)}&` +
+						`path=${encodeURIComponent(config.params.path)}&` +
+						`sni=${encodeURIComponent(config.params.sni)}&` +
+						`fp=${config.params.fp}&` +
+						`alpn=${encodeURIComponent(config.params.alpn)}` +
+						`#${encodeURIComponent(remark)}`;
+					
+					nodeConfigs.push(vlessLink);
+				}
 			}
 
-			newAddressesapi = await 整理优选列表(addressesapi);
-			newAddressescsv = await 整理测速结果('TRUE');
-			url = `https://${hostName}/${fakeUserID + _url.search}`;
-			if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
-				if (_url.search) url += '&notls';
-				else url += '?notls';
+			// 添加随机节点 (从预设的IP池中随机选择)
+			const randomIPPool = [
+				// 添加一些优质IP
+				"104.16.0.0",
+				"172.64.0.0",
+				"104.17.0.0",
+				// 可以继续添加更多IP
+			];
+			
+			// 生成5个随机节点
+			for (let i = 0; i < 5; i++) {
+				const randomIP = randomIPPool[Math.floor(Math.random() * randomIPPool.length)];
+				const config = {...baseConfig};
+				config.address = randomIP;
+				const remark = `${FileName} - Random ${i + 1}`;
+				
+				const vlessLink = `${config.protocol}://${config.uuid}@${config.address}:${config.port}?` +
+					`encryption=${config.params.encryption}&` +
+					`security=${config.params.security}&` +
+					`type=${config.params.type}&` +
+					`host=${encodeURIComponent(config.params.host)}&` +
+					`path=${encodeURIComponent(config.params.path)}&` +
+					`sni=${encodeURIComponent(config.params.sni)}&` +
+					`fp=${config.params.fp}&` +
+					`alpn=${encodeURIComponent(config.params.alpn)}` +
+					`#${encodeURIComponent(remark)}`;
+				
+				nodeConfigs.push(vlessLink);
 			}
-			console.log(`虚假订阅: ${url}`);
+
+			// 合并所有节点配置
+			const content = nodeConfigs.join('\n');
+			
+			// 根据请求参数决定是否需要base64编码
+			if (url.searchParams.has('base64') || url.searchParams.has('b64')) {
+				return btoa(content);
+			}
+			return content;
 		}
 
 		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
@@ -2034,156 +2084,4 @@ async function 处理地址列表(地址列表) {
 	}
 	
 	return 分类地址;
-}
-
-// 处理CF节点信息的函数
-function processCFNodes(addressList) {
-    const cfNodes = [];
-    addressList.split('\n').forEach(line => {
-        if (line.includes('#CF')) {
-            const [address, port] = line.split('#')[0].split(':');
-            cfNodes.push({
-                server: address.trim(),
-                port: parseInt(port || '443'),
-                type: 'http',
-                tls: true
-            });
-        }
-    });
-    return cfNodes;
-}
-
-// 修改 buildXrayBestPingConfig 函数
-async function buildXrayBestPingConfig(proxySettings, addressList) {
-    const { warpEndpoints } = proxySettings;
-    const config = structuredClone(clashConfigTemp);
-    config.dns = await buildClashDNS(proxySettings, true, true);
-    const { rules, ruleProviders } = buildClashRoutingRules(proxySettings);
-    config.rules = rules;
-    config["rule-providers"] = ruleProviders;
-    
-    // 初始化代理组
-    const selector = config["proxy-groups"][0];
-    const warpUrlTest = config["proxy-groups"][1];
-    const cfUrlTest = {
-        "name": "🌐 CF节点 - Best Ping",
-        "type": "url-test",
-        "url": "https://www.gstatic.com/generate_204",
-        "interval": 300,
-        "tolerance": 50,
-        "proxies": []
-    };
-
-    // 设置选择器初始代理列表
-    selector.proxies = [
-        "🌐 CF节点 - Best Ping",
-        "💦 Warp - Best Ping 🚀", 
-        "💦 WoW - Best Ping 🚀"
-    ];
-
-    // 处理 Warp 相关配置
-    warpUrlTest.name = "💦 Warp - Best Ping 🚀";
-    warpUrlTest.interval = +proxySettings.bestWarpInterval;
-    config["proxy-groups"].push(structuredClone(warpUrlTest));
-    
-    const WoWUrlTest = config["proxy-groups"][2];
-    WoWUrlTest.name = "💦 WoW - Best Ping 🚀";
-    
-    let warpRemarks = [], WoWRemarks = [], cfRemarks = [];
-
-    // 处理 Warp 节点
-    warpEndpoints.split(",").forEach((endpoint, index) => {
-        const warpRemark = `💦 ${index + 1} - Warp 🇮🇷`;
-        const WoWRemark = `💦 ${index + 1} - WoW 🌍`;
-        const warpOutbound = buildXrayWarpOutbound(warpConfigs, warpRemark, endpoint, "");
-        const WoWOutbound = buildXrayWarpOutbound(warpConfigs, WoWRemark, endpoint, warpRemark);
-        config.proxies.push(WoWOutbound, warpOutbound);
-        warpRemarks.push(warpRemark);
-        WoWRemarks.push(WoWRemark);
-        warpUrlTest.proxies.push(warpRemark);
-        WoWUrlTest.proxies.push(WoWRemark);
-    });
-
-    // 处理 CF 节点
-    const cfNodes = processCFNodes(addressList);
-    cfNodes.forEach((node, index) => {
-        const cfRemark = `🌐 CF节点 ${index + 1}`;
-        config.proxies.push({
-            "name": cfRemark,
-            "type": "http",
-            "server": node.server,
-            "port": node.port,
-            "tls": true
-        });
-        cfRemarks.push(cfRemark);
-        cfUrlTest.proxies.push(cfRemark);
-    });
-
-    // 添加所有代理组
-    config["proxy-groups"].push(cfUrlTest);
-    selector.proxies.push(...cfRemarks, ...warpRemarks, ...WoWRemarks);
-
-    return config;
-}
-
-// 在主函数中调用
-async function 生成配置信息(userID, host, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
-    // ... 其他代码 ...
-    
-    // 获取地址列表
-    const addressList = await 获取地址列表(env);
-    const cfNodes = processCFNodes(addressList);
-    
-    // 生成配置
-    const config = await buildXrayBestPingConfig(proxySettings);
-    
-    // 添加CF节点组
-    const cfUrlTest = {
-        "name": "🌐 CF节点 - Best Ping",
-        "type": "url-test",
-        "url": "https://www.gstatic.com/generate_204",
-        "interval": 300,
-        "tolerance": 50,
-        "proxies": []
-    };
-    
-    // 处理CF节点
-    const cfRemarks = [];
-    cfNodes.forEach((node, index) => {
-        const cfRemark = `🌐 CF节点 ${index + 1}`;
-        config.proxies.push({
-            "name": cfRemark,
-            "type": "http",
-            "server": node.server,
-            "port": node.port,
-            "tls": true
-        });
-        cfRemarks.push(cfRemark);
-        cfUrlTest.proxies.push(cfRemark);
-    });
-
-    // 将CF节点组添加到配置中
-    if (cfRemarks.length > 0) {
-        config["proxy-groups"].push(cfUrlTest);
-        // 在选择器的开头添加CF节点组
-        config["proxy-groups"][0].proxies.unshift("🌐 CF节点 - Best Ping");
-        // 添加CF节点到选择器
-        config["proxy-groups"][0].proxies.push(...cfRemarks);
-    }
-
-    // ... 继续原有代码 ...
-
-    return config;
-}
-
-// 获取地址列表的辅助函数
-async function 获取地址列表(env) {
-    try {
-        // 从环境变量或其他来源获取地址列表
-        const addressList = env.ADD || ''; // 这里根据你的实际情况获取地址列表
-        return addressList;
-    } catch (error) {
-        console.error('获取地址列表失败:', error);
-        return '';
-    }
 }
