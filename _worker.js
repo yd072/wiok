@@ -1303,69 +1303,95 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fake
         let isBase64 = true;
 
         if (!sub || sub == "") {
-            let nodes = [];
+            let responseBody = '';
+            let notlsresponseBody = '';
             
-            // 生成基础节点
+            // 生成基础配置
             const baseConfig = {
                 protocol: atob("dmxlc3M="), // vless
                 uuid: userID,
-                port: 443,
                 params: {
                     encryption: "none",
-                    security: "tls",
                     type: "ws",
                     host: hostName,
                     path: `/?ed=2560${proxyIP ? `/${btoa(proxyIP)}` : ''}`,
-                    sni: hostName,
                     fp: "randomized",
                     alpn: "h2,http/1.1",
                     allowInsecure: false
                 }
             };
 
-            // 添加主节点
-            const mainNode = generateVlessLink(baseConfig, hostName, "主节点");
-            nodes.push(mainNode);
+            // 处理 TLS 节点
+            if (addresses.length > 0) {
+                addresses.forEach((address) => {
+                    const [addr, ...remarkParts] = address.split('#');
+                    const remark = remarkParts.join('#') || FileName;
+                    
+                    // 为每个地址生成不同端口的节点
+                    httpsPorts.forEach(port => {
+                        const config = {
+                            ...baseConfig,
+                            address: addr,
+                            port: port,
+                            params: {
+                                ...baseConfig.params,
+                                security: "tls",
+                                sni: hostName
+                            }
+                        };
+                        
+                        const vlessLink = generateVlessLink(config, hostName, `${remark}-${port}`);
+                        responseBody += vlessLink + '\n';
+                    });
+                });
+            }
 
-            // 添加随机节点
-            const randomPorts = [443, 8443, 2053, 2083, 2087, 2096];
-            const randomFingerprints = ["chrome", "firefox", "safari", "ios", "android", "edge", "random"];
-            
-            for(let i = 0; i < 3; i++) { // 生成3个随机节点
-                const randomConfig = {
+            // 处理 noTLS 节点
+            if (addressesnotls.length > 0) {
+                addressesnotls.forEach((address) => {
+                    const [addr, ...remarkParts] = address.split('#');
+                    const remark = remarkParts.join('#') || FileName;
+                    
+                    const config = {
+                        ...baseConfig,
+                        address: addr,
+                        port: 80,
+                        params: {
+                            ...baseConfig.params,
+                            security: "none",
+                            host: hostName
+                        }
+                    };
+                    
+                    const vlessLink = generateVlessLink(config, hostName, `${remark}-80`);
+                    notlsresponseBody += vlessLink + '\n';
+                });
+            }
+
+            // 如果没有任何地址，生成默认节点
+            if (!responseBody && !notlsresponseBody) {
+                const defaultConfig = {
                     ...baseConfig,
-                    port: randomPorts[Math.floor(Math.random() * randomPorts.length)],
+                    address: hostName,
+                    port: 443,
                     params: {
                         ...baseConfig.params,
-                        fp: randomFingerprints[Math.floor(Math.random() * randomFingerprints.length)]
+                        security: "tls",
+                        sni: hostName
                     }
                 };
-                const randomNode = generateVlessLink(randomConfig, hostName, `随机节点${i + 1}`);
-                nodes.push(randomNode);
+                
+                responseBody = generateVlessLink(defaultConfig, hostName, FileName);
             }
 
-            // 如果有代理IP，添加代理节点
-            if(proxyIP) {
-                const proxyNode = generateVlessLink({
-                    ...baseConfig,
-                    address: proxyIP,
-                    params: {
-                        ...baseConfig.params,
-                        path: `/?ed=2560/${btoa(proxyIP)}`
-                    }
-                }, hostName, "代理节点");
-                nodes.push(proxyNode);
+            // 合并所有配置
+            let content = responseBody;
+            if (notlsresponseBody) {
+                content += notlsresponseBody;
             }
 
-            // 合并所有节点配置
-            content = nodes.join('\n');
-            
             // Base64编码
-            if(isBase64) {
-                content = btoa(content);
-            }
-
-            return content;
+            return btoa(content);
         }
 
         if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
@@ -1413,14 +1439,14 @@ function generateVlessLink(config, hostName, remarks) {
         `type=${config.params.type}&` +
         `host=${encodeURIComponent(config.params.host)}&` +
         `path=${encodeURIComponent(config.params.path)}&` +
-        `sni=${encodeURIComponent(config.params.sni)}&` +
+        `sni=${encodeURIComponent(config.params.sni || '')}&` +
         `fp=${config.params.fp}&` +
         `alpn=${encodeURIComponent(config.params.alpn)}&` +
         `allowInsecure=${config.params.allowInsecure}&` +
-        `tfo=true&` + // TCP Fast Open
-        `keepAlive=true&` +  
-        `congestion_control=bbr&` + // BBR拥塞控制
-        `udp_relay=true` + // UDP转发
+        `tfo=true&` +
+        `keepAlive=true&` +
+        `congestion_control=bbr&` +
+        `udp_relay=true` +
         `#${encodeURIComponent(remarks)}`;
 }
 
