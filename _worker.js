@@ -2036,71 +2036,65 @@ async function 处理地址列表(地址列表) {
 	return 分类地址;
 }
 
-// 添加 CF 随机节点到配置
-function addCFRandomNodes(config, cfNodes) {
-    cfNodes.forEach((node, index) => {
-        const cfRemark = `CF节点 ${index + 1}`;
-        config.proxies.push({
-            "name": cfRemark,
-            "type": "http",
-            "server": node.server,
-            "port": node.port,
-            "username": node.username,
-            "password": node.password
-        });
-        config["proxy-groups"][0].proxies.push(cfRemark);
+// 处理CF节点信息的函数
+function processCFNodes(addressList) {
+    const cfNodes = [];
+    addressList.split('\n').forEach(line => {
+        if (line.includes('#CF')) {
+            const [address, port] = line.split('#')[0].split(':');
+            cfNodes.push({
+                server: address.trim(),
+                port: parseInt(port || '443'),
+                type: 'http',
+                tls: true
+            });
+        }
     });
+    return cfNodes;
 }
 
-// 添加 buildXrayWarpOutbound 函数
-function buildXrayWarpOutbound(warpConfigs, remark, endpoint, chain) {
-    const ipv6Regex = /\[(.*?)\]/;
-    const portRegex = /[^:]*$/;
-    const endpointServer = endpoint.includes("[") ? endpoint.match(ipv6Regex)[1] : endpoint.split(":")[0];
-    const endpointPort = endpoint.includes("[") ? +endpoint.match(portRegex)[0] : +endpoint.split(":")[1];
-    const {
-        warpIPv6,
-        reserved,
-        publicKey,
-        privateKey
-    } = extractWireguardParams(warpConfigs, chain);
-    return {
-        "name": remark,
-        "type": "wireguard",
-        "ip": "172.16.0.2/32",
-        "ipv6": warpIPv6,
-        "private-key": privateKey,
-        "server": endpointServer,
-        "port": endpointPort,
-        "public-key": publicKey,
-        "allowed-ips": ["0.0.0.0/0", "::/0"],
-        "reserved": reserved,
-        "udp": true,
-        "mtu": 1280,
-        "dialer-proxy": chain
-    };
-}
-
-// 添加 buildXrayBestPingConfig 函数
-async function buildXrayBestPingConfig(proxySettings, cfNodes) {
+// 修改 buildXrayBestPingConfig 函数
+async function buildXrayBestPingConfig(proxySettings, addressList) {
     const { warpEndpoints } = proxySettings;
     const config = structuredClone(clashConfigTemp);
     config.dns = await buildClashDNS(proxySettings, true, true);
     const { rules, ruleProviders } = buildClashRoutingRules(proxySettings);
     config.rules = rules;
     config["rule-providers"] = ruleProviders;
+    
+    // 初始化代理组
     const selector = config["proxy-groups"][0];
     const warpUrlTest = config["proxy-groups"][1];
-    selector.proxies = ["\u{1F4A6} Warp - Best Ping \u{1F680}", "\u{1F4A6} WoW - Best Ping \u{1F680}"];
-    warpUrlTest.name = "\u{1F4A6} Warp - Best Ping \u{1F680}";
+    const cfUrlTest = {
+        "name": "🌐 CF节点 - Best Ping",
+        "type": "url-test",
+        "url": "https://www.gstatic.com/generate_204",
+        "interval": 300,
+        "tolerance": 50,
+        "proxies": []
+    };
+
+    // 设置选择器初始代理列表
+    selector.proxies = [
+        "🌐 CF节点 - Best Ping",
+        "💦 Warp - Best Ping 🚀", 
+        "💦 WoW - Best Ping 🚀"
+    ];
+
+    // 处理 Warp 相关配置
+    warpUrlTest.name = "💦 Warp - Best Ping 🚀";
     warpUrlTest.interval = +proxySettings.bestWarpInterval;
     config["proxy-groups"].push(structuredClone(warpUrlTest));
+    
     const WoWUrlTest = config["proxy-groups"][2];
-    WoWUrlTest.name = "\u{1F4A6} WoW - Best Ping \u{1F680}";
-    let warpRemarks = [], WoWRemarks = [];
+    WoWUrlTest.name = "💦 WoW - Best Ping 🚀";
+    
+    let warpRemarks = [], WoWRemarks = [], cfRemarks = [];
+
+    // 处理 Warp 节点
     warpEndpoints.split(",").forEach((endpoint, index) => {
-        const warpRemark = `\u{1F4A6} ${index + 1} - Warp \u{1F1EE}\u{1F1F7}`;
-        const WoWRemark = `\u{1F4A6} ${index + 1} - WoW \u{1F30D}`;
+        const warpRemark = `💦 ${index + 1} - Warp 🇮🇷`;
+        const WoWRemark = `💦 ${index + 1} - WoW 🌍`;
         const warpOutbound = buildXrayWarpOutbound(warpConfigs, warpRemark, endpoint, "");
         const WoWOutbound = buildXrayWarpOutbound(warpConfigs, WoWRemark, endpoint, warpRemark);
         config.proxies.push(WoWOutbound, warpOutbound);
@@ -2109,10 +2103,38 @@ async function buildXrayBestPingConfig(proxySettings, cfNodes) {
         warpUrlTest.proxies.push(warpRemark);
         WoWUrlTest.proxies.push(WoWRemark);
     });
-    selector.proxies.push(...warpRemarks, ...WoWRemarks);
 
-    // 添加 CF 随机节点
-    addCFRandomNodes(config, cfNodes);
+    // 处理 CF 节点
+    const cfNodes = processCFNodes(addressList);
+    cfNodes.forEach((node, index) => {
+        const cfRemark = `🌐 CF节点 ${index + 1}`;
+        config.proxies.push({
+            "name": cfRemark,
+            "type": "http",
+            "server": node.server,
+            "port": node.port,
+            "tls": true
+        });
+        cfRemarks.push(cfRemark);
+        cfUrlTest.proxies.push(cfRemark);
+    });
+
+    // 添加所有代理组
+    config["proxy-groups"].push(cfUrlTest);
+    selector.proxies.push(...cfRemarks, ...warpRemarks, ...WoWRemarks);
 
     return config;
+}
+
+// 在主函数中调用
+async function 生成配置信息(userID, host, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
+    // ... 其他代码 ...
+    
+    // 获取地址列表
+    const addressList = await 获取地址列表(); // 你需要实现这个函数来获取地址列表
+    
+    // 生成配置
+    const config = await buildXrayBestPingConfig(proxySettings, addressList);
+    
+    // ... 其他代码 ...
 }
