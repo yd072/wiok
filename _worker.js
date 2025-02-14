@@ -1532,7 +1532,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 
 	const uniqueAddresses = [...new Set(addresses)];
 
-	const responseBody = uniqueAddresses.map((address, index) => {
+	const responseBody = uniqueAddresses.map(address => {
 		let port = "-1";
 		let addressid = address;
 
@@ -1588,36 +1588,32 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		// 添加分片配置
 		const fragmentConfig = {
 			enabled: true,
-			packets: "10-20", // 分片数量范围
+			packets: "tlshello", // 分片数量范围
 			length: "100-200", // 每个分片的长度范围
 			interval: "10-20" // 分片发送间隔(ms)
 		};
 
-		// 添加节点序号
-		const nodeIndex = index + 1;
-		const 节点备注WithFragment = ` [Fragment ${nodeIndex}]${节点备注}`;
-
 		const 协议类型 = atob(啥啥啥_写的这是啥啊);
-		const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
-			`${atob('ZW5jcnlwdGlvbj1ub25l')}&` + 
-			`${atob('c2VjdXJpdHk9dGxz')}&` + 
-			`${atob('c25pPQ==')}${伪装域名}&` + 
-			`fp=randomized&` + 
-			`type=ws&` + 
-			`host=${伪装域名}&` + 
-			`path=${encodeURIComponent(最终路径)}&` + 
-			`alpn=h3&` + 
-			`allowInsecure=false&` + 
-			`tfo=true&` + // TCP Fast Open
-			`keepAlive=true&` +  
-			`congestion_control=bbr&` + // BBR拥塞控制
+        const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
+            `${atob('ZW5jcnlwdGlvbj1ub25l')}&` + 
+            `${atob('c2VjdXJpdHk9dGxz')}&` + 
+            `${atob('c25pPQ==')}${伪装域名}&` + 
+            `fp=randomized&` + 
+            `type=ws&` + 
+            `host=${伪装域名}&` + 
+            `path=${encodeURIComponent(最终路径)}&` + 
+            `alpn=h3&` + 
+            `allowInsecure=false&` + 
+            `tfo=true&` + // TCP Fast Open
+            `keepAlive=true&` +  
+            `congestion_control=bbr&` + // BBR拥塞控制
 			`udp_relay=true&` + // UDP转发
 			// 添加分片参数
 			`fragment=true&` +
 			`fragmentPackets=${fragmentConfig.packets}&` +
 			`fragmentLength=${fragmentConfig.length}&` +
 			`fragmentInterval=${fragmentConfig.interval}` +
-			`#${encodeURIComponent(addressid + 节点备注WithFragment)}`;
+			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
 	}).join('\n');
@@ -1844,7 +1840,7 @@ async function handleGetRequest(env, txt) {
 			<div class="editor-container">
 				${hasKV ? `
 				<textarea class="editor" 
-					placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRnJhdyUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+					placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
 					id="content">${content}</textarea>
 				<div class="save-container">
 					<button class="back-btn" onclick="goBack()">返回配置页</button>
@@ -1993,6 +1989,7 @@ async function handleGetRequest(env, txt) {
 		headers: { "Content-Type": "text/html;charset=utf-8" }
 	});
 }
+
 async function 处理地址列表(地址列表) {
 	const 分类地址 = {
 		接口地址: new Set(),
