@@ -1057,42 +1057,6 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-// 先假设我们已经从源码3.js中导入了buildXrayVLOutbound函数
-// import { buildXrayVLOutbound } from './源码3.js';
-
-// 生成VLESS配置的函数
-function 生成VLESS配置(userID, hostName, port, path) {
-    const remark = `VLESS节点 - ${hostName}:${port}`;
-    return {
-        name: remark,
-        server: hostName,
-        port: port,
-        type: "vless",
-        uuid: userID,
-        tls: true,
-        network: "ws",
-        "ws-opts": {
-            path: path,
-            headers: {
-                Host: hostName
-            }
-        }
-    };
-}
-
-// 生成随机节点订阅的函数
-function 生成随机节点订阅(userID, hostName, ports, paths) {
-    const 配置列表 = [];
-    for (const port of ports) {
-        for (const path of paths) {
-            const vlessConfig = 生成VLESS配置(userID, hostName, port, path);
-            配置列表.push(vlessConfig);
-        }
-    }
-    return 配置列表;
-}
-
-// 在生成配置信息的函数中调用生成随机节点订阅的函数
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
 
@@ -2070,4 +2034,65 @@ async function 处理地址列表(地址列表) {
 	}
 	
 	return 分类地址;
+}
+
+// 添加 buildXrayWarpOutbound 函数
+function buildXrayWarpOutbound(warpConfigs, remark, endpoint, chain) {
+    const ipv6Regex = /\[(.*?)\]/;
+    const portRegex = /[^:]*$/;
+    const endpointServer = endpoint.includes("[") ? endpoint.match(ipv6Regex)[1] : endpoint.split(":")[0];
+    const endpointPort = endpoint.includes("[") ? +endpoint.match(portRegex)[0] : +endpoint.split(":")[1];
+    const {
+        warpIPv6,
+        reserved,
+        publicKey,
+        privateKey
+    } = extractWireguardParams(warpConfigs, chain);
+    return {
+        "name": remark,
+        "type": "wireguard",
+        "ip": "172.16.0.2/32",
+        "ipv6": warpIPv6,
+        "private-key": privateKey,
+        "server": endpointServer,
+        "port": endpointPort,
+        "public-key": publicKey,
+        "allowed-ips": ["0.0.0.0/0", "::/0"],
+        "reserved": reserved,
+        "udp": true,
+        "mtu": 1280,
+        "dialer-proxy": chain
+    };
+}
+
+// 添加 buildXrayBestPingConfig 函数
+function buildXrayBestPingConfig(proxySettings) {
+    const { warpEndpoints } = proxySettings;
+    const config = structuredClone(clashConfigTemp);
+    config.dns = await buildClashDNS(proxySettings, true, true);
+    const { rules, ruleProviders } = buildClashRoutingRules(proxySettings);
+    config.rules = rules;
+    config["rule-providers"] = ruleProviders;
+    const selector = config["proxy-groups"][0];
+    const warpUrlTest = config["proxy-groups"][1];
+    selector.proxies = ["\u{1F4A6} Warp - Best Ping \u{1F680}", "\u{1F4A6} WoW - Best Ping \u{1F680}"];
+    warpUrlTest.name = "\u{1F4A6} Warp - Best Ping \u{1F680}";
+    warpUrlTest.interval = +proxySettings.bestWarpInterval;
+    config["proxy-groups"].push(structuredClone(warpUrlTest));
+    const WoWUrlTest = config["proxy-groups"][2];
+    WoWUrlTest.name = "\u{1F4A6} WoW - Best Ping \u{1F680}";
+    let warpRemarks = [], WoWRemarks = [];
+    warpEndpoints.split(",").forEach((endpoint, index) => {
+        const warpRemark = `\u{1F4A6} ${index + 1} - Warp \u{1F1EE}\u{1F1F7}`;
+        const WoWRemark = `\u{1F4A6} ${index + 1} - WoW \u{1F30D}`;
+        const warpOutbound = buildXrayWarpOutbound(warpConfigs, warpRemark, endpoint, "");
+        const WoWOutbound = buildXrayWarpOutbound(warpConfigs, WoWRemark, endpoint, warpRemark);
+        config.proxies.push(WoWOutbound, warpOutbound);
+        warpRemarks.push(warpRemark);
+        WoWRemarks.push(WoWRemark);
+        warpUrlTest.proxies.push(warpRemark);
+        WoWUrlTest.proxies.push(WoWRemark);
+    });
+    selector.proxies.push(...warpRemarks, ...WoWRemarks);
+    return config;
 }
