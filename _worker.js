@@ -195,6 +195,9 @@ class ConfigManager {
 
 export default {
 	async fetch(request, env, ctx) {
+		// 调用日志记录功能
+		logRequestDetails(request);
+
 		try {
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
@@ -1057,7 +1060,7 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
+async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
 
 	if (sub) {
@@ -1112,7 +1115,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fake
 		}
 	}
 
-	const uuid = (url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
+	const uuid = (_url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
 	const userAgent = UA.toLowerCase();
 	const Config = 配置信息(userID, hostName);
 	const proxyConfig = Config[0];
@@ -2036,111 +2039,54 @@ async function 处理地址列表(地址列表) {
 	return 分类地址;
 }
 
-// 添加新的配置生成函数
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
-    try {
-        // 保留原有的配置逻辑
-        // ... 现有代码 ...
-
-        // 增加新的配置选项
-        const 高级配置 = {
-            // TLS 配置增强
-            tls: {
-                enabled: true,
-                serverName: hostName,
-                fingerprint: getRandomFingerprint(),
-                alpn: ["h2", "http/1.1"],
-                minVersion: "1.2",
-                maxVersion: "1.3",
-                cipherSuites: [
-                    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
-                    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
-                    "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
-                ]
-            },
-            
-            // WebSocket 配置增强
-            ws: {
-                path: `/?ed=2048${proxyIP ? `/${btoa(proxyIP)}` : ''}`,
-                headers: {
-                    Host: hostName,
-                    "User-Agent": UA || "Mozilla/5.0",
-                    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-                    "Accept-Encoding": "gzip, deflate, br"
-                },
-                maxEarlyData: 2048,
-                earlyDataHeaderName: "Sec-WebSocket-Protocol"
-            },
-            
-            // 性能优化配置
-            performance: {
-                tcpFastOpen: true,
-                tcpKeepAlive: true,
-                congestionControl: "bbr",
-                udpRelay: true,
-                bufferSize: 32768
-            }
-        };
-
-        // 生成节点配置时合并高级配置
-        if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !url.searchParams.has('b64')) {
-            // 为不同客户端生成优化的配置
-            if (userAgent.includes('clash')) {
-                // Clash 配置增强
-                const clashConfig = {
-                    type: "vless",
-                    name: `${FileName} - ${hostName}`,
-                    server: hostName,
-                    port: 443,
-                    uuid: userID,
-                    network: "ws",
-                    tls: true,
-                    ...高级配置.tls,
-                    ...高级配置.ws,
-                    ...高级配置.performance
-                };
-                configs.push(clashConfig);
-            } else if (userAgent.includes('v2ray')) {
-                // v2ray 配置增强
-                const v2rayConfig = {
-                    v: "2",
-                    ps: `${FileName} - ${hostName}`,
-                    add: hostName,
-                    port: 443,
-                    id: userID,
-                    aid: 0,
-                    net: "ws",
-                    type: "none",
-                    tls: "tls",
-                    ...高级配置.tls,
-                    ...高级配置.ws,
-                    ...高级配置.performance
-                };
-                configs.push(v2rayConfig);
-            }
-        }
-
-        // 保持原有的返回逻辑
-        return content;
-
-    } catch (error) {
-        console.error('配置生成错误:', error);
-        throw error;
-    }
+// 新增功能模块：日志记录
+function logRequestDetails(request) {
+    const url = new URL(request.url);
+    console.log(`请求路径: ${url.pathname}`);
+    console.log(`请求方法: ${request.method}`);
+    console.log(`请求头: ${JSON.stringify([...request.headers])}`);
 }
 
-// 添加辅助函数
-function getRandomFingerprint() {
-    const fingerprints = [
-        "chrome",
-        "firefox",
-        "safari",
-        "ios",
-        "android",
-        "edge",
-        "360",
-        "qq",
-        "random"
-    ];
-    return fingerprints[Math.floor(Math.random() * fingerprints.length)];
+// 新增功能模块：自定义错误处理
+function handleError(error) {
+    console.error('发生错误:', error);
+    return new Response("服务器错误: " + error.message, {
+        status: 500,
+        headers: { "Content-Type": "text/plain;charset=utf-8" }
+    });
+}
+
+// 在 handleRequest 函数中使用自定义错误处理
+async function handleRequest(request) {
+    try {
+        // ... 现有代码 ...
+
+        if (url.pathname === `/${userID}`) {
+            const config = await 生成配置信息(
+                userID,
+                request.headers.get('Host'),
+                sub,
+                request.headers.get('User-Agent'),
+                RproxyIP,
+                url,
+                fakeUserID,
+                fakeHostName,
+                env
+            );
+
+            return new Response(config, {
+                status: 200,
+                headers: {
+                    "Content-Type": "text/plain;charset=utf-8",
+                    "Profile-Update-Interval": "6",
+                    "Subscription-Userinfo": `upload=0; download=0; total=0; expire=${expire}`,
+                    "Cache-Control": "no-store"
+                }
+            });
+        }
+
+        // ... 其他代码 ...
+    } catch (error) {
+        return handleError(error);
+    }
 }
