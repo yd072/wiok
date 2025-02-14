@@ -1053,17 +1053,14 @@ function generateRandomNode(cidr) {
   const subnetMask = 32 - parseInt(mask, 10);
   const maxHosts = Math.pow(2, subnetMask) - 1;
 
-  // 使用 nacl 生成随机字节
+  // 使用 crypto.getRandomValues 生成随机字节
   const randomBytes = new Uint8Array(4);
-  nacl.randombytes(randomBytes, 4);
-
-  // 使用随机字节生成主机部分
+  crypto.getRandomValues(randomBytes);
   const randomHost = (randomBytes[0] << 24 | 
                      randomBytes[1] << 16 | 
                      randomBytes[2] << 8 | 
                      randomBytes[3]) & maxHosts;
 
-  // 构建IP地址
   return baseIP.map((octet, index) => {
     if (index < 2) return octet;
     if (index === 2) {
@@ -1078,7 +1075,7 @@ function generateRandomNode(cidr) {
 async function getDataset(request, env) {
   return {
     proxySettings: {
-      cleanIPs: env.CLEANIPS || '', // 从环境变量获取cleanIPs
+      cleanIPs: env.CLEANIPS || '', 
       proxyIP: env.PROXYIP || '',
       ports: env.PORTS ? env.PORTS.split(',') : ['443'],
       enableIPv6: env.IPV6 === 'true',
@@ -1089,51 +1086,58 @@ async function getDataset(request, env) {
   };
 }
 
-// 添加地址生成函数
-async function getConfigAddresses(cleanIPs, enableIPv6) {
-  const Addresses = [];
-  
-  // 处理cleanIPs
-  if(cleanIPs) {
-    Addresses.push(...cleanIPs.split(','));
-  } else {
-    // 默认的CF IP范围
-    Addresses.push(
+// 修改生成配置信息函数
+async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+  const uniqueAddresses = new Set();
+
+  // 保留原有的sub和KV处理逻辑
+  if (sub) {
+    const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
+    sub = match ? match[1] : sub;
+    const subs = await 整理(sub);
+    sub = subs.length > 1 ? subs[0] : sub;
+  } else if (env.KV) {
+    await 迁移地址列表(env);
+    const 优选地址列表 = await env.KV.get('ADD.txt');
+    if (优选地址列表) {
+      const 分类地址 = await 处理地址列表(优选地址列表);
+      addressesapi = [...分类地址.接口地址];
+      link = [...分类地址.链接地址];
+      addresses = [...分类地址.优选地址];
+    }
+  }
+
+  // 如果没有现成的地址，则生成随机节点
+  if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
+    const { proxySettings } = await getDataset(_url, env);
+    const {
+      cleanIPs,
+      enableIPv6
+    } = proxySettings;
+
+    // 获取地址列表
+    let cfips = [
       '103.21.244.0/23',
       '104.16.0.0/13',
       '104.24.0.0/14',
-      '141.101.64.0/19', 
+      '141.101.64.0/19',
       '172.64.0.0/14',
       '188.114.96.0/21',
       '190.93.240.0/21'
-    );
-  }
+    ];
 
-  return Addresses;
-}
-
-// 修改生成配置信息函数
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-  const { proxySettings } = await getDataset(request, env);
-  const {
-    cleanIPs,
-    enableIPv6,
-    customCdnAddrs
-  } = proxySettings;
-
-  if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-    // 获取地址列表
-    const Addresses = await getConfigAddresses(cleanIPs, enableIPv6);
-    const customCdnAddresses = customCdnAddrs ? customCdnAddrs.split(",") : [];
-    const totalAddresses = [...Addresses, ...customCdnAddresses];
+    // 如果有自定义IP，使用自定义IP
+    if(cleanIPs) {
+      cfips = cleanIPs.split(',');
+    }
 
     if (hostName.includes(".workers.dev")) {
       addressesnotls = addressesnotls.concat(
-        totalAddresses.map(addr => addr + '#CF节点')
+        cfips.map(cidr => generateRandomNode(cidr) + '#CF随机节点')
       );
     } else {
       addresses = addresses.concat(
-        totalAddresses.map(addr => addr + '#CF节点') 
+        cfips.map(cidr => generateRandomNode(cidr) + '#CF随机节点')
       );
     }
   }
