@@ -2036,6 +2036,22 @@ async function 处理地址列表(地址列表) {
 	return 分类地址;
 }
 
+// 添加 CF 随机节点到配置
+function addCFRandomNodes(config, cfNodes) {
+    cfNodes.forEach((node, index) => {
+        const cfRemark = `CF节点 ${index + 1}`;
+        config.proxies.push({
+            "name": cfRemark,
+            "type": "http",
+            "server": node.server,
+            "port": node.port,
+            "username": node.username,
+            "password": node.password
+        });
+        config["proxy-groups"][0].proxies.push(cfRemark);
+    });
+}
+
 // 添加 buildXrayWarpOutbound 函数
 function buildXrayWarpOutbound(warpConfigs, remark, endpoint, chain) {
     const ipv6Regex = /\[(.*?)\]/;
@@ -2066,7 +2082,7 @@ function buildXrayWarpOutbound(warpConfigs, remark, endpoint, chain) {
 }
 
 // 添加 buildXrayBestPingConfig 函数
-async function buildXrayBestPingConfig(proxySettings) {
+async function buildXrayBestPingConfig(proxySettings, cfNodes) {
     const { warpEndpoints } = proxySettings;
     const config = structuredClone(clashConfigTemp);
     config.dns = await buildClashDNS(proxySettings, true, true);
@@ -2094,5 +2110,9 @@ async function buildXrayBestPingConfig(proxySettings) {
         WoWUrlTest.proxies.push(WoWRemark);
     });
     selector.proxies.push(...warpRemarks, ...WoWRemarks);
+
+    // 添加 CF 随机节点
+    addCFRandomNodes(config, cfNodes);
+
     return config;
 }
