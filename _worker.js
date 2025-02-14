@@ -1057,20 +1057,6 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-function generateRandomIPFromCIDR(cidr) {
-    const [base, mask] = cidr.split('/');
-    const baseIP = base.split('.').map(Number);
-    const subnetMask = 32 - parseInt(mask, 10);
-    const maxHosts = Math.pow(2, subnetMask) - 1;
-    const randomHost = Math.floor(Math.random() * maxHosts);
-
-    return baseIP.map((octet, index) => {
-        if (index < 2) return octet;
-        if (index === 2) return (octet & (255 << (subnetMask - 8))) + ((randomHost >> 8) & 255);
-        return (octet & (255 << subnetMask)) + (randomHost & 255);
-    }).join('.');
-}
-
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
 
@@ -1104,6 +1090,20 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			'188.114.96.0/21',
 			'190.93.240.0/21',
 		];
+
+		function generateRandomIPFromCIDR(cidr) {
+			const [base, mask] = cidr.split('/');
+			const baseIP = base.split('.').map(Number);
+			const subnetMask = 32 - parseInt(mask, 10);
+			const maxHosts = Math.pow(2, subnetMask) - 1;
+			const randomHost = Math.floor(Math.random() * maxHosts);
+
+			return baseIP.map((octet, index) => {
+				if (index < 2) return octet;
+				if (index === 2) return (octet & (255 << (subnetMask - 8))) + ((randomHost >> 8) & 255);
+				return (octet & (255 << subnetMask)) + (randomHost & 255);
+			}).join('.');
+		}
 
 		if (hostName.includes(".workers.dev")) {
 			addressesnotls = addressesnotls.concat(cfips.map(cidr => generateRandomIPFromCIDR(cidr) + '#CF随机节点'));
@@ -2035,3 +2035,31 @@ async function 处理地址列表(地址列表) {
 	
 	return 分类地址;
 }
+
+// 添加一个函数来解析DNS并获取IP地址
+async function resolveDNS(hostName) {
+    // 这里假设有一个现有的DNS解析函数
+    const resolved = await someDNSResolveFunction(hostName);
+    return resolved; // 返回解析后的IP地址列表
+}
+
+// 使用解析得到的IP地址生成节点
+async function 生成节点配置(域名) {
+    const resolved = await resolveDNS(域名);
+    const ipv4Addresses = resolved.ipv4; // 假设解析结果包含ipv4字段
+
+    const 节点配置列表 = ipv4Addresses.map(ip => {
+        return `节点配置: ${ip}`; // 这里根据需要生成具体的节点配置
+    });
+
+    return 节点配置列表;
+}
+
+// 示例调用
+async function main() {
+    const 域名 = "www.speedtest.net";
+    const 节点配置 = await 生成节点配置(域名);
+    console.log(节点配置);
+}
+
+main();
