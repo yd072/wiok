@@ -1113,7 +1113,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fake
             }
         }
 
-        const uuid = (_url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
+        const uuid = (url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
         const userAgent = UA.toLowerCase();
         const Config = 配置信息(userID, hostName);
         const proxyConfig = Config[0];
@@ -1272,191 +1272,156 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fake
                 ${cmad}
                 `;
             return 节点配置页;
+        }
+
+        if (typeof fetch != 'function') {
+            return 'Error: fetch is not available in this environment.';
+        }
+
+        let newAddressesapi = [];
+        let newAddressescsv = [];
+        let newAddressesnotlsapi = [];
+        let newAddressesnotlscsv = [];
+
+        if (hostName.includes(".workers.dev")) {
+            noTLS = 'true';
+            fakeHostName = `${fakeHostName}.workers.dev`;
+            newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+            newAddressesnotlscsv = await 整理测速结果('FALSE');
+        } else if (hostName.includes(".pages.dev")) {
+            fakeHostName = `${fakeHostName}.pages.dev`;
+        } else if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
+            noTLS = 'true';
+            fakeHostName = `notls${fakeHostName}.net`;
+            newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+            newAddressesnotlscsv = await 整理测速结果('FALSE');
         } else {
-            if (typeof fetch != 'function') {
-                return 'Error: fetch is not available in this environment.';
+            fakeHostName = `${fakeHostName}.xyz`
+        }
+        console.log(`虚假HOST: ${fakeHostName}`);
+        let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}`;
+        let isBase64 = true;
+
+        if (!sub || sub == "") {
+            let nodes = [];
+            
+            // 生成基础节点
+            const baseConfig = {
+                protocol: atob("dmxlc3M="), // vless
+                uuid: userID,
+                port: 443,
+                params: {
+                    encryption: "none",
+                    security: "tls",
+                    type: "ws",
+                    host: hostName,
+                    path: `/?ed=2560${proxyIP ? `/${btoa(proxyIP)}` : ''}`,
+                    sni: hostName,
+                    fp: "randomized",
+                    alpn: "h2,http/1.1",
+                    allowInsecure: false
+                }
+            };
+
+            // 添加主节点
+            const mainNode = generateVlessLink(baseConfig, hostName, "主节点");
+            nodes.push(mainNode);
+
+            // 添加随机节点
+            const randomPorts = [443, 8443, 2053, 2083, 2087, 2096];
+            const randomFingerprints = ["chrome", "firefox", "safari", "ios", "android", "edge", "random"];
+            
+            for(let i = 0; i < 3; i++) { // 生成3个随机节点
+                const randomConfig = {
+                    ...baseConfig,
+                    port: randomPorts[Math.floor(Math.random() * randomPorts.length)],
+                    params: {
+                        ...baseConfig.params,
+                        fp: randomFingerprints[Math.floor(Math.random() * randomFingerprints.length)]
+                    }
+                };
+                const randomNode = generateVlessLink(randomConfig, hostName, `随机节点${i + 1}`);
+                nodes.push(randomNode);
             }
 
-            let newAddressesapi = [];
-            let newAddressescsv = [];
-            let newAddressesnotlsapi = [];
-            let newAddressesnotlscsv = [];
+            // 如果有代理IP，添加代理节点
+            if(proxyIP) {
+                const proxyNode = generateVlessLink({
+                    ...baseConfig,
+                    address: proxyIP,
+                    params: {
+                        ...baseConfig.params,
+                        path: `/?ed=2560/${btoa(proxyIP)}`
+                    }
+                }, hostName, "代理节点");
+                nodes.push(proxyNode);
+            }
 
-            if (hostName.includes(".workers.dev")) {
-                noTLS = 'true';
-                fakeHostName = `${fakeHostName}.workers.dev`;
-                newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-                newAddressesnotlscsv = await 整理测速结果('FALSE');
-            } else if (hostName.includes(".pages.dev")) {
-                fakeHostName = `${fakeHostName}.pages.dev`;
-            } else if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
-                noTLS = 'true';
-                fakeHostName = `notls${fakeHostName}.net`;
-                newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-                newAddressesnotlscsv = await 整理测速结果('FALSE');
+            // 合并所有节点配置
+            content = nodes.join('\n');
+            
+            // Base64编码
+            if(isBase64) {
+                content = btoa(content);
+            }
+
+            return content;
+        }
+
+        if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
+            if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
+                url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                isBase64 = false;
+            } else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
+                url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                isBase64 = false;
+            }
+        }
+
+        try {
+            let content;
+            if ((!sub || sub == "") && isBase64 == true) {
+                content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
             } else {
-                fakeHostName = `${fakeHostName}.xyz`
-            }
-            console.log(`虚假HOST: ${fakeHostName}`);
-            let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}`;
-            let isBase64 = true;
-
-            if (!sub || sub == "") {
-                let responseBody = '';
-                let notlsresponseBody = '';
-                
-                // 处理固定节点
-                for (const address of addresses) {
-                    if (!uniqueAddresses.has(address)) {
-                        uniqueAddresses.add(address);
-                        const 配置 = 配置信息(userID, hostName);
-                        const vlessLink = `${atob("dmxlc3M=")}://${userID}@${address}:443?` + 
-                            `encryption=none&` + 
-                            `security=tls&` + 
-                            `sni=${hostName}&` + 
-                            `fp=randomized&` + 
-                            `type=ws&` + 
-                            `host=${hostName}&` + 
-                            `path=${encodeURIComponent(path)}&` + 
-                            `alpn=h2,http/1.1&` + 
-                            `allowInsecure=false#${encodeURIComponent(FileName)} - ${address}`;
-                        
-                        responseBody += vlessLink + '\n';
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
                     }
-                }
-
-                // 处理 API 节点
-                if (addressesapi && addressesapi.length > 0) {
-                    const newAddressesapi = await 整理优选列表(addressesapi);
-                    for (const address of newAddressesapi) {
-                        if (!uniqueAddresses.has(address)) {
-                            uniqueAddresses.add(address);
-                            const vlessLink = `${atob("dmxlc3M=")}://${userID}@${address}:443?` + 
-                                `encryption=none&` + 
-                                `security=tls&` + 
-                                `sni=${hostName}&` + 
-                                `fp=randomized&` + 
-                                `type=ws&` + 
-                                `host=${hostName}&` + 
-                                `path=${encodeURIComponent(path)}&` + 
-                                `alpn=h2,http/1.1&` + 
-                                `allowInsecure=false#${encodeURIComponent(FileName)} - API ${address}`;
-                            
-                            responseBody += vlessLink + '\n';
-                        }
-                    }
-                }
-
-                // 处理测速结果节点
-                const newAddressescsv = await 整理测速结果('TRUE');
-                for (const address of newAddressescsv) {
-                    if (!uniqueAddresses.has(address)) {
-                        uniqueAddresses.add(address);
-                        const vlessLink = `${atob("dmxlc3M=")}://${userID}@${address}:443?` + 
-                            `encryption=none&` + 
-                            `security=tls&` + 
-                            `sni=${hostName}&` + 
-                            `fp=randomized&` + 
-                            `type=ws&` + 
-                            `host=${hostName}&` + 
-                            `path=${encodeURIComponent(path)}&` + 
-                            `alpn=h2,http/1.1&` + 
-                            `allowInsecure=false#${encodeURIComponent(FileName)} - CSV ${address}`;
-                        
-                        responseBody += vlessLink + '\n';
-                    }
-                }
-
-                // 添加随机节点
-                const cfips = [
-                    '104.16.0.0/13',
-                    '104.24.0.0/14',
-                    '172.64.0.0/14'
-                ];
-
-                function generateRandomIPFromCIDR(cidr) {
-                    const [base, mask] = cidr.split('/');
-                    const baseIP = base.split('.').map(Number);
-                    const subnetMask = 32 - parseInt(mask, 10);
-                    const maxHosts = Math.pow(2, subnetMask) - 1;
-                    const randomHost = Math.floor(Math.random() * maxHosts);
-
-                    return baseIP.map((octet, index) => {
-                        if (index < 2) return octet;
-                        if (index === 2) return (octet & (255 << (subnetMask - 8))) + ((randomHost >> 8) & 255);
-                        return (octet & (255 << subnetMask)) + (randomHost & 255);
-                    }).join('.');
-                }
-
-                // 生成5个随机节点
-                for (let i = 0; i < 5; i++) {
-                    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
-                    const randomIP = generateRandomIPFromCIDR(randomCIDR);
-                    if (!uniqueAddresses.has(randomIP)) {
-                        uniqueAddresses.add(randomIP);
-                        const vlessLink = `${atob("dmxlc3M=")}://${userID}@${randomIP}:443?` + 
-                            `encryption=none&` + 
-                            `security=tls&` + 
-                            `sni=${hostName}&` + 
-                            `fp=randomized&` + 
-                            `type=ws&` + 
-                            `host=${hostName}&` + 
-                            `path=${encodeURIComponent(path)}&` + 
-                            `alpn=h2,http/1.1&` + 
-                            `allowInsecure=false#${encodeURIComponent(FileName)} - Random ${i + 1}`;
-                        
-                        responseBody += vlessLink + '\n';
-                    }
-                }
-
-                // 添加链接节点
-                if (link && link.length > 0) {
-                    responseBody += link.join('\n');
-                }
-
-                // 根据请求参数决定是否需要base64编码
-                if (url.searchParams.has('base64') || url.searchParams.has('b64')) {
-                    return btoa(responseBody);
-                }
-                return responseBody;
+                });
+                content = await response.text();
             }
 
-            if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
-                if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
-                    url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-                    isBase64 = false;
-                } else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
-                    url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-                    isBase64 = false;
-                }
-            }
+            if (_url.pathname == `/${fakeUserID}`) return content;
 
-            try {
-                let content;
-                if ((!sub || sub == "") && isBase64 == true) {
-                    content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
-                } else {
-                    const response = await fetch(url, {
-                        headers: {
-                            'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
-                        }
-                    });
-                    content = await response.text();
-                }
+            return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
 
-                if (_url.pathname == `/${fakeUserID}`) return content;
-
-                return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
-
-            } catch (error) {
-                console.error('Error fetching content:', error);
-                return `Error fetching content: ${error.message}`;
-            }
+        } catch (error) {
+            console.error('Error fetching content:', error);
+            return `Error fetching content: ${error.message}`;
         }
     } catch (error) {
         console.error('配置生成错误:', error);
         throw error;
     }
+}
+
+// 添加一个辅助函数用于生成vless链接
+function generateVlessLink(config, hostName, remarks) {
+    return `${config.protocol}://${config.uuid}@${config.address || hostName}:${config.port}?` +
+        `encryption=${config.params.encryption}&` +
+        `security=${config.params.security}&` +
+        `type=${config.params.type}&` +
+        `host=${encodeURIComponent(config.params.host)}&` +
+        `path=${encodeURIComponent(config.params.path)}&` +
+        `sni=${encodeURIComponent(config.params.sni)}&` +
+        `fp=${config.params.fp}&` +
+        `alpn=${encodeURIComponent(config.params.alpn)}&` +
+        `allowInsecure=${config.params.allowInsecure}&` +
+        `tfo=true&` + // TCP Fast Open
+        `keepAlive=true&` +  
+        `congestion_control=bbr&` + // BBR拥塞控制
+        `udp_relay=true` + // UDP转发
+        `#${encodeURIComponent(remarks)}`;
 }
 
 async function 整理优选列表(api) {
