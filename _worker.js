@@ -1,3 +1,4 @@
+
 let 快速订阅访问入口 = ['auto'];
 let addresses = [];
 let addressesapi = [];
@@ -462,77 +463,6 @@ function utf8ToBase64(str) {
 	return btoa(unescape(encodeURIComponent(str)));
 }
 
-// 新增工具函数
-function parseAddress(address) {
-  let port = "-1";
-  let addressid = address;
-  let parsedAddress = address;
-
-  const match = addressid.match(regex);
-  if (!match) {
-    if (address.includes(':') && address.includes('#')) {
-      const [addr, rest] = address.split(':');
-      parsedAddress = addr;
-      const [p, id] = rest.split('#');
-      port = p;
-      addressid = id;
-    } else if (address.includes(':')) {
-      const [addr, p] = address.split(':');
-      parsedAddress = addr;
-      port = p;
-    } else if (address.includes('#')) {
-      const [addr, id] = address.split('#');
-      parsedAddress = addr;
-      addressid = id;
-    }
-
-    if (addressid.includes(':')) {
-      addressid = addressid.split(':')[0];
-    }
-  } else {
-    parsedAddress = match[1];
-    port = match[2] || port;
-    addressid = match[3] || parsedAddress;
-  }
-
-  return { address: parsedAddress, port, addressid };
-}
-
-// 处理代理IP的函数
-function handleProxyIP(addressid, address, defaultPath) {
-  if (隧道版本作者.trim() !== atob('Y21saXU=') || 获取代理IP.trim() !== 'true') {
-    return defaultPath; // 返回默认路径而不是全局path
-  }
-
-  let lowerAddressid = addressid.toLowerCase();
-  let foundProxyIP = null;
-
-  if (socks5Data) {
-    const socks5 = getRandomProxyByMatch(lowerAddressid, socks5Data);
-    return `/${socks5}`;
-  }
-
-  for (let item of 匹配PROXYIP) {
-    if ((item.includes('#') && item.split('#')[1] && lowerAddressid.includes(item.split('#')[1].toLowerCase())) ||
-        (item.includes(':') && item.split(':')[1] && lowerAddressid.includes(item.split(':')[1].toLowerCase()))) {
-      foundProxyIP = item.split(/[:#]/)[0];
-      break;
-    }
-  }
-
-  const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-  if (matchingProxyIP) {
-    return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + matchingProxyIP;
-  }
-  
-  if (foundProxyIP) {
-    return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + foundProxyIP;
-  }
-
-  const randomProxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
-  return atob('Lz9lZD0yNTYwJnByb3h5aXA9') + randomProxyIP;
-}
-
 export default {
 	async fetch(request, env) {
 		if (env.TOKEN) 快速订阅访问入口 = await 整理(env.TOKEN);
@@ -857,44 +787,107 @@ export default {
 			}
 
 			const responseBody = uniqueAddresses.map(address => {
-				const { address: parsedAddress, port: initialPort, addressid } = parseAddress(address);
-				
-				let port = initialPort;
-				if (!isValidIPv4(parsedAddress) && port === "-1") {
+				let port = "-1";
+				let addressid = address;
+
+				const match = addressid.match(regex);
+				if (!match) {
+					if (address.includes(':') && address.includes('#')) {
+						const parts = address.split(':');
+						address = parts[0];
+						const subParts = parts[1].split('#');
+						port = subParts[0];
+						addressid = subParts[1];
+					} else if (address.includes(':')) {
+						const parts = address.split(':');
+						address = parts[0];
+						port = parts[1];
+					} else if (address.includes('#')) {
+						const parts = address.split('#');
+						address = parts[0];
+						addressid = parts[1];
+					}
+
+					if (addressid.includes(':')) {
+						addressid = addressid.split(':')[0];
+					}
+				} else {
+					address = match[1];
+					port = match[2] || port;
+					addressid = match[3] || address;
+				}
+
+				if (!isValidIPv4(address) && port == "-1") {
 					for (let httpsPort of httpsPorts) {
-						if (parsedAddress.includes(httpsPort)) {
+						if (address.includes(httpsPort)) {
 							port = httpsPort;
 							break;
 						}
 					}
 				}
-				if (port === "-1") port = "443";
+				if (port == "-1") port = "443";
 
-				const newPath = handleProxyIP(addressid, parsedAddress, path); // 传入path作为默认值
+				//console.log(address, port, addressid);
+
+				if (隧道版本作者.trim() === atob('Y21saXU=') && 获取代理IP.trim() === 'true') {
+					// 将addressid转换为小写
+					let lowerAddressid = addressid.toLowerCase();
+					// 初始化找到的proxyIP为null
+					let foundProxyIP = null;
+
+					if (socks5Data) {
+						const socks5 = getRandomProxyByMatch(lowerAddressid, socks5Data);
+						path = `/${socks5}`;
+					} else {
+						// 遍历匹配PROXYIP数组查找匹配项
+						for (let item of 匹配PROXYIP) {
+							if (item.includes('#') && item.split('#')[1] && lowerAddressid.includes(item.split('#')[1].toLowerCase())) {
+								foundProxyIP = item.split('#')[0];
+								break; // 找到匹配项，跳出循环
+							} else if (item.includes(':') && item.split(':')[1] && lowerAddressid.includes(item.split(':')[1].toLowerCase())) {
+								foundProxyIP = item.split(':')[0];
+								break; // 找到匹配项，跳出循环
+							}
+						}
+
+						const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
+						if (matchingProxyIP) {
+							path = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + matchingProxyIP;
+						} else if (foundProxyIP) {
+							// 如果找到匹配的proxyIP，赋值给path
+							path = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + foundProxyIP;
+						} else {
+							// 如果没有找到匹配项，随机选择一个proxyIP
+							const randomProxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+							path = atob('Lz9lZD0yNTYwJnByb3h5aXA9') + randomProxyIP;
+						}
+					}
+				}
 
 				let 伪装域名 = host;
-				let 最终路径 = newPath;
+				let 最终路径 = path;
 				let 节点备注 = EndPS;
 				if (临时中转域名.length > 0 && (host.includes('.workers.dev'))) {
-					最终路径 = `/${host}${newPath}`;
+					最终路径 = `/${host}${path}`;
 					伪装域名 = 临时中转域名[Math.floor(Math.random() * 临时中转域名.length)];
 					节点备注 = EndPS + atob('IOW3suWQr+eUqOS4tOaXtuWfn+WQjeS4rei9rOacjeWKoe+8jOivt+WwveW/q+e7keWumuiHquWumuS5ieWfn++8gQ==');
 					sni = 伪装域名;
 				}
 
 				if (协议类型 == 'VMess') {
-					const vmessLink = `vmess://${utf8ToBase64(`{"v":"2","ps":"${addressid + 节点备注}","add":"${parsedAddress}","port":"${port}","id":"${uuid}","aid":"${额外ID}","scy":"${加密方式}","net":"ws","type":"${type}","host":"${伪装域名}","path":"${最终路径}","tls":"tls","sni":"${sni}","alpn":"${encodeURIComponent(alpn)}","fp":""}`)}`;
+					const vmessLink = `vmess://${utf8ToBase64(`{"v":"2","ps":"${addressid + 节点备注}","add":"${address}","port":"${port}","id":"${uuid}","aid":"${额外ID}","scy":"${加密方式}","net":"ws","type":"${type}","host":"${伪装域名}","path":"${最终路径}","tls":"tls","sni":"${sni}","alpn":"${encodeURIComponent(alpn)}","fp":""}`)}`;
 					return vmessLink;
 				} else if (协议类型 == atob('VHJvamFu')) {
-					const 特洛伊Link = `${atob('dHJvamFuOi8v') + uuid}@${parsedAddress}:${port + atob('P3NlY3VyaXR5PXRscyZzbmk9') + sni}&alpn=${encodeURIComponent(alpn)}&fp=randomized&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
+					const 特洛伊Link = `${atob('dHJvamFuOi8v') + uuid}@${address}:${port + atob('P3NlY3VyaXR5PXRscyZzbmk9') + sni}&alpn=${encodeURIComponent(alpn)}&fp=randomized&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
 					return 特洛伊Link;
 				} else {
-					const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${parsedAddress}:${port + atob('P2VuY3J5cHRpb249bm9uZSZzZWN1cml0eT10bHMmc25pPQ==') + sni}&alpn=${encodeURIComponent(alpn)}&fp=random&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
+					const 维列斯Link = `${atob('dmxlc3M6Ly8=') + uuid}@${address}:${port + atob('P2VuY3J5cHRpb249bm9uZSZzZWN1cml0eT10bHMmc25pPQ==') + sni}&alpn=${encodeURIComponent(alpn)}&fp=random&type=${type}&host=${伪装域名}&path=${encodeURIComponent(最终路径)}#${encodeURIComponent(addressid + 节点备注)}`;
 					return 维列斯Link;
 				}
-			});
 
-			let combinedContent = responseBody.join('\n'); // 合并内容
+			}).join('\n');
+
+			let combinedContent = responseBody; // 合并内容
 
 			if (link) {
 				const links = await 整理(link);
