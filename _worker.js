@@ -1,5 +1,4 @@
 import { connect } from 'cloudflare:sockets';
-import dns from 'dns/promises';
 
 let userID = '';
 let proxyIP = '';
@@ -516,23 +515,12 @@ async function fetchWithTimeout(resource, options = {}) {
             }
         });
         clearTimeout(id);
-        return response;
-    } catch (error) {
-        console.error(`Fetch error: ${error.message}`);
-        throw error;
-    }
-}
-
-// 使用 async/await 处理异步操作
-async function fetchData(url) {
-    try {
-        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         return await response.json();
     } catch (error) {
-        console.error('Fetch error:', error);
+        console.error(`Fetch error: ${error.message}`);
         throw error;
     }
 }
@@ -540,7 +528,15 @@ async function fetchData(url) {
 // 并行处理多个异步请求
 async function fetchMultipleData(urls) {
     try {
-        const promises = urls.map(url => fetchData(url));
+        const promises = urls.map(url => fetchWithTimeout(url, {
+            headers: {
+                'Upgrade-Insecure-Requests': '1',
+                'Accept': 'application/json',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'ALPN': 'h2,h3', // 添加 ALPN 参数以支持 HTTP/2 和 HTTP/3
+            }
+        }));
         const results = await Promise.all(promises);
         return results;
     } catch (error) {
@@ -596,7 +592,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                         if (维列斯Header) 维列斯Header = null;
                     } catch (error) {
                         console.error(`发送数据时发生错误: ${error.message}`);
-                        safeCloseWebSocket(webSocket);
+                        utils.ws.safeClose(webSocket);
                     }
                 }
             },
@@ -609,7 +605,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         }));
     } catch (error) {
         console.error(`DNS查询异常: ${error.message}`, error.stack);
-        safeCloseWebSocket(webSocket);
+        utils.ws.safeClose(webSocket);
     }
 }
 
@@ -676,7 +672,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             tcpSocket.closed.catch(error => {
                 console.log('Retry tcpSocket closed error', error);
             }).finally(() => {
-                safeCloseWebSocket(webSocket);
+                utils.ws.safeClose(webSocket);
             });
             remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
@@ -795,26 +791,12 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         )
         .catch((error) => {
             console.error(`remoteSocketToWS exception`);
-            safeCloseWebSocket(webSocket);
+            utils.ws.safeClose(webSocket);
         });
 
     if (!hasIncomingData && retry) {
         log(`Retrying connection`);
         retry();
-    }
-}
-
-function base64ToArrayBuffer(base64Str) {
-    if (!base64Str) {
-        return { earlyData: undefined, error: null };
-    }
-    try {
-        base64Str = base64Str.replace(/-/g, '+').replace(/_/g, '/');
-        const decoded = atob(base64Str);
-        const arrayBuffer = Uint8Array.from(decoded, c => c.charCodeAt(0));
-        return { earlyData: arrayBuffer.buffer, error: null };
-    } catch (error) {
-        return { earlyData: undefined, error };
     }
 }
 
@@ -2036,37 +2018,3 @@ async function 处理地址列表(地址列表) {
 	
 	return 分类地址;
 }
-
-// 添加一个函数来解析DNS并获取IP地址
-async function resolveDNS(hostName) {
-    try {
-        const response = await fetch(`https://dns.google/resolve?name=${hostName}&type=A`);
-        const data = await response.json();
-        const ipv4Addresses = data.Answer ? data.Answer.map(answer => answer.data) : [];
-        return { ipv4: ipv4Addresses };
-    } catch (error) {
-        console.error('DNS解析失败:', error);
-        return { ipv4: [] };
-    }
-}
-
-// 使用解析得到的IP地址生成节点
-async function 生成节点配置(域名) {
-    const resolved = await resolveDNS(域名);
-    const ipv4Addresses = resolved.ipv4;
-
-    const 节点配置列表 = ipv4Addresses.map(ip => {
-        return `节点配置: ${ip}`; // 这里根据需要生成具体的节点配置
-    });
-
-    return 节点配置列表;
-}
-
-// 示例调用
-async function main() {
-    const 域名 = "www.speedtest.net";
-    const 节点配置 = await 生成节点配置(域名);
-    console.log("生成的节点配置:", 节点配置);
-}
-
-main();
