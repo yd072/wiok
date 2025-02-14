@@ -548,8 +548,6 @@ function processLargeDataStream(dataStream) {
 
 // 优化 handleDNSQuery 函数，添加错误处理和日志
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
-    const WS_READY_STATE_OPEN = 1;
-    
     try {
         // 只使用Google的备用DNS服务器,更快更稳定
         const dnsServer = '8.8.4.4';
@@ -578,7 +576,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                         if (维列斯Header) 维列斯Header = null;
                     } catch (error) {
                         console.error(`发送数据时发生错误: ${error.message}`);
-                        safeCloseWebSocket(webSocket); // 使用 safeCloseWebSocket
+                        safeCloseWebSocket(webSocket); 
                     }
                 }
             },
@@ -591,7 +589,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         }));
     } catch (error) {
         console.error(`DNS查询异常: ${error.message}`, error.stack);
-        safeCloseWebSocket(webSocket); // 使用 safeCloseWebSocket
+        safeCloseWebSocket(webSocket); 
     }
 }
 
@@ -658,7 +656,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             tcpSocket.closed.catch(error => {
                 console.log('Retry tcpSocket closed error', error);
             }).finally(() => {
-                safeCloseWebSocket(webSocket); // 使用 safeCloseWebSocket
+                safeCloseWebSocket(webSocket); 
             });
             remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
@@ -777,7 +775,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         )
         .catch((error) => {
             console.error(`remoteSocketToWS exception`);
-            safeCloseWebSocket(webSocket); // 使用 safeCloseWebSocket
+            safeCloseWebSocket(webSocket); 
         });
 
     if (!hasIncomingData && retry) {
@@ -1021,6 +1019,61 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
+// 添加 nacl 随机数生成器设置
+const nacl = {
+  setPRNG: function(fn) {
+    this.randombytes = fn;
+  },
+  randombytes: null
+};
+
+// 设置加密级随机数生成器
+(function() {
+  const crypto = typeof self !== "undefined" ? 
+    (self.crypto || self.msCrypto) : null;
+    
+  if (crypto && crypto.getRandomValues) {
+    const QUOTA = 65536;
+    nacl.setPRNG(function(x, n) {
+      const v = new Uint8Array(n);
+      for (let i = 0; i < n; i += QUOTA) {
+        crypto.getRandomValues(v.subarray(i, i + Math.min(n - i, QUOTA)));
+      }
+      for (let i = 0; i < n; i++) x[i] = v[i];
+      // 清理敏感数据
+      v.fill(0);
+    });
+  }
+})();
+
+// 修改生成随机节点的函数
+function generateRandomNode(cidr) {
+  const [base, mask] = cidr.split('/');
+  const baseIP = base.split('.').map(Number);
+  const subnetMask = 32 - parseInt(mask, 10);
+  const maxHosts = Math.pow(2, subnetMask) - 1;
+
+  // 使用 nacl 生成随机字节
+  const randomBytes = new Uint8Array(4);
+  nacl.randombytes(randomBytes, 4);
+
+  // 使用随机字节生成主机部分
+  const randomHost = (randomBytes[0] << 24 | 
+                     randomBytes[1] << 16 | 
+                     randomBytes[2] << 8 | 
+                     randomBytes[3]) & maxHosts;
+
+  // 构建IP地址
+  return baseIP.map((octet, index) => {
+    if (index < 2) return octet;
+    if (index === 2) {
+      return (octet & (255 << (subnetMask - 8))) + 
+             ((randomHost >> 8) & 255);
+    }
+    return (octet & (255 << subnetMask)) + (randomHost & 255);
+  }).join('.');
+}
+
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
 
@@ -1055,24 +1108,14 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			'190.93.240.0/21',
 		];
 
-		function generateRandomIPFromCIDR(cidr) {
-			const [base, mask] = cidr.split('/');
-			const baseIP = base.split('.').map(Number);
-			const subnetMask = 32 - parseInt(mask, 10);
-			const maxHosts = Math.pow(2, subnetMask) - 1;
-			const randomHost = Math.floor(Math.random() * maxHosts);
-
-			return baseIP.map((octet, index) => {
-				if (index < 2) return octet;
-				if (index === 2) return (octet & (255 << (subnetMask - 8))) + ((randomHost >> 8) & 255);
-				return (octet & (255 << subnetMask)) + (randomHost & 255);
-			}).join('.');
-		}
-
 		if (hostName.includes(".workers.dev")) {
-			addressesnotls = addressesnotls.concat(cfips.map(cidr => generateRandomIPFromCIDR(cidr) + '#CF随机节点'));
+			addressesnotls = addressesnotls.concat(
+				cfips.map(cidr => generateRandomNode(cidr) + '#CF随机节点')
+			);
 		} else {
-			addresses = addresses.concat(cfips.map(cidr => generateRandomIPFromCIDR(cidr) + '#CF随机节点'));
+			addresses = addresses.concat(
+				cfips.map(cidr => generateRandomNode(cidr) + '#CF随机节点')
+			);
 		}
 	}
 
