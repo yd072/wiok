@@ -1531,7 +1531,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	}
 
 	const uniqueAddresses = [...new Set(addresses)];
-
+	
 	// 添加 Best Ping 配置组
 	let bestPingGroup = [];
 	
@@ -1603,7 +1603,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`keepAlive=true&` +  
 			`congestion_control=bbr&` + 
 			`udp_relay=true` + 
-			`#${encodeURIComponent(addressid + 节点备注)}`;
+			`#${encodeURIComponent(addressid + ' - ' + port)}`;  // 修改备注格式
 
 		// 将节点添加到 Best Ping 组
 		bestPingGroup.push(维列斯Link);
@@ -1611,18 +1611,29 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		return 维列斯Link;
 	}).join('\n');
 
-	// 添加 Best Ping 配置
-	const bestPingConfig = `
-vless-rss://best_ping?remarks=🌊 Best Ping 💨&interval=600&tolerance=50&timeout=5&url=https://www.gstatic.com/generate_204
-${bestPingGroup.join('\n')}
-`;
+	// 修改 Best Ping 配置格式
+	const bestPingConfig = bestPingGroup.map((node, index) => {
+		const nodeName = `AutoBestPing_${index + 1}`;
+		return node.replace(/#[^#]+$/, `#${nodeName}`);  // 替换节点名称
+	}).join('\n');
+
+	// 添加自动切换策略
+	const autoSwitchConfig = `
+vless://auto-switch?
+name=🌊 Auto Best Ping&
+type=url-test&
+interval=300&
+tolerance=50&
+url=http://www.gstatic.com/generate_204&
+nodes=${bestPingGroup.length}
+${bestPingConfig}`;
 
 	let base64Response = responseBody; 
 	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
 	if (link.length > 0) base64Response += '\n' + link.join('\n');
 	
-	// 添加 Best Ping 配置到最终响应
-	base64Response += '\n' + bestPingConfig;
+	// 添加自动切换配置到最终响应
+	base64Response += '\n' + autoSwitchConfig;
 	
 	return btoa(base64Response);
 }
