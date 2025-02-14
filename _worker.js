@@ -1060,7 +1060,7 @@ const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRT
 // 先假设我们已经从源码3.js中导入了buildXrayVLOutbound函数
 // import { buildXrayVLOutbound } from './源码3.js';
 
-// 确保只保留一个生成VLESS配置函数
+// 生成VLESS配置的函数
 function 生成VLESS配置(userID, hostName, port, path) {
     const remark = `VLESS节点 - ${hostName}:${port}`;
     return {
@@ -1080,7 +1080,7 @@ function 生成VLESS配置(userID, hostName, port, path) {
     };
 }
 
-// 确保只保留一个生成随机节点订阅函数
+// 生成随机节点订阅的函数
 function 生成随机节点订阅(userID, hostName, ports, paths) {
     const 配置列表 = [];
     for (const port of ports) {
@@ -1092,7 +1092,7 @@ function 生成随机节点订阅(userID, hostName, ports, paths) {
     return 配置列表;
 }
 
-// 确保只保留一个生成配置信息函数
+// 在生成配置信息的函数中调用生成随机节点订阅的函数
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
 
