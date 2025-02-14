@@ -2057,9 +2057,38 @@ async function 生成节点配置(域名) {
 
 // 示例调用
 async function main() {
+    const 域名 = "www.speedtest.net"; // 在这里填入你想要解析的域名
+    const 节点配置 = await 生成节点配置(域名);
+    console.log("生成的节点配置:", 节点配置);
+}
+
+main();
+
+// 假设有一个现有的DNS解析函数
+async function someDNSResolveFunction(hostName) {
+    // 模拟DNS解析，返回一个包含IPv4地址的对象
+    return {
+        ipv4: ["192.0.2.1", "192.0.2.2"] // 示例IP地址
+    };
+}
+
+// 使用解析得到的IP地址生成节点
+async function 生成节点配置(域名) {
+    const resolved = await resolveDNS(域名);
+    const ipv4Addresses = resolved.ipv4;
+
+    const 节点配置列表 = ipv4Addresses.map(ip => {
+        return `节点配置: ${ip}`; // 这里根据需要生成具体的节点配置
+    });
+
+    return 节点配置列表;
+}
+
+// 示例调用
+async function main() {
     const 域名 = "www.speedtest.net";
     const 节点配置 = await 生成节点配置(域名);
-    console.log(节点配置);
+    console.log("生成的节点配置:", 节点配置);
 }
 
 main();
