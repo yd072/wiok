@@ -3326,3 +3326,206 @@ class ConsensusProtocol {
         return false;
     }
 }
+
+// 添加网络学习连接系统
+class NetworkLearningConnector {
+    constructor(nodeManager) {
+        this.nodeManager = nodeManager;
+        this.learningPeers = new Map();
+        this.knowledgeNetwork = new Map();
+        this.learningChannels = new Map();
+        this.activeConnections = new Set();
+        this.learningState = {
+            isLearning: false,
+            currentTopic: null,
+            progress: 0,
+            lastUpdate: Date.now()
+        };
+    }
+
+    // 初始化学习网络
+    async initializeLearningNetwork() {
+        try {
+            // 建立学习网络连接
+            await this.establishLearningConnections();
+            // 同步知识库
+            await this.syncKnowledgeBase();
+            // 开始主动学习
+            this.startActiveLearning();
+            return true;
+        } catch (error) {
+            console.error('Failed to initialize learning network:', error);
+            return false;
+        }
+    }
+
+    // 建立学习连接
+    async establishLearningConnections() {
+        // 发现学习节点
+        const learningNodes = await this.discoverLearningNodes();
+        
+        for (const node of learningNodes) {
+            try {
+                // 建立加密学习通道
+                const channel = await this.createLearningChannel(node);
+                if (channel) {
+                    this.learningChannels.set(node.id, channel);
+                    this.activeConnections.add(node.id);
+                    
+                    // 交换学习能力
+                    await this.exchangeLearningCapabilities(node);
+                }
+            } catch (error) {
+                console.warn(`Failed to establish learning connection with node ${node.id}:`, error);
+            }
+        }
+    }
+
+    // 创建学习通道
+    async createLearningChannel(node) {
+        const channelConfig = {
+            id: `learning-${this.nodeManager.nodeId}-${node.id}`,
+            type: 'learning',
+            encryption: await this.setupChannelEncryption(),
+            protocol: {
+                version: '1.0',
+                features: ['knowledge_sync', 'active_learning', 'peer_teaching']
+            }
+        };
+
+        return await this.nodeManager.createDataChannel(node.id, channelConfig);
+    }
+
+    // 开始主动学习
+    async startActiveLearning() {
+        if (this.learningState.isLearning) return;
+
+        this.learningState.isLearning = true;
+        try {
+            while (this.learningState.isLearning) {
+                // 选择学习主题
+                const topic = await this.selectLearningTopic();
+                if (!topic) break;
+
+                this.learningState.currentTopic = topic;
+                
+                // 从网络获取知识
+                await this.learnFromNetwork(topic);
+                
+                // 验证和整合新知识
+                await this.validateAndIntegrateKnowledge(topic);
+                
+                // 分享学习成果
+                await this.shareLearnedKnowledge(topic);
+                
+                // 更新学习进度
+                this.updateLearningProgress();
+            }
+        } catch (error) {
+            console.error('Active learning error:', error);
+        } finally {
+            this.learningState.isLearning = false;
+        }
+    }
+
+    // 从网络学习
+    async learnFromNetwork(topic) {
+        const peers = Array.from(this.activeConnections);
+        const learningTasks = [];
+
+        for (const peerId of peers) {
+            const channel = this.learningChannels.get(peerId);
+            if (channel) {
+                learningTasks.push(this.learnFromPeer(peerId, topic, channel));
+            }
+        }
+
+        // 并行学习
+        const results = await Promise.allSettled(learningTasks);
+        
+        // 处理学习结果
+        return this.processLearningResults(results, topic);
+    }
+
+    // 从对等节点学习
+    async learnFromPeer(peerId, topic, channel) {
+        try {
+            // 请求知识
+            const knowledge = await this.requestKnowledge(peerId, topic);
+            
+            // 验证知识
+            if (await this.validateKnowledge(knowledge)) {
+                // 整合知识
+                await this.integrateKnowledge(knowledge);
+                
+                // 更新学习状态
+                this.updateLearningState(peerId, topic, true);
+                
+                return { success: true, knowledge };
+            }
+        } catch (error) {
+            console.warn(`Failed to learn from peer ${peerId}:`, error);
+            this.updateLearningState(peerId, topic, false);
+        }
+        return { success: false };
+    }
+
+    // 分享学习成果
+    async shareLearnedKnowledge(topic) {
+        const knowledge = await this.prepareKnowledgeForSharing(topic);
+        if (!knowledge) return;
+
+        const peers = Array.from(this.activeConnections);
+        for (const peerId of peers) {
+            try {
+                const channel = this.learningChannels.get(peerId);
+                if (channel) {
+                    await this.shareKnowledgeWithPeer(peerId, knowledge, channel);
+                }
+            } catch (error) {
+                console.warn(`Failed to share knowledge with peer ${peerId}:`, error);
+            }
+        }
+    }
+
+    // 准备知识分享
+    async prepareKnowledgeForSharing(topic) {
+        const knowledge = this.knowledgeNetwork.get(topic);
+        if (!knowledge) return null;
+
+        return {
+            topic,
+            content: knowledge.content,
+            confidence: knowledge.confidence,
+            timestamp: Date.now(),
+            source: this.nodeManager.nodeId,
+            signature: await this.signKnowledge(knowledge)
+        };
+    }
+
+    // 更新学习进度
+    updateLearningProgress() {
+        const now = Date.now();
+        const timeSinceLastUpdate = now - this.learningState.lastUpdate;
+        
+        // 计算学习效率
+        const efficiency = this.calculateLearningEfficiency();
+        
+        // 更新进度
+        this.learningState.progress = Math.min(
+            1,
+            this.learningState.progress + (efficiency * timeSinceLastUpdate / 3600000)
+        );
+        
+        this.learningState.lastUpdate = now;
+    }
+
+    // 计算学习效率
+    calculateLearningEfficiency() {
+        const baseEfficiency = 0.1;
+        const networkFactor = Math.min(1, this.activeConnections.size / 10);
+        const knowledgeFactor = Math.min(1, this.knowledgeNetwork.size / 1000);
+        
+        return baseEfficiency * (1 + networkFactor + knowledgeFactor);
+    }
+}
