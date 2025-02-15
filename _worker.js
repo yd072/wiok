@@ -45,12 +45,14 @@ let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 
-// 添加噪声生成函数
-const noiseGenerators = {
-    base64: (level) => btoa(Math.random().toString(36).substring(2, 2 + level)),
-    random: (level) => Math.random().toString(36).substring(2, 2 + level),
-    string: (level) => '固定字符串噪声'.substring(0, level)
-};
+// 在全局变量区域添加
+let enableUDPNoise = true; // 默认关闭
+let udpNoises = [{
+    type: "base64",  
+    packet: btoa("noise"),  // 默认noise内容
+    delay: "1-1",    
+    count: "1"       
+}];
 
 // 添加工具函数
 const utils = {
@@ -601,11 +603,6 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
-    // 添加噪声类型选择和级别
-    const noiseType = 'base64'; // 可以是 'base64', 'random', 'string'
-    const noiseLevel = 4; // 噪声级别，控制噪声的长度
-    const noise = noiseGenerators[noiseType](noiseLevel);
-
     async function useSocks5Pattern(address) {
         if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
         return go2Socks5s.some(pattern => {
@@ -639,9 +636,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         
         // 使用更大的写入缓冲区
         const writer = tcpSocket.writable.getWriter();
-        // 在数据前添加噪声
-        const dataWithNoise = new Uint8Array([...noise, ...rawClientData]);
-        await writer.write(dataWithNoise);
+        await writer.write(rawClientData);
         writer.releaseLock();
         
         return tcpSocket;
@@ -683,6 +678,14 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         shouldUseSocks = await useSocks5Pattern(addressRemote);
     }
     let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
+    
+    // 只在启用且非DNS请求时发送UDP noise
+    if(enableUDPNoise && portRemote !== 53) {
+        sendUDPNoise(tcpSocket).catch(error => {
+            log('UDP noise error:', error);
+        });
+    }
+    
     remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
 }
 
@@ -1018,7 +1021,7 @@ function 配置信息(UUID, 域名地址) {
     let 传输层安全 = ['tls', true];
     const SNI = 域名地址;
     const 指纹 = 'randomized';
-    
+  
     if (域名地址.includes('.workers.dev')) {
         地址 = atob('dmlzYS5jbg==');
         端口 = 80;
@@ -1544,11 +1547,13 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				`type=ws&` +
 				`host=${伪装域名}&` +
 				`path=${encodeURIComponent(最终路径)}&` +
+				`packetEncoding=xudp&` +  // 添加UDP编码方式
+				`udp=true&` +  // 启用UDP
 				`security=none&` + 
 				`tfo=true&` + 
 				`keepAlive=true&` + 
 				`congestion_control=bbr&` + 
-				`udp_relay=true&` + 
+				`udp_relay_mode=native&` +  // 修改UDP中继模式
 				`#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
@@ -1621,11 +1626,13 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`host=${伪装域名}&` +
 			`path=${encodeURIComponent(最终路径)}&` +
 			`alpn=h3&` +
+			`packetEncoding=xudp&` +  // 添加UDP编码方式
+			`udp=true&` +  // 启用UDP
 			`allowInsecure=false&` +
 			`tfo=true&` + 
-			`keepAlive=true&` + // 保持连接
-			`congestion_control=bbr&` + // BBR拥塞控制
-			`udp_relay=true&` + // UDP转发
+			`keepAlive=true&` + 
+			`congestion_control=bbr&` + 
+			`udp_relay_mode=native&` +  // 修改UDP中继模式
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
@@ -2022,4 +2029,54 @@ async function 处理地址列表(地址列表) {
 	}
 	
 	return 分类地址;
+}
+
+function updateUDPNoise(noiseConfig) {
+    try {
+        udpNoises = JSON.parse(noiseConfig);
+    } catch(error) {
+        console.error('Invalid UDP noise config:', error);
+        udpNoises = [{
+            type: "base64",
+            packet: btoa("noise"),
+            delay: "1-1",
+            count: "1"
+        }];
+    }
+}
+
+async function sendUDPNoise(socket) {
+    if(!udpNoises || udpNoises.length === 0) return;
+    
+    for(const noise of udpNoises) {
+        try {
+            const [minDelay, maxDelay] = noise.delay.split('-').map(Number);
+            const count = parseInt(noise.count);
+            
+            for(let i = 0; i < count; i++) {
+                let packetData;
+                switch(noise.type) {
+                    case 'base64':
+                        packetData = new TextEncoder().encode(atob(noise.packet));
+                        break;
+                    case 'random':
+                        const size = Math.floor(Math.random() * 256);
+                        packetData = crypto.getRandomValues(new Uint8Array(size));
+                        break;
+                    case 'string':
+                        packetData = new TextEncoder().encode(noise.packet);
+                        break;
+                }
+                
+                const delay = Math.floor(Math.random() * (maxDelay - minDelay + 1) + minDelay);
+                await new Promise(resolve => setTimeout(resolve, delay * 1000));
+                
+                const writer = socket.writable.getWriter();
+                await writer.write(packetData);
+                writer.releaseLock();
+            }
+        } catch(error) {
+            console.error('UDP noise error:', error);
+        }
+    }
 }
