@@ -45,14 +45,14 @@ let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 
-// 在全局变量区域添加
-let enableUDPNoise = true; // 默认关闭
-let udpNoises = [{
-    type: "random",     // 使用随机数据
-    minSize: 64,        // 最小包大小
-    maxSize: 256,       // 最大包大小
-    delay: "2-5",      // 更随机的延迟
-    count: "3"         // 增加发包数量
+// 流量优化配置
+let enableTrafficOptimizer = true; // 默认开启
+let trafficPatterns = [{
+    type: "random",     
+    minSize: 64,        
+    maxSize: 256,       
+    delay: "2-5",      
+    count: "3"         
 }];
 
 // 添加工具函数
@@ -2026,40 +2026,41 @@ async function 处理地址列表(地址列表) {
 	return 分类地址;
 }
 
-function updateUDPNoise(noiseConfig) {
+function updateTrafficPattern(patternConfig) {
     try {
-        udpNoises = JSON.parse(noiseConfig);
+        trafficPatterns = JSON.parse(patternConfig);
     } catch(error) {
-        console.error('Invalid UDP noise config:', error);
-        udpNoises = [{
-            type: "base64",
-            packet: btoa("noise"),
-            delay: "1-1",
-            count: "1"
+        console.error('Invalid traffic pattern config:', error);
+        trafficPatterns = [{
+            type: "random",
+            minSize: 64,
+            maxSize: 256,
+            delay: "2-5",
+            count: "3"
         }];
     }
 }
 
-async function sendUDPNoise(socket) {
-    if(!enableUDPNoise || !udpNoises || udpNoises.length === 0) return;
+async function applyTrafficPattern(socket) {
+    if(!enableTrafficOptimizer || !trafficPatterns || trafficPatterns.length === 0) return;
     
-    for(const noise of udpNoises) {
+    for(const pattern of trafficPatterns) {
         try {
-            const [minDelay, maxDelay] = noise.delay.split('-').map(Number);
-            const count = parseInt(noise.count);
+            const [minDelay, maxDelay] = pattern.delay.split('-').map(Number);
+            const count = parseInt(pattern.count);
             
             for(let i = 0; i < count; i++) {
                 let packetData;
-                switch(noise.type) {
+                switch(pattern.type) {
                     case 'random':
-                        const size = Math.floor(Math.random() * (noise.maxSize - noise.minSize + 1)) + noise.minSize;
+                        const size = Math.floor(Math.random() * (pattern.maxSize - pattern.minSize + 1)) + pattern.minSize;
                         packetData = crypto.getRandomValues(new Uint8Array(size));
                         break;
                     case 'base64':
-                        packetData = new Uint8Array(atob(noise.packet).split('').map(c => c.charCodeAt(0)));
+                        packetData = new Uint8Array(atob(pattern.packet).split('').map(c => c.charCodeAt(0)));
                         break;
                     case 'string':
-                        packetData = new Uint8Array(noise.packet.split('').map(c => c.charCodeAt(0)));
+                        packetData = new Uint8Array(pattern.packet.split('').map(c => c.charCodeAt(0)));
                         break;
                 }
                 
@@ -2069,12 +2070,11 @@ async function sendUDPNoise(socket) {
                 try {
                     await socket.write(packetData);
                 } catch(error) {
-                    // 忽略写入错误，继续发送下一个包
-                    console.error('Failed to write UDP noise packet:', error);
+                    console.error('Failed to apply traffic pattern:', error);
                 }
             }
         } catch(error) {
-            console.error('UDP noise error:', error);
+            console.error('Traffic pattern error:', error);
         }
     }
 }
@@ -2096,43 +2096,18 @@ class StreamMultiplexer {
         return streamId;
     }
 
-    // 动态调整数据包大小和发送间隔
-    async sendData(socket, data, streamId) {
-        const stream = this.streams.get(streamId);
-        if (!stream) return;
-
-        // 动态分片
-        const chunks = this.dynamicSplit(data);
-        
-        for (const chunk of chunks) {
-            // 添加随机填充
-            const paddedChunk = this.addRandomPadding(chunk);
-            
-            // 动态调整发送时间
-            await this.dynamicDelay();
-            
-            try {
-                await socket.write(paddedChunk);
-            } catch (error) {
-                console.error('Send error:', error);
-            }
-        }
-    }
-
     // 动态分片算法
     dynamicSplit(data) {
-        const minSize = 64;
-        const maxSize = 1024;
+        const minSize = 128;  // 增加最小包大小
+        const maxSize = 1400; // 调整到MTU附近
         const chunks = [];
         let offset = 0;
 
         while (offset < data.length) {
-            // 使用网络流量特征来决定分片大小
             const chunkSize = this.getOptimalChunkSize(minSize, maxSize);
             chunks.push(data.slice(offset, offset + chunkSize));
             offset += chunkSize;
         }
-
         return chunks;
     }
 
@@ -2161,19 +2136,48 @@ class StreamMultiplexer {
         return Math.min(Math.max(size, min), max);
     }
 
-    // 动态延迟
+    // 优化延迟控制
     async dynamicDelay() {
-        const baseDelay = 1;
-        const jitter = Math.random() * 2;
+        const baseDelay = 0.5;  // 减少基础延迟
+        const jitter = Math.random();  // 减少抖动范围
         await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
     }
 
-    // 添加随机填充
+    // 优化填充大小
     addRandomPadding(chunk) {
-        const paddingSize = Math.floor(Math.random() * 32); // 0-32字节的随机填充
+        const paddingSize = Math.floor(Math.random() * 16); // 减少填充大小以提高性能
         const paddedData = new Uint8Array(chunk.length + paddingSize);
         paddedData.set(chunk);
         crypto.getRandomValues(paddedData.subarray(chunk.length));
         return paddedData;
+    }
+
+    // 动态调整数据包大小和发送间隔
+    async sendData(socket, data, streamId) {
+        const stream = this.streams.get(streamId);
+        if (!stream) return;
+
+        try {
+            const chunks = this.dynamicSplit(data);
+            
+            for (const chunk of chunks) {
+                const paddedChunk = this.addRandomPadding(chunk);
+                await this.dynamicDelay();
+                
+                try {
+                    await socket.write(paddedChunk);
+                } catch (error) {
+                    if (error.message.includes('closed')) {
+                        throw error; // 连接关闭时直接抛出
+                    }
+                    console.warn('Chunk send error:', error);
+                    continue; // 其他错误继续发送
+                }
+            }
+        } catch (error) {
+            console.error('Stream send error:', error);
+            this.streams.delete(streamId); // 清理失败的流
+            throw error;
+        }
     }
 }
