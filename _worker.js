@@ -48,10 +48,11 @@ let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 // 在全局变量区域添加
 let enableUDPNoise = true; // 默认关闭
 let udpNoises = [{
-    type: "base64",  
-    packet: btoa("noise"),  // 默认noise内容
-    delay: "1-1",    
-    count: "1"       
+    type: "random",     // 使用随机数据
+    minSize: 64,        // 最小包大小
+    maxSize: 256,       // 最大包大小
+    delay: "2-5",      // 更随机的延迟
+    count: "3"         // 增加发包数量
 }];
 
 // 添加工具函数
@@ -679,12 +680,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     }
     let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
     
-    // 只在启用且非DNS请求时发送UDP noise
-    if(enableUDPNoise && portRemote !== 53) {
-        sendUDPNoise(tcpSocket).catch(error => {
-            log('UDP noise error:', error);
-        });
-    }
+    // 使用新的StreamMultiplexer
+    const multiplexer = new StreamMultiplexer();
+    const streamId = multiplexer.createStream();
+    await multiplexer.sendData(tcpSocket, rawClientData, streamId);
     
     remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
 }
@@ -1550,8 +1549,8 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				`packetEncoding=xudp&` +  // 添加UDP编码方式
 				`udp=true&` +  // 启用UDP
 				`security=none&` + 
-				`tfo=true&` + 
-				`keepAlive=true&` + 
+				`tfo=true&` +// 启用TCP Fast Open 
+				`keepAlive=true&` + // 保持连接
 				`congestion_control=bbr&` + 
 				`udp_relay_mode=native&` +  // 修改UDP中继模式
 				`#${encodeURIComponent(addressid + 节点备注)}`;
@@ -1629,9 +1628,9 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`packetEncoding=xudp&` +  // 添加UDP编码方式
 			`udp=true&` +  // 启用UDP
 			`allowInsecure=false&` +
-			`tfo=true&` + 
-			`keepAlive=true&` + 
-			`congestion_control=bbr&` + 
+			`tfo=true&` + // 启用TCP Fast Open
+			`keepAlive=true&` +// 保持连接 
+			`congestion_control=bbr&` + // BBR拥塞控制
 			`udp_relay_mode=native&` +  // 修改UDP中继模式
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
@@ -2046,7 +2045,7 @@ function updateUDPNoise(noiseConfig) {
 }
 
 async function sendUDPNoise(socket) {
-    if(!udpNoises || udpNoises.length === 0) return;
+    if(!enableUDPNoise || !udpNoises || udpNoises.length === 0) return;
     
     for(const noise of udpNoises) {
         try {
@@ -2056,12 +2055,12 @@ async function sendUDPNoise(socket) {
             for(let i = 0; i < count; i++) {
                 let packetData;
                 switch(noise.type) {
+                    case 'random':
+                        const size = Math.floor(Math.random() * (noise.maxSize - noise.minSize + 1)) + noise.minSize;
+                        packetData = crypto.getRandomValues(new Uint8Array(size));
+                        break;
                     case 'base64':
                         packetData = new Uint8Array(atob(noise.packet).split('').map(c => c.charCodeAt(0)));
-                        break;
-                    case 'random':
-                        const size = Math.floor(Math.random() * 256);
-                        packetData = crypto.getRandomValues(new Uint8Array(size));
                         break;
                     case 'string':
                         packetData = new Uint8Array(noise.packet.split('').map(c => c.charCodeAt(0)));
@@ -2071,10 +2070,114 @@ async function sendUDPNoise(socket) {
                 const delay = Math.floor(Math.random() * (maxDelay - minDelay + 1) + minDelay);
                 await new Promise(resolve => setTimeout(resolve, delay * 1000));
                 
-                await socket.write(packetData);
+                try {
+                    await socket.write(packetData);
+                } catch(error) {
+                    // 忽略写入错误，继续发送下一个包
+                    console.error('Failed to write UDP noise packet:', error);
+                }
             }
         } catch(error) {
             console.error('UDP noise error:', error);
         }
+    }
+}
+
+class StreamMultiplexer {
+    constructor() {
+        this.streams = new Map();
+        this.currentStreamId = 0;
+    }
+
+    createStream(priority = 1) {
+        const streamId = this.currentStreamId++;
+        const stream = {
+            id: streamId,
+            priority: priority,
+            buffer: []
+        };
+        this.streams.set(streamId, stream);
+        return streamId;
+    }
+
+    // 动态调整数据包大小和发送间隔
+    async sendData(socket, data, streamId) {
+        const stream = this.streams.get(streamId);
+        if (!stream) return;
+
+        // 动态分片
+        const chunks = this.dynamicSplit(data);
+        
+        for (const chunk of chunks) {
+            // 添加随机填充
+            const paddedChunk = this.addRandomPadding(chunk);
+            
+            // 动态调整发送时间
+            await this.dynamicDelay();
+            
+            try {
+                await socket.write(paddedChunk);
+            } catch (error) {
+                console.error('Send error:', error);
+            }
+        }
+    }
+
+    // 动态分片算法
+    dynamicSplit(data) {
+        const minSize = 64;
+        const maxSize = 1024;
+        const chunks = [];
+        let offset = 0;
+
+        while (offset < data.length) {
+            // 使用网络流量特征来决定分片大小
+            const chunkSize = this.getOptimalChunkSize(minSize, maxSize);
+            chunks.push(data.slice(offset, offset + chunkSize));
+            offset += chunkSize;
+        }
+
+        return chunks;
+    }
+
+    // 基于网络特征的最优分片大小
+    getOptimalChunkSize(min, max) {
+        // 模拟正常HTTPS流量的包大小分布
+        const distribution = [
+            {size: 100, weight: 0.3},
+            {size: 300, weight: 0.4},
+            {size: 600, weight: 0.2},
+            {size: 900, weight: 0.1}
+        ];
+
+        let size = min;
+        const random = Math.random();
+        let accumWeight = 0;
+
+        for (const {size: s, weight} of distribution) {
+            accumWeight += weight;
+            if (random <= accumWeight) {
+                size = s;
+                break;
+            }
+        }
+
+        return Math.min(Math.max(size, min), max);
+    }
+
+    // 动态延迟
+    async dynamicDelay() {
+        const baseDelay = 1;
+        const jitter = Math.random() * 2;
+        await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
+    }
+
+    // 添加随机填充
+    addRandomPadding(chunk) {
+        const paddingSize = Math.floor(Math.random() * 32); // 0-32字节的随机填充
+        const paddedData = new Uint8Array(chunk.length + paddingSize);
+        paddedData.set(chunk);
+        crypto.getRandomValues(paddedData.subarray(chunk.length));
+        return paddedData;
     }
 }
