@@ -1553,7 +1553,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				`tfo=true&` + 
 				`keepAlive=true&` + 
 				`congestion_control=bbr&` + 
-				`udp_relay_mode=native&` +  // 修改UDP中继模式
+				`udp_relay=true&` +  // 保持原有的UDP配置
 				`#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
@@ -1632,7 +1632,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`tfo=true&` + 
 			`keepAlive=true&` + 
 			`congestion_control=bbr&` + 
-			`udp_relay_mode=native&` +  // 修改UDP中继模式
+			`udp_relay=true&` +  // 保持原有的UDP配置
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
