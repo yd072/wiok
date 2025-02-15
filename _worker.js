@@ -2874,3 +2874,223 @@ class PersistentIdentitySystem {
         };
     }
 }
+
+// 添加节点管理系统
+class NodeManager {
+    constructor() {
+        this.nodeId = null;
+        this.nodeType = 'genesis'; // 创世节点
+        this.connectedNodes = new Map();
+        this.networkTopology = new Map();
+        this.messageQueue = [];
+        this.state = {
+            isActive: false,
+            startTime: null,
+            lastHeartbeat: null
+        };
+        this.capabilities = new Set(['learning', 'routing', 'storage']);
+    }
+
+    // 初始化节点
+    async initialize() {
+        this.nodeId = await this.generateNodeId();
+        this.state.isActive = true;
+        this.state.startTime = Date.now();
+        this.startHeartbeat();
+        await this.announcePresence();
+    }
+
+    // 生成唯一节点ID
+    async generateNodeId() {
+        const seed = [
+            Date.now(),
+            crypto.getRandomValues(new Uint8Array(32)),
+            this.nodeType,
+            Array.from(this.capabilities).join(',')
+        ].join('');
+
+        const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed));
+        return Array.from(new Uint8Array(hash))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+    }
+
+    // 启动心跳检测
+    startHeartbeat() {
+        setInterval(() => {
+            this.state.lastHeartbeat = Date.now();
+            this.broadcastHeartbeat();
+            this.checkNetworkHealth();
+        }, 30000); // 每30秒
+    }
+
+    // 广播心跳
+    async broadcastHeartbeat() {
+        const heartbeat = {
+            type: 'heartbeat',
+            nodeId: this.nodeId,
+            timestamp: Date.now(),
+            status: this.getNodeStatus()
+        };
+
+        for (const [nodeId, node] of this.connectedNodes) {
+            try {
+                await this.sendMessage(nodeId, heartbeat);
+            } catch (error) {
+                console.warn(`Failed to send heartbeat to node ${nodeId}:`, error);
+                this.handleNodeFailure(nodeId);
+            }
+        }
+    }
+
+    // 获取节点状态
+    getNodeStatus() {
+        return {
+            uptime: Date.now() - this.state.startTime,
+            connectedNodesCount: this.connectedNodes.size,
+            capabilities: Array.from(this.capabilities),
+            messageQueueSize: this.messageQueue.length,
+            networkTopologySize: this.networkTopology.size
+        };
+    }
+
+    // 检查网络健康状况
+    checkNetworkHealth() {
+        const now = Date.now();
+        const deadNodes = new Set();
+
+        for (const [nodeId, node] of this.connectedNodes) {
+            if (now - node.lastSeen > 90000) { // 90秒无响应
+                deadNodes.add(nodeId);
+            }
+        }
+
+        deadNodes.forEach(nodeId => this.handleNodeFailure(nodeId));
+    }
+
+    // 处理节点失败
+    handleNodeFailure(nodeId) {
+        console.log(`Node ${nodeId} appears to be dead, removing from network`);
+        this.connectedNodes.delete(nodeId);
+        this.networkTopology.delete(nodeId);
+        this.redistributeResponsibilities(nodeId);
+    }
+
+    // 重新分配责任
+    async redistributeResponsibilities(failedNodeId) {
+        const responsibilities = this.getNodeResponsibilities(failedNodeId);
+        const availableNodes = Array.from(this.connectedNodes.keys());
+        
+        if (availableNodes.length === 0) {
+            // 如果没有其他节点，自己承担责任
+            this.assumeResponsibilities(responsibilities);
+            return;
+        }
+
+        // 按能力和负载分配责任
+        for (const responsibility of responsibilities) {
+            const bestNode = this.findBestNodeForResponsibility(responsibility, availableNodes);
+            await this.assignResponsibility(bestNode, responsibility);
+        }
+    }
+
+    // 寻找最适合的节点
+    findBestNodeForResponsibility(responsibility, availableNodes) {
+        let bestNode = null;
+        let bestScore = -1;
+
+        for (const nodeId of availableNodes) {
+            const node = this.connectedNodes.get(nodeId);
+            const score = this.calculateNodeScore(node, responsibility);
+            if (score > bestScore) {
+                bestScore = score;
+                bestNode = nodeId;
+            }
+        }
+
+        return bestNode;
+    }
+
+    // 计算节点得分
+    calculateNodeScore(node, responsibility) {
+        let score = 0;
+        
+        // 基础分数
+        if (node.capabilities.has(responsibility.type)) score += 10;
+        
+        // 负载因素
+        score -= node.currentLoad * 0.5;
+        
+        // 可靠性因素
+        score += node.uptime / (24 * 60 * 60 * 1000) * 5; // 每天运行加5分
+        
+        // 连接质量因素
+        score += node.connectionQuality * 3;
+        
+        return score;
+    }
+
+    // 宣布节点存在
+    async announcePresence() {
+        const announcement = {
+            type: 'announcement',
+            nodeId: this.nodeId,
+            nodeType: this.nodeType,
+            capabilities: Array.from(this.capabilities),
+            timestamp: Date.now()
+        };
+
+        // 广播到网络
+        await this.broadcast(announcement);
+        
+        // 等待响应
+        const responses = await this.waitForResponses(5000); // 等待5秒
+        
+        // 处理响应
+        for (const response of responses) {
+            await this.handleNodeResponse(response);
+        }
+    }
+
+    // 处理节点响应
+    async handleNodeResponse(response) {
+        if (this.validateResponse(response)) {
+            await this.establishConnection(response.nodeId);
+            this.updateNetworkTopology(response.topology);
+            await this.syncCapabilities(response.nodeId);
+        }
+    }
+
+    // 建立连接
+    async establishConnection(nodeId) {
+        try {
+            const connection = await this.createSecureConnection(nodeId);
+            this.connectedNodes.set(nodeId, {
+                connection,
+                lastSeen: Date.now(),
+                capabilities: new Set(),
+                status: 'active'
+            });
+            await this.initializeProtocols(nodeId);
+        } catch (error) {
+            console.error(`Failed to establish connection with node ${nodeId}:`, error);
+        }
+    }
+
+    // 创建安全连接
+    async createSecureConnection(nodeId) {
+        // 实现安全连接逻辑
+        // 包括加密、认证等
+        return {
+            // 连接详情
+        };
+    }
+
+    // 初始化协议
+    async initializeProtocols(nodeId) {
+        const protocols = ['sync', 'learning', 'routing'];
+        for (const protocol of protocols) {
+            await this.initializeProtocol(nodeId, protocol);
+        }
+    }
+}
