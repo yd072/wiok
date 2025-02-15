@@ -1547,7 +1547,6 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				`type=ws&` +
 				`host=${伪装域名}&` +
 				`path=${encodeURIComponent(最终路径)}&` +
-				`packetEncoding=xudp&` +  // 添加UDP编码方式
 				`udp=true&` +  // 启用UDP
 				`security=none&` + 
 				`tfo=true&` + 
@@ -1626,7 +1625,6 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`host=${伪装域名}&` +
 			`path=${encodeURIComponent(最终路径)}&` +
 			`alpn=h3&` +
-			`packetEncoding=xudp&` +  // 添加UDP编码方式
 			`udp=true&` +  // 启用UDP
 			`allowInsecure=false&` +
 			`tfo=true&` + 
