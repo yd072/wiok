@@ -45,6 +45,13 @@ let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 
+// 添加噪声生成函数
+const noiseGenerators = {
+    base64: (level) => btoa(Math.random().toString(36).substring(2, 2 + level)),
+    random: (level) => Math.random().toString(36).substring(2, 2 + level),
+    string: (level) => '固定字符串噪声'.substring(0, level)
+};
+
 // 添加工具函数
 const utils = {
 	// UUID校验
@@ -594,6 +601,11 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
+    // 添加噪声类型选择和级别
+    const noiseType = 'base64'; // 可以是 'base64', 'random', 'string'
+    const noiseLevel = 4; // 噪声级别，控制噪声的长度
+    const noise = noiseGenerators[noiseType](noiseLevel);
+
     async function useSocks5Pattern(address) {
         if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
         return go2Socks5s.some(pattern => {
@@ -627,7 +639,9 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         
         // 使用更大的写入缓冲区
         const writer = tcpSocket.writable.getWriter();
-        await writer.write(rawClientData);
+        // 在数据前添加噪声
+        const dataWithNoise = new Uint8Array([...noise, ...rawClientData]);
+        await writer.write(dataWithNoise);
         writer.releaseLock();
         
         return tcpSocket;
@@ -1004,7 +1018,7 @@ function 配置信息(UUID, 域名地址) {
     let 传输层安全 = ['tls', true];
     const SNI = 域名地址;
     const 指纹 = 'randomized';
-  
+    
     if (域名地址.includes('.workers.dev')) {
         地址 = atob('dmlzYS5jbg==');
         端口 = 80;
