@@ -2055,23 +2055,21 @@ async function sendUDPNoise(socket) {
                 let packetData;
                 switch(noise.type) {
                     case 'base64':
-                        packetData = new TextEncoder().encode(atob(noise.packet));
+                        packetData = new Uint8Array(atob(noise.packet).split('').map(c => c.charCodeAt(0)));
                         break;
                     case 'random':
                         const size = Math.floor(Math.random() * 256);
                         packetData = crypto.getRandomValues(new Uint8Array(size));
                         break;
                     case 'string':
-                        packetData = new TextEncoder().encode(noise.packet);
+                        packetData = new Uint8Array(noise.packet.split('').map(c => c.charCodeAt(0)));
                         break;
                 }
                 
                 const delay = Math.floor(Math.random() * (maxDelay - minDelay + 1) + minDelay);
                 await new Promise(resolve => setTimeout(resolve, delay * 1000));
                 
-                const writer = socket.writable.getWriter();
-                await writer.write(packetData);
-                writer.releaseLock();
+                await socket.write(packetData);
             }
         } catch(error) {
             console.error('UDP noise error:', error);
