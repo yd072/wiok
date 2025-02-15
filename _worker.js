@@ -1546,13 +1546,11 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				`type=ws&` +
 				`host=${伪装域名}&` +
 				`path=${encodeURIComponent(最终路径)}&` +
-				`packetEncoding=xudp&` +  // 添加UDP编码方式
-				`udp=true&` +  // 启用UDP
+				`udp=true&` +  // 保留UDP支持
 				`security=none&` + 
-				`tfo=true&` +// 启用TCP Fast Open 
-				`keepAlive=true&` + // 保持连接
+				`tfo=true&` +
+				`keepAlive=true&` + 
 				`congestion_control=bbr&` + 
-				`udp_relay_mode=native&` +  // 修改UDP中继模式
 				`#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
@@ -1625,13 +1623,11 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`host=${伪装域名}&` +
 			`path=${encodeURIComponent(最终路径)}&` +
 			`alpn=h3&` +
-			`packetEncoding=xudp&` +  // 添加UDP编码方式
-			`udp=true&` +  // 启用UDP
+			`udp=true&` +  // 保留UDP支持
 			`allowInsecure=false&` +
-			`tfo=true&` + // 启用TCP Fast Open
-			`keepAlive=true&` +// 保持连接 
-			`congestion_control=bbr&` + // BBR拥塞控制
-			`udp_relay_mode=native&` +  // 修改UDP中继模式
+			`tfo=true&` + 
+			`keepAlive=true&` +
+			`congestion_control=bbr&` + 
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
