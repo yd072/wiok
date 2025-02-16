@@ -49,10 +49,10 @@ let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 let enableTrafficOptimizer = true; // 默认开启
 let trafficPatterns = [{
     type: "random",     
-    minSize: 64,        
-    maxSize: 256,       
-    delay: "2-5",      
-    count: "3"         
+    minSize: 128,       // 增加最小包大小到128字节
+    maxSize: 1400,      // 调整到MTU附近
+    delay: "0.5-1.5",   // 减少延迟范围
+    count: "2"          // 减少包数量以提高性能
 }];
 
 // 添加工具函数
@@ -2089,40 +2089,31 @@ class StreamMultiplexer {
         this.currentStreamId = 0;
     }
 
-    createStream(priority = 1) {
-        const streamId = this.currentStreamId++;
-        const stream = {
-            id: streamId,
-            priority: priority,
-            buffer: []
-        };
-        this.streams.set(streamId, stream);
-        return streamId;
-    }
-
-    // 动态分片算法
+    // 优化分片算法
     dynamicSplit(data) {
-        const minSize = 128;  // 增加最小包大小
-        const maxSize = 1400; // 调整到MTU附近
+        const minSize = 128;
+        const maxSize = 1400;
         const chunks = [];
         let offset = 0;
 
         while (offset < data.length) {
-            const chunkSize = this.getOptimalChunkSize(minSize, maxSize);
+            // 使用更智能的分片大小计算
+            const chunkSize = this.getOptimalChunkSize(minSize, maxSize, data.length - offset);
             chunks.push(data.slice(offset, offset + chunkSize));
             offset += chunkSize;
         }
         return chunks;
     }
 
-    // 基于网络特征的最优分片大小
-    getOptimalChunkSize(min, max) {
-        // 模拟正常HTTPS流量的包大小分布
+    // 优化分片大小计算
+    getOptimalChunkSize(min, max, remainingData) {
+        // 基于剩余数据量动态调整分片大小
+        const targetSize = Math.min(remainingData, max);
         const distribution = [
-            {size: 100, weight: 0.3},
-            {size: 300, weight: 0.4},
-            {size: 600, weight: 0.2},
-            {size: 900, weight: 0.1}
+            {size: Math.min(300, targetSize), weight: 0.4},
+            {size: Math.min(600, targetSize), weight: 0.3},
+            {size: Math.min(900, targetSize), weight: 0.2},
+            {size: Math.min(1200, targetSize), weight: 0.1}
         ];
 
         let size = min;
@@ -2137,26 +2128,17 @@ class StreamMultiplexer {
             }
         }
 
-        return Math.min(Math.max(size, min), max);
+        return Math.min(Math.max(size, min), targetSize);
     }
 
     // 优化延迟控制
     async dynamicDelay() {
-        const baseDelay = 0.5;  // 减少基础延迟
-        const jitter = Math.random();  // 减少抖动范围
-        await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
+        const baseDelay = 0.3;  // 进一步减少基础延迟
+        const jitter = Math.random() * 0.4; // 减少抖动范围
+        await new Promise(resolve => setTimeout(resolve, (baseDelay + jitter) * 1000));
     }
 
-    // 优化填充大小
-    addRandomPadding(chunk) {
-        const paddingSize = Math.floor(Math.random() * 16); // 减少填充大小以提高性能
-        const paddedData = new Uint8Array(chunk.length + paddingSize);
-        paddedData.set(chunk);
-        crypto.getRandomValues(paddedData.subarray(chunk.length));
-        return paddedData;
-    }
-
-    // 动态调整数据包大小和发送间隔
+    // 优化数据发送
     async sendData(socket, data, streamId) {
         const stream = this.streams.get(streamId);
         if (!stream) return;
@@ -2165,22 +2147,21 @@ class StreamMultiplexer {
             const chunks = this.dynamicSplit(data);
             
             for (const chunk of chunks) {
-                const paddedChunk = this.addRandomPadding(chunk);
                 await this.dynamicDelay();
                 
                 try {
-                    await socket.write(paddedChunk);
+                    await socket.write(chunk);
                 } catch (error) {
                     if (error.message.includes('closed')) {
-                        throw error; // 连接关闭时直接抛出
+                        throw error;
                     }
-                    console.warn('Chunk send error:', error);
-                    continue; // 其他错误继续发送
+                    console.warn('发送分片错误:', error);
+                    continue;
                 }
             }
         } catch (error) {
-            console.error('Stream send error:', error);
-            this.streams.delete(streamId); // 清理失败的流
+            console.error('流发送错误:', error);
+            this.streams.delete(streamId);
             throw error;
         }
     }
