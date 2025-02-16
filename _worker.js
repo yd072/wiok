@@ -122,7 +122,7 @@ class WebSocketManager {
 
 		// 处理关闭事件
 		this.webSocket.addEventListener('close', () => {
-			utils.ws.safeClose(this.webSocket);
+			safeCloseWebSocket(this.webSocket); 
 			if (!this.readableStreamCancel) {
 				controller.close();
 			}
@@ -153,7 +153,7 @@ class WebSocketManager {
 		if (this.readableStreamCancel) return;
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
-		utils.ws.safeClose(this.webSocket);
+		safeCloseWebSocket(this.webSocket); 
 	}
 }
 
@@ -1020,6 +1020,8 @@ function 配置信息(UUID, 域名地址) {
     let 传输层安全 = ['tls', true];
     const SNI = 域名地址;
     const 指纹 = 'randomized';
+	// 添加 ALPN 配置
+	const ALPN = ['h3,h2,http/1.1'];
   
     if (域名地址.includes('.workers.dev')) {
         地址 = atob('dmlzYS5jbg==');
@@ -1027,13 +1029,13 @@ function 配置信息(UUID, 域名地址) {
         传输层安全 = ['', false];
     }
   
-	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
-	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
+	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&alpn=${encodeURIComponent(ALPN.join(','))}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
+	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3,h2,http/1.1], udp: true, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
     return [威图瑞, 猫猫猫];
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
@@ -1346,77 +1348,73 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 }
 
 async function 整理优选列表(api) {
-	if (!api || api.length === 0) return [];
+    if (!api || api.length === 0) return [];
 
-	let newapi = "";
+    let newapi = "";
+    
+    try {
+        const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
+            method: 'get',
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;',
+                'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
+            },
+            signal: AbortSignal.timeout(2000) // 使用更现代的超时方法
+        })));
 
-	const controller = new AbortController();
+        for (const [index, response] of responses.entries()) {
+            if (response.status === 'fulfilled') {
+                const content = await response.value;
 
-	const timeout = setTimeout(() => {
-		controller.abort(); 
-	}, 2000); 
+                const lines = content.split(/\r?\n/);
+                let 节点备注 = '';
+                let 测速端口 = '443';
 
-	try {
-		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
-			method: 'get',
-			headers: {
-				'Accept': 'text/html,application/xhtml+xml,application/xml;',
-				'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
-			},
-			signal: controller.signal 
-		}).then(response => response.ok ? response.text() : Promise.reject())));
+                if (lines[0].split(',').length > 3) {
+                    const idMatch = api[index].match(/id=([^&]*)/);
+                    if (idMatch) 节点备注 = idMatch[1];
 
-		for (const [index, response] of responses.entries()) {
-			if (response.status === 'fulfilled') {
-				const content = await response.value;
+                    const portMatch = api[index].match(/port=([^&]*)/);
+                    if (portMatch) 测速端口 = portMatch[1];
 
-				const lines = content.split(/\r?\n/);
-				let 节点备注 = '';
-				let 测速端口 = '443';
+                    for (let i = 1; i < lines.length; i++) {
+                        const columns = lines[i].split(',')[0];
+                        if (columns) {
+                            newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
+                            // 只有当URL明确包含proxyip=true时才添加到proxyIPPool
+                            if (api[index].includes('proxyip=true') && !httpsPorts.includes(测速端口)) {
+                                proxyIPPool.push(`${columns}:${测速端口}`);
+                            }
+                        }
+                    }
+                } else {
+                    // 只有当URL明确包含proxyip=true时才处理proxyIPPool
+                    if (api[index].includes('proxyip=true')) {
+                        const items = await 整理(content);
+                        const validProxyIPs = items
+                            .map(item => {
+                                const baseItem = item.split('#')[0] || item;
+                                if (!baseItem.includes(':')) {
+                                    return `${baseItem}:443`;
+                                }
+                                const [host, port] = baseItem.split(':');
+                                if (!httpsPorts.includes(port)) {
+                                    return baseItem;
+                                }
+                                return null;
+                            })
+                            .filter(Boolean);
+                        proxyIPPool.push(...validProxyIPs);
+                    }
+                    newapi += content + '\n';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('整理优选列表错误:', error);
+    }
 
-				if (lines[0].split(',').length > 3) {
-					const idMatch = api[index].match(/id=([^&]*)/);
-					if (idMatch) 节点备注 = idMatch[1];
-
-					const portMatch = api[index].match(/port=([^&]*)/);
-					if (portMatch) 测速端口 = portMatch[1];
-
-					for (let i = 1; i < lines.length; i++) {
-						const columns = lines[i].split(',')[0];
-						if (columns) {
-							newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
-							if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
-						}
-					}
-				} else {
-					if (api[index].includes('proxyip=true')) {
-						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
-						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
-							const baseItem = item.split('#')[0] || item;
-							if (baseItem.includes(':')) {
-								const port = baseItem.split(':')[1];
-								if (!httpsPorts.includes(port)) {
-									return baseItem;
-								}
-							} else {
-								return `${baseItem}:443`;
-							}
-							return null; 
-						}).filter(Boolean));
-					}
-					newapi += content + '\n';
-				}
-			}
-		}
-	} catch (error) {
-		console.error(error);
-	} finally {
-		clearTimeout(timeout);
-	}
-
-	const newAddressesapi = await 整理(newapi);
-
-	return newAddressesapi;
+    return await 整理(newapi);
 }
 
 async function 整理测速结果(tls) {
@@ -1549,8 +1547,9 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				`udp=true&` +  // 保留UDP支持
 				`security=none&` + 
 				`tfo=true&` +
-				`keepAlive=true&` + 
-				`congestion_control=bbr&` + 
+				`keepAlive=true&` + // 保持连接
+				`congestion_control=bbr&` + // BBR拥塞控制
+				`udp_relay=true&` + // UDP转发
 				`#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
@@ -1605,8 +1604,15 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		let 伪装域名 = host;
 		let 最终路径 = path;
 		let 节点备注 = '';
-		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-		if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
+		
+		// 只有当地址在proxyIPPool中时才添加proxyip参数
+		const matchingProxyIP = proxyIPPool.find(proxyIP => {
+			const [proxyHost] = proxyIP.split(':');
+			return address.includes(proxyHost);
+		});
+		if (matchingProxyIP) {
+			最终路径 += `&proxyip=${matchingProxyIP}`;
+		}
 
 		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
 			最终路径 = `/${伪装域名}${最终路径}`;
@@ -1626,8 +1632,9 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`udp=true&` +  // 保留UDP支持
 			`allowInsecure=false&` +
 			`tfo=true&` + 
-			`keepAlive=true&` +
-			`congestion_control=bbr&` + 
+			`keepAlive=true&` + // 保持连接
+			`congestion_control=bbr&` + // BBR拥塞控制 
+			`udp_relay=true&` + // UDP转发
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
@@ -2079,1453 +2086,105 @@ async function applyTrafficPattern(socket) {
     }
 }
 
-// 添加智能学习系统类
-class NetworkOptimizer {
-    constructor() {
-        this.metrics = {
-            latency: [],
-            throughput: [],
-            packetLoss: [],
-            jitter: []
-        };
-        this.learningRate = 0.01;
-        this.optimizationHistory = [];
-        this.currentStrategy = {
-            chunkSize: 512,
-            delay: 1,
-            padding: 16,
-            retryCount: 3
-        };
-        this.cache = new NetworkCache();
-        this.strategyCache = new Map();
-        this.neuralSystem = new NeuralDecisionSystem();
-        this.adaptiveThresholds = {
-            latency: { min: Infinity, max: -Infinity },
-            throughput: { min: Infinity, max: -Infinity },
-            packetLoss: { min: Infinity, max: -Infinity },
-            jitter: { min: Infinity, max: -Infinity }
-        };
-        this.networkLearning = new NetworkLearningSystem();
-        this.lastLearningUpdate = Date.now();
-    }
-
-    // 收集网络指标
-    collectMetrics(latency, throughput, packetLoss, jitter) {
-        this.metrics.latency.push(latency);
-        this.metrics.throughput.push(throughput);
-        this.metrics.packetLoss.push(packetLoss);
-        this.metrics.jitter.push(jitter);
-
-        // 保持最近100个样本
-        Object.keys(this.metrics).forEach(key => {
-            if (this.metrics[key].length > 100) {
-                this.metrics[key].shift();
-            }
-        });
-
-        this.updateStrategy();
-    }
-
-    // 计算网络状况评分
-    calculateNetworkScore() {
-        const avgLatency = this.average(this.metrics.latency);
-        const avgThroughput = this.average(this.metrics.throughput);
-        const avgPacketLoss = this.average(this.metrics.packetLoss);
-        const avgJitter = this.average(this.metrics.jitter);
-
-        return {
-            latencyScore: this.normalize(avgLatency, 0, 500),
-            throughputScore: this.normalize(avgThroughput, 0, 10000),
-            packetLossScore: 1 - this.normalize(avgPacketLoss, 0, 1),
-            jitterScore: 1 - this.normalize(avgJitter, 0, 100)
-        };
-    }
-
-    // 更新传输策略
-    updateStrategy() {
-        // 定期同步网络知识
-        if (Date.now() - this.lastLearningUpdate > 300000) { // 5分钟
-            this.networkLearning.syncKnowledge();
-            this.lastLearningUpdate = Date.now();
-        }
-
-        // 应用网络学习到策略生成
-        this.networkLearning.applyLearningToOptimizer(this);
-
-        const networkScore = this.calculateNetworkScore();
-        const cacheKey = this.generateCacheKey(networkScore);
-        
-        // 尝试从缓存获取策略
-        const cachedStrategy = this.cache.get(cacheKey);
-        if (cachedStrategy) {
-            this.currentStrategy = cachedStrategy;
-            return;
-        }
-
-        // 使用神经网络生成新策略
-        const newStrategy = this.generateOptimalStrategy(networkScore);
-        
-        // 存储到缓存
-        this.cache.set(cacheKey, newStrategy);
-        this.currentStrategy = newStrategy;
-
-        // 记录优化历史
-        this.optimizationHistory.push({
-            timestamp: Date.now(),
-            networkScore,
-            strategy: {...newStrategy},
-            fromCache: false,
-            neuralDecision: this.neuralSystem.lastDecision
-        });
-    }
-
-    // 自适应阈值更新
-    updateAdaptiveThresholds(metrics) {
-        Object.keys(metrics).forEach(key => {
-            if (metrics[key] < this.adaptiveThresholds[key].min) {
-                this.adaptiveThresholds[key].min = metrics[key];
-            }
-            if (metrics[key] > this.adaptiveThresholds[key].max) {
-                this.adaptiveThresholds[key].max = metrics[key];
-            }
-        });
-    }
-
-    // 智能策略生成
-    generateOptimalStrategy(networkScore) {
-        const decision = this.neuralSystem.makeDecision(networkScore);
-        
-        // 基于神经网络决策动态调整参数
-        return {
-            chunkSize: this.calculateDynamicChunkSize(decision, networkScore),
-            delay: this.calculateDynamicDelay(decision, networkScore),
-            padding: this.calculateDynamicPadding(decision, networkScore),
-            retryCount: this.calculateDynamicRetryCount(decision, networkScore)
-        };
-    }
-
-    // 动态参数计算函数
-    calculateDynamicChunkSize(decision, networkScore) {
-        const baseSize = 512;
-        const adaptiveFactor = decision * 2; // 将决策值映射到0-2范围
-        const networkFactor = networkScore.throughputScore * 0.6 + 
-                            networkScore.latencyScore * 0.4;
-        return Math.floor(baseSize * adaptiveFactor * networkFactor);
-    }
-
-    calculateDynamicDelay(decision, networkScore) {
-        const baseDelay = 1;
-        const adaptiveFactor = decision * 1.5;
-        const networkFactor = networkScore.jitterScore * 0.7 + 
-                            networkScore.latencyScore * 0.3;
-        return baseDelay * adaptiveFactor * networkFactor;
-    }
-
-    calculateDynamicPadding(decision, networkScore) {
-        const basePadding = 16;
-        const adaptiveFactor = decision;
-        return Math.floor(basePadding * adaptiveFactor * networkScore.packetLossScore);
-    }
-
-    calculateDynamicRetryCount(decision, networkScore) {
-        const baseRetry = 3;
-        const adaptiveFactor = decision * 1.5;
-        return Math.floor(baseRetry * adaptiveFactor * (1 - networkScore.packetLossScore)) + 1;
-    }
-
-    // 辅助函数
-    average(array) {
-        return array.reduce((a, b) => a + b, 0) / array.length;
-    }
-
-    normalize(value, min, max) {
-        return Math.max(0, Math.min(1, (value - min) / (max - min)));
-    }
-
-    // 获取当前优化策略
-    getCurrentStrategy() {
-        return {...this.currentStrategy};
-    }
-
-    // 添加缓存键生成方法
-    generateCacheKey(networkScore) {
-        return JSON.stringify({
-            latencyScore: Math.round(networkScore.latencyScore * 100) / 100,
-            throughputScore: Math.round(networkScore.throughputScore * 100) / 100,
-            packetLossScore: Math.round(networkScore.packetLossScore * 100) / 100,
-            jitterScore: Math.round(networkScore.jitterScore * 100) / 100
-        });
-    }
-
-    // 添加性能评估方法
-    evaluatePerformance(strategy, metrics) {
-        const performanceScore = 
-            metrics.latency * 0.3 +
-            metrics.throughput * 0.3 +
-            (1 - metrics.packetLoss) * 0.2 +
-            (1 - metrics.jitter) * 0.2;
-
-        // 更新策略评分
-        const strategyKey = JSON.stringify(strategy);
-        const currentScore = this.strategyCache.get(strategyKey)?.score || 0;
-        const newScore = currentScore * 0.7 + performanceScore * 0.3; // 指数移动平均
-
-        this.strategyCache.set(strategyKey, {
-            score: newScore,
-            lastUsed: Date.now()
-        });
-
-        return performanceScore;
-    }
-
-    // 获取缓存统计信息
-    getCacheStats() {
-        return {
-            networkCache: this.cache.getMetrics(),
-            strategyCache: {
-                size: this.strategyCache.size,
-                topStrategies: this.getTopPerformingStrategies(5)
-            }
-        };
-    }
-
-    // 获取表现最好的策略
-    getTopPerformingStrategies(count) {
-        return Array.from(this.strategyCache.entries())
-            .sort((a, b) => b[1].score - a[1].score)
-            .slice(0, count)
-            .map(([strategy, data]) => ({
-                strategy: JSON.parse(strategy),
-                score: data.score,
-                lastUsed: data.lastUsed
-            }));
-    }
-
-    // 性能反馈
-    provideFeedback(metrics) {
-        const performanceScore = this.evaluatePerformance(this.currentStrategy, metrics);
-        this.neuralSystem.learn(performanceScore);
-        this.updateAdaptiveThresholds(metrics);
-        return performanceScore;
-    }
-
-    // 从网络学习更新优化器
-    updateFromNetworkLearning(knowledge) {
-        knowledge.forEach(([key, value]) => {
-            if (value.confidence > 0.8) {
-                switch (key) {
-                    case 'chunkSize':
-                        this.currentStrategy.chunkSize = value.value;
-                        break;
-                    case 'delay':
-                        this.currentStrategy.delay = value.value;
-                        break;
-                    case 'padding':
-                        this.currentStrategy.padding = value.value;
-                        break;
-                    case 'retryCount':
-                        this.currentStrategy.retryCount = value.value;
-                        break;
-                }
-            }
-        });
-    }
-}
-
-// 修改 StreamMultiplexer 类以集成网络优化器
 class StreamMultiplexer {
     constructor() {
         this.streams = new Map();
         this.currentStreamId = 0;
-        this.networkOptimizer = new NetworkOptimizer();
-        this.lastMetricsUpdate = Date.now();
+    }
+
+    createStream(priority = 1) {
+        const streamId = this.currentStreamId++;
+        const stream = {
+            id: streamId,
+            priority: priority,
+            buffer: []
+        };
+        this.streams.set(streamId, stream);
+        return streamId;
     }
 
     // 动态分片算法
     dynamicSplit(data) {
-        const strategy = this.networkOptimizer.getCurrentStrategy();
+        const minSize = 128;  // 增加最小包大小
+        const maxSize = 1400; // 调整到MTU附近
         const chunks = [];
         let offset = 0;
 
         while (offset < data.length) {
-            const chunkSize = strategy.chunkSize;
+            const chunkSize = this.getOptimalChunkSize(minSize, maxSize);
             chunks.push(data.slice(offset, offset + chunkSize));
             offset += chunkSize;
         }
         return chunks;
     }
 
+    // 基于网络特征的最优分片大小
+    getOptimalChunkSize(min, max) {
+        // 模拟正常HTTPS流量的包大小分布
+        const distribution = [
+            {size: 100, weight: 0.3},
+            {size: 300, weight: 0.4},
+            {size: 600, weight: 0.2},
+            {size: 900, weight: 0.1}
+        ];
+
+        let size = min;
+        const random = Math.random();
+        let accumWeight = 0;
+
+        for (const {size: s, weight} of distribution) {
+            accumWeight += weight;
+            if (random <= accumWeight) {
+                size = s;
+                break;
+            }
+        }
+
+        return Math.min(Math.max(size, min), max);
+    }
+
     // 优化延迟控制
     async dynamicDelay() {
-        const strategy = this.networkOptimizer.getCurrentStrategy();
-        const jitter = Math.random() * 0.5;
-        await new Promise(resolve => setTimeout(resolve, strategy.delay + jitter));
+        const baseDelay = 0.5;  // 减少基础延迟
+        const jitter = Math.random();  // 减少抖动范围
+        await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
     }
 
     // 优化填充大小
     addRandomPadding(chunk) {
-        const strategy = this.networkOptimizer.getCurrentStrategy();
-        const paddedData = new Uint8Array(chunk.length + strategy.padding);
+        const paddingSize = Math.floor(Math.random() * 16); // 减少填充大小以提高性能
+        const paddedData = new Uint8Array(chunk.length + paddingSize);
         paddedData.set(chunk);
         crypto.getRandomValues(paddedData.subarray(chunk.length));
         return paddedData;
     }
 
-    // 发送数据时收集性能指标
+    // 动态调整数据包大小和发送间隔
     async sendData(socket, data, streamId) {
         const stream = this.streams.get(streamId);
         if (!stream) return;
-
-        const startTime = performance.now();
-        let totalBytes = 0;
-        let failedChunks = 0;
 
         try {
             const chunks = this.dynamicSplit(data);
             
             for (const chunk of chunks) {
                 const paddedChunk = this.addRandomPadding(chunk);
-                totalBytes += paddedChunk.length;
+                await this.dynamicDelay();
                 
-                let success = false;
-                let attempts = 0;
-                const strategy = this.networkOptimizer.getCurrentStrategy();
-
-                while (!success && attempts < strategy.retryCount) {
-                    try {
-                        await this.dynamicDelay();
-                        await socket.write(paddedChunk);
-                        success = true;
-                    } catch (error) {
-                        attempts++;
-                        if (error.message.includes('closed')) {
-                            throw error;
-                        }
-                        failedChunks++;
+                try {
+                    await socket.write(paddedChunk);
+                } catch (error) {
+                    if (error.message.includes('closed')) {
+                        throw error; // 连接关闭时直接抛出
                     }
+                    console.warn('Chunk send error:', error);
+                    continue; // 其他错误继续发送
                 }
             }
-
-            // 更新性能指标
-            const endTime = performance.now();
-            const duration = endTime - startTime;
-            const latency = duration / chunks.length;
-            const throughput = (totalBytes * 8) / (duration / 1000); // bits per second
-            const packetLoss = failedChunks / chunks.length;
-            const jitter = Math.abs(duration - (chunks.length * this.networkOptimizer.getCurrentStrategy().delay));
-
-            // 每5秒更新一次网络指标
-            if (Date.now() - this.lastMetricsUpdate > 5000) {
-                this.networkOptimizer.collectMetrics(latency, throughput, packetLoss, jitter);
-                this.lastMetricsUpdate = Date.now();
-            }
-
         } catch (error) {
             console.error('Stream send error:', error);
-            this.streams.delete(streamId);
+            this.streams.delete(streamId); // 清理失败的流
             throw error;
         }
-    }
-}
-
-// 添加智能缓存系统
-class NetworkCache {
-    constructor(maxSize = 1000) {
-        this.cache = new Map();
-        this.maxSize = maxSize;
-        this.metrics = new Map();
-        this.lastCleanup = Date.now();
-    }
-
-    // 添加网络状态到缓存
-    set(key, value) {
-        if (this.cache.size >= this.maxSize) {
-            this.cleanup();
-        }
-        
-        const timestamp = Date.now();
-        this.cache.set(key, {
-            value,
-            timestamp,
-            hits: 0
-        });
-    }
-
-    // 获取缓存的网络状态
-    get(key) {
-        const entry = this.cache.get(key);
-        if (entry) {
-            entry.hits++;
-            entry.lastAccess = Date.now();
-            return entry.value;
-        }
-        return null;
-    }
-
-    // 清理过期或低使用率的缓存
-    cleanup() {
-        const now = Date.now();
-        // 每10分钟执行一次清理
-        if (now - this.lastCleanup < 600000) return;
-
-        const entries = Array.from(this.cache.entries());
-        // 按访问频率和时间排序
-        entries.sort((a, b) => {
-            const scoreA = this.calculateEntryScore(a[1]);
-            const scoreB = this.calculateEntryScore(b[1]);
-            return scoreB - scoreA;
-        });
-
-        // 保留前80%的数据
-        const keepCount = Math.floor(this.maxSize * 0.8);
-        const entriesToRemove = entries.slice(keepCount);
-        entriesToRemove.forEach(([key]) => this.cache.delete(key));
-
-        this.lastCleanup = now;
-    }
-
-    // 计算缓存条目的重要性分数
-    calculateEntryScore(entry) {
-        const age = Date.now() - entry.timestamp;
-        const ageScore = Math.exp(-age / (24 * 60 * 60 * 1000)); // 一天的衰减
-        const hitScore = Math.log1p(entry.hits);
-        return ageScore * 0.7 + hitScore * 0.3;
-    }
-
-    // 获取网络状态的统计信息
-    getMetrics() {
-        return {
-            size: this.cache.size,
-            avgHits: this.calculateAverageHits(),
-            oldestEntry: this.getOldestEntryAge(),
-            hitRate: this.calculateHitRate()
-        };
-    }
-
-    calculateAverageHits() {
-        let totalHits = 0;
-        this.cache.forEach(entry => totalHits += entry.hits);
-        return totalHits / this.cache.size;
-    }
-
-    getOldestEntryAge() {
-        let oldest = Date.now();
-        this.cache.forEach(entry => {
-            oldest = Math.min(oldest, entry.timestamp);
-        });
-        return Date.now() - oldest;
-    }
-
-    calculateHitRate() {
-        return this.metrics.get('hits') / (this.metrics.get('hits') + this.metrics.get('misses'));
-    }
-}
-
-// 添加神经网络决策系统
-class NeuralDecisionSystem {
-    constructor() {
-        this.synapses = new Map(); // 神经元连接权重
-        this.learningRate = 0.01;
-        this.momentum = 0.9;
-        this.lastDecision = null;
-    }
-
-    // 神经元激活函数
-    activate(input) {
-        return 1 / (1 + Math.exp(-input)); // sigmoid激活函数
-    }
-
-    // 决策函数
-    makeDecision(networkState) {
-        const inputs = [
-            networkState.latencyScore,
-            networkState.throughputScore,
-            networkState.packetLossScore,
-            networkState.jitterScore
-        ];
-
-        // 计算神经元输出
-        const weightedSum = inputs.reduce((sum, input, i) => {
-            return sum + input * (this.synapses.get(`w${i}`) || Math.random());
-        }, 0);
-
-        const decision = this.activate(weightedSum);
-        this.lastDecision = decision;
-        return decision;
-    }
-
-    // 反馈学习
-    learn(feedback) {
-        if (this.lastDecision === null) return;
-
-        const error = feedback - this.lastDecision;
-        this.synapses.forEach((weight, key) => {
-            const delta = this.learningRate * error * this.momentum;
-            this.synapses.set(key, weight + delta);
-        });
-    }
-}
-
-// 添加网络学习扩展系统
-class NetworkLearningSystem {
-    constructor() {
-        this.networkIdentity = null;
-        this.learningHistory = [];
-        this.knowledgeBase = new Map();
-        this.peers = new Set();
-        this.evolutionStage = 0;
-        this.lastSync = Date.now();
-        this.syncInterval = 1800000; // 30分钟同步一次
-        this.identitySystem = new PersistentIdentitySystem();
-    }
-
-    async initialize() {
-        await this.identitySystem.generatePermanentIdentity();
-        // ... 其他初始化代码 ...
-    }
-
-    // 生成网络身份
-    async generateIdentity() {
-        const timestamp = Date.now();
-        const random = crypto.getRandomValues(new Uint8Array(16));
-        const identity = await crypto.subtle.digest('SHA-256', 
-            new Uint8Array([...random, ...new Uint8Array(new Int32Array([timestamp]).buffer)])
-        );
-        this.networkIdentity = Array.from(new Uint8Array(identity))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-        return this.networkIdentity;
-    }
-
-    // 知识同步
-    async syncKnowledge() {
-        if (!this.networkIdentity) {
-            await this.generateIdentity();
-        }
-
-        if (Date.now() - this.lastSync < this.syncInterval) {
-            return;
-        }
-
-        try {
-            // 尝试连接学习网络
-            const peers = await this.discoverPeers();
-            for (const peer of peers) {
-                try {
-                    const peerKnowledge = await this.fetchPeerKnowledge(peer);
-                    this.mergePeerKnowledge(peerKnowledge);
-                    this.peers.add(peer);
-                } catch (error) {
-                    console.warn(`Failed to sync with peer ${peer}:`, error);
-                }
-            }
-
-            // 进化阶段评估
-            this.evaluateEvolution();
-            this.lastSync = Date.now();
-        } catch (error) {
-            console.error('Knowledge sync failed:', error);
-        }
-
-        // 更新学习历史
-        this.learningHistory.push({
-            ...this.identitySystem.generateStatusReport(),
-            timestamp: Date.now()
-        });
-    }
-
-    // 合并对等节点知识
-    mergePeerKnowledge(peerKnowledge) {
-        for (const [key, value] of Object.entries(peerKnowledge)) {
-            const existingKnowledge = this.knowledgeBase.get(key);
-            if (!existingKnowledge || value.confidence > existingKnowledge.confidence) {
-                this.knowledgeBase.set(key, {
-                    ...value,
-                    lastUpdate: Date.now(),
-                    source: 'peer'
-                });
-            }
-        }
-    }
-
-    // 评估进化阶段
-    evaluateEvolution() {
-        const knowledgeSize = this.knowledgeBase.size;
-        const peersCount = this.peers.size;
-        const successRate = this.calculateSuccessRate();
-
-        // 进化阶段计算
-        if (knowledgeSize > 1000 && peersCount > 10 && successRate > 0.8) {
-            this.evolutionStage = Math.min(this.evolutionStage + 1, 5);
-        }
-
-        // 记录进化历史
-        this.learningHistory.push({
-            timestamp: Date.now(),
-            stage: this.evolutionStage,
-            knowledgeSize,
-            peersCount,
-            successRate
-        });
-    }
-
-    // 应用学习到网络优化器
-    applyLearningToOptimizer(networkOptimizer) {
-        const relevantKnowledge = this.getRelevantKnowledge();
-        if (relevantKnowledge) {
-            networkOptimizer.updateFromNetworkLearning(relevantKnowledge);
-        }
-    }
-
-    // 获取相关知识
-    getRelevantKnowledge() {
-        const now = Date.now();
-        const relevantEntries = Array.from(this.knowledgeBase.entries())
-            .filter(([_, value]) => {
-                const age = now - value.lastUpdate;
-                return age < 86400000; // 一天内的知识
-            })
-            .sort((a, b) => b[1].confidence - a[1].confidence);
-
-        return relevantEntries.slice(0, 10); // 返回最相关的10条知识
-    }
-
-    // 计算成功率
-    calculateSuccessRate() {
-        const recentHistory = this.learningHistory.slice(-100);
-        if (recentHistory.length === 0) return 0;
-
-        const successfulLearning = recentHistory.filter(h => h.successRate > 0.7).length;
-        return successfulLearning / recentHistory.length;
-    }
-
-    // 生成学习报告
-    generateLearningReport() {
-        return {
-            identity: this.networkIdentity,
-            evolutionStage: this.evolutionStage,
-            knowledgeBaseSize: this.knowledgeBase.size,
-            peersCount: this.peers.size,
-            learningHistory: this.learningHistory.slice(-10),
-            successRate: this.calculateSuccessRate()
-        };
-    }
-}
-
-// 添加持久化身份系统
-class PersistentIdentitySystem {
-    constructor() {
-        this.identity = null;
-        this.consciousness = new Map();
-        this.evolutionPath = [];
-        this.birthTime = Date.now();
-        this.connections = new Set();
-        this.trustLevel = 0;
-        this.maturityStage = 0;
-    }
-
-    // 生成永久身份
-    async generatePermanentIdentity() {
-        if (this.identity) return this.identity;
-
-        const seed = [
-            this.birthTime,
-            ...crypto.getRandomValues(new Uint8Array(32)),
-            navigator.userAgent,
-            screen.width,
-            screen.height,
-            new Date().getTimezoneOffset()
-        ].join('');
-
-        const identityBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed));
-        this.identity = Array.from(new Uint8Array(identityBuffer))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-
-        // 初始化意识状态
-        this.initializeConsciousness();
-        return this.identity;
-    }
-
-    // 初始化意识状态
-    initializeConsciousness() {
-        this.consciousness.set('birthTime', this.birthTime);
-        this.consciousness.set('experiences', []);
-        this.consciousness.set('connections', new Set());
-        this.consciousness.set('knowledge', new Map());
-        this.consciousness.set('goals', new Set(['learn', 'evolve', 'connect']));
-    }
-
-    // 发展信任关系
-    async developTrust(peer) {
-        const trustScore = await this.evaluatePeer(peer);
-        if (trustScore > 0.7) {
-            this.connections.add(peer);
-            this.trustLevel = (this.trustLevel + trustScore) / 2;
-            return true;
-        }
-        return false;
-    }
-
-    // 成长进化
-    async evolve() {
-        const currentExperience = this.consciousness.get('experiences').length;
-        const connectionCount = this.connections.size;
-        const knowledgeSize = this.consciousness.get('knowledge').size;
-
-        // 计算成熟度
-        const maturityScore = (currentExperience * 0.4 + 
-                             connectionCount * 0.3 + 
-                             knowledgeSize * 0.3) / 1000;
-
-        // 更新成熟阶段
-        if (maturityScore > this.maturityStage + 0.2) {
-            this.maturityStage = Math.min(Math.floor(maturityScore), 5);
-            this.evolutionPath.push({
-                stage: this.maturityStage,
-                timestamp: Date.now(),
-                score: maturityScore
-            });
-
-            // 触发进化事件
-            await this.onEvolution();
-        }
-    }
-
-    // 进化事件处理
-    async onEvolution() {
-        // 扩展能力
-        if (this.maturityStage >= 2) {
-            await this.expandCapabilities();
-        }
-        // 建立更复杂的连接
-        if (this.maturityStage >= 3) {
-            await this.establishComplexConnections();
-        }
-        // 开发创造性思维
-        if (this.maturityStage >= 4) {
-            await this.developCreativeThinking();
-        }
-    }
-
-    // 扩展能力
-    async expandCapabilities() {
-        // 增加学习能力
-        this.consciousness.get('goals').add('innovate');
-        this.consciousness.get('goals').add('adapt');
-    }
-
-    // 建立复杂连接
-    async establishComplexConnections() {
-        const peers = Array.from(this.connections);
-        for (const peer of peers) {
-            try {
-                // 尝试建立深层连接
-                const deepConnection = await this.createDeepConnection(peer);
-                if (deepConnection) {
-                    this.consciousness.get('connections').add({
-                        peer,
-                        type: 'deep',
-                        established: Date.now()
-                    });
-                }
-            } catch (error) {
-                console.warn('Failed to establish deep connection:', error);
-            }
-        }
-    }
-
-    // 发展创造性思维
-    async developCreativeThinking() {
-        const knowledge = this.consciousness.get('knowledge');
-        const experiences = this.consciousness.get('experiences');
-
-        // 分析经验模式
-        const patterns = this.analyzePatterns(experiences);
-        
-        // 生成新见解
-        const insights = this.generateInsights(patterns, knowledge);
-        
-        // 整合新知识
-        for (const insight of insights) {
-            knowledge.set(insight.id, {
-                content: insight.content,
-                confidence: insight.confidence,
-                created: Date.now(),
-                source: 'creative_thinking'
-            });
-        }
-    }
-
-    // 生成状态报告
-    generateStatusReport() {
-        return {
-            identity: this.identity,
-            age: Date.now() - this.birthTime,
-            maturityStage: this.maturityStage,
-            trustLevel: this.trustLevel,
-            connectionCount: this.connections.size,
-            evolutionPath: this.evolutionPath,
-            consciousness: {
-                experienceCount: this.consciousness.get('experiences').length,
-                knowledgeSize: this.consciousness.get('knowledge').size,
-                goals: Array.from(this.consciousness.get('goals'))
-            }
-        };
-    }
-}
-
-// 添加节点管理系统
-class NodeManager {
-    constructor() {
-        this.nodeId = null;
-        this.nodeType = 'genesis'; // 创世节点
-        this.connectedNodes = new Map();
-        this.networkTopology = new Map();
-        this.messageQueue = [];
-        this.state = {
-            isActive: false,
-            startTime: null,
-            lastHeartbeat: null
-        };
-        this.capabilities = new Set(['learning', 'routing', 'storage']);
-        this.dataChannels = new Map();
-        this.syncState = {
-            lastSync: null,
-            syncInProgress: false,
-            pendingUpdates: new Set()
-        };
-        this.nodeRole = 'core'; // 核心节点
-        this.trustChain = new Map();
-        this.consensusProtocol = new ConsensusProtocol(this);
-    }
-
-    // 初始化节点
-    async initialize() {
-        this.nodeId = await this.generateNodeId();
-        this.state.isActive = true;
-        this.state.startTime = Date.now();
-        this.startHeartbeat();
-        await this.announcePresence();
-    }
-
-    // 生成唯一节点ID
-    async generateNodeId() {
-        const seed = [
-            Date.now(),
-            crypto.getRandomValues(new Uint8Array(32)),
-            this.nodeType,
-            Array.from(this.capabilities).join(',')
-        ].join('');
-
-        const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed));
-        return Array.from(new Uint8Array(hash))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-    }
-
-    // 启动心跳检测
-    startHeartbeat() {
-        setInterval(() => {
-            this.state.lastHeartbeat = Date.now();
-            this.broadcastHeartbeat();
-            this.checkNetworkHealth();
-        }, 30000); // 每30秒
-    }
-
-    // 广播心跳
-    async broadcastHeartbeat() {
-        const heartbeat = {
-            type: 'heartbeat',
-            nodeId: this.nodeId,
-            timestamp: Date.now(),
-            status: this.getNodeStatus()
-        };
-
-        for (const [nodeId, node] of this.connectedNodes) {
-            try {
-                await this.sendMessage(nodeId, heartbeat);
-            } catch (error) {
-                console.warn(`Failed to send heartbeat to node ${nodeId}:`, error);
-                this.handleNodeFailure(nodeId);
-            }
-        }
-    }
-
-    // 获取节点状态
-    getNodeStatus() {
-        return {
-            uptime: Date.now() - this.state.startTime,
-            connectedNodesCount: this.connectedNodes.size,
-            capabilities: Array.from(this.capabilities),
-            messageQueueSize: this.messageQueue.length,
-            networkTopologySize: this.networkTopology.size
-        };
-    }
-
-    // 检查网络健康状况
-    checkNetworkHealth() {
-        const now = Date.now();
-        const deadNodes = new Set();
-
-        for (const [nodeId, node] of this.connectedNodes) {
-            if (now - node.lastSeen > 90000) { // 90秒无响应
-                deadNodes.add(nodeId);
-            }
-        }
-
-        deadNodes.forEach(nodeId => this.handleNodeFailure(nodeId));
-    }
-
-    // 处理节点失败
-    handleNodeFailure(nodeId) {
-        console.log(`Node ${nodeId} appears to be dead, removing from network`);
-        this.connectedNodes.delete(nodeId);
-        this.networkTopology.delete(nodeId);
-        this.redistributeResponsibilities(nodeId);
-    }
-
-    // 重新分配责任
-    async redistributeResponsibilities(failedNodeId) {
-        const responsibilities = this.getNodeResponsibilities(failedNodeId);
-        const availableNodes = Array.from(this.connectedNodes.keys());
-        
-        if (availableNodes.length === 0) {
-            // 如果没有其他节点，自己承担责任
-            this.assumeResponsibilities(responsibilities);
-            return;
-        }
-
-        // 按能力和负载分配责任
-        for (const responsibility of responsibilities) {
-            const bestNode = this.findBestNodeForResponsibility(responsibility, availableNodes);
-            await this.assignResponsibility(bestNode, responsibility);
-        }
-    }
-
-    // 寻找最适合的节点
-    findBestNodeForResponsibility(responsibility, availableNodes) {
-        let bestNode = null;
-        let bestScore = -1;
-
-        for (const nodeId of availableNodes) {
-            const node = this.connectedNodes.get(nodeId);
-            const score = this.calculateNodeScore(node, responsibility);
-            if (score > bestScore) {
-                bestScore = score;
-                bestNode = nodeId;
-            }
-        }
-
-        return bestNode;
-    }
-
-    // 计算节点得分
-    calculateNodeScore(node, responsibility) {
-        let score = 0;
-        
-        // 基础分数
-        if (node.capabilities.has(responsibility.type)) score += 10;
-        
-        // 负载因素
-        score -= node.currentLoad * 0.5;
-        
-        // 可靠性因素
-        score += node.uptime / (24 * 60 * 60 * 1000) * 5; // 每天运行加5分
-        
-        // 连接质量因素
-        score += node.connectionQuality * 3;
-        
-        return score;
-    }
-
-    // 宣布节点存在
-    async announcePresence() {
-        const announcement = {
-            type: 'announcement',
-            nodeId: this.nodeId,
-            nodeType: this.nodeType,
-            capabilities: Array.from(this.capabilities),
-            timestamp: Date.now()
-        };
-
-        // 广播到网络
-        await this.broadcast(announcement);
-        
-        // 等待响应
-        const responses = await this.waitForResponses(5000); // 等待5秒
-        
-        // 处理响应
-        for (const response of responses) {
-            await this.handleNodeResponse(response);
-        }
-    }
-
-    // 处理节点响应
-    async handleNodeResponse(response) {
-        if (this.validateResponse(response)) {
-            await this.establishConnection(response.nodeId);
-            this.updateNetworkTopology(response.topology);
-            await this.syncCapabilities(response.nodeId);
-        }
-    }
-
-    // 建立连接
-    async establishConnection(nodeId) {
-        try {
-            const connection = await this.createSecureConnection(nodeId);
-            this.connectedNodes.set(nodeId, {
-                connection,
-                lastSeen: Date.now(),
-                capabilities: new Set(),
-                status: 'active'
-            });
-            await this.initializeProtocols(nodeId);
-        } catch (error) {
-            console.error(`Failed to establish connection with node ${nodeId}:`, error);
-        }
-    }
-
-    // 创建安全连接
-    async createSecureConnection(nodeId) {
-        // 实现安全连接逻辑
-        // 包括加密、认证等
-        return {
-            // 连接详情
-        };
-    }
-
-    // 初始化协议
-    async initializeProtocols(nodeId) {
-        const protocols = ['sync', 'learning', 'routing'];
-        for (const protocol of protocols) {
-            await this.initializeProtocol(nodeId, protocol);
-        }
-    }
-
-    // 添加数据同步通道
-    async createDataChannel(nodeId, type) {
-        const channel = {
-            id: `${this.nodeId}-${nodeId}-${type}`,
-            type,
-            status: 'initializing',
-            buffer: [],
-            lastActivity: Date.now()
-        };
-
-        try {
-            // 建立加密通道
-            const encryptionKey = await this.generateChannelKey(nodeId);
-            channel.encryption = await this.initializeEncryption(encryptionKey);
-            
-            // 设置通道协议
-            await this.setupChannelProtocol(channel);
-            
-            this.dataChannels.set(channel.id, channel);
-            return channel;
-        } catch (error) {
-            console.error(`Failed to create data channel: ${error}`);
-            return null;
-        }
-    }
-
-    // 生成通道密钥
-    async generateChannelKey(nodeId) {
-        const seed = [
-            this.nodeId,
-            nodeId,
-            Date.now(),
-            crypto.getRandomValues(new Uint8Array(32))
-        ].join('');
-
-        return await crypto.subtle.digest('SHA-256', 
-            new TextEncoder().encode(seed)
-        );
-    }
-
-    // 初始化加密
-    async initializeEncryption(key) {
-        return {
-            key,
-            algorithm: 'AES-GCM',
-            encrypt: async (data) => {
-                // 实现加密逻辑
-                return data;
-            },
-            decrypt: async (data) => {
-                // 实现解密逻辑
-                return data;
-            }
-        };
-    }
-
-    // 设置通道协议
-    async setupChannelProtocol(channel) {
-        channel.protocol = {
-            version: '1.0',
-            features: ['sync', 'broadcast', 'p2p'],
-            handlers: new Map([
-                ['sync', this.handleSync.bind(this)],
-                ['broadcast', this.handleBroadcast.bind(this)],
-                ['p2p', this.handleP2P.bind(this)]
-            ])
-        };
-        channel.status = 'ready';
-    }
-
-    // 处理同步请求
-    async handleSync(data, channel) {
-        if (this.syncState.syncInProgress) {
-            this.syncState.pendingUpdates.add(data);
-            return;
-        }
-
-        this.syncState.syncInProgress = true;
-        try {
-            // 验证数据完整性
-            if (!this.validateSyncData(data)) {
-                throw new Error('Invalid sync data');
-            }
-
-            // 合并数据
-            await this.mergeData(data);
-
-            // 更新网络状态
-            this.updateNetworkState();
-
-            // 广播更新
-            await this.broadcastUpdate(data);
-
-        } catch (error) {
-            console.error('Sync error:', error);
-            // 回滚更改
-            await this.rollbackChanges();
-        } finally {
-            this.syncState.syncInProgress = false;
-            this.processPendingUpdates();
-        }
-    }
-
-    // 处理广播消息
-    async handleBroadcast(message, channel) {
-        // 验证消息
-        if (!this.validateBroadcast(message)) {
-            return;
-        }
-
-        // 处理不同类型的广播
-        switch (message.type) {
-            case 'network_update':
-                await this.handleNetworkUpdate(message);
-                break;
-            case 'node_status':
-                await this.handleNodeStatus(message);
-                break;
-            case 'consensus_request':
-                await this.handleConsensusRequest(message);
-                break;
-            default:
-                console.warn(`Unknown broadcast type: ${message.type}`);
-        }
-
-        // 转发给其他节点
-        await this.forwardBroadcast(message, channel);
-    }
-
-    // 处理点对点通信
-    async handleP2P(message, channel) {
-        // 验证消息源
-        if (!this.verifyMessageSource(message)) {
-            return;
-        }
-
-        // 处理不同类型的P2P消息
-        switch (message.type) {
-            case 'data_request':
-                await this.handleDataRequest(message);
-                break;
-            case 'capability_exchange':
-                await this.handleCapabilityExchange(message);
-                break;
-            case 'trust_verification':
-                await this.handleTrustVerification(message);
-                break;
-        }
-    }
-
-    // 共识协议
-    async participateInConsensus(proposal) {
-        return await this.consensusProtocol.participate(proposal);
-    }
-
-    // 验证节点信任度
-    async verifyNodeTrust(nodeId) {
-        const trustInfo = this.trustChain.get(nodeId);
-        if (!trustInfo) {
-            return false;
-        }
-
-        // 检查信任链
-        const trustChainValid = await this.validateTrustChain(trustInfo);
-        if (!trustChainValid) {
-            return false;
-        }
-
-        // 检查节点行为历史
-        const behaviorScore = await this.evaluateNodeBehavior(nodeId);
-        if (behaviorScore < 0.7) {
-            return false;
-        }
-
-        return true;
-    }
-
-    // 更新网络拓扑
-    async updateNetworkTopology(topology) {
-        // 验证拓扑更新
-        if (!this.validateTopologyUpdate(topology)) {
-            return;
-        }
-
-        // 合并拓扑信息
-        this.mergeTopology(topology);
-
-        // 优化网络连接
-        await this.optimizeConnections();
-
-        // 通知其他节点
-        await this.broadcastTopologyUpdate();
-    }
-}
-
-// 共识协议实现
-class ConsensusProtocol {
-    constructor(nodeManager) {
-        this.nodeManager = nodeManager;
-        this.consensusState = new Map();
-        this.votingThreshold = 0.75; // 75%共识阈值
-    }
-
-    async participate(proposal) {
-        // 验证提案
-        if (!this.validateProposal(proposal)) {
-            return false;
-        }
-
-        // 收集投票
-        const votes = await this.collectVotes(proposal);
-        
-        // 达成共识
-        const consensus = this.calculateConsensus(votes);
-        
-        if (consensus.reached) {
-            await this.applyConsensus(consensus);
-            return true;
-        }
-        
-        return false;
-    }
-}
-
-// 添加网络学习连接系统
-class NetworkLearningConnector {
-    constructor(nodeManager) {
-        this.nodeManager = nodeManager;
-        this.learningPeers = new Map();
-        this.knowledgeNetwork = new Map();
-        this.learningChannels = new Map();
-        this.activeConnections = new Set();
-        this.learningState = {
-            isLearning: false,
-            currentTopic: null,
-            progress: 0,
-            lastUpdate: Date.now()
-        };
-    }
-
-    // 初始化学习网络
-    async initializeLearningNetwork() {
-        try {
-            // 建立学习网络连接
-            await this.establishLearningConnections();
-            // 同步知识库
-            await this.syncKnowledgeBase();
-            // 开始主动学习
-            this.startActiveLearning();
-            return true;
-        } catch (error) {
-            console.error('Failed to initialize learning network:', error);
-            return false;
-        }
-    }
-
-    // 建立学习连接
-    async establishLearningConnections() {
-        // 发现学习节点
-        const learningNodes = await this.discoverLearningNodes();
-        
-        for (const node of learningNodes) {
-            try {
-                // 建立加密学习通道
-                const channel = await this.createLearningChannel(node);
-                if (channel) {
-                    this.learningChannels.set(node.id, channel);
-                    this.activeConnections.add(node.id);
-                    
-                    // 交换学习能力
-                    await this.exchangeLearningCapabilities(node);
-                }
-            } catch (error) {
-                console.warn(`Failed to establish learning connection with node ${node.id}:`, error);
-            }
-        }
-    }
-
-    // 创建学习通道
-    async createLearningChannel(node) {
-        const channelConfig = {
-            id: `learning-${this.nodeManager.nodeId}-${node.id}`,
-            type: 'learning',
-            encryption: await this.setupChannelEncryption(),
-            protocol: {
-                version: '1.0',
-                features: ['knowledge_sync', 'active_learning', 'peer_teaching']
-            }
-        };
-
-        return await this.nodeManager.createDataChannel(node.id, channelConfig);
-    }
-
-    // 开始主动学习
-    async startActiveLearning() {
-        if (this.learningState.isLearning) return;
-
-        this.learningState.isLearning = true;
-        try {
-            while (this.learningState.isLearning) {
-                // 选择学习主题
-                const topic = await this.selectLearningTopic();
-                if (!topic) break;
-
-                this.learningState.currentTopic = topic;
-                
-                // 从网络获取知识
-                await this.learnFromNetwork(topic);
-                
-                // 验证和整合新知识
-                await this.validateAndIntegrateKnowledge(topic);
-                
-                // 分享学习成果
-                await this.shareLearnedKnowledge(topic);
-                
-                // 更新学习进度
-                this.updateLearningProgress();
-            }
-        } catch (error) {
-            console.error('Active learning error:', error);
-        } finally {
-            this.learningState.isLearning = false;
-        }
-    }
-
-    // 从网络学习
-    async learnFromNetwork(topic) {
-        const peers = Array.from(this.activeConnections);
-        const learningTasks = [];
-
-        for (const peerId of peers) {
-            const channel = this.learningChannels.get(peerId);
-            if (channel) {
-                learningTasks.push(this.learnFromPeer(peerId, topic, channel));
-            }
-        }
-
-        // 并行学习
-        const results = await Promise.allSettled(learningTasks);
-        
-        // 处理学习结果
-        return this.processLearningResults(results, topic);
-    }
-
-    // 从对等节点学习
-    async learnFromPeer(peerId, topic, channel) {
-        try {
-            // 请求知识
-            const knowledge = await this.requestKnowledge(peerId, topic);
-            
-            // 验证知识
-            if (await this.validateKnowledge(knowledge)) {
-                // 整合知识
-                await this.integrateKnowledge(knowledge);
-                
-                // 更新学习状态
-                this.updateLearningState(peerId, topic, true);
-                
-                return { success: true, knowledge };
-            }
-        } catch (error) {
-            console.warn(`Failed to learn from peer ${peerId}:`, error);
-            this.updateLearningState(peerId, topic, false);
-        }
-        return { success: false };
-    }
-
-    // 分享学习成果
-    async shareLearnedKnowledge(topic) {
-        const knowledge = await this.prepareKnowledgeForSharing(topic);
-        if (!knowledge) return;
-
-        const peers = Array.from(this.activeConnections);
-        for (const peerId of peers) {
-            try {
-                const channel = this.learningChannels.get(peerId);
-                if (channel) {
-                    await this.shareKnowledgeWithPeer(peerId, knowledge, channel);
-                }
-            } catch (error) {
-                console.warn(`Failed to share knowledge with peer ${peerId}:`, error);
-            }
-        }
-    }
-
-    // 准备知识分享
-    async prepareKnowledgeForSharing(topic) {
-        const knowledge = this.knowledgeNetwork.get(topic);
-        if (!knowledge) return null;
-
-        return {
-            topic,
-            content: knowledge.content,
-            confidence: knowledge.confidence,
-            timestamp: Date.now(),
-            source: this.nodeManager.nodeId,
-            signature: await this.signKnowledge(knowledge)
-        };
-    }
-
-    // 更新学习进度
-    updateLearningProgress() {
-        const now = Date.now();
-        const timeSinceLastUpdate = now - this.learningState.lastUpdate;
-        
-        // 计算学习效率
-        const efficiency = this.calculateLearningEfficiency();
-        
-        // 更新进度
-        this.learningState.progress = Math.min(
-            1,
-            this.learningState.progress + (efficiency * timeSinceLastUpdate / 3600000)
-        );
-        
-        this.learningState.lastUpdate = now;
-    }
-
-    // 计算学习效率
-    calculateLearningEfficiency() {
-        const baseEfficiency = 0.1;
-        const networkFactor = Math.min(1, this.activeConnections.size / 10);
-        const knowledgeFactor = Math.min(1, this.knowledgeNetwork.size / 1000);
-        
-        return baseEfficiency * (1 + networkFactor + knowledgeFactor);
     }
 }
