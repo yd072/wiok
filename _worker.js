@@ -1348,73 +1348,77 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 }
 
 async function 整理优选列表(api) {
-    if (!api || api.length === 0) return [];
+	if (!api || api.length === 0) return [];
 
-    let newapi = "";
-    
-    try {
-        const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
-            method: 'get',
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;',
-                'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
-            },
-            signal: AbortSignal.timeout(2000) // 使用更现代的超时方法
-        })));
+	let newapi = "";
 
-        for (const [index, response] of responses.entries()) {
-            if (response.status === 'fulfilled') {
-                const content = await response.value;
+	const controller = new AbortController();
 
-                const lines = content.split(/\r?\n/);
-                let 节点备注 = '';
-                let 测速端口 = '443';
+	const timeout = setTimeout(() => {
+		controller.abort(); 
+	}, 2000); 
 
-                if (lines[0].split(',').length > 3) {
-                    const idMatch = api[index].match(/id=([^&]*)/);
-                    if (idMatch) 节点备注 = idMatch[1];
+	try {
+		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
+			method: 'get',
+			headers: {
+				'Accept': 'text/html,application/xhtml+xml,application/xml;',
+				'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
+			},
+			signal: controller.signal 
+		}).then(response => response.ok ? response.text() : Promise.reject())));
 
-                    const portMatch = api[index].match(/port=([^&]*)/);
-                    if (portMatch) 测速端口 = portMatch[1];
+		for (const [index, response] of responses.entries()) {
+			if (response.status === 'fulfilled') {
+				const content = await response.value;
 
-                    for (let i = 1; i < lines.length; i++) {
-                        const columns = lines[i].split(',')[0];
-                        if (columns) {
-                            newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
-                            // 只有当URL明确包含proxyip=true时才添加到proxyIPPool
-                            if (api[index].includes('proxyip=true') && !httpsPorts.includes(测速端口)) {
-                                proxyIPPool.push(`${columns}:${测速端口}`);
-                            }
-                        }
-                    }
-                } else {
-                    // 只有当URL明确包含proxyip=true时才处理proxyIPPool
-                    if (api[index].includes('proxyip=true')) {
-                        const items = await 整理(content);
-                        const validProxyIPs = items
-                            .map(item => {
-                                const baseItem = item.split('#')[0] || item;
-                                if (!baseItem.includes(':')) {
-                                    return `${baseItem}:443`;
-                                }
-                                const [host, port] = baseItem.split(':');
-                                if (!httpsPorts.includes(port)) {
-                                    return baseItem;
-                                }
-                                return null;
-                            })
-                            .filter(Boolean);
-                        proxyIPPool.push(...validProxyIPs);
-                    }
-                    newapi += content + '\n';
-                }
-            }
-        }
-    } catch (error) {
-        console.error('整理优选列表错误:', error);
-    }
+				const lines = content.split(/\r?\n/);
+				let 节点备注 = '';
+				let 测速端口 = '443';
 
-    return await 整理(newapi);
+				if (lines[0].split(',').length > 3) {
+					const idMatch = api[index].match(/id=([^&]*)/);
+					if (idMatch) 节点备注 = idMatch[1];
+
+					const portMatch = api[index].match(/port=([^&]*)/);
+					if (portMatch) 测速端口 = portMatch[1];
+
+					for (let i = 1; i < lines.length; i++) {
+						const columns = lines[i].split(',')[0];
+						if (columns) {
+							newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
+							if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
+						}
+					}
+				} else {
+					if (api[index].includes('proxyip=true')) {
+						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
+						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
+							const baseItem = item.split('#')[0] || item;
+							if (baseItem.includes(':')) {
+								const port = baseItem.split(':')[1];
+								if (!httpsPorts.includes(port)) {
+									return baseItem;
+								}
+							} else {
+								return `${baseItem}:443`;
+							}
+							return null; 
+						}).filter(Boolean));
+					}
+					newapi += content + '\n';
+				}
+			}
+		}
+	} catch (error) {
+		console.error(error);
+	} finally {
+		clearTimeout(timeout);
+	}
+
+	const newAddressesapi = await 整理(newapi);
+
+	return newAddressesapi;
 }
 
 async function 整理测速结果(tls) {
@@ -1604,15 +1608,8 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		let 伪装域名 = host;
 		let 最终路径 = path;
 		let 节点备注 = '';
-		
-		// 只有当地址在proxyIPPool中时才添加proxyip参数
-		const matchingProxyIP = proxyIPPool.find(proxyIP => {
-			const [proxyHost] = proxyIP.split(':');
-			return address.includes(proxyHost);
-		});
-		if (matchingProxyIP) {
-			最终路径 += `&proxyip=${matchingProxyIP}`;
-		}
+		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
+		if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
 
 		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
 			最终路径 = `/${伪装域名}${最终路径}`;
