@@ -73,7 +73,7 @@ const utils = {
 	// 错误处理
 	error: {
 		handle(err, type = 'general') {
-			console.error(`[${type}] Error:`, err);
+	console.error(`[${type}] Error:`, err);
 			return new Response(err.toString(), {
 				status: type === 'auth' ? 401 : 500,
 				headers: { "Content-Type": "text/plain;charset=utf-8" }
@@ -482,72 +482,8 @@ function mergeData(header, chunk) {
     return merged;
 }
 
-// 优化 fetchWithTimeout 函数，添加默认超时和错误处理
-async function fetchWithTimeout(resource, options = {}) {
-    const { timeout = 3000 } = options;
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    try {
-        const response = await fetch(resource, {
-            ...options,
-            signal: controller.signal,
-            headers: {
-                ...options.headers,
-                'Upgrade-Insecure-Requests': '1',
-                'Accept': 'application/json',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'ALPN': 'h2,h3', // 添加 ALPN 参数以支持 HTTP/2 和 HTTP/3
-            }
-        });
-        clearTimeout(id);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return await response.json();
-    } catch (error) {
-        console.error(`Fetch error: ${error.message}`);
-        throw error;
-    }
-}
-
-// 并行处理多个异步请求
-async function fetchMultipleData(urls) {
-    try {
-        const promises = urls.map(url => fetchWithTimeout(url, {
-            headers: {
-                'Upgrade-Insecure-Requests': '1',
-                'Accept': 'application/json',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'ALPN': 'h2,h3', // 添加 ALPN 参数以支持 HTTP/2 和 HTTP/3
-            }
-        }));
-        const results = await Promise.all(promises);
-        return results;
-    } catch (error) {
-        console.error('Error fetching multiple data:', error);
-    }
-}
-
-// 使用流处理大数据
-function processLargeDataStream(dataStream) {
-    const reader = dataStream.getReader();
-    const decoder = new TextDecoder();
-    let result = '';
-
-    return reader.read().then(function processText({ done, value }) {
-        if (done) {
-            console.log('Stream complete');
-            return result;
-        }
-        result += decoder.decode(value, { stream: true });
-        return reader.read().then(processText);
-    });
-}
-
-// 优化 handleDNSQuery 函数，添加错误处理和日志
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
+
     try {
         // 只使用Google的备用DNS服务器,更快更稳定
         const dnsServer = '8.8.4.4';
@@ -576,7 +512,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                         if (维列斯Header) 维列斯Header = null;
                     } catch (error) {
                         console.error(`发送数据时发生错误: ${error.message}`);
-                        safeCloseWebSocket(webSocket); 
+                        safeCloseWebSocket(webSocket);
                     }
                 }
             },
@@ -589,7 +525,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         }));
     } catch (error) {
         console.error(`DNS查询异常: ${error.message}`, error.stack);
-        safeCloseWebSocket(webSocket); 
+        safeCloseWebSocket(webSocket);
     }
 }
 
@@ -613,18 +549,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 connect({ 
                     hostname: address, 
                     port: port,
-                    // TCP 优化选项
+                    // 添加 TCP 连接优化选项
                     allowHalfOpen: false,
                     keepAlive: true,
-                    keepAliveInitialDelay: 60000,
-                    // TCP Fast Open 相关优化
-                    tcpFastOpen: true,           // 启用 TCP Fast Open
-                    tcpFastOpenQueueLength: 256, // TFO 队列长度
-                    noDelay: true,               // 禁用 Nagle 算法
-                    reusePort: true,             // 启用端口重用
-                    // TCP 缓冲区优化
-                    receiveBufferSize: 4194304,  // 接收缓冲区 4MB
-                    sendBufferSize: 4194304      // 发送缓冲区 4MB
+                    keepAliveInitialDelay: 60000
                 }),
             new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('连接超时')), 3000)
@@ -664,7 +592,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             tcpSocket.closed.catch(error => {
                 console.log('Retry tcpSocket closed error', error);
             }).finally(() => {
-                safeCloseWebSocket(webSocket); 
+                safeCloseWebSocket(webSocket);
             });
             remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
@@ -783,7 +711,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         )
         .catch((error) => {
             console.error(`remoteSocketToWS exception`);
-            safeCloseWebSocket(webSocket); 
+            safeCloseWebSocket(webSocket);
         });
 
     if (!hasIncomingData && retry) {
@@ -996,32 +924,32 @@ async function 代理URL(代理网址, 目标网址) {
 
 const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
 function 配置信息(UUID, 域名地址) {
-    const 协议类型 = atob(啥啥啥_写的这是啥啊);
-  
-    const 别名 = FileName;
-    let 地址 = 域名地址;
-    let 端口 = 443;
-  
-    const 用户ID = UUID;
-    const 加密方式 = 'none';
-  
-    const 传输层协议 = 'ws';
-    const 伪装域名 = 域名地址;
-    const 路径 = path;
-  
-    let 传输层安全 = ['tls', true];
-    const SNI = 域名地址;
-    const 指纹 = 'randomized';
-  
-    if (域名地址.includes('.workers.dev')) {
-        地址 = atob('dmlzYS5jbg==');
-        端口 = 80;
-        传输层安全 = ['', false];
-    }
-  
+	const 协议类型 = atob(啥啥啥_写的这是啥啊);
+
+	const 别名 = FileName;
+	let 地址 = 域名地址;
+	let 端口 = 443;
+
+	const 用户ID = UUID;
+	const 加密方式 = 'none';
+
+	const 传输层协议 = 'ws';
+	const 伪装域名 = 域名地址;
+	const 路径 = path;
+
+	let 传输层安全 = ['tls', true];
+	const SNI = 域名地址;
+	const 指纹 = 'randomized';
+
+	if (域名地址.includes('.workers.dev')) {
+		地址 = atob('dmlzYS5jbg==');
+		端口 = 80;
+		传输层安全 = ['', false];
+	}
+
 	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
 	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
-    return [威图瑞, 猫猫猫];
+	return [威图瑞, 猫猫猫];
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
@@ -1478,10 +1406,6 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
 	let notlsresponseBody;
-	
-	// 在函数开始处定义协议类型
-	const 协议类型 = atob(啥啥啥_写的这是啥啊);
-
 	if (noTLS == 'true') {
 		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
@@ -1532,19 +1456,19 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			let 伪装域名 = host;
 			let 最终路径 = path;
 			let 节点备注 = '';
+			const 协议类型 = atob(啥啥啥_写的这是啥啊);
 
-			const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
-				`${atob('ZW5jcnlwdGlvbj1ub25l')}&` + 
-				`type=ws&` +
-				`host=${伪装域名}&` +
-				`path=${encodeURIComponent(最终路径)}&` +
-				`udp=true&` +  // 保留UDP支持
-				`security=none&` + 
-				`tfo=true&` + 
-				`keepAlive=true&` + // 保持连接
-				`congestion_control=bbr&` + // BBR拥塞控制
-				`udp_relay=true&` + // UDP转发
-				`#${encodeURIComponent(addressid + 节点备注)}`;
+            const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
+                `encryption=none&` + 
+                `security=none&` + 
+                `type=ws&` + 
+				`tfo=true&` + // 启用 TCP Fast Open
+				`keepAlive=true&` + 
+				`congestion_control=bbr&` +
+				`udp=true&` +
+                `host=${伪装域名}&` + 
+                `path=${encodeURIComponent(最终路径)}` + 
+                `#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
 
@@ -1607,21 +1531,21 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
 		}
 
+		const 协议类型 = atob(啥啥啥_写的这是啥啊);
+
 		const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
-			`${atob('ZW5jcnlwdGlvbj1ub25l')}&` + 
-			`${atob('c2VjdXJpdHk9dGxz')}&` + 
-			`${atob('c25pPQ==')}${伪装域名}&` + 
-			`fp=randomized&` + 
+			`encryption=none&` +
+			`security=tls&` +
+			`sni=${伪装域名}&` +
+			`fp=randomized&` +
+			`alpn=h3&` + 
 			`type=ws&` +
+			`tfo=true&` + // 启用 TCP Fast Open
+			`keepAlive=true&` + 
+			`congestion_control=bbr&` +
+			`udp=true&` +
 			`host=${伪装域名}&` +
-			`path=${encodeURIComponent(最终路径)}&` +
-			`alpn=h3&` +
-			`udp=true&` +  // 保留UDP支持
-			`allowInsecure=false&` +
-			`tfo=true&` + 
-			`keepAlive=true&` + // 保持连接
-			`congestion_control=bbr&` + // BBR拥塞控制
-			`udp_relay=true&` + // UDP转发
+                        `path=${encodeURIComponent(最终路径)}` + 
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
@@ -1844,7 +1768,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRnJhdyUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
