@@ -1406,7 +1406,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	addresses = addresses.concat(newAddressescsv);
 	let notlsresponseBody;
 	
-	function 生成随机噪声() {
+	function 生成随机噪声(){ 
 		const 噪声列表 = [
 			// 常见参数
 			`t=${Date.now()}`,
@@ -1424,6 +1424,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`zone=${['cn','hk','sg','us'][Math.floor(Math.random() * 4)]}`,
 			`ver=${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}`
 		];
+	}
 	if (noTLS == 'true') {
 		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
