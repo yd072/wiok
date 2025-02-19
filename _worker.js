@@ -1435,7 +1435,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		];
 	
 		// 统一生成3-5个随机参数
-		const 数量 = Math.floor(Math.random() * 2) + 2;
+		const 数量 = Math.floor(Math.random() * 3) + 3;
 	
 		// 随机打乱并选择参数
 		return 噪声列表
