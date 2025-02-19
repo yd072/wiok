@@ -1411,51 +1411,13 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成随机噪声(UA = '') {
-    // 生成随机噪声参数
-    const 噪声列表 = [
-        `t=${Date.now()}`,
-        `neko=${Math.random().toString(36).substring(7)}`,
-        `timestamp=${Math.floor(Math.random() * 1000000)}`,
-        `auth=${btoa(Math.random().toString()).substring(10, 15)}`,
-        `mux=${Math.random() > 0.5 ? 'true' : 'false'}`,
-        `level=${Math.floor(Math.random() * 10)}`,
-        `pbk=${btoa(Math.random().toString()).substring(5, 15)}`,
-        `sid=${Math.random().toString(36).substring(5)}`,
-        `spx=${Math.random() > 0.5 ? 'true' : 'false'}`,
-        `client=${['chrome','firefox','safari','edge'][Math.floor(Math.random() * 4)]}`,
-        `zone=${['cn','hk','sg','us'][Math.floor(Math.random() * 4)]}`,
-        `ver=${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}`
-    ];
-
-    // 统一生成3-5个随机参数
-    const 数量 = Math.floor(Math.random() * 3) + 3;
-
-    // 随机打乱并选择参数
-    return 噪声列表
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 数量)
-        .join('&');
-}
-
 function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
 	let notlsresponseBody;
 
-	// 添加生成随机噪声函数
 	function 生成随机噪声(UA = '') {
-		const userAgent = UA.toLowerCase();
-		const isSimpleClient = userAgent && (
-			userAgent.includes('clash') || 
-			userAgent.includes('sing-box') || 
-			userAgent.includes('singbox') ||
-			userAgent.includes('nekobox') ||
-			userAgent.includes('shadowrocket') ||
-			userAgent.includes('v2fly')
-		);
-
 		// 生成随机噪声参数
 		const 噪声列表 = [
 			`t=${Date.now()}`,
@@ -1471,12 +1433,10 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`zone=${['cn','hk','sg','us'][Math.floor(Math.random() * 4)]}`,
 			`ver=${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}`
 		];
-
-		// 根据客户端类型选择噪声数量
-		const 数量 = isSimpleClient ? 
-			Math.floor(Math.random() * 3) + 3 : // 移动客户端 3-5个
-			Math.floor(Math.random() * 4) + 4;  // 桌面客户端 4-7个
-
+	
+		// 统一生成3-5个随机参数
+		const 数量 = Math.floor(Math.random() * 3) + 3;
+	
 		// 随机打乱并选择参数
 		return 噪声列表
 			.sort(() => Math.random() - 0.5)
