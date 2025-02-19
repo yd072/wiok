@@ -1418,14 +1418,15 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	let notlsresponseBody;
 
 	// 添加生成随机噪声函数
-	function 生成随机噪声() {
+	function 生成随机噪声(UA = '') {
+		const userAgent = UA.toLowerCase();
 		const isSimpleClient = userAgent && (
 			userAgent.includes('clash') || 
 			userAgent.includes('sing-box') || 
 			userAgent.includes('singbox') ||
 			userAgent.includes('nekobox') ||
 			userAgent.includes('shadowrocket') ||
-			userAgent.includes('v2fly') // 添加对v2rayng的检测
+			userAgent.includes('v2fly')
 		);
 
 		// 生成随机噪声参数
