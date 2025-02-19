@@ -1501,8 +1501,8 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `security=none&` + 
                 `type=ws&` + 
                 `host=${伪装域名}&` + 
-                `path=${encodeURIComponent(最终路径)}` + 
-				生成随机噪声() +
+                `path=${encodeURIComponent(最终路径)}&` + // 添加 & 符号
+                `${生成随机噪声()}` +  // 调用生成随机噪声并添加到链接中
                 `#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
@@ -1576,8 +1576,8 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`alpn=h3&` + 
 			`type=ws&` +
 			`host=${伪装域名}&` +
-			`path=${encodeURIComponent(最终路径)}` +
-			生成随机噪声() +
+			`path=${encodeURIComponent(最终路径)}&` + // 添加 & 符号
+			`${生成随机噪声()}` +  // 调用生成随机噪声并添加到链接中
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
