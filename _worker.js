@@ -1252,7 +1252,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		try {
 			let content;
 			if ((!sub || sub == "") && isBase64 == true) {
-				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
+				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv, UA.toLowerCase());
 			} else {
 				const response = await fetch(url, {
 					headers: {
@@ -1409,51 +1409,50 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
+function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv, userAgent) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
 	let notlsresponseBody;
-	
-    function 生成链接(协议类型, UUID, address, port, 伪装域名, 最终路径, addressid, 节点备注, userAgent) {
-        // 生成随机噪声参数
-        function 生成随机噪声() {
-            const 噪声列表 = [
-                // 常见参数
-                `t=${Date.now()}`,
-                `neko=${Math.random().toString(36).substring(7)}`,
-                `timestamp=${Math.floor(Math.random() * 1000000)}`,
-                `auth=${btoa(Math.random().toString()).substring(10, 15)}`,
-                `mux=${Math.random() > 0.5 ? 'true' : 'false'}`,
-                `level=${Math.floor(Math.random() * 10)}`,
-                // 模拟真实参数
-                `pbk=${btoa(Math.random().toString()).substring(5, 15)}`,
-                `sid=${Math.random().toString(36).substring(5)}`,
-                `spx=${Math.random() > 0.5 ? 'true' : 'false'}`,
-                // 自定义参数
-                `client=${['chrome','firefox','safari','edge'][Math.floor(Math.random() * 4)]}`,
-                `zone=${['cn','hk','sg','us'][Math.floor(Math.random() * 4)]}`,
-                `ver=${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}`
-            ];
 
-            // 根据不同条件生成不同数量的噪声
-            let 数量;
-            if (isSimpleClient) {
-                // 移动客户端使用较少噪声 (3-5个)
-                数量 = Math.floor(Math.random() * 3) + 3;
-            } else {
-                // 桌面客户端使用更多噪声 (4-7个)
-                数量 = Math.floor(Math.random() * 4) + 4;
-            }
+	// 添加生成随机噪声函数
+	function 生成随机噪声(isSimpleClient = false) {
+		// 生成随机噪声参数
+		const 噪声列表 = [
+			// 常见参数
+			`t=${Date.now()}`,
+			`neko=${Math.random().toString(36).substring(7)}`,
+			`timestamp=${Math.floor(Math.random() * 1000000)}`,
+			`auth=${btoa(Math.random().toString()).substring(10, 15)}`,
+			`mux=${Math.random() > 0.5 ? 'true' : 'false'}`,
+			`level=${Math.floor(Math.random() * 10)}`,
+			// 模拟真实参数
+			`pbk=${btoa(Math.random().toString()).substring(5, 15)}`,
+			`sid=${Math.random().toString(36).substring(5)}`,
+			`spx=${Math.random() > 0.5 ? 'true' : 'false'}`,
+			// 自定义参数
+			`client=${['chrome','firefox','safari','edge'][Math.floor(Math.random() * 4)]}`,
+			`zone=${['cn','hk','sg','us'][Math.floor(Math.random() * 4)]}`,
+			`ver=${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}`
+		];
 
-            // 随机打乱并选择参数
-            return 噪声列表
-                .sort(() => Math.random() - 0.5)
-                .slice(0, 数量)
-                .join('&');
-        }
+		// 根据不同条件生成不同数量的噪声
+		let 数量;
+		if (isSimpleClient) {
+			// 移动客户端使用较少噪声 (3-5个)
+			数量 = Math.floor(Math.random() * 3) + 3;
+		} else {
+			// 桌面客户端使用更多噪声 (4-7个)
+			数量 = Math.floor(Math.random() * 4) + 4;
+		}
+
+		// 随机打乱并选择参数
+		return 噪声列表
+			.sort(() => Math.random() - 0.5)
+			.slice(0, 数量)
+			.join('&');
 	}
-	
+
 	if (noTLS == 'true') {
 		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
@@ -1506,14 +1505,14 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			let 节点备注 = '';
 			const 协议类型 = atob(啥啥啥_写的这是啥啊);
 
-            const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
-                `encryption=none&` + 
-                `security=none&` + 
-                `type=ws&` + 
-                `host=${伪装域名}&` + 
-                `path=${encodeURIComponent(最终路径)}` + 
-				生成随机噪声() +
-                `#${encodeURIComponent(addressid + 节点备注)}`;
+			const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
+				`encryption=none&` + 
+				`security=none&` + 
+				`type=ws&` + 
+				`host=${伪装域名}&` + 
+				`path=${encodeURIComponent(最终路径)}` + 
+				生成随机噪声(userAgent.includes('mobile')) +
+				`#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
 
@@ -1586,8 +1585,8 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`alpn=h3&` + 
 			`type=ws&` +
 			`host=${伪装域名}&` +
-			`path=${encodeURIComponent(最终路径)}` +
-			生成随机噪声() +
+			`path=${encodeURIComponent(最终路径)}&` +
+			生成随机噪声(userAgent.includes('mobile')) +
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
