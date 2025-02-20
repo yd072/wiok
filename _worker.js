@@ -89,17 +89,6 @@ class WebSocketManager {
 		this.log = log;
 		this.readableStreamCancel = false;
 		this.backpressure = false;
-
-		// 添加对 WebSocket 关闭和错误事件的处理
-		this.webSocket.addEventListener('close', () => {
-			this.log('WebSocket closed');
-			this.cleanup();
-		});
-
-		this.webSocket.addEventListener('error', (error) => {
-			this.log('WebSocket error', error);
-			this.cleanup();
-		});
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -188,6 +177,164 @@ class ConfigManager {
 	set(key, value) {
 		this.config[key] = value;
 	}
+}
+
+// 网络请求工具类 - 处理所有网络相关的操作
+class NetworkUtils {
+    // 带超时的fetch请求
+    // @param url - 请求URL
+    // @param options - fetch选项
+    // @param timeout - 超时时间(毫秒)
+    static async fetchWithTimeout(url, options = {}, timeout = 2000) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+            return response;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    // 获取IP地址信息
+    // @param ip - IP地址
+    // @returns {Promise<Object>} IP信息对象,包含国家、城市等
+    static async getIPInfo(ip) {
+        try {
+            const response = await this.fetchWithTimeout(`http://ip-api.com/json/${ip}?lang=zh-CN`);
+            if (response.ok) {
+                return await response.json();
+            }
+            return null;
+        } catch (error) {
+            console.error('获取IP信息失败:', error);
+            return null;
+        }
+    }
+
+    // 发送Telegram消息
+    // @param botToken - 机器人token
+    // @param chatId - 聊天ID
+    // @param message - 消息内容
+    static async sendTelegramMessage(botToken, chatId, message) {
+        if (!botToken || !chatId) return;
+        
+        try {
+            const url = `https://api.telegram.org/bot${botToken}/sendMessage?chat_id=${chatId}&parse_mode=HTML&text=${encodeURIComponent(message)}`;
+            return await this.fetchWithTimeout(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'User-Agent': 'Mozilla/5.0 Chrome/90.0.4430.72'
+                }
+            });
+        } catch (error) {
+            console.error('发送Telegram消息失败:', error);
+        }
+    }
+}
+
+// 地址处理工具类 - 处理各种地址格式的解析和验证
+class AddressUtils {
+    // 解析地址列表,将地址分类为接口地址、链接地址和优选地址
+    // @param addressList - 地址列表字符串
+    // @returns {Promise<Object>} 分类后的地址集合
+    static async parseAddressList(addressList) {
+        const categories = {
+            接口地址: new Set(),
+            链接地址: new Set(),
+            优选地址: new Set()
+        };
+        
+        const addresses = await this.cleanAndSplit(addressList);
+        for (const address of addresses) {
+            if (address.startsWith('https://')) {
+                categories.接口地址.add(address);
+            } else if (address.includes('://')) {
+                categories.链接地址.add(address);
+            } else {
+                categories.优选地址.add(address);
+            }
+        }
+        
+        return categories;
+    }
+
+    // 清理和分割地址字符串
+    // @param content - 原始地址字符串
+    // @param cacheKey - 缓存键(可选)
+    // @returns {Promise<Array>} 清理后的地址数组
+    static async cleanAndSplit(content, cacheKey = null) {
+        if (cacheKey && globalCache.has(cacheKey)) {
+            return globalCache.get(cacheKey);
+        }
+        
+        const cleanedContent = content.replace(/[	|"'\r\n]+/g, ',')
+                                    .replace(/,+/g, ',')
+                                    .replace(/^,|,$/g, '');
+        
+        const addressArray = cleanedContent.split(',');
+        
+        if (cacheKey) {
+            globalCache.set(cacheKey, addressArray);
+        }
+        
+        return addressArray;
+    }
+
+    // 验证IPv4地址格式
+    // @param address - IP地址字符串
+    // @returns {boolean} 是否为有效的IPv4地址
+    static isValidIPv4(address) {
+        const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+        return ipv4Regex.test(address);
+    }
+}
+
+// UUID工具类 - 处理动态UUID的生成和管理
+class UUIDUtils {
+    // 生成动态UUID
+    // @param key - 密钥
+    // @param updateHour - 更新时间(小时)
+    // @param validDays - 有效天数
+    // @returns {Promise<Array>} [当前UUID, 上一个UUID, 到期时间字符串]
+    static async generateDynamicUUID(key, updateHour, validDays) {
+        const timezone = 8;
+        const startDate = new Date(2007, 6, 7, updateHour, 0, 0);
+        const weekMilliseconds = 1000 * 60 * 60 * 24 * validDays;
+
+        // 获取当前周数
+        const getCurrentWeek = () => {
+            const now = new Date();
+            const adjustedNow = new Date(now.getTime() + timezone * 60 * 60 * 1000);
+            const timeDiff = Number(adjustedNow) - Number(startDate);
+            return Math.ceil(timeDiff / weekMilliseconds);
+        };
+
+        // 根据基础字符串生成UUID
+        const generateUUID = async (baseString) => {
+            const hashBuffer = new TextEncoder().encode(baseString);
+            const hash = await crypto.subtle.digest('SHA-256', hashBuffer);
+            const hashArray = Array.from(new Uint8Array(hash));
+            const hexHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return `${hexHash.substr(0, 8)}-${hexHash.substr(8, 4)}-4${hexHash.substr(13, 3)}-${(parseInt(hexHash.substr(16, 2), 16) & 0x3f | 0x80).toString(16)}${hexHash.substr(18, 2)}-${hexHash.substr(20, 12)}`;
+        };
+
+        const currentWeek = getCurrentWeek();
+        const endTime = new Date(startDate.getTime() + currentWeek * weekMilliseconds);
+
+        const currentUUID = await generateUUID(key + currentWeek);
+        const previousUUID = await generateUUID(key + (currentWeek - 1));
+        const expiryTimeUTC = new Date(endTime.getTime() - timezone * 60 * 60 * 1000);
+        const expiryTimeString = `到期时间(UTC): ${expiryTimeUTC.toISOString().slice(0, 19).replace('T', ' ')} (UTC+8): ${endTime.toISOString().slice(0, 19).replace('T', ' ')}\n`;
+
+        return [currentUUID, previousUUID, expiryTimeString];
+    }
 }
 
 export default {
@@ -503,8 +650,13 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         
         // 使用Promise.race设置2秒超时
         const tcpSocket = await Promise.race([
-            connect({ hostname: dnsServer, port: dnsPort }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('DNS连接超时')), 2000))
+            connect({
+                hostname: dnsServer,
+                port: dnsPort
+            }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('DNS连接超时')), 2000)
+            )
         ]);
 
         log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
@@ -1411,39 +1563,11 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv, UA) {
+function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
 	let notlsresponseBody;
-
-	function 生成随机噪声(UA = '') {
-		// 生成随机噪声参数
-		const 噪声列表 = [
-			`t=${Date.now()}`,
-			`neko=${Math.random().toString(36).substring(7)}`,
-			`timestamp=${Math.floor(Math.random() * 1000000)}`,
-			`auth=${btoa(Math.random().toString()).substring(10, 15)}`,
-			`mux=${Math.random() > 0.5 ? 'true' : 'false'}`,
-			`level=${Math.floor(Math.random() * 10)}`,
-			`pbk=${btoa(Math.random().toString()).substring(5, 15)}`,
-			`sid=${Math.random().toString(36).substring(5)}`,
-			`spx=${Math.random() > 0.5 ? 'true' : 'false'}`,
-			`client=${['chrome','firefox','safari','edge'][Math.floor(Math.random() * 4)]}`,
-			`zone=${['cn','hk','sg','us'][Math.floor(Math.random() * 4)]}`,
-			`ver=${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}`
-		];
-	
-		// 统一生成3-5个随机参数
-		const 数量 = Math.floor(Math.random() * 3) + 3;
-	
-		// 随机打乱并选择参数
-		return 噪声列表
-			.sort(() => Math.random() - 0.5)
-			.slice(0, 数量)
-			.join('&');
-	}
-	
 	if (noTLS == 'true') {
 		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
@@ -1481,7 +1605,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			}
 
 			const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
-			if (!isValidIPv4(address) && port == "-1") {
+			if (!AddressUtils.isValidIPv4(address) && port == "-1") {
 				for (let httpPort of httpPorts) {
 					if (address.includes(httpPort)) {
 						port = httpPort;
@@ -1501,8 +1625,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `security=none&` + 
                 `type=ws&` + 
                 `host=${伪装域名}&` + 
-                `path=${encodeURIComponent(最终路径)}&` + 
-                `${生成随机噪声(UA)}` +  // 传入UA参数
+                `path=${encodeURIComponent(最终路径)}` + 
                 `#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
@@ -1544,7 +1667,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			addressid = match[3] || address;
 		}
 
-		if (!isValidIPv4(address) && port == "-1") {
+		if (!AddressUtils.isValidIPv4(address) && port == "-1") {
 			for (let httpsPort of httpsPorts) {
 				if (address.includes(httpsPort)) {
 					port = httpsPort;
@@ -1576,8 +1699,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`alpn=h3&` + 
 			`type=ws&` +
 			`host=${伪装域名}&` +
-			`path=${encodeURIComponent(最终路径)}&` + 
-			`${生成随机噪声(UA)}` +  // 传入UA参数
+                        `path=${encodeURIComponent(最终路径)}` + 
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
@@ -1589,87 +1711,38 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	return btoa(base64Response);
 }
 
-// 优化 整理 函数
+// 修改原有函数使用新的工具类
+async function 处理地址列表(地址列表) {
+    return await AddressUtils.parseAddressList(地址列表);
+}
+
 async function 整理(内容, cacheKey = null) {
-    if (cacheKey && globalCache.has(cacheKey)) {
-        return globalCache.get(cacheKey);
-    }
-    
-    const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
-        .replace(/^,|,$/g, '');
-    
-    const 地址数组 = 替换后的内容.split(',');
-    
-    if (cacheKey) {
-        globalCache.set(cacheKey, 地址数组);
-    }
-    
-    return 地址数组;
+    return await AddressUtils.cleanAndSplit(内容, cacheKey);
 }
 
+// 修改原有的sendMessage函数使用新的工具类
 async function sendMessage(type, ip, add_data = "") {
-	if (!BotToken || !ChatID) return;
+    if (!BotToken || !ChatID) return;
 
-	try {
-		let msg = "";
-		const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
-		if (response.ok) {
-			const ipInfo = await response.json();
-			msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n<tg-spoiler>城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
-		} else {
-			msg = `${type}\nIP: ${ip}\n<tg-spoiler>${add_data}`;
-		}
+    try {
+        let msg = "";
+        const ipInfo = await NetworkUtils.getIPInfo(ip);
+        
+        if (ipInfo) {
+            msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n<tg-spoiler>城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
+        } else {
+            msg = `${type}\nIP: ${ip}\n<tg-spoiler>${add_data}`;
+        }
 
-		const url = `https://api.telegram.org/bot${BotToken}/sendMessage?chat_id=${ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`;
-		return fetch(url, {
-			method: 'GET',
-			headers: {
-				'Accept': 'text/html,application/xhtml+xml,application/xml;',
-				'Accept-Encoding': 'gzip, deflate, br',
-				'User-Agent': 'Mozilla/5.0 Chrome/90.0.4430.72'
-			}
-		});
-	} catch (error) {
-		console.error('Error sending message:', error);
-	}
+        return await NetworkUtils.sendTelegramMessage(BotToken, ChatID, msg);
+    } catch (error) {
+        console.error('Error sending message:', error);
+    }
 }
 
-function isValidIPv4(address) {
-	const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-	return ipv4Regex.test(address);
-}
-
-function 生成动态UUID(密钥) {
-	const 时区偏移 = 8; 
-	const 起始日期 = new Date(2007, 6, 7, 更新时间, 0, 0); 
-	const 一周的毫秒数 = 1000 * 60 * 60 * 24 * 有效时间;
-
-	function 获取当前周数() {
-		const 现在 = new Date();
-		const 调整后的现在 = new Date(现在.getTime() + 时区偏移 * 60 * 60 * 1000);
-		const 时间差 = Number(调整后的现在) - Number(起始日期);
-		return Math.ceil(时间差 / 一周的毫秒数);
-	}
-
-	function 生成UUID(基础字符串) {
-		const 哈希缓冲区 = new TextEncoder().encode(基础字符串);
-		return crypto.subtle.digest('SHA-256', 哈希缓冲区).then((哈希) => {
-			const 哈希数组 = Array.from(new Uint8Array(哈希));
-			const 十六进制哈希 = 哈希数组.map(b => b.toString(16).padStart(2, '0')).join('');
-			return `${十六进制哈希.substr(0, 8)}-${十六进制哈希.substr(8, 4)}-4${十六进制哈希.substr(13, 3)}-${(parseInt(十六进制哈希.substr(16, 2), 16) & 0x3f | 0x80).toString(16)}${十六进制哈希.substr(18, 2)}-${十六进制哈希.substr(20, 12)}`;
-		});
-	}
-
-	const 当前周数 = 获取当前周数(); 
-	const 结束时间 = new Date(起始日期.getTime() + 当前周数 * 一周的毫秒数);
-
-	const 当前UUIDPromise = 生成UUID(密钥 + 当前周数);
-	const 上一个UUIDPromise = 生成UUID(密钥 + (当前周数 - 1));
-
-	const 到期时间UTC = new Date(结束时间.getTime() - 时区偏移 * 60 * 60 * 1000); // UTC时间
-	const 到期时间字符串 = `到期时间(UTC): ${到期时间UTC.toISOString().slice(0, 19).replace('T', ' ')} (UTC+8): ${结束时间.toISOString().slice(0, 19).replace('T', ' ')}\n`;
-
-	return Promise.all([当前UUIDPromise, 上一个UUIDPromise, 到期时间字符串]);
+// 修改原有函数使用新的工具类
+async function 生成动态UUID(密钥) {
+    return await UUIDUtils.generateDynamicUUID(密钥, 更新时间, 有效时间);
 }
 
 async function 迁移地址列表(env, txt = 'ADD.txt') {
@@ -1953,25 +2026,4 @@ async function handleGetRequest(env, txt) {
 	return new Response(html, {
 		headers: { "Content-Type": "text/html;charset=utf-8" }
 	});
-}
-
-async function 处理地址列表(地址列表) {
-	const 分类地址 = {
-		接口地址: new Set(),
-		链接地址: new Set(),
-		优选地址: new Set()
-	};
-	
-	const 地址数组 = await 整理(地址列表);
-	for (const 地址 of 地址数组) {
-		if (地址.startsWith('https://')) {
-			分类地址.接口地址.add(地址);
-		} else if (地址.includes('://')) {
-			分类地址.链接地址.add(地址);
-		} else {
-			分类地址.优选地址.add(地址);
-		}
-	}
-	
-	return 分类地址;
 }
