@@ -89,39 +89,68 @@ class WebSocketManager {
 		this.log = log;
 		this.readableStreamCancel = false;
 		this.backpressure = false;
+		this.messageQueue = []; // 添加消息队列
+		this.processingMessage = false;
+	}
+
+	// 添加消息队列处理
+	async processMessageQueue() {
+		if (this.processingMessage || this.messageQueue.length === 0) return;
+		
+		this.processingMessage = true;
+		while (this.messageQueue.length > 0) {
+			const message = this.messageQueue.shift();
+			try {
+				await this.handleMessage(message);
+			} catch (error) {
+				this.log('处理消息出错:', error);
+			}
+		}
+		this.processingMessage = false;
+	}
+
+	async handleMessage(message) {
+		if (this.readableStreamCancel) return;
+		if (!this.backpressure) {
+			await new Promise(resolve => setTimeout(resolve, 0)); // 微任务让出执行权
+			this.controller.enqueue(message);
+		} else {
+			this.log('背压控制,消息已缓存');
+			this.messageQueue.push(message);
+		}
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+			start: (controller) => {
+				this.controller = controller;
+				this.handleStreamStart(controller, earlyDataHeader);
+			},
 			pull: (controller) => this.handleStreamPull(controller),
 			cancel: (reason) => this.handleStreamCancel(reason)
 		});
 	}
 
 	handleStreamStart(controller, earlyDataHeader) {
-		// 处理消息事件
-		this.webSocket.addEventListener('message', (event) => {
-			if (this.readableStreamCancel) return;
-			if (!this.backpressure) {
-				controller.enqueue(event.data);
-			} else {
-				this.log('Backpressure, message discarded');
-			}
+		// 优化消息处理
+		this.webSocket.addEventListener('message', async (event) => {
+			this.messageQueue.push(event.data);
+			await this.processMessageQueue();
 		});
 
-		// 处理关闭事件
+		// 优化错误处理
+		this.webSocket.addEventListener('error', (err) => {
+			this.log('WebSocket错误:', err);
+			this.cleanup();
+			controller.error(err);
+		});
+
 		this.webSocket.addEventListener('close', () => {
-			safeCloseWebSocket(this.webSocket); 
+			this.log('WebSocket关闭');
+			this.cleanup();
 			if (!this.readableStreamCancel) {
 				controller.close();
 			}
-		});
-
-		// 处理错误事件
-		this.webSocket.addEventListener('error', (err) => {
-			this.log('WebSocket server error');
-			controller.error(err);
 		});
 
 		// 处理早期数据
@@ -131,6 +160,12 @@ class WebSocketManager {
 		} else if (earlyData) {
 			controller.enqueue(earlyData);
 		}
+	}
+
+	cleanup() {
+		this.messageQueue = [];
+		this.processingMessage = false;
+		safeCloseWebSocket(this.webSocket);
 	}
 
 	handleStreamPull(controller) {
@@ -177,267 +212,6 @@ class ConfigManager {
 	set(key, value) {
 		this.config[key] = value;
 	}
-}
-
-// 网络请求工具类 - 处理所有网络相关的操作
-class NetworkUtils {
-    // 带超时的fetch请求
-    // @param url - 请求URL
-    // @param options - fetch选项
-    // @param timeout - 超时时间(毫秒)
-    static async fetchWithTimeout(url, options = {}, timeout = 2000) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-        
-        try {
-            const response = await fetch(url, {
-                ...options,
-                signal: controller.signal
-            });
-            return response;
-        } finally {
-            clearTimeout(timeoutId);
-        }
-    }
-
-    // 获取IP地址信息
-    // @param ip - IP地址
-    // @returns {Promise<Object>} IP信息对象,包含国家、城市等
-    static async getIPInfo(ip) {
-        try {
-            const response = await this.fetchWithTimeout(`http://ip-api.com/json/${ip}?lang=zh-CN`);
-            if (response.ok) {
-                return await response.json();
-            }
-            return null;
-        } catch (error) {
-            console.error('获取IP信息失败:', error);
-            return null;
-        }
-    }
-
-    // 发送Telegram消息
-    // @param botToken - 机器人token
-    // @param chatId - 聊天ID
-    // @param message - 消息内容
-    static async sendTelegramMessage(botToken, chatId, message) {
-        if (!botToken || !chatId) return;
-        
-        try {
-            const url = `https://api.telegram.org/bot${botToken}/sendMessage?chat_id=${chatId}&parse_mode=HTML&text=${encodeURIComponent(message)}`;
-            return await this.fetchWithTimeout(url, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'User-Agent': 'Mozilla/5.0 Chrome/90.0.4430.72'
-                }
-            });
-        } catch (error) {
-            console.error('发送Telegram消息失败:', error);
-        }
-    }
-}
-
-// 地址处理工具类 - 处理各种地址格式的解析和验证
-class AddressUtils {
-    // 解析地址列表,将地址分类为接口地址、链接地址和优选地址
-    // @param addressList - 地址列表字符串
-    // @returns {Promise<Object>} 分类后的地址集合
-    static async parseAddressList(addressList) {
-        const categories = {
-            接口地址: new Set(),
-            链接地址: new Set(),
-            优选地址: new Set()
-        };
-        
-        const addresses = await this.cleanAndSplit(addressList);
-        for (const address of addresses) {
-            if (address.startsWith('https://')) {
-                categories.接口地址.add(address);
-            } else if (address.includes('://')) {
-                categories.链接地址.add(address);
-            } else {
-                categories.优选地址.add(address);
-            }
-        }
-        
-        return categories;
-    }
-
-    // 清理和分割地址字符串
-    // @param content - 原始地址字符串
-    // @param cacheKey - 缓存键(可选)
-    // @returns {Promise<Array>} 清理后的地址数组
-    static async cleanAndSplit(content, cacheKey = null) {
-        if (cacheKey && globalCache.has(cacheKey)) {
-            return globalCache.get(cacheKey);
-        }
-        
-        const cleanedContent = content.replace(/[	|"'\r\n]+/g, ',')
-                                    .replace(/,+/g, ',')
-                                    .replace(/^,|,$/g, '');
-        
-        const addressArray = cleanedContent.split(',');
-        
-        if (cacheKey) {
-            globalCache.set(cacheKey, addressArray);
-        }
-        
-        return addressArray;
-    }
-
-    // 验证IPv4地址格式
-    // @param address - IP地址字符串
-    // @returns {boolean} 是否为有效的IPv4地址
-    static isValidIPv4(address) {
-        const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-        return ipv4Regex.test(address);
-    }
-
-    // 解析单个地址
-    // @param address - 地址字符串
-    // @param regex - 匹配正则表达式
-    // @returns {Object} 解析后的地址信息
-    static parseAddress(address, regex) {
-        let port = "-1";
-        let addressid = address;
-        let originalAddress = address;
-
-        const match = addressid.match(regex);
-        if (!match) {
-            if (address.includes(':') && address.includes('#')) {
-                const parts = address.split(':');
-                address = parts[0];
-                const subParts = parts[1].split('#');
-                port = subParts[0];
-                addressid = subParts[1];
-            } else if (address.includes(':')) {
-                const parts = address.split(':');
-                address = parts[0];
-                port = parts[1];
-            } else if (address.includes('#')) {
-                const parts = address.split('#');
-                address = parts[0];
-                addressid = parts[1];
-            }
-
-            if (addressid.includes(':')) {
-                addressid = addressid.split(':')[0];
-            }
-        } else {
-            address = match[1];
-            port = match[2] || port;
-            addressid = match[3] || address;
-        }
-
-        return {
-            address,
-            port,
-            addressid,
-            originalAddress
-        };
-    }
-
-    // 根据端口类型设置默认端口
-    // @param addressInfo - 地址信息对象
-    // @param ports - 可用端口列表
-    // @param defaultPort - 默认端口
-    // @returns {string} 最终端口
-    static resolvePort(addressInfo, ports, defaultPort) {
-        const { address, port } = addressInfo;
-        if (port !== "-1") return port;
-
-        if (!this.isValidIPv4(address)) {
-            for (let availablePort of ports) {
-                if (address.includes(availablePort)) {
-                    return availablePort;
-                }
-            }
-        }
-        return defaultPort;
-    }
-}
-
-// UUID工具类 - 处理动态UUID的生成和管理
-class UUIDUtils {
-    // 生成动态UUID
-    // @param key - 密钥
-    // @param updateHour - 更新时间(小时)
-    // @param validDays - 有效天数
-    // @returns {Promise<Array>} [当前UUID, 上一个UUID, 到期时间字符串]
-    static async generateDynamicUUID(key, updateHour, validDays) {
-        const timezone = 8;
-        const startDate = new Date(2007, 6, 7, updateHour, 0, 0);
-        const weekMilliseconds = 1000 * 60 * 60 * 24 * validDays;
-
-        // 获取当前周数
-        const getCurrentWeek = () => {
-            const now = new Date();
-            const adjustedNow = new Date(now.getTime() + timezone * 60 * 60 * 1000);
-            const timeDiff = Number(adjustedNow) - Number(startDate);
-            return Math.ceil(timeDiff / weekMilliseconds);
-        };
-
-        // 根据基础字符串生成UUID
-        const generateUUID = async (baseString) => {
-            const hashBuffer = new TextEncoder().encode(baseString);
-            const hash = await crypto.subtle.digest('SHA-256', hashBuffer);
-            const hashArray = Array.from(new Uint8Array(hash));
-            const hexHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            return `${hexHash.substr(0, 8)}-${hexHash.substr(8, 4)}-4${hexHash.substr(13, 3)}-${(parseInt(hexHash.substr(16, 2), 16) & 0x3f | 0x80).toString(16)}${hexHash.substr(18, 2)}-${hexHash.substr(20, 12)}`;
-        };
-
-        const currentWeek = getCurrentWeek();
-        const endTime = new Date(startDate.getTime() + currentWeek * weekMilliseconds);
-
-        const currentUUID = await generateUUID(key + currentWeek);
-        const previousUUID = await generateUUID(key + (currentWeek - 1));
-        const expiryTimeUTC = new Date(endTime.getTime() - timezone * 60 * 60 * 1000);
-        const expiryTimeString = `到期时间(UTC): ${expiryTimeUTC.toISOString().slice(0, 19).replace('T', ' ')} (UTC+8): ${endTime.toISOString().slice(0, 19).replace('T', ' ')}\n`;
-
-        return [currentUUID, previousUUID, expiryTimeString];
-    }
-}
-
-// 添加链接生成工具类
-class LinkGenerator {
-    // 生成维列斯链接
-    // @param params - 链接参数对象
-    // @returns {string} 生成的链接
-    static generateLink({
-        协议类型,
-        UUID,
-        address,
-        port,
-        伪装域名,
-        最终路径,
-        addressid,
-        节点备注,
-        security = 'tls',
-        extraParams = {}
-    }) {
-        const baseParams = {
-            encryption: 'none',
-            security,
-            type: 'ws',
-            host: 伪装域名,
-            path: encodeURIComponent(最终路径)
-        };
-
-        if (security === 'tls') {
-            baseParams.sni = 伪装域名;
-            baseParams.fp = 'randomized';
-            baseParams.alpn = 'h3';
-        }
-
-        const allParams = { ...baseParams, ...extraParams };
-        const queryString = Object.entries(allParams)
-            .map(([key, value]) => `${key}=${value}`)
-            .join('&');
-
-        return `${协议类型}://${UUID}@${address}:${port}?${queryString}#${encodeURIComponent(addressid + 节点备注)}`;
-    }
 }
 
 export default {
@@ -946,42 +720,62 @@ function process维列斯Header(维列斯Buffer, userID) {
 }
 
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
+    const chunkSize = 64 * 1024; // 64KB chunks
     let hasIncomingData = false;
     let header = responseHeader;
-
-    await remoteSocket.readable
-        .pipeTo(
-            new WritableStream({
-                async write(chunk, controller) {
-                    hasIncomingData = true;
-
-                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        controller.error('WebSocket not open');
-                    }
-
-                    if (header) {
-                        webSocket.send(await new Blob([header, chunk]).arrayBuffer());
-                        header = null;
+    
+    try {
+        await remoteSocket.readable
+            .pipeThrough(new TransformStream({
+                transform(chunk, controller) {
+                    // 分块处理大数据
+                    if (chunk.byteLength > chunkSize) {
+                        for (let i = 0; i < chunk.byteLength; i += chunkSize) {
+                            controller.enqueue(chunk.slice(i, i + chunkSize));
+                        }
                     } else {
-                        webSocket.send(chunk);
+                        controller.enqueue(chunk);
                     }
-                },
-                close() {
-                    log(`Remote connection closed, data received: ${hasIncomingData}`);
-                },
-                abort(reason) {
-                    console.error(`Remote connection aborted`);
-                },
-            })
-        )
-        .catch((error) => {
-            console.error(`remoteSocketToWS exception`);
-            safeCloseWebSocket(webSocket);
-        });
+                }
+            }))
+            .pipeTo(
+                new WritableStream({
+                    async write(chunk) {
+                        hasIncomingData = true;
+                        
+                        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                            throw new Error('WebSocket未连接');
+                        }
 
-    if (!hasIncomingData && retry) {
-        log(`Retrying connection`);
-        retry();
+                        try {
+                            if (header) {
+                                await new Promise(resolve => setTimeout(resolve, 0));
+                                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
+                                header = null;
+                            } else {
+                                webSocket.send(chunk);
+                            }
+                        } catch (error) {
+                            log('发送数据错误:', error);
+                            throw error;
+                        }
+                    },
+                    close() {
+                        log(`远程连接关闭, 数据接收: ${hasIncomingData}`);
+                    },
+                    abort(reason) {
+                        log(`远程连接中断:`, reason);
+                    }
+                })
+            );
+    } catch (error) {
+        log('数据传输错误:', error);
+        safeCloseWebSocket(webSocket);
+        
+        if (!hasIncomingData && retry) {
+            log('尝试重新连接...');
+            await retry();
+        }
     }
 }
 
@@ -1667,112 +1461,234 @@ async function 整理测速结果(tls) {
 }
 
 function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
-    const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
-    
-    // 处理 notls 地址
-    const processNotlsAddresses = (addresses) => {
-        return addresses.map(address => {
-            const addressInfo = AddressUtils.parseAddress(address, regex);
-            const port = AddressUtils.resolvePort(addressInfo, ["8080", "8880", "2052", "2082", "2086", "2095"], "80");
-            
-            return LinkGenerator.generateLink({
-                协议类型: atob(啥啥啥_写的这是啥啊),
-                UUID,
-                address: addressInfo.address,
-                port,
-                伪装域名: host,
-                最终路径: path,
-                addressid: addressInfo.addressid,
-                节点备注: '',
-                security: 'none'
-            });
-        }).join('\n');
-    };
+	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
+	addresses = addresses.concat(newAddressesapi);
+	addresses = addresses.concat(newAddressescsv);
+	let notlsresponseBody;
+	if (noTLS == 'true') {
+		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
+		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
+		const uniqueAddressesnotls = [...new Set(addressesnotls)];
 
-    // 处理 tls 地址
-    const processTlsAddresses = (addresses) => {
-        return addresses.map(address => {
-            const addressInfo = AddressUtils.parseAddress(address, regex);
-            const port = AddressUtils.resolvePort(addressInfo, httpsPorts, "443");
-            
-            let 伪装域名 = host;
-            let 最终路径 = path;
-            let 节点备注 = '';
+		notlsresponseBody = uniqueAddressesnotls.map(address => {
+			let port = "-1";
+			let addressid = address;
 
-            // 处理 proxyIP
-            const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(addressInfo.address));
-            if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
+			const match = addressid.match(regex);
+			if (!match) {
+				if (address.includes(':') && address.includes('#')) {
+					const parts = address.split(':');
+					address = parts[0];
+					const subParts = parts[1].split('#');
+					port = subParts[0];
+					addressid = subParts[1];
+				} else if (address.includes(':')) {
+					const parts = address.split(':');
+					address = parts[0];
+					port = parts[1];
+				} else if (address.includes('#')) {
+					const parts = address.split('#');
+					address = parts[0];
+					addressid = parts[1];
+				}
 
-            // 处理 workers.dev 域名
-            if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
-                最终路径 = `/${伪装域名}${最终路径}`;
-                伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
-                节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
-            }
+				if (addressid.includes(':')) {
+					addressid = addressid.split(':')[0];
+				}
+			} else {
+				address = match[1];
+				port = match[2] || port;
+				addressid = match[3] || address;
+			}
 
-            return LinkGenerator.generateLink({
-                协议类型: atob(啥啥啥_写的这是啥啊),
-                UUID,
-                address: addressInfo.address,
-                port,
-                伪装域名,
-                最终路径,
-                addressid: addressInfo.addressid,
-                节点备注
-            });
-        }).join('\n');
-    };
+			const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
+			if (!isValidIPv4(address) && port == "-1") {
+				for (let httpPort of httpPorts) {
+					if (address.includes(httpPort)) {
+						port = httpPort;
+						break;
+					}
+				}
+			}
+			if (port == "-1") port = "80";
 
-    // 合并所有地址
-    addresses = addresses.concat(newAddressesapi, newAddressescsv);
-    const uniqueAddresses = [...new Set(addresses)];
-    let base64Response = processTlsAddresses(uniqueAddresses);
+			let 伪装域名 = host;
+			let 最终路径 = path;
+			let 节点备注 = '';
+			const 协议类型 = atob(啥啥啥_写的这是啥啊);
 
-    if (noTLS == 'true') {
-        addressesnotls = addressesnotls.concat(newAddressesnotlsapi, newAddressesnotlscsv);
-        const uniqueAddressesnotls = [...new Set(addressesnotls)];
-        base64Response += '\n' + processNotlsAddresses(uniqueAddressesnotls);
-    }
+            const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
+                `encryption=none&` + 
+                `security=none&` + 
+                `type=ws&` + 
+                `host=${伪装域名}&` + 
+                `path=${encodeURIComponent(最终路径)}` + 
+                `#${encodeURIComponent(addressid + 节点备注)}`;
 
-    if (link.length > 0) {
-        base64Response += '\n' + link.join('\n');
-    }
+			return 维列斯Link;
 
-    return btoa(base64Response);
+		}).join('\n');
+
+	}
+
+	const uniqueAddresses = [...new Set(addresses)];
+
+	const responseBody = uniqueAddresses.map(address => {
+		let port = "-1";
+		let addressid = address;
+
+		const match = addressid.match(regex);
+		if (!match) {
+			if (address.includes(':') && address.includes('#')) {
+				const parts = address.split(':');
+				address = parts[0];
+				const subParts = parts[1].split('#');
+				port = subParts[0];
+				addressid = subParts[1];
+			} else if (address.includes(':')) {
+				const parts = address.split(':');
+				address = parts[0];
+				port = parts[1];
+			} else if (address.includes('#')) {
+				const parts = address.split('#');
+				address = parts[0];
+				addressid = parts[1];
+			}
+
+			if (addressid.includes(':')) {
+				addressid = addressid.split(':')[0];
+			}
+		} else {
+			address = match[1];
+			port = match[2] || port;
+			addressid = match[3] || address;
+		}
+
+		if (!isValidIPv4(address) && port == "-1") {
+			for (let httpsPort of httpsPorts) {
+				if (address.includes(httpsPort)) {
+					port = httpsPort;
+					break;
+				}
+			}
+		}
+		if (port == "-1") port = "443";
+
+		let 伪装域名 = host;
+		let 最终路径 = path;
+		let 节点备注 = '';
+		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
+		if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
+
+		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
+			最终路径 = `/${伪装域名}${最终路径}`;
+			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
+			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
+		}
+
+		const 协议类型 = atob(啥啥啥_写的这是啥啊);
+
+		const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
+			`encryption=none&` +
+			`security=tls&` +
+			`sni=${伪装域名}&` +
+			`fp=randomized&` +
+			`alpn=h3&` + 
+			`type=ws&` +
+			`host=${伪装域名}&` +
+                        `path=${encodeURIComponent(最终路径)}` + 
+			`#${encodeURIComponent(addressid + 节点备注)}`;
+
+		return 维列斯Link;
+	}).join('\n');
+
+	let base64Response = responseBody; 
+	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
+	if (link.length > 0) base64Response += '\n' + link.join('\n');
+	return btoa(base64Response);
 }
 
-// 修改原有函数使用新的工具类
-async function 处理地址列表(地址列表) {
-    return await AddressUtils.parseAddressList(地址列表);
-}
-
+// 优化 整理 函数
 async function 整理(内容, cacheKey = null) {
-    return await AddressUtils.cleanAndSplit(内容, cacheKey);
-}
-
-// 修改原有的sendMessage函数使用新的工具类
-async function sendMessage(type, ip, add_data = "") {
-    if (!BotToken || !ChatID) return;
-
-    try {
-        let msg = "";
-        const ipInfo = await NetworkUtils.getIPInfo(ip);
-        
-        if (ipInfo) {
-            msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n<tg-spoiler>城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
-        } else {
-            msg = `${type}\nIP: ${ip}\n<tg-spoiler>${add_data}`;
-        }
-
-        return await NetworkUtils.sendTelegramMessage(BotToken, ChatID, msg);
-    } catch (error) {
-        console.error('Error sending message:', error);
+    if (cacheKey && globalCache.has(cacheKey)) {
+        return globalCache.get(cacheKey);
     }
+    
+    const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
+        .replace(/^,|,$/g, '');
+    
+    const 地址数组 = 替换后的内容.split(',');
+    
+    if (cacheKey) {
+        globalCache.set(cacheKey, 地址数组);
+    }
+    
+    return 地址数组;
 }
 
-// 修改原有函数使用新的工具类
-async function 生成动态UUID(密钥) {
-    return await UUIDUtils.generateDynamicUUID(密钥, 更新时间, 有效时间);
+async function sendMessage(type, ip, add_data = "") {
+	if (!BotToken || !ChatID) return;
+
+	try {
+		let msg = "";
+		const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
+		if (response.ok) {
+			const ipInfo = await response.json();
+			msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n<tg-spoiler>城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
+		} else {
+			msg = `${type}\nIP: ${ip}\n<tg-spoiler>${add_data}`;
+		}
+
+		const url = `https://api.telegram.org/bot${BotToken}/sendMessage?chat_id=${ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`;
+		return fetch(url, {
+			method: 'GET',
+			headers: {
+				'Accept': 'text/html,application/xhtml+xml,application/xml;',
+				'Accept-Encoding': 'gzip, deflate, br',
+				'User-Agent': 'Mozilla/5.0 Chrome/90.0.4430.72'
+			}
+		});
+	} catch (error) {
+		console.error('Error sending message:', error);
+	}
+}
+
+function isValidIPv4(address) {
+	const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+	return ipv4Regex.test(address);
+}
+
+function 生成动态UUID(密钥) {
+	const 时区偏移 = 8; 
+	const 起始日期 = new Date(2007, 6, 7, 更新时间, 0, 0); 
+	const 一周的毫秒数 = 1000 * 60 * 60 * 24 * 有效时间;
+
+	function 获取当前周数() {
+		const 现在 = new Date();
+		const 调整后的现在 = new Date(现在.getTime() + 时区偏移 * 60 * 60 * 1000);
+		const 时间差 = Number(调整后的现在) - Number(起始日期);
+		return Math.ceil(时间差 / 一周的毫秒数);
+	}
+
+	function 生成UUID(基础字符串) {
+		const 哈希缓冲区 = new TextEncoder().encode(基础字符串);
+		return crypto.subtle.digest('SHA-256', 哈希缓冲区).then((哈希) => {
+			const 哈希数组 = Array.from(new Uint8Array(哈希));
+			const 十六进制哈希 = 哈希数组.map(b => b.toString(16).padStart(2, '0')).join('');
+			return `${十六进制哈希.substr(0, 8)}-${十六进制哈希.substr(8, 4)}-4${十六进制哈希.substr(13, 3)}-${(parseInt(十六进制哈希.substr(16, 2), 16) & 0x3f | 0x80).toString(16)}${十六进制哈希.substr(18, 2)}-${十六进制哈希.substr(20, 12)}`;
+		});
+	}
+
+	const 当前周数 = 获取当前周数(); 
+	const 结束时间 = new Date(起始日期.getTime() + 当前周数 * 一周的毫秒数);
+
+	const 当前UUIDPromise = 生成UUID(密钥 + 当前周数);
+	const 上一个UUIDPromise = 生成UUID(密钥 + (当前周数 - 1));
+
+	const 到期时间UTC = new Date(结束时间.getTime() - 时区偏移 * 60 * 60 * 1000); // UTC时间
+	const 到期时间字符串 = `到期时间(UTC): ${到期时间UTC.toISOString().slice(0, 19).replace('T', ' ')} (UTC+8): ${结束时间.toISOString().slice(0, 19).replace('T', ' ')}\n`;
+
+	return Promise.all([当前UUIDPromise, 上一个UUIDPromise, 到期时间字符串]);
 }
 
 async function 迁移地址列表(env, txt = 'ADD.txt') {
@@ -1903,7 +1819,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCglMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
@@ -2056,4 +1972,25 @@ async function handleGetRequest(env, txt) {
 	return new Response(html, {
 		headers: { "Content-Type": "text/html;charset=utf-8" }
 	});
+}
+
+async function 处理地址列表(地址列表) {
+	const 分类地址 = {
+		接口地址: new Set(),
+		链接地址: new Set(),
+		优选地址: new Set()
+	};
+	
+	const 地址数组 = await 整理(地址列表);
+	for (const 地址 of 地址数组) {
+		if (地址.startsWith('https://')) {
+			分类地址.接口地址.add(地址);
+		} else if (地址.includes('://')) {
+			分类地址.链接地址.add(地址);
+		} else {
+			分类地址.优选地址.add(地址);
+		}
+	}
+	
+	return 分类地址;
 }
