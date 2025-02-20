@@ -294,6 +294,69 @@ class AddressUtils {
         const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
         return ipv4Regex.test(address);
     }
+
+    // 解析单个地址
+    // @param address - 地址字符串
+    // @param regex - 匹配正则表达式
+    // @returns {Object} 解析后的地址信息
+    static parseAddress(address, regex) {
+        let port = "-1";
+        let addressid = address;
+        let originalAddress = address;
+
+        const match = addressid.match(regex);
+        if (!match) {
+            if (address.includes(':') && address.includes('#')) {
+                const parts = address.split(':');
+                address = parts[0];
+                const subParts = parts[1].split('#');
+                port = subParts[0];
+                addressid = subParts[1];
+            } else if (address.includes(':')) {
+                const parts = address.split(':');
+                address = parts[0];
+                port = parts[1];
+            } else if (address.includes('#')) {
+                const parts = address.split('#');
+                address = parts[0];
+                addressid = parts[1];
+            }
+
+            if (addressid.includes(':')) {
+                addressid = addressid.split(':')[0];
+            }
+        } else {
+            address = match[1];
+            port = match[2] || port;
+            addressid = match[3] || address;
+        }
+
+        return {
+            address,
+            port,
+            addressid,
+            originalAddress
+        };
+    }
+
+    // 根据端口类型设置默认端口
+    // @param addressInfo - 地址信息对象
+    // @param ports - 可用端口列表
+    // @param defaultPort - 默认端口
+    // @returns {string} 最终端口
+    static resolvePort(addressInfo, ports, defaultPort) {
+        const { address, port } = addressInfo;
+        if (port !== "-1") return port;
+
+        if (!this.isValidIPv4(address)) {
+            for (let availablePort of ports) {
+                if (address.includes(availablePort)) {
+                    return availablePort;
+                }
+            }
+        }
+        return defaultPort;
+    }
 }
 
 // UUID工具类 - 处理动态UUID的生成和管理
@@ -334,6 +397,46 @@ class UUIDUtils {
         const expiryTimeString = `到期时间(UTC): ${expiryTimeUTC.toISOString().slice(0, 19).replace('T', ' ')} (UTC+8): ${endTime.toISOString().slice(0, 19).replace('T', ' ')}\n`;
 
         return [currentUUID, previousUUID, expiryTimeString];
+    }
+}
+
+// 添加链接生成工具类
+class LinkGenerator {
+    // 生成维列斯链接
+    // @param params - 链接参数对象
+    // @returns {string} 生成的链接
+    static generateLink({
+        协议类型,
+        UUID,
+        address,
+        port,
+        伪装域名,
+        最终路径,
+        addressid,
+        节点备注,
+        security = 'tls',
+        extraParams = {}
+    }) {
+        const baseParams = {
+            encryption: 'none',
+            security,
+            type: 'ws',
+            host: 伪装域名,
+            path: encodeURIComponent(最终路径)
+        };
+
+        if (security === 'tls') {
+            baseParams.sni = 伪装域名;
+            baseParams.fp = 'randomized';
+            baseParams.alpn = 'h3';
+        }
+
+        const allParams = { ...baseParams, ...extraParams };
+        const queryString = Object.entries(allParams)
+            .map(([key, value]) => `${key}=${value}`)
+            .join('&');
+
+        return `${协议类型}://${UUID}@${address}:${port}?${queryString}#${encodeURIComponent(addressid + 节点备注)}`;
     }
 }
 
@@ -1564,151 +1667,78 @@ async function 整理测速结果(tls) {
 }
 
 function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
-	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
-	addresses = addresses.concat(newAddressesapi);
-	addresses = addresses.concat(newAddressescsv);
-	let notlsresponseBody;
-	if (noTLS == 'true') {
-		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
-		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
-		const uniqueAddressesnotls = [...new Set(addressesnotls)];
+    const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
+    
+    // 处理 notls 地址
+    const processNotlsAddresses = (addresses) => {
+        return addresses.map(address => {
+            const addressInfo = AddressUtils.parseAddress(address, regex);
+            const port = AddressUtils.resolvePort(addressInfo, ["8080", "8880", "2052", "2082", "2086", "2095"], "80");
+            
+            return LinkGenerator.generateLink({
+                协议类型: atob(啥啥啥_写的这是啥啊),
+                UUID,
+                address: addressInfo.address,
+                port,
+                伪装域名: host,
+                最终路径: path,
+                addressid: addressInfo.addressid,
+                节点备注: '',
+                security: 'none'
+            });
+        }).join('\n');
+    };
 
-		notlsresponseBody = uniqueAddressesnotls.map(address => {
-			let port = "-1";
-			let addressid = address;
+    // 处理 tls 地址
+    const processTlsAddresses = (addresses) => {
+        return addresses.map(address => {
+            const addressInfo = AddressUtils.parseAddress(address, regex);
+            const port = AddressUtils.resolvePort(addressInfo, httpsPorts, "443");
+            
+            let 伪装域名 = host;
+            let 最终路径 = path;
+            let 节点备注 = '';
 
-			const match = addressid.match(regex);
-			if (!match) {
-				if (address.includes(':') && address.includes('#')) {
-					const parts = address.split(':');
-					address = parts[0];
-					const subParts = parts[1].split('#');
-					port = subParts[0];
-					addressid = subParts[1];
-				} else if (address.includes(':')) {
-					const parts = address.split(':');
-					address = parts[0];
-					port = parts[1];
-				} else if (address.includes('#')) {
-					const parts = address.split('#');
-					address = parts[0];
-					addressid = parts[1];
-				}
+            // 处理 proxyIP
+            const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(addressInfo.address));
+            if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
 
-				if (addressid.includes(':')) {
-					addressid = addressid.split(':')[0];
-				}
-			} else {
-				address = match[1];
-				port = match[2] || port;
-				addressid = match[3] || address;
-			}
+            // 处理 workers.dev 域名
+            if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
+                最终路径 = `/${伪装域名}${最终路径}`;
+                伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
+                节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
+            }
 
-			const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
-			if (!AddressUtils.isValidIPv4(address) && port == "-1") {
-				for (let httpPort of httpPorts) {
-					if (address.includes(httpPort)) {
-						port = httpPort;
-						break;
-					}
-				}
-			}
-			if (port == "-1") port = "80";
+            return LinkGenerator.generateLink({
+                协议类型: atob(啥啥啥_写的这是啥啊),
+                UUID,
+                address: addressInfo.address,
+                port,
+                伪装域名,
+                最终路径,
+                addressid: addressInfo.addressid,
+                节点备注
+            });
+        }).join('\n');
+    };
 
-			let 伪装域名 = host;
-			let 最终路径 = path;
-			let 节点备注 = '';
-			const 协议类型 = atob(啥啥啥_写的这是啥啊);
+    // 合并所有地址
+    addresses = addresses.concat(newAddressesapi, newAddressescsv);
+    const uniqueAddresses = [...new Set(addresses)];
+    let base64Response = processTlsAddresses(uniqueAddresses);
 
-            const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
-                `encryption=none&` + 
-                `security=none&` + 
-                `type=ws&` + 
-                `host=${伪装域名}&` + 
-                `path=${encodeURIComponent(最终路径)}` + 
-                `#${encodeURIComponent(addressid + 节点备注)}`;
+    if (noTLS == 'true') {
+        addressesnotls = addressesnotls.concat(newAddressesnotlsapi, newAddressesnotlscsv);
+        const uniqueAddressesnotls = [...new Set(addressesnotls)];
+        base64Response += '\n' + processNotlsAddresses(uniqueAddressesnotls);
+    }
 
-			return 维列斯Link;
+    if (link.length > 0) {
+        base64Response += '\n' + link.join('\n');
+    }
 
-		}).join('\n');
-
-	}
-
-	const uniqueAddresses = [...new Set(addresses)];
-
-	const responseBody = uniqueAddresses.map(address => {
-		let port = "-1";
-		let addressid = address;
-
-		const match = addressid.match(regex);
-		if (!match) {
-			if (address.includes(':') && address.includes('#')) {
-				const parts = address.split(':');
-				address = parts[0];
-				const subParts = parts[1].split('#');
-				port = subParts[0];
-				addressid = subParts[1];
-			} else if (address.includes(':')) {
-				const parts = address.split(':');
-				address = parts[0];
-				port = parts[1];
-			} else if (address.includes('#')) {
-				const parts = address.split('#');
-				address = parts[0];
-				addressid = parts[1];
-			}
-
-			if (addressid.includes(':')) {
-				addressid = addressid.split(':')[0];
-			}
-		} else {
-			address = match[1];
-			port = match[2] || port;
-			addressid = match[3] || address;
-		}
-
-		if (!AddressUtils.isValidIPv4(address) && port == "-1") {
-			for (let httpsPort of httpsPorts) {
-				if (address.includes(httpsPort)) {
-					port = httpsPort;
-					break;
-				}
-			}
-		}
-		if (port == "-1") port = "443";
-
-		let 伪装域名 = host;
-		let 最终路径 = path;
-		let 节点备注 = '';
-		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-		if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
-
-		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
-			最终路径 = `/${伪装域名}${最终路径}`;
-			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
-			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
-		}
-
-		const 协议类型 = atob(啥啥啥_写的这是啥啊);
-
-		const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
-			`encryption=none&` +
-			`security=tls&` +
-			`sni=${伪装域名}&` +
-			`fp=randomized&` +
-			`alpn=h3&` + 
-			`type=ws&` +
-			`host=${伪装域名}&` +
-                        `path=${encodeURIComponent(最终路径)}` + 
-			`#${encodeURIComponent(addressid + 节点备注)}`;
-
-		return 维列斯Link;
-	}).join('\n');
-
-	let base64Response = responseBody; 
-	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
-	if (link.length > 0) base64Response += '\n' + link.join('\n');
-	return btoa(base64Response);
+    return btoa(base64Response);
 }
 
 // 修改原有函数使用新的工具类
