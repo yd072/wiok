@@ -1509,7 +1509,61 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
     return btoa(base64Response);
 }
 
-// 修改 buildVlessLink 函数以支持不同的安全设置
+// 预编译正则表达式
+const IP_REGEX = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SPLIT_REGEX = /[\t|"'\r\n,]+/g;
+
+// 端口映射
+const PORT_MAP = {
+    'workers.dev': '80',
+    'pages.dev': '443',
+    'default': '443'
+};
+
+const HTTP_PORTS = new Set(["8080", "8880", "2052", "2082", "2086", "2095"]);
+const HTTPS_PORTS = new Set(["2053", "2083", "2087", "2096", "8443"]);
+
+// 工具函数
+function getDefaultPort(domain) {
+    return Object.entries(PORT_MAP).find(([key]) => domain.includes(key))?.[1] || PORT_MAP.default;
+}
+
+function isValidUUID(uuid) {
+    return UUID_PATTERN.test(uuid);
+}
+
+function parseAddress(address) {
+    const match = address.match(IP_REGEX);
+    if (match) {
+        return {
+            ip: match[1],
+            port: match[2] || "-1",
+            id: match[3] || match[1]
+        };
+    }
+    
+    const parts = address.split(':');
+    const [ip, ...rest] = parts;
+    
+    if (rest.length) {
+        const [port, ...idParts] = rest.join(':').split('#');
+        return {
+            ip,
+            port,
+            id: idParts.join('#') || ip
+        };
+    }
+    
+    const [addr, ...idParts] = ip.split('#');
+    return {
+        ip: addr,
+        port: "-1",
+        id: idParts.join('#') || addr
+    };
+}
+
+// 生成 vless 链接
 function buildVlessLink({协议类型, UUID, address, port, 伪装域名, 最终路径, addressid, 节点备注, security = 'tls'}) {
     const params = new URLSearchParams({
         encryption: 'none',
@@ -1529,20 +1583,11 @@ function buildVlessLink({协议类型, UUID, address, port, 伪装域名, 最终
     return `${协议类型}://${UUID}@${address}:${port}?${params}#${encodeURIComponent(addressid + 节点备注)}`;
 }
 
-// 预编译正则表达式
-const IP_REGEX = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const SPLIT_REGEX = /[\t|"'\r\n,]+/g;
-
 // 优化 整理 函数
 async function 整理(内容) {
     // 使用预编译的正则表达式
     const 替换后的内容 = 内容.replace(SPLIT_REGEX, ',').replace(/^,|,$/g, '');
     return 替换后的内容.split(',');
-}
-
-function isValidUUID(uuid) {
-    return UUID_PATTERN.test(uuid);
 }
 
 async function sendMessage(type, ip, add_data = "") {
@@ -1912,69 +1957,4 @@ async function 处理地址列表(地址列表) {
 	}
 	
 	return 分类地址;
-}
-
-// 使用模板字符串和对象解构优化字符串拼接
-function buildVlessLink({协议类型, UUID, address, port, 伪装域名, 最终路径, addressid, 节点备注, security = 'tls'}) {
-    const params = new URLSearchParams({
-        encryption: 'none',
-        security,
-        type: 'ws',
-        host: 伪装域名,
-        path: 最终路径
-    });
-
-    // 只在 TLS 模式下添加这些参数
-    if (security === 'tls') {
-        params.append('sni', 伪装域名);
-        params.append('fp', 'randomized');
-        params.append('alpn', 'h3');
-    }
-    
-    return `${协议类型}://${UUID}@${address}:${port}?${params}#${encodeURIComponent(addressid + 节点备注)}`;
-}
-
-// 使用对象映射优化多重条件判断
-const PORT_MAP = {
-    'workers.dev': '80',
-    'pages.dev': '443',
-    'default': '443'
-};
-
-function getDefaultPort(domain) {
-    return Object.entries(PORT_MAP).find(([key]) => domain.includes(key))?.[1] || PORT_MAP.default;
-}
-
-const HTTP_PORTS = new Set(["8080", "8880", "2052", "2082", "2086", "2095"]);
-const HTTPS_PORTS = new Set(["2053", "2083", "2087", "2096", "8443"]);
-
-// 拆分复杂函数为小函数
-function parseAddress(address) {
-    const match = address.match(IP_REGEX);
-    if (match) {
-        return {
-            ip: match[1],
-            port: match[2] || "-1",
-            id: match[3] || match[1]
-        };
-    }
-    
-    const parts = address.split(':');
-    const [ip, ...rest] = parts;
-    
-    if (rest.length) {
-        const [port, ...idParts] = rest.join(':').split('#');
-        return {
-            ip,
-            port,
-            id: idParts.join('#') || ip
-        };
-    }
-    
-    const [addr, ...idParts] = ip.split('#');
-    return {
-        ip: addr,
-        port: "-1",
-        id: idParts.join('#') || addr
-    };
 }
