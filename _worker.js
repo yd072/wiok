@@ -191,8 +191,8 @@ class ConfigManager {
 			uuid: this.env.UUID || this.env.uuid || this.env.PASSWORD || this.env.pswd || '',
 			proxyIP: this.env.PROXYIP || this.env.proxyip || '',
 			socks5: this.env.SOCKS5 || '',
-			httpsPorts: this.parseArray(this.env.CFPORTS) ?? ["2053", "2083", "2087", "2096", "8443"],
-			banHosts: this.parseArray(this.env.BAN) ?? [this.safeAtob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')],
+			httpsPorts: this.parseArray(this.env.CFPORTS) || ["2053", "2083", "2087", "2096", "8443"],
+			banHosts: this.parseArray(this.env.BAN) || [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')],
 			// ... 其他配置项
 		};
 	}
