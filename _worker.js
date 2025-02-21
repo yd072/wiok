@@ -208,15 +208,30 @@ class ConfigManager {
 			uuid: this.env.UUID || this.env.uuid || this.env.PASSWORD || this.env.pswd || '',
 			proxyIP: this.env.PROXYIP || this.env.proxyip || '',
 			socks5: this.env.SOCKS5 || '',
-			httpsPorts: this.parseArray(this.env.CFPORTS) || ["2053", "2083", "2087", "2096", "8443"],
-			banHosts: this.parseArray(this.env.BAN) || [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')],
+			httpsPorts: this.parseArray(this.env.CFPORTS) ?? ["2053", "2083", "2087", "2096", "8443"],
+			banHosts: this.parseArray(this.env.BAN) ?? [this.safeAtob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')],
 			// ... 其他配置项
 		};
 	}
 
 	parseArray(str) {
-		if (!str) return null;
-		return str.split(',').map(item => item.trim());
+		if (!str) return [];
+		return str.split(',')
+			.map(item => item.trim())
+			.filter(item => item !== '');  // 过滤掉空字符串
+	}
+
+	safeAtob(base64Str) {
+		try {
+			if (typeof atob === "function") {
+				return atob(base64Str);
+			} else {
+				return Buffer.from(base64Str, 'base64').toString('utf-8');
+			}
+		} catch (error) {
+			console.error("Base64 解码失败:", error);
+			return "";
+		}
 	}
 
 	get(key) {
