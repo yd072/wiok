@@ -961,7 +961,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
@@ -1273,78 +1273,78 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 }
 
-// 优化异步操作，使用Promise.all来并行处理多个请求
 async function 整理优选列表(api) {
-    if (!api || api.length === 0) return [];
+	if (!api || api.length === 0) return [];
 
-    let newapi = "";
+	let newapi = "";
 
-    const controller = new AbortController();
+	const controller = new AbortController();
 
-    const timeout = setTimeout(() => {
-        controller.abort(); 
-    }, 2000); 
+	const timeout = setTimeout(() => {
+		controller.abort(); 
+	}, 2000); 
 
-    try {
-        const responses = await Promise.all(api.map(apiUrl => fetch(apiUrl, {
-            method: 'get',
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;',
-                'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
-            },
-            signal: controller.signal 
-        }).then(response => response.ok ? response.text() : Promise.reject())));
+	try {
+		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
+			method: 'get',
+			headers: {
+				'Accept': 'text/html,application/xhtml+xml,application/xml;',
+				'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
+			},
+			signal: controller.signal 
+		}).then(response => response.ok ? response.text() : Promise.reject())));
 
-        for (const response of responses) {
-            if (response) {
-                const content = response;
-                const lines = content.split(/\r?\n/);
-                let 节点备注 = '';
-                let 测速端口 = '443';
+		for (const [index, response] of responses.entries()) {
+			if (response.status === 'fulfilled') {
+				const content = await response.value;
 
-                if (lines[0].split(',').length > 3) {
-                    const idMatch = api[index].match(/id=([^&]*)/);
-                    if (idMatch) 节点备注 = idMatch[1];
+				const lines = content.split(/\r?\n/);
+				let 节点备注 = '';
+				let 测速端口 = '443';
 
-                    const portMatch = api[index].match(/port=([^&]*)/);
-                    if (portMatch) 测速端口 = portMatch[1];
+				if (lines[0].split(',').length > 3) {
+					const idMatch = api[index].match(/id=([^&]*)/);
+					if (idMatch) 节点备注 = idMatch[1];
 
-                    for (let i = 1; i < lines.length; i++) {
-                        const columns = lines[i].split(',')[0];
-                        if (columns) {
-                            newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
-                            if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
-                        }
-                    }
-                } else {
-                    if (api[index].includes('proxyip=true')) {
-                        // 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
-                        proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
-                            const baseItem = item.split('#')[0] || item;
-                            if (baseItem.includes(':')) {
-                                const port = baseItem.split(':')[1];
-                                if (!httpsPorts.includes(port)) {
-                                    return baseItem;
-                                }
-                            } else {
-                                return `${baseItem}:443`;
-                            }
-                            return null; 
-                        }).filter(Boolean));
-                    }
-                    newapi += content + '\n';
-                }
-            }
-        }
-    } catch (error) {
-        console.error(error);
-    } finally {
-        clearTimeout(timeout);
-    }
+					const portMatch = api[index].match(/port=([^&]*)/);
+					if (portMatch) 测速端口 = portMatch[1];
 
-    const newAddressesapi = await 整理(newapi);
+					for (let i = 1; i < lines.length; i++) {
+						const columns = lines[i].split(',')[0];
+						if (columns) {
+							newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
+							if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
+						}
+					}
+				} else {
+					if (api[index].includes('proxyip=true')) {
+						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
+						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
+							const baseItem = item.split('#')[0] || item;
+							if (baseItem.includes(':')) {
+								const port = baseItem.split(':')[1];
+								if (!httpsPorts.includes(port)) {
+									return baseItem;
+								}
+							} else {
+								return `${baseItem}:443`;
+							}
+							return null; 
+						}).filter(Boolean));
+					}
+					newapi += content + '\n';
+				}
+			}
+		}
+	} catch (error) {
+		console.error(error);
+	} finally {
+		clearTimeout(timeout);
+	}
 
-    return newAddressesapi;
+	const newAddressesapi = await 整理(newapi);
+
+	return newAddressesapi;
 }
 
 async function 整理测速结果(tls) {
@@ -1410,163 +1410,40 @@ async function 整理测速结果(tls) {
 }
 
 function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
-	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
-	const addresses = [...new Set([...newAddressesapi, ...newAddressescsv])];
-	let notlsresponseBody;
-	if (noTLS === 'true') {
-		const addressesnotls = [...new Set([...newAddressesnotlsapi, ...newAddressesnotlscsv])];
-		notlsresponseBody = addressesnotls.map(address => {
-			let port = "-1";
-			let addressid = address;
+    // 使用展开运算符一次性合并数组
+    const allAddresses = [...addresses, ...newAddressesapi, ...newAddressescsv];
+    const uniqueAddresses = [...new Set(allAddresses)];
 
-			const match = addressid.match(regex);
-			if (!match) {
-				if (address.includes(':') && address.includes('#')) {
-					const parts = address.split(':');
-					address = parts[0];
-					const subParts = parts[1].split('#');
-					port = subParts[0];
-					addressid = subParts[1];
-				} else if (address.includes(':')) {
-					const parts = address.split(':');
-					address = parts[0];
-					port = parts[1];
-				} else if (address.includes('#')) {
-					const parts = address.split('#');
-					address = parts[0];
-					addressid = parts[1];
-				}
-
-				if (addressid.includes(':')) {
-					addressid = addressid.split(':')[0];
-				}
-			} else {
-				address = match[1];
-				port = match[2] || port;
-				addressid = match[3] || address;
-			}
-
-			const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
-			if (!isValidIPv4(address) && port == "-1") {
-				for (let httpPort of httpPorts) {
-					if (address.includes(httpPort)) {
-						port = httpPort;
-						break;
-					}
-				}
-			}
-			if (port == "-1") port = "80";
-
-			let 伪装域名 = host;
-			let 最终路径 = path;
-			let 节点备注 = '';
-			const 协议类型 = atob(啥啥啥_写的这是啥啊);
-
-            const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
-                `encryption=none&` + 
-                `security=none&` + 
-                `type=ws&` + 
-                `host=${伪装域名}&` + 
-                `path=${encodeURIComponent(最终路径)}` + 
-                `#${encodeURIComponent(addressid + 节点备注)}`;
-
-			return 维列斯Link;
-
-		}).join('\n');
-
-	}
-
-	const responseBody = addresses.map(address => {
-		let port = "-1";
-		let addressid = address;
-
-		const match = addressid.match(regex);
-		if (!match) {
-			if (address.includes(':') && address.includes('#')) {
-				const parts = address.split(':');
-				address = parts[0];
-				const subParts = parts[1].split('#');
-				port = subParts[0];
-				addressid = subParts[1];
-			} else if (address.includes(':')) {
-				const parts = address.split(':');
-				address = parts[0];
-				port = parts[1];
-			} else if (address.includes('#')) {
-				const parts = address.split('#');
-				address = parts[0];
-				addressid = parts[1];
-			}
-
-			if (addressid.includes(':')) {
-				addressid = addressid.split(':')[0];
-			}
-		} else {
-			address = match[1];
-			port = match[2] || port;
-			addressid = match[3] || address;
-		}
-
-		if (!isValidIPv4(address) && port == "-1") {
-			for (let httpsPort of httpsPorts) {
-				if (address.includes(httpsPort)) {
-					port = httpsPort;
-					break;
-				}
-			}
-		}
-		if (port == "-1") port = "443";
-
-		let 伪装域名 = host;
-		let 最终路径 = path;
-		let 节点备注 = '';
-		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-		if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
-
-		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
-			最终路径 = `/${伪装域名}${最终路径}`;
-			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
-			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
-		}
-
-		const 协议类型 = atob(啥啥啥_写的这是啥啊);
-
-		const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
-			`encryption=none&` +
-			`security=tls&` +
-			`sni=${伪装域名}&` +
-			`fp=randomized&` +
-			`alpn=h3&` + 
-			`type=ws&` +
-			`host=${伪装域名}&` +
-                        `path=${encodeURIComponent(最终路径)}` + 
-			`#${encodeURIComponent(addressid + 节点备注)}`;
-
-		return 维列斯Link;
-	}).join('\n');
-
-	let base64Response = responseBody; 
-	if (noTLS === 'true') base64Response += `\n${notlsresponseBody}`;
-	if (link.length > 0) base64Response += '\n' + link.join('\n');
-	return btoa(base64Response);
+    // 使用 map 处理数组
+    const responseBody = uniqueAddresses.map(address => {
+        const {ip, port, id} = parseAddress(address);
+        return buildVlessLink({
+            协议类型: atob(啥啥啥_写的这是啥啊),
+            UUID,
+            address: ip,
+            port: port || getDefaultPort(ip),
+            伪装域名: host,
+            最终路径: path,
+            addressid: id,
+            节点备注: ''
+        });
+    }).join('\n');
 }
 
+// 预编译正则表达式
+const IP_REGEX = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SPLIT_REGEX = /[\t|"'\r\n,]+/g;
+
 // 优化 整理 函数
-async function 整理(内容, cacheKey = null) {
-    if (cacheKey && globalCache.has(cacheKey)) {
-        return globalCache.get(cacheKey);
-    }
-    
-    const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
-        .replace(/^,|,$/g, '');
-    
-    const 地址数组 = 替换后的内容.split(',');
-    
-    if (cacheKey) {
-        globalCache.set(cacheKey, 地址数组);
-    }
-    
-    return 地址数组;
+async function 整理(内容) {
+    // 使用预编译的正则表达式
+    const 替换后的内容 = 内容.replace(SPLIT_REGEX, ',').replace(/^,|,$/g, '');
+    return 替换后的内容.split(',');
+}
+
+function isValidUUID(uuid) {
+    return UUID_PATTERN.test(uuid);
 }
 
 async function sendMessage(type, ip, add_data = "") {
@@ -1597,8 +1474,8 @@ async function sendMessage(type, ip, add_data = "") {
 }
 
 function isValidIPv4(address) {
-    const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9][0-9]?)$/;
-    return ipv4Regex.test(address);
+	const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+	return ipv4Regex.test(address);
 }
 
 function 生成动态UUID(密钥) {
@@ -1762,7 +1639,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCglMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
@@ -1936,4 +1813,65 @@ async function 处理地址列表(地址列表) {
 	}
 	
 	return 分类地址;
+}
+
+// 使用模板字符串和对象解构优化字符串拼接
+function buildVlessLink({协议类型, UUID, address, port, 伪装域名, 最终路径, addressid, 节点备注}) {
+    const params = new URLSearchParams({
+        encryption: 'none',
+        security: 'tls',
+        sni: 伪装域名,
+        fp: 'randomized',
+        alpn: 'h3',
+        type: 'ws',
+        host: 伪装域名,
+        path: 最终路径
+    });
+    
+    return `${协议类型}://${UUID}@${address}:${port}?${params}#${encodeURIComponent(addressid + 节点备注)}`;
+}
+
+// 使用对象映射优化多重条件判断
+const PORT_MAP = {
+    'workers.dev': '80',
+    'pages.dev': '443',
+    'default': '443'
+};
+
+function getDefaultPort(domain) {
+    return Object.entries(PORT_MAP).find(([key]) => domain.includes(key))?.[1] || PORT_MAP.default;
+}
+
+const HTTP_PORTS = new Set(["8080", "8880", "2052", "2082", "2086", "2095"]);
+const HTTPS_PORTS = new Set(["2053", "2083", "2087", "2096", "8443"]);
+
+// 拆分复杂函数为小函数
+function parseAddress(address) {
+    const match = address.match(IP_REGEX);
+    if (match) {
+        return {
+            ip: match[1],
+            port: match[2] || "-1",
+            id: match[3] || match[1]
+        };
+    }
+    
+    const parts = address.split(':');
+    const [ip, ...rest] = parts;
+    
+    if (rest.length) {
+        const [port, ...idParts] = rest.join(':').split('#');
+        return {
+            ip,
+            port,
+            id: idParts.join('#') || ip
+        };
+    }
+    
+    const [addr, ...idParts] = ip.split('#');
+    return {
+        ip: addr,
+        port: "-1",
+        id: idParts.join('#') || addr
+    };
 }
