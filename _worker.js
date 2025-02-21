@@ -103,8 +103,6 @@ class WebSocketManager {
 		this.log = log;
 		this.readableStreamCancel = false;
 		this.backpressure = false;
-		this.messageQueue = []; // 添加消息队列
-		this.processingMessage = false; // 添加处理状态标记
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -115,17 +113,14 @@ class WebSocketManager {
 		});
 	}
 
-	// 优化数据处理逻辑
-	async handleStreamStart(controller, earlyDataHeader) {
-		this.webSocket.addEventListener('message', async (event) => {
+	handleStreamStart(controller, earlyDataHeader) {
+		// 处理消息事件
+		this.webSocket.addEventListener('message', (event) => {
 			if (this.readableStreamCancel) return;
-			
-			// 将消息加入队列
-			this.messageQueue.push(event.data);
-			
-			// 如果没有正在处理消息,开始处理
-			if (!this.processingMessage) {
-				await this.processMessageQueue(controller);
+			if (!this.backpressure) {
+				controller.enqueue(event.data);
+			} else {
+				this.log('Backpressure, message discarded');
 			}
 		});
 
@@ -139,7 +134,7 @@ class WebSocketManager {
 
 		// 处理错误事件
 		this.webSocket.addEventListener('error', (err) => {
-			this.log('WebSocket server error:', err);
+			this.log('WebSocket server error');
 			controller.error(err);
 		});
 
@@ -152,36 +147,9 @@ class WebSocketManager {
 		}
 	}
 
-	// 新增消息队列处理方法
-	async processMessageQueue(controller) {
-		this.processingMessage = true;
-		
-		while (this.messageQueue.length > 0) {
-			if (this.backpressure) {
-				// 如果有背压,等待一段时间再继续
-				await new Promise(resolve => setTimeout(resolve, 50));
-				continue;
-			}
-
-			const data = this.messageQueue.shift();
-			try {
-				controller.enqueue(data);
-			} catch (error) {
-				this.log('Error enqueueing data:', error);
-				break;
-			}
-		}
-
-		this.processingMessage = false;
-	}
-
 	handleStreamPull(controller) {
 		if (controller.desiredSize > 0) {
 			this.backpressure = false;
-			// 如果队列中还有数据且没有在处理,继续处理
-			if (this.messageQueue.length > 0 && !this.processingMessage) {
-				this.processMessageQueue(controller);
-			}
 		}
 	}
 
@@ -730,7 +698,7 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 }
 
-// 优化数据传输
+// 优化 remoteSocketToWS 函数的数据传输
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
@@ -1016,7 +984,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
