@@ -54,7 +54,7 @@ const utils = {
 	},
 
 	// Base64处理
-      base64 = {
+      base64: {
 	encode: (str) => {
 		const encoder = new TextEncoder();
 		const uint8Array = encoder.encode(str);
@@ -86,7 +86,7 @@ const utils = {
 			return { earlyData: undefined, error: error.message };
 		}
 	}
-};
+},
 
 	// WebSocket相关
 	ws: {
