@@ -121,40 +121,51 @@ class WebSocketManager {
 		this.log = log;
 		this.readableStreamCancel = false;
 		this.backpressure = false;
+		this.controller = null; // 存储 controller，方便外部访问
+		this.initWebSocketListeners();
+	}
+
+	initWebSocketListeners() {
+		// 处理 WebSocket 消息
+		this.messageHandler = (event) => {
+			if (this.readableStreamCancel || !this.controller) return;
+			if (!this.backpressure && this.controller.desiredSize > 0) {
+				this.controller.enqueue(event.data);
+			} else {
+				this.log('Backpressure, message discarded');
+			}
+		};
+
+		// 处理 WebSocket 关闭
+		this.closeHandler = () => {
+			utils.ws.safeClose(this.webSocket);
+			if (this.controller && !this.readableStreamCancel) {
+				this.controller.close();
+			}
+		};
+
+		// 处理 WebSocket 错误
+		this.errorHandler = (err) => {
+			this.log('WebSocket server error');
+			if (this.controller) this.controller.error(err);
+		};
+
+		// 绑定事件监听
+		this.webSocket.addEventListener('message', this.messageHandler);
+		this.webSocket.addEventListener('close', this.closeHandler);
+		this.webSocket.addEventListener('error', this.errorHandler);
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
 			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
 			pull: (controller) => this.handleStreamPull(controller),
-			cancel: (reason) => this.handleStreamCancel(reason)
+			cancel: (reason) => this.handleStreamCancel(reason),
 		});
 	}
 
 	handleStreamStart(controller, earlyDataHeader) {
-		// 处理消息事件
-		this.webSocket.addEventListener('message', (event) => {
-			if (this.readableStreamCancel) return;
-			if (!this.backpressure) {
-				controller.enqueue(event.data);
-			} else {
-				this.log('Backpressure, message discarded');
-			}
-		});
-
-		// 处理关闭事件
-		this.webSocket.addEventListener('close', () => {
-			utils.ws.safeClose(this.webSocket);
-			if (!this.readableStreamCancel) {
-				controller.close();
-			}
-		});
-
-		// 处理错误事件
-		this.webSocket.addEventListener('error', (err) => {
-			this.log('WebSocket server error');
-			controller.error(err);
-		});
+		this.controller = controller;
 
 		// 处理早期数据
 		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
@@ -175,6 +186,12 @@ class WebSocketManager {
 		if (this.readableStreamCancel) return;
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
+
+		// 清理 WebSocket 事件监听，防止内存泄漏
+		this.webSocket.removeEventListener('message', this.messageHandler);
+		this.webSocket.removeEventListener('close', this.closeHandler);
+		this.webSocket.removeEventListener('error', this.errorHandler);
+
 		utils.ws.safeClose(this.webSocket);
 	}
 }
