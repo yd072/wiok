@@ -1410,24 +1410,123 @@ async function 整理测速结果(tls) {
 }
 
 function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
-    // 使用展开运算符一次性合并数组
+    // 处理 TLS 地址
     const allAddresses = [...addresses, ...newAddressesapi, ...newAddressescsv];
     const uniqueAddresses = [...new Set(allAddresses)];
+    
+    // 处理 noTLS 地址
+    const allNoTLSAddresses = [...addressesnotls, ...newAddressesnotlsapi, ...newAddressesnotlscsv];
+    const uniqueNoTLSAddresses = [...new Set(allNoTLSAddresses)];
 
-    // 使用 map 处理数组
+    // 生成 TLS 配置
     const responseBody = uniqueAddresses.map(address => {
         const {ip, port, id} = parseAddress(address);
+        let finalPort = port;
+        
+        // 端口处理逻辑
+        if (finalPort === "-1") {
+            if (!isValidIPv4(ip)) {
+                // 检查是否包含HTTPS端口
+                for (const httpsPort of httpsPorts) {
+                    if (ip.includes(httpsPort)) {
+                        finalPort = httpsPort;
+                        break;
+                    }
+                }
+            }
+            finalPort = finalPort === "-1" ? "443" : finalPort;
+        }
+
+        let 最终路径 = path;
+        let 节点备注 = '';
+        let 伪装域名 = host;
+        
+        // 处理 proxyIP
+        const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(ip));
+        if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
+
+        // 处理 workers.dev 域名
+        if (proxyhosts.length > 0 && host.includes('.workers.dev')) {
+            最终路径 = `/${host}${最终路径}`;
+            伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
+            节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
+        }
+
         return buildVlessLink({
             协议类型: atob(啥啥啥_写的这是啥啊),
             UUID,
             address: ip,
-            port: port || getDefaultPort(ip),
-            伪装域名: host,
-            最终路径: path,
+            port: finalPort,
+            伪装域名,
+            最终路径,
             addressid: id,
-            节点备注: ''
+            节点备注,
+            security: 'tls'
         });
     }).join('\n');
+
+    // 生成 noTLS 配置
+    let notlsresponseBody = '';
+    if (noTLS === 'true' && uniqueNoTLSAddresses.length > 0) {
+        notlsresponseBody = uniqueNoTLSAddresses.map(address => {
+            const {ip, port, id} = parseAddress(address);
+            let finalPort = port;
+            
+            // 端口处理逻辑
+            if (finalPort === "-1") {
+                if (!isValidIPv4(ip)) {
+                    // 检查是否包含HTTP端口
+                    const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
+                    for (const httpPort of httpPorts) {
+                        if (ip.includes(httpPort)) {
+                            finalPort = httpPort;
+                            break;
+                        }
+                    }
+                }
+                finalPort = finalPort === "-1" ? "80" : finalPort;
+            }
+
+            return buildVlessLink({
+                协议类型: atob(啥啥啥_写的这是啥啊),
+                UUID,
+                address: ip,
+                port: finalPort,
+                伪装域名: host,
+                最终路径: path,
+                addressid: id,
+                节点备注: '',
+                security: 'none'
+            });
+        }).join('\n');
+    }
+
+    // 合并所有配置
+    let base64Response = responseBody;
+    if (notlsresponseBody) base64Response += '\n' + notlsresponseBody;
+    if (link.length > 0) base64Response += '\n' + link.join('\n');
+    
+    return btoa(base64Response);
+}
+
+// 修改 buildVlessLink 函数以支持不同的安全设置
+function buildVlessLink({协议类型, UUID, address, port, 伪装域名, 最终路径, addressid, 节点备注, security = 'tls'}) {
+    const params = new URLSearchParams({
+        encryption: 'none',
+        security,
+        type: 'ws',
+        host: 伪装域名,
+        path: 最终路径
+    });
+
+    // 只在 TLS 模式下添加这些参数
+    if (security === 'tls') {
+        params.append('sni', 伪装域名);
+        params.append('fp', 'randomized');
+        params.append('alpn', 'h3');
+    }
+    
+    return `${协议类型}://${UUID}@${address}:${port}?${params}#${encodeURIComponent(addressid + 节点备注)}`;
 }
 
 // 预编译正则表达式
