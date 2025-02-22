@@ -584,12 +584,18 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             if (enableSocks) {
                 tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
             } else {
-                // 优化代理IP处理逻辑
                 if (!proxyIP || proxyIP === '') {
                     proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
                 } else {
-                    // 解析代理IP和端口
-                    [proxyIP, portRemote] = parseProxyAddress(proxyIP, portRemote);
+                    const proxyParts = proxyIP.split(':');
+                    if (proxyIP.includes(']:')) {
+                        [proxyIP, portRemote] = proxyIP.split(']:');
+                    } else if (proxyParts.length === 2) {
+                        [proxyIP, portRemote] = proxyParts;
+                    }
+                    if (proxyIP.includes('.tp')) {
+                        portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
+                    }
                 }
                 tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
             }
@@ -602,7 +608,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
             log('Retry error:', error);
-            // 可以在这里添加重试次数限制
         }
     }
 
@@ -613,24 +618,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     
     let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
     remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
-}
-
-// 新增辅助函数用于解析代理地址
-function parseProxyAddress(proxyIP, portRemote) {
-    if (proxyIP.includes(']:')) {
-        [proxyIP, portRemote] = proxyIP.split(']:');
-    } else {
-        const proxyParts = proxyIP.split(':');
-        if (proxyParts.length === 2) {
-            [proxyIP, portRemote] = proxyParts;
-        }
-    }
-    
-    if (proxyIP.includes('.tp')) {
-        portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
-    }
-    
-    return [proxyIP, portRemote];
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
