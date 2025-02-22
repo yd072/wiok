@@ -559,12 +559,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             : connect({ hostname: address, port: port });
         remoteSocket.value = tcpSocket;
         
-        // 使用更大的写入缓冲区
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(rawClientData);
-        writer.releaseLock();
-        
-        return tcpSocket;
     }
 
     async function retry() {
