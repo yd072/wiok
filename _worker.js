@@ -558,25 +558,28 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     }
 
     async function connectAndWrite(address, port, socks = false) {
-        try {
-            const tcpSocket = await Promise.race([
-                socks ? 
-                    await socks5Connect(addressType, address, port, log) :
-                    connect({ 
-                        hostname: address, 
-                        port: port,
-                        allowHalfOpen: false,
-                        keepAlive: true                        
-                    }),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('连接超时')), 3000)
-                )
-            ]);
-            
-            return tcpSocket;
-        } catch (error) {
-            throw new Error(`连接失败: ${error.message}`);
-        }
+        log(`正在连接 ${address}:${port}`);
+        
+        // 添加连接超时处理
+        const tcpSocket = await Promise.race([
+            socks ? 
+                await socks5Connect(addressType, address, port, log) :
+                connect({ 
+                    hostname: address, 
+                    port: port,
+                    // 添加 TCP 连接优化选项
+                    allowHalfOpen: false,
+                    keepAlive: true,
+                    keepAliveInitialDelay: 60000
+                }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('连接超时')), 3000)
+            )
+        ]);
+
+        remoteSocket.value = tcpSocket;
+        
+        return tcpSocket;
     }
 
     async function retry() {
@@ -599,12 +602,11 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 }
                 tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
             }
-
-            // 优化连接关闭处理
-            tcpSocket.closed
-                .catch(error => log('Retry tcpSocket closed error:', error))
-                .finally(() => utils.ws.safeClose(webSocket));
-
+            tcpSocket.closed.catch(error => {
+                console.log('Retry tcpSocket closed error', error);
+            }).finally(() => {
+                utils.ws.safeClose(webSocket);
+            });
             remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
             log('Retry error:', error);
@@ -615,7 +617,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     if (go2Socks5s.length > 0 && enableSocks) {
         shouldUseSocks = await useSocks5Pattern(addressRemote);
     }
-    
     let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
     remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
 }
@@ -696,40 +697,39 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let hasIncomingData = false;
     let header = responseHeader;
 
-    try {
-        await remoteSocket.readable
-            .pipeTo(
-                new WritableStream({
-                    async write(chunk) {
-                        hasIncomingData = true;
-                        if (webSocket.readyState !== WS_READY_STATE_OPEN) return;
+    await remoteSocket.readable
+        .pipeTo(
+            new WritableStream({
+                async write(chunk, controller) {
+                    hasIncomingData = true;
 
-                        try {
-                            if (header) {
-                                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
-                                header = null;
-                            } else {
-                                webSocket.send(chunk);
-                            }
-                        } catch (error) {
-                            console.error('发送数据失败:', error);
-                        }
-                    },
-                    close() {
-                        log(`连接已关闭, 数据接收: ${hasIncomingData}`);
-                    },
-                    abort(reason) {
-                        log(`连接中断: ${reason}`);
-                    },
-                })
-            );
-    } catch (error) {
-        console.error('数据传输错误:', error);
-        utils.ws.safeClose(webSocket);
-        
-        if (!hasIncomingData && retry) {
-            await retry();
-        }
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        controller.error('WebSocket not open');
+                    }
+
+                    if (header) {
+                        webSocket.send(await new Blob([header, chunk]).arrayBuffer());
+                        header = null;
+                    } else {
+                        webSocket.send(chunk);
+                    }
+                },
+                close() {
+                    log(`Remote connection closed, data received: ${hasIncomingData}`);
+                },
+                abort(reason) {
+                    console.error(`Remote connection aborted`);
+                },
+            })
+        )
+        .catch((error) => {
+            console.error(`remoteSocketToWS exception`);
+            utils.ws.safeClose(webSocket);
+        });
+
+    if (!hasIncomingData && retry) {
+        log(`Retrying connection`);
+        retry();
     }
 }
 
