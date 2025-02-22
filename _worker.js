@@ -53,29 +53,32 @@ const utils = {
 		return uuidPattern.test(uuid);
 	},
 
-	// Base64处理
+	// Base64 处理
 	base64: {
 		encode: (str) => btoa(str),
 		decode: (str) => atob(str),
 		toArrayBuffer(base64Str) {
 			if (!base64Str) return { earlyData: undefined, error: null };
 			try {
-				base64Str = base64Str.replace(/-/g, '+').replace(/_/g, '/');
-				const decoded = atob(base64Str);
-				const arrayBuffer = Uint8Array.from(decoded, c => c.charCodeAt(0));
-				return { earlyData: arrayBuffer.buffer, error: null };
+				base64Str = base64Str.replace(/-/g, '+').replace(/_/g, '/'); // Base64 URL 兼容
+				const binary = atob(base64Str);
+				const len = binary.length;
+				const bytes = new Uint8Array(len);
+				for (let i = 0; i < len; i++) {
+					bytes[i] = binary.charCodeAt(i);
+				}
+				return { earlyData: bytes.buffer, error: null };
 			} catch (error) {
 				return { earlyData: undefined, error };
 			}
 		}
 	},
 
-	// WebSocket相关
+	// WebSocket 相关
 	ws: {
 		safeClose(socket) {
 			try {
-				if (socket.readyState === WS_READY_STATE_OPEN || 
-					socket.readyState === WS_READY_STATE_CLOSING) {
+				if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CLOSING) {
 					socket.close();
 				}
 			} catch (error) {
@@ -87,7 +90,7 @@ const utils = {
 	// 错误处理
 	error: {
 		handle(err, type = 'general') {
-	console.error(`[${type}] Error:`, err);
+			console.error(`[${type}] Error:`, err);
 			return new Response(err.toString(), {
 				status: type === 'auth' ? 401 : 500,
 				headers: { "Content-Type": "text/plain;charset=utf-8" }
@@ -96,82 +99,96 @@ const utils = {
 	}
 };
 
-// WebSocket连接管理类
+// WebSocket 连接管理类
 class WebSocketManager {
-    constructor(webSocket, log) {
-        this.webSocket = webSocket;
-        this.log = log;
-        this.readableStreamCancel = false;
-        this.backpressure = false;
-    }
+	constructor(webSocket, log) {
+		this.webSocket = webSocket;
+		this.log = log;
+		this.readableStreamCancel = false;
+		this.backpressure = false;
+		this.controller = null;
 
-    makeReadableStream(earlyDataHeader) {
-        return new ReadableStream({
-            start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
-            pull: (controller) => this.handleStreamPull(controller),
-            cancel: (reason) => this.handleStreamCancel(reason)
-        });
-    }
+		// 事件绑定
+		this.messageHandler = this.handleMessage.bind(this);
+		this.errorHandler = this.handleError.bind(this);
+		this.closeHandler = this.handleClose.bind(this);
 
-    handleStreamStart(controller, earlyDataHeader) {
-        this.webSocket.addEventListener('message', async (event) => {
-            if (this.readableStreamCancel) return;
-            
-            let data = event.data;
-            if (data instanceof Blob) {
-                data = await data.arrayBuffer(); // 确保转换为 ArrayBuffer
-            }
+		this.webSocket.addEventListener('message', this.messageHandler);
+		this.webSocket.addEventListener('error', this.errorHandler);
+		this.webSocket.addEventListener('close', this.closeHandler);
+	}
 
-            if (controller.desiredSize > 0) {
-                controller.enqueue(data);
-            } else {
-                this.backpressure = true;
-                this.log('Backpressure triggered, message queued');
-            }
-        });
+	makeReadableStream(earlyDataHeader) {
+		return new ReadableStream({
+			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+			pull: (controller) => this.handleStreamPull(controller),
+			cancel: (reason) => this.handleStreamCancel(reason)
+		});
+	}
 
-        this.webSocket.addEventListener('close', () => {
-            if (!this.readableStreamCancel) {
-                controller.close();
-            }
-            if (this.webSocket.readyState !== WebSocket.CLOSED) {
-                utils.ws.safeClose(this.webSocket);
-            }
-        });
+	async handleMessage(event) {
+		if (this.readableStreamCancel) return;
 
-        this.webSocket.addEventListener('error', (err) => {
-            this.log('WebSocket server error');
-            controller.error(err);
-        });
+		let data = event.data;
+		if (data instanceof Blob) {
+			data = await data.arrayBuffer(); // 确保转换为 ArrayBuffer
+		}
 
-        // 解析 earlyDataHeader
-        try {
-            const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-            if (error) {
-                this.log('Failed to parse earlyDataHeader, ignoring early data');
-            } else if (earlyData) {
-                controller.enqueue(earlyData);
-            }
-        } catch (e) {
-            this.log('Unexpected error in earlyDataHeader parsing: ' + e.message);
-        }
-    }
+		if (this.controller && this.controller.desiredSize > 0) {
+			this.controller.enqueue(data);
+		} else {
+			this.backpressure = true;
+			this.log('Backpressure triggered, message queued');
+		}
+	}
 
-    handleStreamPull(controller) {
-        if (controller.desiredSize > 0 && this.backpressure) {
-            this.backpressure = false;
-            this.log('Backpressure released');
-        }
-    }
+	handleStreamStart(controller, earlyDataHeader) {
+		this.controller = controller;
 
-    handleStreamCancel(reason) {
-        if (this.readableStreamCancel) return;
-        this.log(`Readable stream canceled, reason: ${reason}`);
-        this.readableStreamCancel = true;
-        if (this.webSocket.readyState !== WebSocket.CLOSED) {
-            utils.ws.safeClose(this.webSocket);
-        }
-    }
+		// 解析 earlyDataHeader
+		try {
+			const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+			if (error) {
+				this.log('Failed to parse earlyDataHeader, ignoring early data');
+			} else if (earlyData) {
+				setTimeout(() => controller.enqueue(earlyData), 10); // 避免 earlyData 影响 WebSocket 读取
+			}
+		} catch (e) {
+			this.log('Unexpected error in earlyDataHeader parsing: ' + e.message);
+		}
+	}
+
+	handleError(err) {
+		this.log('WebSocket server error', err);
+		if (this.controller) this.controller.error(err);
+	}
+
+	handleClose() {
+		this.log('WebSocket closed');
+		utils.ws.safeClose(this.webSocket);
+		if (this.controller && !this.readableStreamCancel) {
+			this.controller.close();
+		}
+	}
+
+	handleStreamPull(controller) {
+		if (controller.desiredSize > 0 && this.backpressure) {
+			this.backpressure = false; // 及时解除回压
+			this.log('Backpressure released');
+		}
+	}
+
+	handleStreamCancel(reason) {
+		if (this.readableStreamCancel) return;
+		this.log(`Readable stream canceled, reason: ${reason}`);
+		this.readableStreamCancel = true;
+		utils.ws.safeClose(this.webSocket);
+
+		// 解绑事件，防止内存泄漏
+		this.webSocket.removeEventListener('message', this.messageHandler);
+		this.webSocket.removeEventListener('error', this.errorHandler);
+		this.webSocket.removeEventListener('close', this.closeHandler);
+	}
 }
 
 // 配置管理类
