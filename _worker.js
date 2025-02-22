@@ -540,7 +540,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
             abort(reason) {
                 console.error(`DNS连接异常中断`, reason);
             }
-        }));
+        }), { highWaterMark: 1024 * 64 });
     } catch (error) {
         console.error(`DNS查询异常: ${error.message}`, error.stack);
         utils.ws.safeClose(webSocket);
@@ -612,7 +612,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             }).finally(() => {
                 utils.ws.safeClose(webSocket);
             });
-            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
+            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
         } catch (error) {
             log('Retry error:', error);
         }
@@ -698,11 +698,9 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 }
 
-// 优化 remoteSocketToWS 函数的数据传输
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    const CHUNK_SIZE = 16384; // 16KB chunks
 
     await remoteSocket.readable
         .pipeTo(
@@ -712,51 +710,30 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
 
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                         controller.error('WebSocket not open');
-                        return;
                     }
 
-                    try {
-                        // 分块发送大数据
-                        if (chunk.byteLength > CHUNK_SIZE) {
-                            for (let i = 0; i < chunk.byteLength; i += CHUNK_SIZE) {
-                                const slice = chunk.slice(i, Math.min(i + CHUNK_SIZE, chunk.byteLength));
-                                if (header && i === 0) {
-                                    webSocket.send(await new Blob([header, slice]).arrayBuffer());
-                                    header = null;
-                                } else {
-                                    webSocket.send(slice);
-                                }
-                                // 添加小延迟避免拥塞
-                                await new Promise(resolve => setTimeout(resolve, 1));
-                            }
-                        } else {
-                            if (header) {
-                                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
-                                header = null;
-                            } else {
-                                webSocket.send(chunk);
-                            }
-                        }
-                    } catch (error) {
-                        log(`发送数据时出错: ${error.message}`);
-                        controller.error(error);
+                    if (header) {
+                        webSocket.send(await new Blob([header, chunk]).arrayBuffer());
+                        header = null;
+                    } else {
+                        webSocket.send(chunk);
                     }
                 },
                 close() {
                     log(`Remote connection closed, data received: ${hasIncomingData}`);
                 },
                 abort(reason) {
-                    log(`Remote connection aborted: ${reason}`);
+                    console.error(`Remote connection aborted`);
                 },
-            })
+            }), { highWaterMark: 1024 * 64 }
         )
         .catch((error) => {
-            console.error(`remoteSocketToWS exception: ${error.message}`);
+            console.error(`remoteSocketToWS exception`);
             utils.ws.safeClose(webSocket);
         });
 
     if (!hasIncomingData && retry) {
-        log(`No data received, retrying connection`);
+        log(`Retrying connection`);
         retry();
     }
 }
@@ -984,7 +961,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	const uniqueAddresses = new Set();
