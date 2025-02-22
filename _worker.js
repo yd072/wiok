@@ -83,6 +83,17 @@ const utils = {
 			}
 		}
 	},
+
+	// 错误处理
+	error: {
+		handle(err, type = 'general') {
+	console.error(`[${type}] Error:`, err);
+			return new Response(err.toString(), {
+				status: type === 'auth' ? 401 : 500,
+				headers: { "Content-Type": "text/plain;charset=utf-8" }
+			});
+		}
+	}
 };
 
 // WebSocket连接管理类
@@ -91,6 +102,7 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
+		this.backpressure = false;
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -105,7 +117,11 @@ class WebSocketManager {
 		// 处理消息事件
 		this.webSocket.addEventListener('message', (event) => {
 			if (this.readableStreamCancel) return;
-			controller.enqueue(event.data);
+			if (!this.backpressure) {
+				controller.enqueue(event.data);
+			} else {
+				this.log('Backpressure, message discarded');
+			}
 		});
 
 		// 处理关闭事件
@@ -142,6 +158,38 @@ class WebSocketManager {
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
 		utils.ws.safeClose(this.webSocket);
+	}
+}
+
+// 配置管理类
+class ConfigManager {
+	constructor(env) {
+		this.env = env;
+		this.config = this.initConfig();
+	}
+
+	initConfig() {
+		return {
+			uuid: this.env.UUID || this.env.uuid || this.env.PASSWORD || this.env.pswd || '',
+			proxyIP: this.env.PROXYIP || this.env.proxyip || '',
+			socks5: this.env.SOCKS5 || '',
+			httpsPorts: this.parseArray(this.env.CFPORTS) || ["2053", "2083", "2087", "2096", "8443"],
+			banHosts: this.parseArray(this.env.BAN) || [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')],
+			// ... 其他配置项
+		};
+	}
+
+	parseArray(str) {
+		if (!str) return null;
+		return str.split(',').map(item => item.trim());
+	}
+
+	get(key) {
+		return this.config[key];
+	}
+
+	set(key, value) {
+		this.config[key] = value;
 	}
 }
 
@@ -449,6 +497,8 @@ function mergeData(header, chunk) {
 }
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
+    const WS_READY_STATE_OPEN = 1;
+    
     try {
         // 只使用Google的备用DNS服务器,更快更稳定
         const dnsServer = '8.8.4.4';
@@ -456,10 +506,11 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         
         let 维列斯Header = 维列斯ResponseHeader;
         
-        const tcpSocket = await connect({
-            hostname: dnsServer,
-            port: dnsPort
-        });
+        // 使用Promise.race设置2秒超时
+        const tcpSocket = await Promise.race([
+            connect({ hostname: dnsServer, port: dnsPort }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('DNS连接超时')), 2000))
+        ]);
 
         log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
 
@@ -476,7 +527,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                         if (维列斯Header) 维列斯Header = null;
                     } catch (error) {
                         console.error(`发送数据时发生错误: ${error.message}`);
-                        utils.ws.safeClose(webSocket);
+                        safeCloseWebSocket(webSocket);
                     }
                 }
             },
@@ -489,7 +540,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         }));
     } catch (error) {
         console.error(`DNS查询异常: ${error.message}`, error.stack);
-        utils.ws.safeClose(webSocket);
+        safeCloseWebSocket(webSocket);
     }
 }
 
@@ -506,18 +557,26 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     async function connectAndWrite(address, port, socks = false) {
         log(`正在连接 ${address}:${port}`);
         
-        const tcpSocket = await (socks ? 
-            await socks5Connect(addressType, address, port, log) :
-            connect({ 
-                hostname: address,
-                port: port,
-                allowHalfOpen: false,
-                keepAlive: true
-            })
-        );
+        // 添加连接超时处理
+        const tcpSocket = await Promise.race([
+            socks ? 
+                await socks5Connect(addressType, address, port, log) :
+                connect({ 
+                    hostname: address, 
+                    port: port,
+                    // 添加 TCP 连接优化选项
+                    allowHalfOpen: false,
+                    keepAlive: true,
+                    keepAliveInitialDelay: 60000
+                }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('连接超时')), 3000)
+            )
+        ]);
 
         remoteSocket.value = tcpSocket;
         
+        // 使用更大的写入缓冲区
         const writer = tcpSocket.writable.getWriter();
         await writer.write(rawClientData);
         writer.releaseLock();
@@ -548,7 +607,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             tcpSocket.closed.catch(error => {
                 console.log('Retry tcpSocket closed error', error);
             }).finally(() => {
-                utils.ws.safeClose(webSocket);
+                safeCloseWebSocket(webSocket);
             });
             remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
@@ -667,7 +726,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         )
         .catch((error) => {
             console.error(`remoteSocketToWS exception`);
-            utils.ws.safeClose(webSocket);
+            safeCloseWebSocket(webSocket);
         });
 
     if (!hasIncomingData && retry) {
@@ -676,8 +735,37 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }
 }
 
+function base64ToArrayBuffer(base64Str) {
+    if (!base64Str) {
+        return { earlyData: undefined, error: null };
+    }
+    try {
+        base64Str = base64Str.replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = atob(base64Str);
+        const arrayBuffer = Uint8Array.from(decoded, c => c.charCodeAt(0));
+        return { earlyData: arrayBuffer.buffer, error: null };
+    } catch (error) {
+        return { earlyData: undefined, error };
+    }
+}
+
+function isValidUUID(uuid) {
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidPattern.test(uuid);
+}
+
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
+
+function safeCloseWebSocket(socket) {
+    try {
+        if (socket.readyState === WS_READY_STATE_OPEN || socket.readyState === WS_READY_STATE_CLOSING) {
+            socket.close();
+        }
+    } catch (error) {
+        console.error('safeCloseWebSocket error', error);
+    }
+}
 
 const byteToHexArray = Array.from({ length: 256 }, (_, i) => (i + 256).toString(16).slice(1));
 
@@ -692,7 +780,7 @@ function unsafeStringify(arr, offset = 0) {
 
 function stringify(arr, offset = 0) {
     const uuid = unsafeStringify(arr, offset);
-    if (!utils.isValidUUID(uuid)) {
+    if (!isValidUUID(uuid)) {
         throw new TypeError(`Invalid UUID: ${uuid}`);
     }
     return uuid;
@@ -899,9 +987,11 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+	const uniqueAddresses = new Set();
+
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
@@ -911,23 +1001,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		await 迁移地址列表(env);
 		const 优选地址列表 = await env.KV.get('ADD.txt');
 		if (优选地址列表) {
-				const 优选地址数组 = await 整理(优选地址列表);
-				const 分类地址 = {
-					接口地址: new Set(),
-					链接地址: new Set(),
-					优选地址: new Set()
-				};
-
-				for (const 元素 of 优选地址数组) {
-					if (元素.startsWith('https://')) {
-						分类地址.接口地址.add(元素);
-					} else if (元素.includes('://')) {
-						分类地址.链接地址.add(元素);
-					} else {
-						分类地址.优选地址.add(元素);
-					}
-				}
-
+			const 分类地址 = await 处理地址列表(优选地址列表);
 			addressesapi = [...分类地址.接口地址];
 			link = [...分类地址.链接地址];
 			addresses = [...分类地址.优选地址];
@@ -1422,6 +1496,10 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `encryption=none&` + 
                 `security=none&` + 
                 `type=ws&` + 
+				`tfo=true&` + // 启用 TCP Fast Open
+				`keepAlive=true&` + 
+				`congestion_control=bbr&` +
+				`udp=true&` +
                 `host=${伪装域名}&` + 
                 `path=${encodeURIComponent(最终路径)}` + 
                 `#${encodeURIComponent(addressid + 节点备注)}`;
@@ -1496,6 +1574,10 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`fp=randomized&` +
 			`alpn=h3&` + 
 			`type=ws&` +
+			`tfo=true&` + // 启用 TCP Fast Open
+			`keepAlive=true&` + 
+			`congestion_control=bbr&` +
+			`udp=true&` +
 			`host=${伪装域名}&` +
                         `path=${encodeURIComponent(最终路径)}` + 
 			`#${encodeURIComponent(addressid + 节点备注)}`;
@@ -1510,11 +1592,21 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 }
 
 // 优化 整理 函数
-async function 整理(内容) {
+async function 整理(内容, cacheKey = null) {
+    if (cacheKey && globalCache.has(cacheKey)) {
+        return globalCache.get(cacheKey);
+    }
+    
     const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
         .replace(/^,|,$/g, '');
     
-    return 替换后的内容.split(',');
+    const 地址数组 = 替换后的内容.split(',');
+    
+    if (cacheKey) {
+        globalCache.set(cacheKey, 地址数组);
+    }
+    
+    return 地址数组;
 }
 
 async function sendMessage(type, ip, add_data = "") {
@@ -1710,7 +1802,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRnJhdyUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
@@ -1863,4 +1955,25 @@ async function handleGetRequest(env, txt) {
 	return new Response(html, {
 		headers: { "Content-Type": "text/html;charset=utf-8" }
 	});
+}
+
+async function 处理地址列表(地址列表) {
+	const 分类地址 = {
+		接口地址: new Set(),
+		链接地址: new Set(),
+		优选地址: new Set()
+	};
+	
+	const 地址数组 = await 整理(地址列表);
+	for (const 地址 of 地址数组) {
+		if (地址.startsWith('https://')) {
+			分类地址.接口地址.add(地址);
+		} else if (地址.includes('://')) {
+			分类地址.链接地址.add(地址);
+		} else {
+			分类地址.优选地址.add(地址);
+		}
+	}
+	
+	return 分类地址;
 }
