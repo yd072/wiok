@@ -556,7 +556,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     async function connectAndWrite(address, port, socks = false) {
         log(`Connecting to ${address}:${port}`);
         const tcpSocket = socks ? await socks5Connect(addressType, address, port, log)
-            : connect({ hostname: address, port: port });
+            : connect({ hostname: address, port: port,allowHalfOpen: false,keepAlive: true });
         remoteSocket.value = tcpSocket;
         
         // 使用更大的写入缓冲区
