@@ -508,13 +508,8 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         
         // 使用Promise.race设置2秒超时
         const tcpSocket = await Promise.race([
-            connect({
-                hostname: dnsServer,
-                port: dnsPort
-            }),
-            new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('DNS连接超时')), 2000)
-            )
+            connect({ hostname: dnsServer, port: dnsPort }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('DNS连接超时')), 2000))
         ]);
 
         log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
@@ -1501,10 +1496,10 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `encryption=none&` + 
                 `security=none&` + 
                 `type=ws&` + 
-                `tfo=true&` + // 启用 TCP Fast Open
-                `keepAlive=true&` + 
-                `congestion_control=bbr&` +
-                `udp=true&` +
+				`tfo=true&` + // 启用 TCP Fast Open
+				`keepAlive=true&` + 
+				`congestion_control=bbr&` +
+				`udp=true&` +
                 `host=${伪装域名}&` + 
                 `path=${encodeURIComponent(最终路径)}` + 
                 `#${encodeURIComponent(addressid + 节点备注)}`;
