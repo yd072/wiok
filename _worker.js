@@ -98,67 +98,80 @@ const utils = {
 
 // WebSocket连接管理类
 class WebSocketManager {
-	constructor(webSocket, log) {
-		this.webSocket = webSocket;
-		this.log = log;
-		this.readableStreamCancel = false;
-		this.backpressure = false;
-	}
+    constructor(webSocket, log) {
+        this.webSocket = webSocket;
+        this.log = log;
+        this.readableStreamCancel = false;
+        this.backpressure = false;
+    }
 
-	makeReadableStream(earlyDataHeader) {
-		return new ReadableStream({
-			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
-			pull: (controller) => this.handleStreamPull(controller),
-			cancel: (reason) => this.handleStreamCancel(reason)
-		});
-	}
+    makeReadableStream(earlyDataHeader) {
+        return new ReadableStream({
+            start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+            pull: (controller) => this.handleStreamPull(controller),
+            cancel: (reason) => this.handleStreamCancel(reason)
+        });
+    }
 
-	handleStreamStart(controller, earlyDataHeader) {
-		// 处理消息事件
-		this.webSocket.addEventListener('message', (event) => {
-			if (this.readableStreamCancel) return;
-			if (!this.backpressure) {
-				controller.enqueue(event.data);
-			} else {
-				this.log('Backpressure, message discarded');
-			}
-		});
+    handleStreamStart(controller, earlyDataHeader) {
+        this.webSocket.addEventListener('message', async (event) => {
+            if (this.readableStreamCancel) return;
+            
+            let data = event.data;
+            if (data instanceof Blob) {
+                data = await data.arrayBuffer(); // 确保转换为 ArrayBuffer
+            }
 
-		// 处理关闭事件
-		this.webSocket.addEventListener('close', () => {
-			utils.ws.safeClose(this.webSocket);
-			if (!this.readableStreamCancel) {
-				controller.close();
-			}
-		});
+            if (controller.desiredSize > 0) {
+                controller.enqueue(data);
+            } else {
+                this.backpressure = true;
+                this.log('Backpressure triggered, message queued');
+            }
+        });
 
-		// 处理错误事件
-		this.webSocket.addEventListener('error', (err) => {
-			this.log('WebSocket server error');
-			controller.error(err);
-		});
+        this.webSocket.addEventListener('close', () => {
+            if (!this.readableStreamCancel) {
+                controller.close();
+            }
+            if (this.webSocket.readyState !== WebSocket.CLOSED) {
+                utils.ws.safeClose(this.webSocket);
+            }
+        });
 
-		// 处理早期数据
-		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-		if (error) {
-			controller.error(error);
-		} else if (earlyData) {
-			controller.enqueue(earlyData);
-		}
-	}
+        this.webSocket.addEventListener('error', (err) => {
+            this.log('WebSocket server error');
+            controller.error(err);
+        });
 
-	handleStreamPull(controller) {
-		if (controller.desiredSize > 0) {
-			this.backpressure = false;
-		}
-	}
+        // 解析 earlyDataHeader
+        try {
+            const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+            if (error) {
+                this.log('Failed to parse earlyDataHeader, ignoring early data');
+            } else if (earlyData) {
+                controller.enqueue(earlyData);
+            }
+        } catch (e) {
+            this.log('Unexpected error in earlyDataHeader parsing: ' + e.message);
+        }
+    }
 
-	handleStreamCancel(reason) {
-		if (this.readableStreamCancel) return;
-		this.log(`Readable stream canceled, reason: ${reason}`);
-		this.readableStreamCancel = true;
-		utils.ws.safeClose(this.webSocket);
-	}
+    handleStreamPull(controller) {
+        if (controller.desiredSize > 0 && this.backpressure) {
+            this.backpressure = false;
+            this.log('Backpressure released');
+        }
+    }
+
+    handleStreamCancel(reason) {
+        if (this.readableStreamCancel) return;
+        this.log(`Readable stream canceled, reason: ${reason}`);
+        this.readableStreamCancel = true;
+        if (this.webSocket.readyState !== WebSocket.CLOSED) {
+            utils.ws.safeClose(this.webSocket);
+        }
+    }
 }
 
 // 配置管理类
