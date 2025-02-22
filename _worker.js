@@ -53,32 +53,29 @@ const utils = {
 		return uuidPattern.test(uuid);
 	},
 
-	// Base64 处理
+	// Base64处理
 	base64: {
 		encode: (str) => btoa(str),
 		decode: (str) => atob(str),
 		toArrayBuffer(base64Str) {
 			if (!base64Str) return { earlyData: undefined, error: null };
 			try {
-				base64Str = base64Str.replace(/-/g, '+').replace(/_/g, '/'); // Base64 URL 兼容
-				const binary = atob(base64Str);
-				const len = binary.length;
-				const bytes = new Uint8Array(len);
-				for (let i = 0; i < len; i++) {
-					bytes[i] = binary.charCodeAt(i);
-				}
-				return { earlyData: bytes.buffer, error: null };
+				base64Str = base64Str.replace(/-/g, '+').replace(/_/g, '/');
+				const decoded = atob(base64Str);
+				const arrayBuffer = Uint8Array.from(decoded, c => c.charCodeAt(0));
+				return { earlyData: arrayBuffer.buffer, error: null };
 			} catch (error) {
 				return { earlyData: undefined, error };
 			}
 		}
 	},
 
-	// WebSocket 相关
+	// WebSocket相关
 	ws: {
 		safeClose(socket) {
 			try {
-				if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CLOSING) {
+				if (socket.readyState === WS_READY_STATE_OPEN || 
+					socket.readyState === WS_READY_STATE_CLOSING) {
 					socket.close();
 				}
 			} catch (error) {
@@ -90,7 +87,7 @@ const utils = {
 	// 错误处理
 	error: {
 		handle(err, type = 'general') {
-			console.error(`[${type}] Error:`, err);
+	console.error(`[${type}] Error:`, err);
 			return new Response(err.toString(), {
 				status: type === 'auth' ? 401 : 500,
 				headers: { "Content-Type": "text/plain;charset=utf-8" }
@@ -99,23 +96,13 @@ const utils = {
 	}
 };
 
-// WebSocket 连接管理类
+// WebSocket连接管理类
 class WebSocketManager {
 	constructor(webSocket, log) {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
 		this.backpressure = false;
-		this.controller = null;
-
-		// 事件绑定
-		this.messageHandler = this.handleMessage.bind(this);
-		this.errorHandler = this.handleError.bind(this);
-		this.closeHandler = this.handleClose.bind(this);
-
-		this.webSocket.addEventListener('message', this.messageHandler);
-		this.webSocket.addEventListener('error', this.errorHandler);
-		this.webSocket.addEventListener('close', this.closeHandler);
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -126,55 +113,43 @@ class WebSocketManager {
 		});
 	}
 
-	async handleMessage(event) {
-		if (this.readableStreamCancel) return;
-
-		let data = event.data;
-		if (data instanceof Blob) {
-			data = await data.arrayBuffer(); // 确保转换为 ArrayBuffer
-		}
-
-		if (this.controller && this.controller.desiredSize > 0) {
-			this.controller.enqueue(data);
-		} else {
-			this.backpressure = true;
-			this.log('Backpressure triggered, message queued');
-		}
-	}
-
 	handleStreamStart(controller, earlyDataHeader) {
-		this.controller = controller;
-
-		// 解析 earlyDataHeader
-		try {
-			const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-			if (error) {
-				this.log('Failed to parse earlyDataHeader, ignoring early data');
-			} else if (earlyData) {
-				setTimeout(() => controller.enqueue(earlyData), 10); // 避免 earlyData 影响 WebSocket 读取
+		// 处理消息事件
+		this.webSocket.addEventListener('message', (event) => {
+			if (this.readableStreamCancel) return;
+			if (!this.backpressure) {
+				controller.enqueue(event.data);
+			} else {
+				this.log('Backpressure, message discarded');
 			}
-		} catch (e) {
-			this.log('Unexpected error in earlyDataHeader parsing: ' + e.message);
-		}
-	}
+		});
 
-	handleError(err) {
-		this.log('WebSocket server error', err);
-		if (this.controller) this.controller.error(err);
-	}
+		// 处理关闭事件
+		this.webSocket.addEventListener('close', () => {
+			utils.ws.safeClose(this.webSocket);
+			if (!this.readableStreamCancel) {
+				controller.close();
+			}
+		});
 
-	handleClose() {
-		this.log('WebSocket closed');
-		utils.ws.safeClose(this.webSocket);
-		if (this.controller && !this.readableStreamCancel) {
-			this.controller.close();
+		// 处理错误事件
+		this.webSocket.addEventListener('error', (err) => {
+			this.log('WebSocket server error');
+			controller.error(err);
+		});
+
+		// 处理早期数据
+		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+		if (error) {
+			controller.error(error);
+		} else if (earlyData) {
+			controller.enqueue(earlyData);
 		}
 	}
 
 	handleStreamPull(controller) {
-		if (controller.desiredSize > 0 && this.backpressure) {
-			this.backpressure = false; // 及时解除回压
-			this.log('Backpressure released');
+		if (controller.desiredSize > 0) {
+			this.backpressure = false;
 		}
 	}
 
@@ -183,11 +158,6 @@ class WebSocketManager {
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
 		utils.ws.safeClose(this.webSocket);
-
-		// 解绑事件，防止内存泄漏
-		this.webSocket.removeEventListener('message', this.messageHandler);
-		this.webSocket.removeEventListener('error', this.errorHandler);
-		this.webSocket.removeEventListener('close', this.closeHandler);
 	}
 }
 
@@ -567,10 +537,6 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         console.error(`DNS查询异常: ${error.message}`, error.stack);
         utils.ws.safeClose(webSocket);
     }
-}
-
-async function getOrCreateConnection(hostname, port) {
-
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
@@ -973,8 +939,7 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {	
-
+async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
