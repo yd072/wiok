@@ -567,10 +567,9 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                         port: port,
                         allowHalfOpen: false,
                         keepAlive: true,
-                        noDelay: true
                     }),
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('连接超时')), 3000)
+                    setTimeout(() => reject(new Error('连接超时')), 5000)
                 )
             ]);
             
@@ -582,20 +581,20 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
     async function retry() {
         try {
+            // 添加重试延迟
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             if (enableSocks) {
                 tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
             } else {
-                // 优化代理IP处理逻辑
                 if (!proxyIP || proxyIP === '') {
                     proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
                 } else {
-                    // 解析代理IP和端口
                     [proxyIP, portRemote] = parseProxyAddress(proxyIP, portRemote);
                 }
                 tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
             }
 
-            // 优化连接关闭处理
             tcpSocket.closed
                 .catch(error => log('Retry tcpSocket closed error:', error))
                 .finally(() => utils.ws.safeClose(webSocket));
@@ -603,7 +602,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
             log('Retry error:', error);
-            // 可以在这里添加重试次数限制
         }
     }
 
@@ -709,6 +707,8 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
+    const bufferSize = 8192; // 8KB buffer
+    let buffer = new Uint8Array(0);
 
     try {
         await remoteSocket.readable
@@ -719,17 +719,35 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                         if (webSocket.readyState !== WS_READY_STATE_OPEN) return;
 
                         try {
-                            if (header) {
-                                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
-                                header = null;
-                            } else {
-                                webSocket.send(chunk);
+                            // 合并数据到缓冲区
+                            const newBuffer = new Uint8Array(buffer.length + chunk.length);
+                            newBuffer.set(buffer);
+                            newBuffer.set(new Uint8Array(chunk), buffer.length);
+                            buffer = newBuffer;
+
+                            // 当缓冲区达到一定大小时发送
+                            if (buffer.length >= bufferSize) {
+                                if (header) {
+                                    webSocket.send(await new Blob([header, buffer]).arrayBuffer());
+                                    header = null;
+                                } else {
+                                    webSocket.send(buffer);
+                                }
+                                buffer = new Uint8Array(0);
                             }
                         } catch (error) {
                             console.error('发送数据失败:', error);
                         }
                     },
                     close() {
+                        // 发送剩余数据
+                        if (buffer.length > 0) {
+                            if (header) {
+                                webSocket.send(new Blob([header, buffer]).arrayBuffer());
+                            } else {
+                                webSocket.send(buffer);
+                            }
+                        }
                         log(`连接已关闭, 数据接收: ${hasIncomingData}`);
                     },
                     abort(reason) {
