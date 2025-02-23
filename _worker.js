@@ -448,13 +448,6 @@ async function 维列斯OverWSHandler(request) {
     });
 }
 
-function mergeData(header, chunk) {
-    const merged = new Uint8Array(header.length + chunk.length);
-    merged.set(header);
-    merged.set(chunk, header.length);
-    return merged;
-}
-
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
     try {
         // 只使用Google的备用DNS服务器,更快更稳定
