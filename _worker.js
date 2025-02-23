@@ -456,12 +456,17 @@ function mergeData(header, chunk) {
 }
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
+    let isWebSocketClosed = false;
+    let 维列斯Header = 维列斯ResponseHeader;
+
+    // 监听 WebSocket 关闭事件
+    webSocket.addEventListener('close', () => {
+        isWebSocketClosed = true;
+    }, { once: true });
+
     try {
-        // 只使用Google的备用DNS服务器,更快更稳定
         const dnsServer = '8.8.4.4';
         const dnsPort = 53;
-        
-        let 维列斯Header = 维列斯ResponseHeader;
         
         const tcpSocket = await connect({
             hostname: dnsServer,
@@ -476,27 +481,35 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 
         await tcpSocket.readable.pipeTo(new WritableStream({
             async write(chunk) {
-                if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                    try {
+                if (isWebSocketClosed) {
+                    throw new Error('WebSocket closed');
+                }
+
+                try {
+                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
                         const combinedData = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
                         webSocket.send(combinedData);
                         if (维列斯Header) 维列斯Header = null;
-                    } catch (error) {
-                        console.error(`发送数据时发生错误: ${error.message}`);
-                        utils.ws.safeClose(webSocket);
+                    } else {
+                        throw new Error('WebSocket not open');
                     }
+                } catch (error) {
+                    log(`DNS数据发送错误: ${error.message}`);
+                    throw error; // 向上传播错误以触发 pipeTo 的 catch
                 }
             },
             close() {
                 log(`DNS连接已关闭`);
             },
             abort(reason) {
-                console.error(`DNS连接异常中断`, reason);
+                log(`DNS连接异常中断: ${reason}`);
             }
         }));
     } catch (error) {
-        console.error(`DNS查询异常: ${error.message}`, error.stack);
-        utils.ws.safeClose(webSocket);
+        log(`DNS查询错误: ${error.message}`);
+        if (!isWebSocketClosed) {
+            utils.ws.safeClose(webSocket);
+        }
     }
 }
 
@@ -591,11 +604,9 @@ function process维列斯Header(维列斯Buffer, userID) {
         return { hasError: true, message: 'Invalid data' };
     }
 
-    // 2. 使用 DataView 减少重复创建 TypedArray
     const dataView = new DataView(维列斯Buffer);
     const bufferView = new Uint8Array(维列斯Buffer);
     
-    // 3. 提取版本和用户ID验证逻辑
     const version = bufferView.slice(0, VERSION_LENGTH);
     const userIDString = stringify(bufferView.slice(VERSION_LENGTH, VERSION_LENGTH + USER_ID_LENGTH));
     
@@ -603,7 +614,6 @@ function process维列斯Header(维列斯Buffer, userID) {
         return { hasError: true, message: 'Invalid user' };
     }
 
-    // 4. 简化命令处理
     const optLength = bufferView[OPT_LENGTH_INDEX];
     const commandIndex = 18 + optLength;
     const command = bufferView[commandIndex];
@@ -613,13 +623,11 @@ function process维列斯Header(维列斯Buffer, userID) {
         return { hasError: true, message: 'Unsupported command' };
     }
 
-    // 5. 提取端口和地址类型
     const portIndex = commandIndex + 1;
     const portRemote = dataView.getUint16(portIndex);
     const addressType = bufferView[portIndex + 2];
     let addressValueIndex = portIndex + 3;
     
-    // 6. 优化地址处理逻辑
     let addressValue = '';
     let addressLength = 0;
 
@@ -660,7 +668,6 @@ function process维列斯Header(维列斯Buffer, userID) {
         return { hasError: true, message: 'Empty address value' };
     }
 
-    // 7. 返回处理结果
     return {
         hasError: false,
         addressRemote: addressValue,
