@@ -557,16 +557,16 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             if (enableSocks) {
                 tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
             } else {
-                // 处理 proxyIP
                 if (!proxyIP || proxyIP === '') {
                     proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
                 } else {
-                    const proxyParts = proxyIP.split(':');
-                    if (proxyIP.includes(']:')) {
-                        [proxyIP, portRemote] = proxyIP.split(']:');
-                    } else if (proxyParts.length === 2) {
-                        [proxyIP, portRemote] = proxyParts;
-                    }
+                    const [ip, port] = proxyIP.includes(']:') ? 
+                        proxyIP.split(']:') :
+                        proxyIP.split(':');
+                    
+                    proxyIP = ip;
+                    portRemote = port || portRemote;
+
                     if (proxyIP.includes('.tp')) {
                         portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
                     }
@@ -690,12 +690,16 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }, { once: true });
 
     try {
-        // 使用 mergeData 函数替代 Blob，提高性能
+        // 修复数据合并函数，确保正确处理 TypedArray
         const mergeArrayBuffers = (header, chunk) => {
-            const merged = new Uint8Array(header.length + chunk.length);
-            merged.set(header);
-            merged.set(new Uint8Array(chunk), header.length);
-            return merged.buffer;
+            // 确保 chunk 是 ArrayBuffer 或 TypedArray
+            const chunkArray = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+            const headerArray = header instanceof Uint8Array ? header : new Uint8Array(header);
+            
+            const merged = new Uint8Array(headerArray.length + chunkArray.length);
+            merged.set(headerArray);
+            merged.set(chunkArray, headerArray.length);
+            return merged;
         };
 
         await remoteSocket.readable.pipeTo(
@@ -709,6 +713,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                         hasIncomingData = true;
                         
                         if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                            // 确保数据类型正确
                             const dataToSend = header ? mergeArrayBuffers(header, chunk) : chunk;
                             webSocket.send(dataToSend);
                             header = null;
@@ -717,7 +722,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                         }
                     } catch (error) {
                         log(`WebSocket send error: ${error.message}`);
-                        throw error; // 向上传播错误以触发 pipeTo 的 catch
+                        throw error;
                     }
                 },
                 close() {
@@ -731,15 +736,14 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     } catch (error) {
         log(`remoteSocketToWS error: ${error.message}`);
         
-        // 安全关闭 WebSocket
         if (!isWebSocketClosed) {
             utils.ws.safeClose(webSocket);
         }
 
-        // 如果没有收到数据且有重试函数，则重试
+        // 确保在连接失败时正确触发重试
         if (!hasIncomingData && retry) {
             log('Retrying connection...');
-            retry();
+            await retry(); // 添加 await 确保正确处理异步重试
         }
     }
 }
@@ -967,7 +971,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
