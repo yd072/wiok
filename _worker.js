@@ -632,47 +632,44 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let header = responseHeader;
 
     try {
-        // 使用 AbortController 来控制流的取消
-        const abortController = new AbortController();
-        webSocket.addEventListener('close', () => abortController.abort());
-
         await remoteSocket.readable.pipeTo(
             new WritableStream({
                 async write(chunk, controller) {
                     hasIncomingData = true;
 
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        controller.error(new Error('WebSocket not open'));
+                        console.warn('WebSocket not open, dropping data');
                         return;
                     }
 
                     try {
                         const dataToSend = header ? await new Blob([header, chunk]).arrayBuffer() : chunk;
-                        await webSocket.send(dataToSend);
+                        webSocket.send(dataToSend);
                         header = null;
                     } catch (error) {
-                        controller.error(error);
+                        console.error(`WebSocket send failed:`, error);
                     }
                 },
                 close() {
                     log(`Remote connection closed, data received: ${hasIncomingData}`);
-                    utils.ws.safeClose(webSocket);
                 },
                 abort(reason) {
-                    log(`Remote connection aborted: ${reason}`);
-                    utils.ws.safeClose(webSocket);
-                }
-            }),
-            { signal: abortController.signal }
+                    console.error(`Remote connection aborted:`, reason);
+                },
+            })
         );
     } catch (error) {
         console.error(`remoteSocketToWS exception:`, error);
         utils.ws.safeClose(webSocket);
-        
         if (!hasIncomingData && retry) {
-            log(`Retrying connection due to error: ${error.message}`);
+            log(`Retrying connection due to error`);
             retry();
         }
+    }
+
+    if (!hasIncomingData && retry) {
+        log(`Retrying connection`);
+        retry();
     }
 }
 
