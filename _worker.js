@@ -514,7 +514,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         log(`正在连接 ${address}:${port}`);
         
         const tcpSocket = await (socks ? 
-            await socks5Connect(addressType, address, port, log) :
+            socks5Connect(addressType, address, port, log) :
             connect({ 
                 hostname: address,
                 port: port,
@@ -534,6 +534,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
     async function retry() {
         try {
+            let tcpSocket;
             if (enableSocks) {
                 tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
             } else {
