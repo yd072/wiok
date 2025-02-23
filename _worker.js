@@ -509,29 +509,71 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
     }
 }
 
-// 优化 TCP 连接处理
+// 优化 TCP 连接处理，保留代理功能
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
-    let tcpSocket;
-    try {
-        // 使用 Promise.race 实现超时控制
-        const connectPromise = connect({
-            hostname: addressRemote,
-            port: portRemote,
-            allowHalfOpen: false,
-            keepAlive: true 
+    async function useSocks5Pattern(address) {
+        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
+        return go2Socks5s.some(pattern => {
+            let regexPattern = pattern.replace(/\*/g, '.*');
+            let regex = new RegExp(`^${regexPattern}$`, 'i');
+            return regex.test(address);
         });
-        
+    }
+
+    async function connectWithTimeout(connectFn, timeout = 5000) {
         const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Connection timeout')), 5000);
+            setTimeout(() => reject(new Error('Connection timeout')), timeout);
+        });
+        return Promise.race([connectFn(), timeoutPromise]);
+    }
+
+    async function connectAndWrite(address, port, socks = false) {
+        log(`正在连接 ${address}:${port}`);
+        
+        const tcpSocket = await connectWithTimeout(async () => {
+            return socks ? 
+                await socks5Connect(addressType, address, port, log) :
+                await connect({ 
+                    hostname: address,
+                    port: port,
+                    allowHalfOpen: false,
+                    keepAlive: true
+                });
         });
 
-        tcpSocket = await Promise.race([connectPromise, timeoutPromise]);
         remoteSocket.value = tcpSocket;
-
-        // 优化数据写入
+        
         const writer = tcpSocket.writable.getWriter();
         await writer.write(rawClientData);
         writer.releaseLock();
+        
+        return tcpSocket;
+    }
+
+    try {
+        let shouldUseSocks = false;
+        if (go2Socks5s.length > 0 && enableSocks) {
+            shouldUseSocks = await useSocks5Pattern(addressRemote);
+        }
+
+        let tcpSocket;
+        if (shouldUseSocks) {
+            tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
+        } else if (proxyIP && proxyIP !== '') {
+            const proxyParts = proxyIP.split(':');
+            let targetPort = portRemote;
+            if (proxyIP.includes(']:')) {
+                [proxyIP, targetPort] = proxyIP.split(']:');
+            } else if (proxyParts.length === 2) {
+                [proxyIP, targetPort] = proxyParts;
+            }
+            if (proxyIP.includes('.tp')) {
+                targetPort = proxyIP.split('.tp')[1].split('.')[0] || targetPort;
+            }
+            tcpSocket = await connectAndWrite(proxyIP, targetPort);
+        } else {
+            tcpSocket = await connectAndWrite(addressRemote, portRemote);
+        }
 
         // 优化错误处理
         tcpSocket.closed.catch(error => {
