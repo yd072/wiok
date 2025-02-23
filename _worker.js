@@ -630,108 +630,45 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    let sendQueue = [];
-    let sending = false;
-    const MAX_BUFFER_SIZE = 512 * 1024; // 512KB，避免 WebSocket 过载
-    const WS_READY_STATE_OPEN = 1; // WebSocket OPEN 状态
-
-    function sendBufferedData() {
-        if (sending || webSocket.readyState !== WS_READY_STATE_OPEN) return;
-        sending = true;
-
-        function processQueue() {
-            if (sendQueue.length === 0) {
-                sending = false;
-                return;
-            }
-
-            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                console.warn('WebSocket closed, stopping send.');
-                sendQueue = []; // 清空队列，避免继续发送
-                sending = false;
-                return;
-            }
-
-            if (webSocket.bufferedAmount > MAX_BUFFER_SIZE) {
-                // WebSocket 缓冲区满，稍等再发送
-                setTimeout(processQueue, 10);
-                return;
-            }
-
-            const data = sendQueue.shift();
-            try {
-                webSocket.send(data);
-            } catch (error) {
-                console.error('WebSocket send failed:', error);
-                sendQueue = []; // 避免持续尝试发送
-                utils.ws.safeClose(webSocket);
-                return;
-            }
-
-            requestAnimationFrame(processQueue); // 平稳发送
-        }
-
-        requestAnimationFrame(processQueue);
-    }
-
-    const transformStream = new TransformStream({
-        async transform(chunk, controller) {
-            hasIncomingData = true;
-
-            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                console.warn('WebSocket not open, dropping data.');
-                return;
-            }
-
-            try {
-                let dataToSend;
-                if (header) {
-                    const combined = new Uint8Array(header.byteLength + chunk.byteLength);
-                    combined.set(new Uint8Array(header), 0);
-                    combined.set(new Uint8Array(chunk), header.byteLength);
-                    dataToSend = combined;
-                    header = null;
-                } else {
-                    dataToSend = chunk;
-                }
-
-                sendQueue.push(dataToSend);
-                sendBufferedData();
-            } catch (error) {
-                console.error('TransformStream error:', error);
-            }
-        }
-    });
 
     try {
-        await remoteSocket.readable
-            .pipeThrough(transformStream)
-            .pipeTo(
-                new WritableStream({
-                    close() {
-                        log(`Remote connection closed, data received: ${hasIncomingData}`);
-                        sendBufferedData();
-                    },
-                    abort(reason) {
-                        console.error('Remote connection aborted:', reason);
-                        sendQueue = []; // 避免残留数据
-                        utils.ws.safeClose(webSocket);
-                    }
-                })
-            );
-    } catch (error) {
-        console.error('remoteSocketToWS exception:', error);
-        utils.ws.safeClose(webSocket);
-        sendQueue = []; // 避免 WebSocket 继续处理错误数据
+        await remoteSocket.readable.pipeTo(
+            new WritableStream({
+                async write(chunk, controller) {
+                    hasIncomingData = true;
 
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        console.warn('WebSocket not open, dropping data');
+                        return;
+                    }
+
+                    try {
+                        const dataToSend = header ? await new Blob([header, chunk]).arrayBuffer() : chunk;
+                        webSocket.send(dataToSend);
+                        header = null;
+                    } catch (error) {
+                        console.error(`WebSocket send failed:`, error);
+                    }
+                },
+                close() {
+                    log(`Remote connection closed, data received: ${hasIncomingData}`);
+                },
+                abort(reason) {
+                    console.error(`Remote connection aborted:`, reason);
+                },
+            })
+        );
+    } catch (error) {
+        console.error(`remoteSocketToWS exception:`, error);
+        utils.ws.safeClose(webSocket);
         if (!hasIncomingData && retry) {
-            log('Retrying connection due to error');
+            log(`Retrying connection due to error`);
             retry();
         }
     }
 
     if (!hasIncomingData && retry) {
-        log('Retrying connection');
+        log(`Retrying connection`);
         retry();
     }
 }
