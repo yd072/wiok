@@ -632,7 +632,8 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let header = responseHeader;
     let sendQueue = [];
     let sending = false;
-    const MAX_BUFFER_SIZE = 512 * 1024; // 512KB，适用于视频流
+    const MAX_BUFFER_SIZE = 512 * 1024; // 512KB，避免 WebSocket 过载
+    const WS_READY_STATE_OPEN = 1; // WebSocket OPEN 状态
 
     function sendBufferedData() {
         if (sending || webSocket.readyState !== WS_READY_STATE_OPEN) return;
@@ -644,9 +645,16 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 return;
             }
 
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                console.warn('WebSocket closed, stopping send.');
+                sendQueue = []; // 清空队列，避免继续发送
+                sending = false;
+                return;
+            }
+
             if (webSocket.bufferedAmount > MAX_BUFFER_SIZE) {
-                // WebSocket 过载，降低发送速率
-                setTimeout(processQueue, 5);
+                // WebSocket 缓冲区满，稍等再发送
+                setTimeout(processQueue, 10);
                 return;
             }
 
@@ -655,12 +663,12 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 webSocket.send(data);
             } catch (error) {
                 console.error('WebSocket send failed:', error);
+                sendQueue = []; // 避免持续尝试发送
                 utils.ws.safeClose(webSocket);
                 return;
             }
 
-            // 继续发送下一批数据
-            requestAnimationFrame(processQueue);
+            requestAnimationFrame(processQueue); // 平稳发送
         }
 
         requestAnimationFrame(processQueue);
@@ -671,28 +679,26 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             hasIncomingData = true;
 
             if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                console.warn('WebSocket not open, dropping data');
+                console.warn('WebSocket not open, dropping data.');
                 return;
             }
 
             try {
                 let dataToSend;
                 if (header) {
-                    // 如果 `header` 存在，合并到 chunk
                     const combined = new Uint8Array(header.byteLength + chunk.byteLength);
                     combined.set(new Uint8Array(header), 0);
                     combined.set(new Uint8Array(chunk), header.byteLength);
                     dataToSend = combined;
                     header = null;
                 } else {
-                    // 直接发送 chunk，不进行额外处理
                     dataToSend = chunk;
                 }
 
                 sendQueue.push(dataToSend);
                 sendBufferedData();
             } catch (error) {
-                console.error('Transform failed:', error);
+                console.error('TransformStream error:', error);
             }
         }
     });
@@ -708,12 +714,15 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     },
                     abort(reason) {
                         console.error('Remote connection aborted:', reason);
+                        sendQueue = []; // 避免残留数据
+                        utils.ws.safeClose(webSocket);
                     }
                 })
             );
     } catch (error) {
         console.error('remoteSocketToWS exception:', error);
         utils.ws.safeClose(webSocket);
+        sendQueue = []; // 避免 WebSocket 继续处理错误数据
 
         if (!hasIncomingData && retry) {
             log('Retrying connection due to error');
