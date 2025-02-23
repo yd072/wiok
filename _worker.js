@@ -682,67 +682,52 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    let isWebSocketClosed = false;
-
-    // 监听 WebSocket 关闭事件
-    webSocket.addEventListener('close', () => {
-        isWebSocketClosed = true;
-    }, { once: true });
 
     try {
-        // 修复：确保 mergeArrayBuffers 函数正确处理 TypedArray
-        const mergeArrayBuffers = (header, chunk) => {
-            const headerArray = header instanceof Uint8Array ? header : new Uint8Array(header);
-            const chunkArray = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
-            const merged = new Uint8Array(headerArray.length + chunkArray.length);
-            merged.set(headerArray);
-            merged.set(chunkArray, headerArray.length);
-            return merged.buffer;
-        };
+        await remoteSocket.readable.pipeTo(new WritableStream({
+            async write(chunk) {
+                hasIncomingData = true;
 
-        await remoteSocket.readable.pipeTo(
-            new WritableStream({
-                async write(chunk) {
-                    if (isWebSocketClosed) {
-                        throw new Error('WebSocket closed');
-                    }
+                if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                    log('WebSocket未打开，丢弃数据');
+                    return;
+                }
 
-                    try {
-                        hasIncomingData = true;
-                        
-                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                            // 修复：确保数据类型正确
-                            const dataToSend = header ? mergeArrayBuffers(header, chunk) : chunk;
-                            webSocket.send(dataToSend);
-                            header = null;
-                        } else {
-                            throw new Error('WebSocket not open');
-                        }
-                    } catch (error) {
-                        log(`WebSocket send error: ${error.message}`);
-                        throw error;
+                try {
+                    // 优化: 避免不必要的Blob创建
+                    if (header) {
+                        const dataToSend = await new Blob([header, chunk]).arrayBuffer();
+                        webSocket.send(dataToSend);
+                        header = null;
+                    } else {
+                        webSocket.send(chunk);
                     }
-                },
-                close() {
-                    log(`Remote connection closed${hasIncomingData ? ' with' : ' without'} data received`);
-                },
-                abort(reason) {
-                    log(`Remote connection aborted: ${reason}`);
-                },
-            })
-        );
+                } catch (error) {
+                    log('发送失败:', error);
+                    throw error; // 传播错误以触发重试
+                }
+            },
+            close() {
+                log(`连接关闭，数据接收: ${hasIncomingData}`);
+            },
+            abort(reason) {
+                log(`连接中断:`, reason);
+            }
+        }));
     } catch (error) {
-        log(`remoteSocketToWS error: ${error.message}`);
+        log(`连接异常:`, error);
+        utils.ws.safeClose(webSocket);
         
-        if (!isWebSocketClosed) {
-            utils.ws.safeClose(webSocket);
+        if (!hasIncomingData && retry) {
+            log(`正在重试连接`);
+            retry();
+            return;
         }
+    }
 
-        // 修复：确保重试逻辑正确执行
-        if (!hasIncomingData && retry && typeof retry === 'function') {
-            log('Retrying connection...');
-            await retry();
-        }
+    if (!hasIncomingData && retry) {
+        log(`正在重试连接`);
+        retry();
     }
 }
 
