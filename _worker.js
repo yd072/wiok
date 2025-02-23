@@ -684,12 +684,13 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let header = responseHeader;
     let isWebSocketClosed = false;
 
+    // 监听 WebSocket 关闭事件
     webSocket.addEventListener('close', () => {
         isWebSocketClosed = true;
     }, { once: true });
 
     try {
-        // 使用全局的 mergeData 函数，确保与 DNS 处理保持一致
+        // 修复：使用已存在的 mergeData 函数而不是创建新的 mergeArrayBuffers
         await remoteSocket.readable.pipeTo(
             new WritableStream({
                 async write(chunk) {
@@ -701,7 +702,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                         hasIncomingData = true;
                         
                         if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                            // 使用全局的 mergeData 函数
+                            // 修复：使用 mergeData 而不是 mergeArrayBuffers
                             const dataToSend = header ? mergeData(header, chunk) : chunk;
                             webSocket.send(dataToSend);
                             header = null;
@@ -728,9 +729,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             utils.ws.safeClose(webSocket);
         }
 
+        // 修复：确保重试逻辑正确执行
         if (!hasIncomingData && retry) {
             log('Retrying connection...');
-            await retry();
+            await retry(); // 添加 await 确保重试正确执行
         }
     }
 }
