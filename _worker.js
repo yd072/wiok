@@ -89,6 +89,9 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
+		this.messageHandler = this.handleMessage.bind(this);
+		this.closeHandler = this.handleClose.bind(this);
+		this.errorHandler = this.handleError.bind(this);
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -99,27 +102,10 @@ class WebSocketManager {
 	}
 
 	handleStreamStart(controller, earlyDataHeader) {
-		// 处理消息事件
-		this.webSocket.addEventListener('message', (event) => {
-			if (this.readableStreamCancel) return;
-			controller.enqueue(event.data);
-		});
+		this.webSocket.addEventListener('message', this.messageHandler);
+		this.webSocket.addEventListener('close', this.closeHandler);
+		this.webSocket.addEventListener('error', this.errorHandler);
 
-		// 处理关闭事件
-		this.webSocket.addEventListener('close', () => {
-			utils.ws.safeClose(this.webSocket);
-			if (!this.readableStreamCancel) {
-				controller.close();
-			}
-		});
-
-		// 处理错误事件
-		this.webSocket.addEventListener('error', (err) => {
-			this.log('WebSocket server error');
-			controller.error(err);
-		});
-
-		// 处理早期数据
 		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
 		if (error) {
 			controller.error(error);
@@ -128,11 +114,37 @@ class WebSocketManager {
 		}
 	}
 
+	handleMessage(event) {
+		if (this.readableStreamCancel) return;
+		controller.enqueue(event.data);
+	}
+
+	handleClose() {
+		utils.ws.safeClose(this.webSocket);
+		if (!this.readableStreamCancel) {
+			controller.close();
+		}
+		this.cleanup();
+	}
+
+	handleError(err) {
+		this.log(`WebSocket server error: ${err.message}`);
+		controller.error(err);
+		this.cleanup();
+	}
+
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
 		utils.ws.safeClose(this.webSocket);
+		this.cleanup();
+	}
+
+	cleanup() {
+		this.webSocket.removeEventListener('message', this.messageHandler);
+		this.webSocket.removeEventListener('close', this.closeHandler);
+		this.webSocket.removeEventListener('error', this.errorHandler);
 	}
 }
 
