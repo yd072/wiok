@@ -85,14 +85,12 @@ const utils = {
 
 // WebSocket连接管理类
 class WebSocketManager {
-	constructor(webSocket, log) {
+	constructor(webSocket) {
 		this.webSocket = webSocket;
-		this.log = log;
 		this.readableStreamCancel = false;
 	}
 
 	makeReadableStream(earlyDataHeader) {
-		// 使用更简洁的 ReadableStream 实现
 		return new ReadableStream({
 			start: (controller) => {
 				// 直接处理早期数据
@@ -105,15 +103,13 @@ class WebSocketManager {
 					if(earlyData) controller.enqueue(earlyData);
 				}
 
-				// 简化消息处理
-				this.webSocket.addEventListener('message', (event) => {
-					if(!this.readableStreamCancel) controller.enqueue(event.data);
-				});
-
-				this.webSocket.addEventListener('close', () => {
-					if(!this.readableStreamCancel) controller.close();
-				});
-
+				// 简化事件处理
+				this.webSocket.addEventListener('message', ({data}) => 
+					!this.readableStreamCancel && controller.enqueue(data));
+				
+				this.webSocket.addEventListener('close', () => 
+					!this.readableStreamCancel && controller.close());
+				
 				this.webSocket.addEventListener('error', (err) => controller.error(err));
 			},
 			cancel: () => {
@@ -343,7 +339,7 @@ async function 维列斯OverWSHandler(request) {
     };
 
     const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
-    const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
+    const readableWebSocketStream = new WebSocketManager(webSocket).makeReadableStream(earlyDataHeader);
 
     let remoteSocketWrapper = { value: null };
     let isDns = false;
@@ -427,60 +423,43 @@ function mergeData(header, chunk) {
     return merged;
 }
 
-async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
+async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader) {
+    const dnsServer = '8.8.4.4';
+    const dnsPort = 53;
+    
     try {
-        // 只使用Google的备用DNS服务器,更快更稳定
-        const dnsServer = '8.8.4.4';
-        const dnsPort = 53;
-        
-        let 维列斯Header = 维列斯ResponseHeader;
-        
         const tcpSocket = await connect({
             hostname: dnsServer,
             port: dnsPort
         });
-
-        log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
 
         const writer = tcpSocket.writable.getWriter();
         await writer.write(udpChunk);
         writer.releaseLock();
 
         await tcpSocket.readable.pipeTo(new WritableStream({
-            async write(chunk) {
+            write(chunk) {
                 if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                    try {
-                        const combinedData = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
-                        webSocket.send(combinedData);
-                        if (维列斯Header) 维列斯Header = null;
-                    } catch (error) {
-                        console.error(`发送数据时发生错误: ${error.message}`);
-                        utils.ws.safeClose(webSocket);
-                    }
+                    const data = 维列斯ResponseHeader ? 
+                        mergeData(维列斯ResponseHeader, chunk) : chunk;
+                    webSocket.send(data);
+                    维列斯ResponseHeader = null;
                 }
-            },
-            close() {
-                log(`DNS连接已关闭`);
-            },
-            abort(reason) {
-                console.error(`DNS连接异常中断`, reason);
             }
-        }));
-    } catch (error) {
-        console.error(`DNS查询异常: ${error.message}`, error.stack);
+        })).catch(() => utils.ws.safeClose(webSocket));
+    } catch {
         utils.ws.safeClose(webSocket);
     }
 }
 
-async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
-    // 简化连接逻辑
+async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader) {
     const connect = async (address, port, useSocks = false) => {
         const tcpSocket = useSocks ? 
-            await socks5Connect(addressType, address, port, log) :
+            await socks5Connect(addressType, address, port) :
             await connect({
                 hostname: address,
                 port: port,
-                allowHalfOpen: false 
+                allowHalfOpen: false
             });
             
         const writer = tcpSocket.writable.getWriter();
@@ -490,11 +469,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return tcpSocket;
     };
 
-    // 优化重试逻辑
     const tryConnect = async (useSocks = false) => {
         try {
             const tcpSocket = await connect(addressRemote, portRemote, useSocks);
-            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
+            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader);
             return true;
         } catch {
             return false;
@@ -510,16 +488,15 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         if(await tryConnect()) return;
     }
 
-    // 最后尝试直连
     await tryConnect();
 }
 
 // 优化 process维列斯Header 函数
-function process维列斯Header(维列斯Buffer, userID) {
+function process维列斯Header(维列斯Buffer) {
     if (维列斯Buffer.byteLength < 24) return { hasError: true, message: 'Invalid data' };
 
     const view = new DataView(维列斯Buffer);
-    const version = new Uint8Array(维列斯Buffer.slice(0, 1));
+    const version = new Uint8Array([view.getUint8(0)]);
     const userIDArray = new Uint8Array(维列斯Buffer.slice(1, 17));
     
     if(stringify(userIDArray) !== userID && stringify(userIDArray) !== userIDLow) {
@@ -530,11 +507,10 @@ function process维列斯Header(维列斯Buffer, userID) {
     const command = view.getUint8(18 + optLength);
     const portRemote = view.getUint16(18 + optLength + 1);
     const addressType = view.getUint8(18 + optLength + 3);
+    const addressStart = 18 + optLength + 4;
 
-    // 使用 switch 优化地址解析
     let addressValue = '';
     let addressLength = 0;
-    const addressStart = 18 + optLength + 4;
 
     switch(addressType) {
         case 1: // IPv4
@@ -542,14 +518,13 @@ function process维列斯Header(维列斯Buffer, userID) {
             addressValue = Array.from(new Uint8Array(维列斯Buffer.slice(addressStart, addressStart + 4))).join('.');
             break;
         case 2: // Domain
-            addressLength = view.getUint8(addressStart);
-            addressValue = new TextDecoder().decode(维列斯Buffer.slice(addressStart + 1, addressStart + 1 + addressLength));
-            addressLength++; // 加上长度字节
+            addressLength = view.getUint8(addressStart) + 1;
+            addressValue = new TextDecoder().decode(维列斯Buffer.slice(addressStart + 1, addressStart + addressLength));
             break;
         case 3: // IPv6
             addressLength = 16;
-            const ipv6 = new Uint8Array(维列斯Buffer.slice(addressStart, addressStart + 16));
-            addressValue = Array.from({length: 8}, (_, i) => view.getUint16(addressStart + i * 2).toString(16)).join(':');
+            addressValue = Array.from({length: 8}, (_, i) => 
+                view.getUint16(addressStart + i * 2).toString(16)).join(':');
             break;
         default:
             return { hasError: true, message: 'Invalid address type' };
