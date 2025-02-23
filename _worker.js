@@ -594,7 +594,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
-    // 1. 提前定义常量
     const HEADER_MIN_LENGTH = 24;
     const VERSION_LENGTH = 1;
     const USER_ID_LENGTH = 16;
@@ -684,7 +683,6 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let header = responseHeader;
     let isWebSocketClosed = false;
 
-    // 监听 WebSocket 关闭事件
     webSocket.addEventListener('close', () => {
         isWebSocketClosed = true;
     }, { once: true });
@@ -700,20 +698,16 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     hasIncomingData = true;
 
                     try {
-                        if (webSocket.readyState === WebSocket.OPEN) {
-                            if (header) {
-                                const dataToSend = await new Response(new Blob([header, chunk])).arrayBuffer();
-                                webSocket.send(dataToSend);
-                                header = null; // 发送后清空 header
-                            } else {
-                                webSocket.send(chunk);
-                            }
+                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                            const dataToSend = header ? await new Blob([header, chunk]).arrayBuffer() : chunk;
+                            webSocket.send(dataToSend);
+                            if (header) header = null;
                         } else {
                             throw new Error('WebSocket not open');
                         }
                     } catch (error) {
-                        log(`WebSocket 发送数据失败: ${error.message}`);
-                        throw error;
+                        log(`WebSocket发送数据失败: ${error.message}`);
+                        throw error; 
                     }
                 },
                 close() {
@@ -726,17 +720,20 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         );
     } catch (error) {
         log(`remoteSocketToWS 异常: ${error.message}`);
-
-        // **使用 utils.ws.safeClose 确保安全关闭 WebSocket**
+        
         if (!isWebSocketClosed) {
             utils.ws.safeClose(webSocket);
         }
 
-        // 仅在未收到数据时重试
         if (!hasIncomingData && retry) {
             log(`由于错误重试连接`);
             retry();
         }
+    }
+
+    if (!hasIncomingData && retry) {
+        log(`重试连接`);
+        retry();
     }
 }
 
