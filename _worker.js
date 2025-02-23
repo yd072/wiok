@@ -682,46 +682,56 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
+    let isWebSocketClosed = false;
+
+    webSocket.addEventListener('close', () => {
+        isWebSocketClosed = true;
+    }, { once: true });
 
     try {
+        // 使用全局的 mergeData 函数，确保与 DNS 处理保持一致
         await remoteSocket.readable.pipeTo(
             new WritableStream({
-                async write(chunk, controller) {
-                    hasIncomingData = true;
-
-                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        console.warn('WebSocket not open, dropping data');
-                        return;
+                async write(chunk) {
+                    if (isWebSocketClosed) {
+                        throw new Error('WebSocket closed');
                     }
 
                     try {
-                        const dataToSend = header ? await new Blob([header, chunk]).arrayBuffer() : chunk;
-                        webSocket.send(dataToSend);
-                        header = null;
+                        hasIncomingData = true;
+                        
+                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                            // 使用全局的 mergeData 函数
+                            const dataToSend = header ? mergeData(header, chunk) : chunk;
+                            webSocket.send(dataToSend);
+                            header = null;
+                        } else {
+                            throw new Error('WebSocket not open');
+                        }
                     } catch (error) {
-                        console.error(`WebSocket send failed:`, error);
+                        log(`WebSocket send error: ${error.message}`);
+                        throw error;
                     }
                 },
                 close() {
-                    log(`Remote connection closed, data received: ${hasIncomingData}`);
+                    log(`Remote connection closed${hasIncomingData ? ' with' : ' without'} data received`);
                 },
                 abort(reason) {
-                    console.error(`Remote connection aborted:`, reason);
+                    log(`Remote connection aborted: ${reason}`);
                 },
             })
         );
     } catch (error) {
-        console.error(`remoteSocketToWS exception:`, error);
-        utils.ws.safeClose(webSocket);
-        if (!hasIncomingData && retry) {
-            log(`Retrying connection due to error`);
-            retry();
+        log(`remoteSocketToWS error: ${error.message}`);
+        
+        if (!isWebSocketClosed) {
+            utils.ws.safeClose(webSocket);
         }
-    }
 
-    if (!hasIncomingData && retry) {
-        log(`Retrying connection`);
-        retry();
+        if (!hasIncomingData && retry) {
+            log('Retrying connection...');
+            await retry();
+        }
     }
 }
 
