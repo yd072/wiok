@@ -511,25 +511,30 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     }
 
     async function connectAndWrite(address, port, socks = false) {
-        log(`正在连接 ${address}:${port}`);
-        
-        const tcpSocket = await (socks ? 
-            socks5Connect(addressType, address, port, log) :
-            connect({ 
-                hostname: address,
-                port: port,
-                allowHalfOpen: false,
-                keepAlive: true
-            })
-        );
+        try {
+            log(`正在连接 ${address}:${port}`);
+            
+            const tcpSocket = await (socks ? 
+                socks5Connect(addressType, address, port, log) :
+                connect({ 
+                    hostname: address,
+                    port: port,
+                    allowHalfOpen: false,
+                    keepAlive: true
+                })
+            );
 
-        remoteSocket.value = tcpSocket;
-        
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(rawClientData);
-        writer.releaseLock();
-        
-        return tcpSocket;
+            remoteSocket.value = tcpSocket;
+            
+            const writer = tcpSocket.writable.getWriter();
+            await writer.write(rawClientData);
+            writer.releaseLock();
+            
+            return tcpSocket;
+        } catch (error) {
+            log(`连接失败: ${error.message}`);
+            throw error;
+        }
     }
 
     async function retry() {
@@ -554,7 +559,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
             }
             tcpSocket.closed.catch(error => {
-                console.log('Retry tcpSocket closed error', error);
+                log('Retry tcpSocket closed error', error);
             }).finally(() => {
                 utils.ws.safeClose(webSocket);
             });
