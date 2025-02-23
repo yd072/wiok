@@ -638,6 +638,13 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         sending = true;
 
         while (sendQueue.length > 0) {
+            if (webSocket.bufferedAmount > 64 * 1024) {
+                // 如果 WebSocket 发送缓冲区过载，延迟处理
+                setTimeout(sendBufferedData, 10);
+                sending = false;
+                return;
+            }
+
             const data = sendQueue.shift();
             try {
                 webSocket.send(data);
@@ -661,11 +668,17 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             }
 
             try {
-                const dataToSend = header ? (header + chunk) : chunk;
-                sendQueue.push(dataToSend);
-                header = null;
+                let dataToSend;
+                if (header) {
+                    dataToSend = new Uint8Array(header.byteLength + chunk.byteLength);
+                    dataToSend.set(new Uint8Array(header), 0);
+                    dataToSend.set(new Uint8Array(chunk), header.byteLength);
+                    header = null;
+                } else {
+                    dataToSend = chunk;
+                }
 
-                // 触发批量发送
+                sendQueue.push(dataToSend);
                 sendBufferedData();
             } catch (error) {
                 console.error('Transform failed:', error);
