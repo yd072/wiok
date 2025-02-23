@@ -594,73 +594,60 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
-    const HEADER_MIN_LENGTH = 24;
-    const VERSION_LENGTH = 1;
-    const USER_ID_LENGTH = 16;
-    const OPT_LENGTH_INDEX = 17;
-    
-    if (维列斯Buffer.byteLength < HEADER_MIN_LENGTH) {
+    if (维列斯Buffer.byteLength < 24) {
         return { hasError: true, message: 'Invalid data' };
     }
 
-    const dataView = new DataView(维列斯Buffer);
-    const bufferView = new Uint8Array(维列斯Buffer);
-    
-    const version = bufferView.slice(0, VERSION_LENGTH);
-    const userIDString = stringify(bufferView.slice(VERSION_LENGTH, VERSION_LENGTH + USER_ID_LENGTH));
-    
-    if (userIDString !== userID && userIDString !== userIDLow) {
+    const version = new Uint8Array(维列斯Buffer.slice(0, 1));
+    const userIDArray = new Uint8Array(维列斯Buffer.slice(1, 17));
+    const userIDString = stringify(userIDArray);
+    const isValidUser = userIDString === userID || userIDString === userIDLow;
+
+    if (!isValidUser) {
         return { hasError: true, message: 'Invalid user' };
     }
 
-    const optLength = bufferView[OPT_LENGTH_INDEX];
-    const commandIndex = 18 + optLength;
-    const command = bufferView[commandIndex];
-    const isUDP = command === 2;
-    
-    if (command !== 1 && command !== 2) {
-        return { hasError: true, message: 'Unsupported command' };
+    const optLength = new Uint8Array(维列斯Buffer.slice(17, 18))[0];
+    const command = new Uint8Array(维列斯Buffer.slice(18 + optLength, 18 + optLength + 1))[0];
+    let isUDP = false;
+
+    switch (command) {
+        case 1: break;
+        case 2: isUDP = true; break;
+        default:
+            return { hasError: true, message: 'Unsupported command' };
     }
 
-    const portIndex = commandIndex + 1;
-    const portRemote = dataView.getUint16(portIndex);
-    const addressType = bufferView[portIndex + 2];
-    let addressValueIndex = portIndex + 3;
-    
+    const portIndex = 18 + optLength + 1;
+    const portRemote = new DataView(维列斯Buffer).getUint16(portIndex);
+
+    const addressIndex = portIndex + 2;
+    const addressType = new Uint8Array(维列斯Buffer.slice(addressIndex, addressIndex + 1))[0];
     let addressValue = '';
     let addressLength = 0;
+    let addressValueIndex = addressIndex + 1;
 
-    try {
-        switch (addressType) {
-            case 1: // IPv4
-                addressLength = 4;
-                addressValue = Array.from(bufferView.slice(addressValueIndex, addressValueIndex + addressLength)).join('.');
-                break;
-                
-            case 2: // Domain
-                addressLength = bufferView[addressValueIndex];
-                addressValueIndex++;
-                addressValue = new TextDecoder().decode(
-                    维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength)
-                );
-                break;
-                
-            case 3: // IPv6
-                addressLength = 16;
-                const ipv6Parts = [];
-                for (let i = 0; i < 8; i++) {
-                    ipv6Parts.push(
-                        dataView.getUint16(addressValueIndex + i * 2).toString(16)
-                    );
-                }
-                addressValue = ipv6Parts.join(':');
-                break;
-                
-            default:
-                return { hasError: true, message: 'Invalid address type' };
-        }
-    } catch (error) {
-        return { hasError: true, message: `Address parsing error: ${error.message}` };
+    switch (addressType) {
+        case 1:
+            addressLength = 4;
+            addressValue = new Uint8Array(维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength)).join('.');
+            break;
+        case 2:
+            addressLength = new Uint8Array(维列斯Buffer.slice(addressValueIndex, addressValueIndex + 1))[0];
+            addressValueIndex += 1;
+            addressValue = new TextDecoder().decode(维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength));
+            break;
+        case 3:
+            addressLength = 16;
+            const dataView = new DataView(维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength));
+            const ipv6 = [];
+            for (let i = 0; i < 8; i++) {
+                ipv6.push(dataView.getUint16(i * 2).toString(16));
+            }
+            addressValue = ipv6.join(':');
+            break;
+        default:
+            return { hasError: true, message: 'Invalid address type' };
     }
 
     if (!addressValue) {
