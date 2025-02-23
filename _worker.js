@@ -509,8 +509,9 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
     }
 }
 
-// 优化 TCP 连接处理，保留代理功能
+// 优化 TCP 连接处理,保留代理功能
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
+    // 保留原有的socks5模式检测
     async function useSocks5Pattern(address) {
         if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
         return go2Socks5s.some(pattern => {
@@ -520,6 +521,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         });
     }
 
+    // 添加连接超时控制
     async function connectWithTimeout(connectFn, timeout = 5000) {
         const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Connection timeout')), timeout);
@@ -527,6 +529,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return Promise.race([connectFn(), timeoutPromise]);
     }
 
+    // 优化连接和数据写入
     async function connectAndWrite(address, port, socks = false) {
         log(`正在连接 ${address}:${port}`);
         
@@ -543,6 +546,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
         remoteSocket.value = tcpSocket;
         
+        // 优化数据写入
         const writer = tcpSocket.writable.getWriter();
         await writer.write(rawClientData);
         writer.releaseLock();
@@ -551,6 +555,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     }
 
     try {
+        // 检查是否使用socks5
         let shouldUseSocks = false;
         if (go2Socks5s.length > 0 && enableSocks) {
             shouldUseSocks = await useSocks5Pattern(addressRemote);
@@ -558,8 +563,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
         let tcpSocket;
         if (shouldUseSocks) {
+            // 使用socks5代理
             tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
         } else if (proxyIP && proxyIP !== '') {
+            // 使用proxyIP代理
             const proxyParts = proxyIP.split(':');
             let targetPort = portRemote;
             if (proxyIP.includes(']:')) {
@@ -572,6 +579,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             }
             tcpSocket = await connectAndWrite(proxyIP, targetPort);
         } else {
+            // 直接连接
             tcpSocket = await connectAndWrite(addressRemote, portRemote);
         }
 
@@ -586,6 +594,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             new WritableStream({
                 async write(chunk) {
                     if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                        // 优化数据合并
                         const data = 维列斯ResponseHeader ? 
                             await new Blob([维列斯ResponseHeader, chunk]).arrayBuffer() :
                             chunk;
