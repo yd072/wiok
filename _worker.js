@@ -682,51 +682,64 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
+    let isWebSocketClosed = false;
+
+    // 监听 WebSocket 关闭事件
+    webSocket.addEventListener('close', () => {
+        isWebSocketClosed = true;
+    }, { once: true });
 
     try {
-        await remoteSocket.readable.pipeTo(new WritableStream({
-            async write(chunk) {
-                hasIncomingData = true;
-
-                if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                    log('WebSocket未打开，丢弃数据');
-                    return;
-                }
-
-                try {
-                    // 优化: 避免不必要的Blob创建
-                    if (header) {
-                        const dataToSend = await new Blob([header, chunk]).arrayBuffer();
-                        webSocket.send(dataToSend);
-                        header = null;
-                    } else {
-                        webSocket.send(chunk);
+        await remoteSocket.readable.pipeTo(
+            new WritableStream({
+                async write(chunk) {
+                    if (isWebSocketClosed) {
+                        throw new Error('WebSocket closed');
                     }
-                } catch (error) {
-                    log('发送失败:', error);
-                    throw error; // 传播错误以触发重试
+
+                    hasIncomingData = true;
+
+                    try {
+                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                            // 如果有header则合并发送,否则直接发送chunk
+                            const dataToSend = header ? await new Blob([header, chunk]).arrayBuffer() : chunk;
+                            webSocket.send(dataToSend);
+                            // 发送后清空header
+                            if (header) header = null;
+                        } else {
+                            throw new Error('WebSocket not open');
+                        }
+                    } catch (error) {
+                        log(`WebSocket发送数据失败: ${error.message}`);
+                        throw error; // 向上传播错误以触发 pipeTo 的 catch
+                    }
+                },
+                close() {
+                    log(`远程连接已关闭, 是否收到数据: ${hasIncomingData}`);
+                },
+                abort(reason) {
+                    log(`远程连接异常中断: ${reason}`);
                 }
-            },
-            close() {
-                log(`连接关闭，数据接收: ${hasIncomingData}`);
-            },
-            abort(reason) {
-                log(`连接中断:`, reason);
-            }
-        }));
+            })
+        );
     } catch (error) {
-        log(`连接异常:`, error);
-        utils.ws.safeClose(webSocket);
+        log(`remoteSocketToWS 异常: ${error.message}`);
         
+        // 安全关闭 WebSocket
+        if (!isWebSocketClosed) {
+            utils.ws.safeClose(webSocket);
+        }
+
+        // 如果没有收到数据且有重试函数,则进行重试
         if (!hasIncomingData && retry) {
-            log(`正在重试连接`);
+            log(`由于错误重试连接`);
             retry();
-            return;
         }
     }
 
+    // 如果整个过程都没有收到数据且有重试函数,则进行重试
     if (!hasIncomingData && retry) {
-        log(`正在重试连接`);
+        log(`重试连接`);
         retry();
     }
 }
@@ -1770,7 +1783,7 @@ async function handleGetRequest(env, txt) {
 			<div class="editor-container">
 				${hasKV ? `
 				<textarea class="editor" 
-					placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+					placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
 					id="content">${content}</textarea>
 				<div class="save-container">
 					<button class="back-btn" onclick="goBack()">返回配置页</button>
