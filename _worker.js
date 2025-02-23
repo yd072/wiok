@@ -700,18 +700,20 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     hasIncomingData = true;
 
                     try {
-                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                            // 如果有header则合并发送,否则直接发送chunk
-                            const dataToSend = header ? await new Blob([header, chunk]).arrayBuffer() : chunk;
-                            webSocket.send(dataToSend);
-                            // 发送后清空header
-                            if (header) header = null;
+                        if (webSocket.readyState === WebSocket.OPEN) {
+                            if (header) {
+                                const dataToSend = await new Response(new Blob([header, chunk])).arrayBuffer();
+                                webSocket.send(dataToSend);
+                                header = null; // 发送后清空 header
+                            } else {
+                                webSocket.send(chunk);
+                            }
                         } else {
                             throw new Error('WebSocket not open');
                         }
                     } catch (error) {
-                        log(`WebSocket发送数据失败: ${error.message}`);
-                        throw error; // 向上传播错误以触发 pipeTo 的 catch
+                        log(`WebSocket 发送数据失败: ${error.message}`);
+                        throw error;
                     }
                 },
                 close() {
@@ -724,23 +726,17 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         );
     } catch (error) {
         log(`remoteSocketToWS 异常: ${error.message}`);
-        
-        // 安全关闭 WebSocket
+
+        // **使用 utils.ws.safeClose 确保安全关闭 WebSocket**
         if (!isWebSocketClosed) {
             utils.ws.safeClose(webSocket);
         }
 
-        // 如果没有收到数据且有重试函数,则进行重试
+        // 仅在未收到数据时重试
         if (!hasIncomingData && retry) {
             log(`由于错误重试连接`);
             retry();
         }
-    }
-
-    // 如果整个过程都没有收到数据且有重试函数,则进行重试
-    if (!hasIncomingData && retry) {
-        log(`重试连接`);
-        retry();
     }
 }
 
