@@ -665,7 +665,6 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         log(`数据传输错误: ${error.message}`);
             utils.ws.safeClose(webSocket);
     if (!hasIncomingData && retry) {
-        log(`Retrying connection`);
         retry();
         }
     }
