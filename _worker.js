@@ -89,9 +89,30 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
-		this.messageHandler = this.handleMessage.bind(this);
-		this.closeHandler = this.handleClose.bind(this);
-		this.errorHandler = this.handleError.bind(this);
+		this.initEventListeners();
+	}
+
+	initEventListeners() {
+		this.messageListener = (event) => {
+			if (this.readableStreamCancel) return;
+			this.controller.enqueue(event.data);
+		};
+
+		this.closeListener = () => {
+			utils.ws.safeClose(this.webSocket);
+			if (!this.readableStreamCancel) {
+				this.controller.close();
+			}
+		};
+
+		this.errorListener = (err) => {
+			this.log('WebSocket server error');
+			this.controller.error(err);
+		};
+
+		this.webSocket.addEventListener('message', this.messageListener);
+		this.webSocket.addEventListener('close', this.closeListener);
+		this.webSocket.addEventListener('error', this.errorListener);
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -102,35 +123,18 @@ class WebSocketManager {
 	}
 
 	handleStreamStart(controller, earlyDataHeader) {
-		this.webSocket.addEventListener('message', this.messageHandler);
-		this.webSocket.addEventListener('close', this.closeHandler);
-		this.webSocket.addEventListener('error', this.errorHandler);
-
-		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-		if (error) {
-			controller.error(error);
-		} else if (earlyData) {
-			controller.enqueue(earlyData);
+		this.controller = controller;
+		try {
+			const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+			if (error) {
+				controller.error(error);
+			} else if (earlyData) {
+				controller.enqueue(earlyData);
+			}
+		} catch (err) {
+			this.log('Error processing early data', err);
+			controller.error(err);
 		}
-	}
-
-	handleMessage(event) {
-		if (this.readableStreamCancel) return;
-		controller.enqueue(event.data);
-	}
-
-	handleClose() {
-		utils.ws.safeClose(this.webSocket);
-		if (!this.readableStreamCancel) {
-			controller.close();
-		}
-		this.cleanup();
-	}
-
-	handleError(err) {
-		this.log(`WebSocket server error: ${err.message}`);
-		controller.error(err);
-		this.cleanup();
 	}
 
 	handleStreamCancel(reason) {
@@ -142,9 +146,9 @@ class WebSocketManager {
 	}
 
 	cleanup() {
-		this.webSocket.removeEventListener('message', this.messageHandler);
-		this.webSocket.removeEventListener('close', this.closeHandler);
-		this.webSocket.removeEventListener('error', this.errorHandler);
+		this.webSocket.removeEventListener('message', this.messageListener);
+		this.webSocket.removeEventListener('close', this.closeListener);
+		this.webSocket.removeEventListener('error', this.errorListener);
 	}
 }
 
