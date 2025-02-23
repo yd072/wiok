@@ -659,65 +659,46 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    let isWebSocketClosed = false;
-
-    // 监听 WebSocket 关闭事件
-    webSocket.addEventListener('close', () => {
-        isWebSocketClosed = true;
-    }, { once: true });
 
     try {
-        // 使用 mergeData 函数替代 Blob，提高性能
-        const mergeArrayBuffers = (header, chunk) => {
-            const merged = new Uint8Array(header.length + chunk.length);
-            merged.set(header);
-            merged.set(new Uint8Array(chunk), header.length);
-            return merged.buffer;
-        };
-
         await remoteSocket.readable.pipeTo(
             new WritableStream({
-                async write(chunk) {
-                    if (isWebSocketClosed) {
-                        throw new Error('WebSocket closed');
+                async write(chunk, controller) {
+                    hasIncomingData = true;
+
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        console.warn('WebSocket not open, dropping data');
+                        return;
                     }
 
                     try {
-                        hasIncomingData = true;
-                        
-                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                            const dataToSend = header ? mergeArrayBuffers(header, chunk) : chunk;
-                            webSocket.send(dataToSend);
-                            header = null;
-                        } else {
-                            throw new Error('WebSocket not open');
-                        }
+                        const dataToSend = header ? await new Blob([header, chunk]).arrayBuffer() : chunk;
+                        webSocket.send(dataToSend);
+                        header = null;
                     } catch (error) {
-                        log(`WebSocket send error: ${error.message}`);
-                        throw error; // 向上传播错误以触发 pipeTo 的 catch
+                        console.error(`WebSocket send failed:`, error);
                     }
                 },
                 close() {
-                    log(`Remote connection closed${hasIncomingData ? ' with' : ' without'} data received`);
+                    log(`Remote connection closed, data received: ${hasIncomingData}`);
                 },
                 abort(reason) {
-                    log(`Remote connection aborted: ${reason}`);
+                    console.error(`Remote connection aborted:`, reason);
                 },
             })
         );
     } catch (error) {
-        log(`remoteSocketToWS error: ${error.message}`);
-        
-        // 安全关闭 WebSocket
-        if (!isWebSocketClosed) {
-            utils.ws.safeClose(webSocket);
-        }
-
-        // 如果没有收到数据且有重试函数，则重试
+        console.error(`remoteSocketToWS exception:`, error);
+        utils.ws.safeClose(webSocket);
         if (!hasIncomingData && retry) {
-            log('Retrying connection...');
+            log(`Retrying connection due to error`);
             retry();
         }
+    }
+
+    if (!hasIncomingData && retry) {
+        log(`Retrying connection`);
+        retry();
     }
 }
 
