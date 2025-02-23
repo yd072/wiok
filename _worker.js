@@ -459,7 +459,6 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
     let isWebSocketClosed = false;
     let 维列斯Header = 维列斯ResponseHeader;
 
-    // 监听 WebSocket 关闭事件
     webSocket.addEventListener('close', () => {
         isWebSocketClosed = true;
     }, { once: true });
