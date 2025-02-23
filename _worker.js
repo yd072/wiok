@@ -632,16 +632,21 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let header = responseHeader;
     let sendQueue = [];
     let sending = false;
+    const MAX_BUFFER_SIZE = 512 * 1024; // 512KB，适用于视频流
 
     function sendBufferedData() {
         if (sending || webSocket.readyState !== WS_READY_STATE_OPEN) return;
         sending = true;
 
-        while (sendQueue.length > 0) {
-            if (webSocket.bufferedAmount > 64 * 1024) {
-                // 如果 WebSocket 发送缓冲区过载，延迟处理
-                setTimeout(sendBufferedData, 10);
+        function processQueue() {
+            if (sendQueue.length === 0) {
                 sending = false;
+                return;
+            }
+
+            if (webSocket.bufferedAmount > MAX_BUFFER_SIZE) {
+                // WebSocket 过载，降低发送速率
+                setTimeout(processQueue, 5);
                 return;
             }
 
@@ -653,9 +658,12 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 utils.ws.safeClose(webSocket);
                 return;
             }
+
+            // 继续发送下一批数据
+            requestAnimationFrame(processQueue);
         }
 
-        sending = false;
+        requestAnimationFrame(processQueue);
     }
 
     const transformStream = new TransformStream({
@@ -670,11 +678,14 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             try {
                 let dataToSend;
                 if (header) {
-                    dataToSend = new Uint8Array(header.byteLength + chunk.byteLength);
-                    dataToSend.set(new Uint8Array(header), 0);
-                    dataToSend.set(new Uint8Array(chunk), header.byteLength);
+                    // 如果 `header` 存在，合并到 chunk
+                    const combined = new Uint8Array(header.byteLength + chunk.byteLength);
+                    combined.set(new Uint8Array(header), 0);
+                    combined.set(new Uint8Array(chunk), header.byteLength);
+                    dataToSend = combined;
                     header = null;
                 } else {
+                    // 直接发送 chunk，不进行额外处理
                     dataToSend = chunk;
                 }
 
