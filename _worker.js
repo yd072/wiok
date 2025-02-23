@@ -629,44 +629,77 @@ function process维列斯Header(维列斯Buffer, userID) {
 
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
+    let header = responseHeader;
+    let sendQueue = [];
+    let sending = false;
+
+    function sendBufferedData() {
+        if (sending || webSocket.readyState !== WS_READY_STATE_OPEN) return;
+        sending = true;
+
+        while (sendQueue.length > 0) {
+            const data = sendQueue.shift();
+            try {
+                webSocket.send(data);
+            } catch (error) {
+                console.error('WebSocket send failed:', error);
+                utils.ws.safeClose(webSocket);
+                return;
+            }
+        }
+
+        sending = false;
+    }
+
+    const transformStream = new TransformStream({
+        async transform(chunk, controller) {
+            hasIncomingData = true;
+
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                console.warn('WebSocket not open, dropping data');
+                return;
+            }
+
+            try {
+                const dataToSend = header ? (header + chunk) : chunk;
+                sendQueue.push(dataToSend);
+                header = null;
+
+                // 触发批量发送
+                sendBufferedData();
+            } catch (error) {
+                console.error('Transform failed:', error);
+            }
+        }
+    });
 
     try {
-    await remoteSocket.readable
-        .pipeTo(
-            new WritableStream({
-                    async write(chunk) {
-                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                            throw new Error('WebSocket未连接');
+        await remoteSocket.readable
+            .pipeThrough(transformStream)
+            .pipeTo(
+                new WritableStream({
+                    close() {
+                        log(`Remote connection closed, data received: ${hasIncomingData}`);
+                        sendBufferedData();
+                    },
+                    abort(reason) {
+                        console.error('Remote connection aborted:', reason);
                     }
-
-                        hasIncomingData = true;
-                        // 优化数据发送
-                        if (responseHeader) {
-                            // 使用更高效的数据合并方式
-                            const data = new Uint8Array(responseHeader.length + chunk.length);
-                            data.set(responseHeader);
-                            data.set(new Uint8Array(chunk), responseHeader.length);
-                            webSocket.send(data.buffer);
-                            responseHeader = null;
-                    } else {
-                        webSocket.send(chunk);
-                    }
-                },
-                close() {
-                        log(`远程连接关闭，数据接收: ${hasIncomingData}`);
-                },
-                abort(reason) {
-                        log(`远程连接中断: ${reason}`);
-                        utils.ws.safeClose(webSocket);
-                    }
-            })
+                })
             );
     } catch (error) {
-        log(`数据传输错误: ${error.message}`);
-            utils.ws.safeClose(webSocket);
-    if (!hasIncomingData && retry) {
-        retry();
+        console.error('remoteSocketToWS exception:', error);
+        utils.ws.safeClose(webSocket);
+
+        if (!hasIncomingData && retry) {
+            log('Retrying connection due to error');
+            retry();
         }
+    }
+
+    if (!hasIncomingData && retry) {
+        log('Retrying connection');
+        retry();
     }
 }
 
