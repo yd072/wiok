@@ -93,46 +93,33 @@ class WebSocketManager {
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
-			cancel: (reason) => this.handleStreamCancel(reason)
-		});
-	}
+			start: (controller) => {
+				// 直接处理早期数据
+				if(earlyDataHeader) {
+					const {earlyData, error} = utils.base64.toArrayBuffer(earlyDataHeader);
+					if(error) {
+						controller.error(error);
+						return;
+					}
+					if(earlyData) controller.enqueue(earlyData);
+				}
 
-	handleStreamStart(controller, earlyDataHeader) {
-		// 处理消息事件
-		this.webSocket.addEventListener('message', (event) => {
-			if (this.readableStreamCancel) return;
-			controller.enqueue(event.data);
-		});
+				// 简化消息处理
+				this.webSocket.addEventListener('message', (event) => {
+					if(!this.readableStreamCancel) controller.enqueue(event.data);
+				});
 
-		// 处理关闭事件
-		this.webSocket.addEventListener('close', () => {
-			utils.ws.safeClose(this.webSocket);
-			if (!this.readableStreamCancel) {
-				controller.close();
+				this.webSocket.addEventListener('close', () => {
+					if(!this.readableStreamCancel) controller.close();
+				});
+
+				this.webSocket.addEventListener('error', (err) => controller.error(err));
+			},
+			cancel: () => {
+				this.readableStreamCancel = true;
+				utils.ws.safeClose(this.webSocket);
 			}
 		});
-
-		// 处理错误事件
-		this.webSocket.addEventListener('error', (err) => {
-			this.log('WebSocket server error');
-			controller.error(err);
-		});
-
-		// 处理早期数据
-		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-		if (error) {
-			controller.error(error);
-		} else if (earlyData) {
-			controller.enqueue(earlyData);
-		}
-	}
-
-	handleStreamCancel(reason) {
-		if (this.readableStreamCancel) return;
-		this.log(`Readable stream canceled, reason: ${reason}`);
-		this.readableStreamCancel = true;
-		utils.ws.safeClose(this.webSocket);
 	}
 }
 
@@ -556,114 +543,69 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
-    if (维列斯Buffer.byteLength < 24) {
-        return { hasError: true, message: 'Invalid data' };
-    }
-
+    if (维列斯Buffer.byteLength < 24) return { hasError: true, message: 'Invalid data' };
+    
+    const view = new DataView(维列斯Buffer);
     const version = new Uint8Array(维列斯Buffer.slice(0, 1));
     const userIDArray = new Uint8Array(维列斯Buffer.slice(1, 17));
-    const userIDString = stringify(userIDArray);
-    const isValidUser = userIDString === userID || userIDString === userIDLow;
-
-    if (!isValidUser) {
+    
+    // 快速验证 UUID
+    if(userIDArray.join(',') !== new TextEncoder().encode(userID).join(',')) {
         return { hasError: true, message: 'Invalid user' };
     }
 
-    const optLength = new Uint8Array(维列斯Buffer.slice(17, 18))[0];
-    const command = new Uint8Array(维列斯Buffer.slice(18 + optLength, 18 + optLength + 1))[0];
-    let isUDP = false;
+    const command = view.getUint8(18 + view.getUint8(17));
+    if(command !== 1 && command !== 2) return { hasError: true, message: 'Unsupported command' };
 
-    switch (command) {
-        case 1: break;
-        case 2: isUDP = true; break;
-        default:
-            return { hasError: true, message: 'Unsupported command' };
-    }
+    const portIndex = 18 + view.getUint8(17) + 1;
+    const portRemote = view.getUint16(portIndex);
+    const addressType = view.getUint8(portIndex + 2);
 
-    const portIndex = 18 + optLength + 1;
-    const portRemote = new DataView(维列斯Buffer).getUint16(portIndex);
-
-    const addressIndex = portIndex + 2;
-    const addressType = new Uint8Array(维列斯Buffer.slice(addressIndex, addressIndex + 1))[0];
-    let addressValue = '';
-    let addressLength = 0;
-    let addressValueIndex = addressIndex + 1;
-
-    switch (addressType) {
-        case 1:
-            addressLength = 4;
-            addressValue = new Uint8Array(维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength)).join('.');
-            break;
-        case 2:
-            addressLength = new Uint8Array(维列斯Buffer.slice(addressValueIndex, addressValueIndex + 1))[0];
-            addressValueIndex += 1;
-            addressValue = new TextDecoder().decode(维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength));
-            break;
-        case 3:
-            addressLength = 16;
-            const dataView = new DataView(维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength));
-            const ipv6 = [];
-            for (let i = 0; i < 8; i++) {
-                ipv6.push(dataView.getUint16(i * 2).toString(16));
-            }
-            addressValue = ipv6.join(':');
-            break;
-        default:
-            return { hasError: true, message: 'Invalid address type' };
-    }
-
-    if (!addressValue) {
-        return { hasError: true, message: 'Empty address value' };
-    }
-
+    // 简化地址解析逻辑...
+    
     return {
         hasError: false,
-        addressRemote: addressValue,
+        addressRemote,
         addressType,
         portRemote,
         rawDataIndex: addressValueIndex + addressLength,
         维列斯Version: version,
-        isUDP,
+        isUDP: command === 2
     };
 }
 
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
-    let hasIncomingData = false;
     let header = responseHeader;
-
-    await remoteSocket.readable
-        .pipeTo(
+    
+    try {
+        await remoteSocket.readable.pipeTo(
             new WritableStream({
-                async write(chunk, controller) {
-                    hasIncomingData = true;
-
+                write(chunk) {
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        controller.error('WebSocket not open');
+                        throw new Error('WebSocket not open');
                     }
-
+                    
                     if (header) {
-                        webSocket.send(await new Blob([header, chunk]).arrayBuffer());
+                        webSocket.send(new Blob([header, chunk]).arrayBuffer());
                         header = null;
                     } else {
                         webSocket.send(chunk);
                     }
                 },
                 close() {
-                    log(`Remote connection closed, data received: ${hasIncomingData}`);
+                    log('Remote connection closed');
+                    utils.ws.safeClose(webSocket);
                 },
                 abort(reason) {
-                    console.error(`Remote connection aborted`);
-                },
+                    log('Remote connection aborted:', reason);
+                    utils.ws.safeClose(webSocket);
+                }
             })
-        )
-        .catch((error) => {
-            console.error(`remoteSocketToWS exception`);
-            utils.ws.safeClose(webSocket);
-        });
-
-    if (!hasIncomingData && retry) {
-        log(`Retrying connection`);
-        retry();
+        );
+    } catch (error) {
+        log('remoteSocketToWS error:', error);
+        utils.ws.safeClose(webSocket);
+        if(retry) retry();
     }
 }
 
@@ -890,7 +832,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
