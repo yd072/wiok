@@ -515,41 +515,49 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
     async function useSocks5Pattern(address) {
-        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
+        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) {
+            return true;
+        }
         return go2Socks5s.some(pattern => {
-            let regexPattern = pattern.replace(/\*/g, '.*');
-            let regex = new RegExp(`^${regexPattern}$`, 'i');
-            return regex.test(address);
+            const regexPattern = pattern.replace(/\*/g, '.*');
+            return new RegExp(`^${regexPattern}$`, 'i').test(address);
         });
     }
 
     async function connectAndWrite(address, port, socks = false) {
         log(`正在连接 ${address}:${port}`);
         
-        const tcpSocket = await (socks ? 
-            await socks5Connect(addressType, address, port, log) :
-            connect({ 
-                hostname: address,
-                port: port,
-                allowHalfOpen: false,
-                keepAlive: true
-            })
-        );
+        try {
+            const tcpSocket = await (socks ? 
+                socks5Connect(addressType, address, port, log) :
+                connect({ 
+                    hostname: address,
+                    port: port,
+                    allowHalfOpen: false,
+                    keepAlive: true
+                })
+            );
 
-        remoteSocket.value = tcpSocket;
-        
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(rawClientData);
-        writer.releaseLock();
-        
-        return tcpSocket;
+            remoteSocket.value = tcpSocket;
+            
+            const writer = tcpSocket.writable.getWriter();
+            await writer.write(rawClientData);
+            writer.releaseLock();
+            
+            return tcpSocket;
+        } catch (error) {
+            log(`连接失败: ${error.message}`);
+            throw error;
+        }
     }
 
     async function retry() {
         try {
+            let tcpSocket;
             if (enableSocks) {
                 tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
             } else {
+                // 处理 proxyIP
                 if (!proxyIP || proxyIP === '') {
                     proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
                 } else {
@@ -565,11 +573,11 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 }
                 tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
             }
-            tcpSocket.closed.catch(error => {
-                console.log('Retry tcpSocket closed error', error);
-            }).finally(() => {
-                utils.ws.safeClose(webSocket);
-            });
+
+            tcpSocket.closed
+                .catch(error => log('Retry tcpSocket closed error', error))
+                .finally(() => utils.ws.safeClose(webSocket));
+
             remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
             log('Retry error:', error);
@@ -580,65 +588,80 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     if (go2Socks5s.length > 0 && enableSocks) {
         shouldUseSocks = await useSocks5Pattern(addressRemote);
     }
-    let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
+
+    const tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
     remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
-    if (维列斯Buffer.byteLength < 24) {
+    // 1. 提前定义常量
+    const HEADER_MIN_LENGTH = 24;
+    const VERSION_LENGTH = 1;
+    const USER_ID_LENGTH = 16;
+    const OPT_LENGTH_INDEX = 17;
+    
+    if (维列斯Buffer.byteLength < HEADER_MIN_LENGTH) {
         return { hasError: true, message: 'Invalid data' };
     }
 
-    const version = new Uint8Array(维列斯Buffer.slice(0, 1));
-    const userIDArray = new Uint8Array(维列斯Buffer.slice(1, 17));
-    const userIDString = stringify(userIDArray);
-    const isValidUser = userIDString === userID || userIDString === userIDLow;
-
-    if (!isValidUser) {
+    const dataView = new DataView(维列斯Buffer);
+    const bufferView = new Uint8Array(维列斯Buffer);
+    
+    const version = bufferView.slice(0, VERSION_LENGTH);
+    const userIDString = stringify(bufferView.slice(VERSION_LENGTH, VERSION_LENGTH + USER_ID_LENGTH));
+    
+    if (userIDString !== userID && userIDString !== userIDLow) {
         return { hasError: true, message: 'Invalid user' };
     }
 
-    const optLength = new Uint8Array(维列斯Buffer.slice(17, 18))[0];
-    const command = new Uint8Array(维列斯Buffer.slice(18 + optLength, 18 + optLength + 1))[0];
-    let isUDP = false;
-
-    switch (command) {
-        case 1: break;
-        case 2: isUDP = true; break;
-        default:
-            return { hasError: true, message: 'Unsupported command' };
+    const optLength = bufferView[OPT_LENGTH_INDEX];
+    const commandIndex = 18 + optLength;
+    const command = bufferView[commandIndex];
+    const isUDP = command === 2;
+    
+    if (command !== 1 && command !== 2) {
+        return { hasError: true, message: 'Unsupported command' };
     }
 
-    const portIndex = 18 + optLength + 1;
-    const portRemote = new DataView(维列斯Buffer).getUint16(portIndex);
-
-    const addressIndex = portIndex + 2;
-    const addressType = new Uint8Array(维列斯Buffer.slice(addressIndex, addressIndex + 1))[0];
+    const portIndex = commandIndex + 1;
+    const portRemote = dataView.getUint16(portIndex);
+    const addressType = bufferView[portIndex + 2];
+    let addressValueIndex = portIndex + 3;
+    
     let addressValue = '';
     let addressLength = 0;
-    let addressValueIndex = addressIndex + 1;
 
-    switch (addressType) {
-        case 1:
-            addressLength = 4;
-            addressValue = new Uint8Array(维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength)).join('.');
-            break;
-        case 2:
-            addressLength = new Uint8Array(维列斯Buffer.slice(addressValueIndex, addressValueIndex + 1))[0];
-            addressValueIndex += 1;
-            addressValue = new TextDecoder().decode(维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength));
-            break;
-        case 3:
-            addressLength = 16;
-            const dataView = new DataView(维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength));
-            const ipv6 = [];
-            for (let i = 0; i < 8; i++) {
-                ipv6.push(dataView.getUint16(i * 2).toString(16));
-            }
-            addressValue = ipv6.join(':');
-            break;
-        default:
-            return { hasError: true, message: 'Invalid address type' };
+    try {
+        switch (addressType) {
+            case 1: // IPv4
+                addressLength = 4;
+                addressValue = Array.from(bufferView.slice(addressValueIndex, addressValueIndex + addressLength)).join('.');
+                break;
+                
+            case 2: // Domain
+                addressLength = bufferView[addressValueIndex];
+                addressValueIndex++;
+                addressValue = new TextDecoder().decode(
+                    维列斯Buffer.slice(addressValueIndex, addressValueIndex + addressLength)
+                );
+                break;
+                
+            case 3: // IPv6
+                addressLength = 16;
+                const ipv6Parts = [];
+                for (let i = 0; i < 8; i++) {
+                    ipv6Parts.push(
+                        dataView.getUint16(addressValueIndex + i * 2).toString(16)
+                    );
+                }
+                addressValue = ipv6Parts.join(':');
+                break;
+                
+            default:
+                return { hasError: true, message: 'Invalid address type' };
+        }
+    } catch (error) {
+        return { hasError: true, message: `Address parsing error: ${error.message}` };
     }
 
     if (!addressValue) {
@@ -659,46 +682,65 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
+    let isWebSocketClosed = false;
+
+    // 监听 WebSocket 关闭事件
+    webSocket.addEventListener('close', () => {
+        isWebSocketClosed = true;
+    }, { once: true });
 
     try {
+        // 使用 mergeData 函数替代 Blob，提高性能
+        const mergeArrayBuffers = (header, chunk) => {
+            const merged = new Uint8Array(header.length + chunk.length);
+            merged.set(header);
+            merged.set(new Uint8Array(chunk), header.length);
+            return merged.buffer;
+        };
+
         await remoteSocket.readable.pipeTo(
             new WritableStream({
-                async write(chunk, controller) {
-                    hasIncomingData = true;
-
-                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        console.warn('WebSocket not open, dropping data');
-                        return;
+                async write(chunk) {
+                    if (isWebSocketClosed) {
+                        throw new Error('WebSocket closed');
                     }
 
                     try {
-                        const dataToSend = header ? await new Blob([header, chunk]).arrayBuffer() : chunk;
-                        webSocket.send(dataToSend);
-                        header = null;
+                        hasIncomingData = true;
+                        
+                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                            const dataToSend = header ? mergeArrayBuffers(header, chunk) : chunk;
+                            webSocket.send(dataToSend);
+                            header = null;
+                        } else {
+                            throw new Error('WebSocket not open');
+                        }
                     } catch (error) {
-                        console.error(`WebSocket send failed:`, error);
+                        log(`WebSocket send error: ${error.message}`);
+                        throw error; // 向上传播错误以触发 pipeTo 的 catch
                     }
                 },
                 close() {
-                    log(`Remote connection closed, data received: ${hasIncomingData}`);
+                    log(`Remote connection closed${hasIncomingData ? ' with' : ' without'} data received`);
                 },
                 abort(reason) {
-                    console.error(`Remote connection aborted:`, reason);
+                    log(`Remote connection aborted: ${reason}`);
                 },
             })
         );
     } catch (error) {
-        console.error(`remoteSocketToWS exception:`, error);
-        utils.ws.safeClose(webSocket);
+        log(`remoteSocketToWS error: ${error.message}`);
+        
+        // 安全关闭 WebSocket
+        if (!isWebSocketClosed) {
+            utils.ws.safeClose(webSocket);
+        }
+
+        // 如果没有收到数据且有重试函数，则重试
         if (!hasIncomingData && retry) {
-            log(`Retrying connection due to error`);
+            log('Retrying connection...');
             retry();
         }
-    }
-
-    if (!hasIncomingData && retry) {
-        log(`Retrying connection`);
-        retry();
     }
 }
 
