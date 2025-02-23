@@ -456,17 +456,12 @@ function mergeData(header, chunk) {
 }
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
-    let isWebSocketClosed = false;
-    let 维列斯Header = 维列斯ResponseHeader;
-
-    // 监听 WebSocket 关闭事件
-    webSocket.addEventListener('close', () => {
-        isWebSocketClosed = true;
-    }, { once: true });
-
     try {
+        // 只使用Google的备用DNS服务器,更快更稳定
         const dnsServer = '8.8.4.4';
         const dnsPort = 53;
+        
+        let 维列斯Header = 维列斯ResponseHeader;
         
         const tcpSocket = await connect({
             hostname: dnsServer,
@@ -481,35 +476,27 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 
         await tcpSocket.readable.pipeTo(new WritableStream({
             async write(chunk) {
-                if (isWebSocketClosed) {
-                    throw new Error('WebSocket closed');
-                }
-
-                try {
-                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                    try {
                         const combinedData = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
                         webSocket.send(combinedData);
                         if (维列斯Header) 维列斯Header = null;
-                    } else {
-                        throw new Error('WebSocket not open');
+                    } catch (error) {
+                        console.error(`发送数据时发生错误: ${error.message}`);
+                        utils.ws.safeClose(webSocket);
                     }
-                } catch (error) {
-                    log(`DNS数据发送错误: ${error.message}`);
-                    throw error; // 向上传播错误以触发 pipeTo 的 catch
                 }
             },
             close() {
                 log(`DNS连接已关闭`);
             },
             abort(reason) {
-                log(`DNS连接异常中断: ${reason}`);
+                console.error(`DNS连接异常中断`, reason);
             }
         }));
     } catch (error) {
-        log(`DNS查询错误: ${error.message}`);
-        if (!isWebSocketClosed) {
-            utils.ws.safeClose(webSocket);
-        }
+        console.error(`DNS查询异常: ${error.message}`, error.stack);
+        utils.ws.safeClose(webSocket);
     }
 }
 
