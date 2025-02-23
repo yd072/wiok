@@ -690,7 +690,16 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }, { once: true });
 
     try {
-        // 修复：使用已存在的 mergeData 函数而不是创建新的 mergeArrayBuffers
+        // 修复：确保 mergeArrayBuffers 函数正确处理 TypedArray
+        const mergeArrayBuffers = (header, chunk) => {
+            const headerArray = header instanceof Uint8Array ? header : new Uint8Array(header);
+            const chunkArray = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+            const merged = new Uint8Array(headerArray.length + chunkArray.length);
+            merged.set(headerArray);
+            merged.set(chunkArray, headerArray.length);
+            return merged.buffer;
+        };
+
         await remoteSocket.readable.pipeTo(
             new WritableStream({
                 async write(chunk) {
@@ -702,8 +711,8 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                         hasIncomingData = true;
                         
                         if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                            // 修复：使用 mergeData 而不是 mergeArrayBuffers
-                            const dataToSend = header ? mergeData(header, chunk) : chunk;
+                            // 修复：确保数据类型正确
+                            const dataToSend = header ? mergeArrayBuffers(header, chunk) : chunk;
                             webSocket.send(dataToSend);
                             header = null;
                         } else {
@@ -730,9 +739,9 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         }
 
         // 修复：确保重试逻辑正确执行
-        if (!hasIncomingData && retry) {
+        if (!hasIncomingData && retry && typeof retry === 'function') {
             log('Retrying connection...');
-            await retry(); // 添加 await 确保重试正确执行
+            await retry();
         }
     }
 }
@@ -960,7 +969,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
