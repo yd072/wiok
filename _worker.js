@@ -154,8 +154,6 @@ class WebSocketManager {
 
 export default {
 	async fetch(request, env, ctx) {
-		const clientIP = request.headers.get('CF-Connecting-IP');
-
 		try {
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
@@ -458,67 +456,60 @@ function mergeData(header, chunk) {
 }
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
-    const dnsServer = '8.8.4.4';
-    const dnsPort = 53;
-    
     let isWebSocketClosed = false;
-    webSocket.addEventListener('close', () => { isWebSocketClosed = true; }, { once: true });
-    
+    let 维列斯Header = 维列斯ResponseHeader;
+
+    webSocket.addEventListener('close', () => {
+        isWebSocketClosed = true;
+    }, { once: true });
+
     try {
+        const dnsServer = '8.8.4.4';
+        const dnsPort = 53;
+        
         const tcpSocket = await connect({
             hostname: dnsServer,
             port: dnsPort
         });
-        
-        // 写入数据
+
+        log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
+
         const writer = tcpSocket.writable.getWriter();
         await writer.write(udpChunk);
         writer.releaseLock();
-        
-        // 读取响应
-        const reader = tcpSocket.readable.getReader();
-        
-        // 使用循环而不是 pipeTo 以提高效率
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done || isWebSocketClosed) break;
-            
-            if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                if (维列斯ResponseHeader) {
-                    const combined = new Uint8Array(维列斯ResponseHeader.length + value.byteLength);
-                    combined.set(维列斯ResponseHeader, 0);
-                    combined.set(new Uint8Array(value), 维列斯ResponseHeader.length);
-                    webSocket.send(combined.buffer);
-                    维列斯ResponseHeader = null;
-                } else {
-                    webSocket.send(value);
+
+        await tcpSocket.readable.pipeTo(new WritableStream({
+            async write(chunk) {
+                if (isWebSocketClosed) {
+                    throw new Error('WebSocket closed');
                 }
+
+                try {
+                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                        const combinedData = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
+                        webSocket.send(combinedData);
+                        if (维列斯Header) 维列斯Header = null;
+                    } else {
+                        throw new Error('WebSocket not open');
+                    }
+                } catch (error) {
+                    log(`DNS数据发送错误: ${error.message}`);
+                    throw error; // 向上传播错误以触发 pipeTo 的 catch
+                }
+            },
+            close() {
+                log(`DNS连接已关闭`);
+            },
+            abort(reason) {
+                log(`DNS连接异常中断: ${reason}`);
             }
-        }
+        }));
     } catch (error) {
         log(`DNS查询错误: ${error.message}`);
-    } finally {
         if (!isWebSocketClosed) {
             utils.ws.safeClose(webSocket);
         }
     }
-}
-
-async function connectWithRetry(connectFn, maxRetries = 2, delay = 1000) {
-    let lastError;
-    
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-            return await connectFn();
-        } catch (error) {
-            lastError = error;
-            if (attempt < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-        }
-    }
-    
-    throw lastError;
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
@@ -535,7 +526,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     async function connectAndWrite(address, port, socks = false) {
         log(`正在连接 ${address}:${port}`);
         
-        return await connectWithRetry(async () => {
+        try {
             const tcpSocket = await (socks ? 
                 socks5Connect(addressType, address, port, log) :
                 connect({ 
@@ -553,7 +544,11 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             writer.releaseLock();
             
             return tcpSocket;
-        });
+        } catch (error) {
+            log(`连接失败: ${error.message}`);
+            log(`连接详情: 地址=${address}, 端口=${port}, 使用SOCKS5=${socks}`);
+            throw error;
+        }
     }
 
     async function retry() {
@@ -676,84 +671,133 @@ function process维列斯Header(维列斯Buffer, userID) {
 
 // 添加新的辅助函数
 function extractAddressInfo(addressType, bufferView, startIndex, dataView) {
-    // 使用字符串拼接而不是数组操作处理 IPv4
-    if (addressType === 1) { // IPv4
-        const a = bufferView[startIndex];
-        const b = bufferView[startIndex + 1];
-        const c = bufferView[startIndex + 2];
-        const d = bufferView[startIndex + 3];
+    let addressValue = '';
+    let addressLength = 0;
+
+    try {
+        switch (addressType) {
+            case 1: // IPv4
+                addressLength = 4;
+                addressValue = Array.from(
+                    bufferView.slice(startIndex, startIndex + addressLength)
+                ).join('.');
+                break;
+                
+            case 2: // Domain
+                addressLength = bufferView[startIndex];
+                startIndex++;
+                addressValue = new TextDecoder().decode(
+                    bufferView.slice(startIndex, startIndex + addressLength)
+                );
+                break;
+                
+            case 3: // IPv6
+                addressLength = 16;
+                const ipv6Parts = [];
+                for (let i = 0; i < 8; i++) {
+                    ipv6Parts.push(
+                        dataView.getUint16(startIndex + i * 2).toString(16)
+                    );
+                }
+                addressValue = ipv6Parts.join(':');
+                break;
+                
+            default:
+                return { 
+                    hasError: true, 
+                    message: '无效的地址类型' 
+                };
+        }
+
+        if (!addressValue) {
+            return { 
+                hasError: true, 
+                message: '地址值为空' 
+            };
+        }
+
         return {
             hasError: false,
-            addressValue: `${a}.${b}.${c}.${d}`,
-            nextIndex: startIndex + 4
+            addressValue,
+            nextIndex: startIndex + addressLength
+        };
+
+    } catch (error) {
+        return { 
+            hasError: true, 
+            message: `解析地址时出错: ${error.message}` 
         };
     }
-    
-    // 其他地址类型保持不变
-    // ...
 }
 
-function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
+async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
     let isWebSocketClosed = false;
 
-    webSocket.addEventListener('close', () => {
+    const handleWebSocketClose = () => {
         isWebSocketClosed = true;
-    }, { once: true });
+    };
+
+    webSocket.addEventListener('close', handleWebSocketClose, { once: true });
 
     try {
-        // 使用更高效的数据处理方式
         const dataProcessor = new WritableStream({
             async write(chunk) {
-                if (isWebSocketClosed) return;
+                if (isWebSocketClosed) {
+                    throw new Error('WebSocket closed');
+                }
 
                 hasIncomingData = true;
 
                 try {
                     if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                        // 避免不必要的 Blob 创建和 arrayBuffer 转换
-                        if (header) {
-                            const combinedChunk = new Uint8Array(header.length + chunk.byteLength);
-                            combinedChunk.set(header, 0);
-                            combinedChunk.set(new Uint8Array(chunk), header.length);
-                            webSocket.send(combinedChunk.buffer);
-                            header = null;
-                        } else {
-                            webSocket.send(chunk);
-                        }
+                        const dataToSend = header ? 
+                            await new Blob([header, chunk]).arrayBuffer() : 
+                            chunk;
+                        webSocket.send(dataToSend);
+                        
+                        if (header) header = null;
+                    } else {
+                        throw new Error('WebSocket not open');
                     }
                 } catch (error) {
-                    log(`数据发送错误: ${error.message}`);
-                    throw error;
+                    log(`WebSocket发送数据失败: ${error.message}`);
+                    throw error; 
                 }
+            },
+            close() {
+                log(`远程连接已关闭, 是否收到数据: ${hasIncomingData}`);
+            },
+            abort(reason) {
+                log(`远程连接异常中断: ${reason}`);
             }
         });
 
-        remoteSocket.readable.pipeTo(dataProcessor).catch(error => {
-            log(`数据管道错误: ${error.message}`);
-            if (!isWebSocketClosed) {
-                utils.ws.safeClose(webSocket);
-            }
-        });
+        await remoteSocket.readable.pipeTo(dataProcessor);
     } catch (error) {
-        log(`连接处理错误: ${error.message}`);
+        log(`remoteSocketToWS 异常: ${error.message}`);
+        
         if (!isWebSocketClosed) {
             utils.ws.safeClose(webSocket);
         }
+
         if (!hasIncomingData && retry) {
+            log(`由于错误重试连接`);
             retry();
         }
+    }
+
+    if (!hasIncomingData && retry) {
+        log(`重试连接`);
+        retry();
     }
 }
 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
 
-const byteToHexArray = new Array(256);
-for (let i = 0; i < 256; i++) {
-    byteToHexArray[i] = (i + 0x100).toString(16).substring(1);
-}
+const byteToHexArray = Array.from({ length: 256 }, (_, i) => (i + 256).toString(16).slice(1));
 
 function unsafeStringify(arr, offset = 0) {
     return `${byteToHexArray[arr[offset + 0]]}${byteToHexArray[arr[offset + 1]]}${byteToHexArray[arr[offset + 2]]}${byteToHexArray[arr[offset + 3]]}-` +
@@ -766,7 +810,7 @@ function unsafeStringify(arr, offset = 0) {
 
 function stringify(arr, offset = 0) {
     const uuid = unsafeStringify(arr, offset);
-    if (process.env.NODE_ENV !== 'production' && !utils.isValidUUID(uuid)) {
+    if (!utils.isValidUUID(uuid)) {
         throw new TypeError(`Invalid UUID: ${uuid}`);
     }
     return uuid;
@@ -955,7 +999,6 @@ async function 代理URL(代理网址, 目标网址) {
 
     return 新响应;
 }
-
 // 移除不必要的日志记录
 function conditionalLog(message, data = '', logLevel = 'info') {
     // 只在开发环境或错误时记录日志
