@@ -89,7 +89,6 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
-		this.initEventListeners();
 	}
 
 	initEventListeners() {
@@ -116,6 +115,7 @@ class WebSocketManager {
 	}
 
 	makeReadableStream(earlyDataHeader) {
+		this.initEventListeners();
 		return new ReadableStream({
 			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
 			cancel: (reason) => this.handleStreamCancel(reason)
@@ -523,122 +523,74 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         });
     }
 
-    try {
-        let shouldUseSocks = false;
-        if (go2Socks5s.length > 0 && enableSocks) {
-            shouldUseSocks = await useSocks5Pattern(addressRemote);
-        }
-
-        let tcpSocket;
-
-        if (shouldUseSocks) {
-            tcpSocket = await connectWithRetry(addressRemote, portRemote, true, addressType, log);
-        } else {
-            if (!proxyIP || proxyIP === '') {
-                proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
-            }
-            
-            let proxyHost = proxyIP;
-            let proxyPort = portRemote;
-
-            if (proxyIP.includes(']:')) {
-                // IPv6 格式解析
-                const match = proxyIP.match(/^\[([^\]]+)\]:(\d+)$/);
-                if (match) {
-                    proxyHost = match[1];
-                    proxyPort = parseInt(match[2], 10);
-                }
-            } else if (proxyIP.includes(':')) {
-                // 普通 IPv4 格式
-                const [host, port] = proxyIP.split(':');
-                proxyHost = host;
-                proxyPort = port ? parseInt(port, 10) : portRemote;
-            }
-
-            if (proxyHost.includes('.tp')) {
-                proxyPort = parseInt(proxyHost.split('.tp')[1].split('.')[0], 10) || portRemote;
-            }
-
-            tcpSocket = await connectWithRetry(proxyHost || addressRemote, proxyPort, false, addressType, log);
-        }
-
-        remoteSocket.value = tcpSocket;
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(rawClientData);
-        writer.releaseLock();
-
-        tcpSocket.closed.catch(error => {
-            log(`TCP连接关闭时出错: ${error.message}`);
-            cleanup(tcpSocket, webSocket, log);
-        });
-
-        remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
-
-    } catch (error) {
-        log(`TCP连接失败: ${error.message}`);
-
-        if (error.message.includes('ECONNREFUSED')) {
-            throw new Error('服务暂时不可用 (503)');
-        }
-        if (error.message.includes('ETIMEDOUT')) {
-            throw new Error('连接超时 (504)');
-        }
-        throw error;
-    }
-}
-
-// 连接重试逻辑
-async function connectWithRetry(address, port, isSocks = false, addressType, log, options = { maxRetries: 3, delay: 1000 }) {
-    let lastError;
-    
-    for (let i = 0; i < options.maxRetries; i++) {
+    async function connectAndWrite(address, port, socks = false) {
+        log(`正在连接 ${address}:${port}`);
+        
         try {
-            log(`尝试连接: ${address}:${port} (第 ${i + 1} 次尝试)`);
-
-            const socket = await (isSocks 
-                ? socks5Connect(addressType, address, port, log) 
-                : connect({
+            const tcpSocket = await (socks ? 
+                socks5Connect(addressType, address, port, log) :
+                connect({ 
                     hostname: address,
                     port: port,
                     allowHalfOpen: false,
                     keepAlive: true
                 })
             );
+
+            remoteSocket.value = tcpSocket;
             
-            log(`成功连接到 ${address}:${port}`);
-            return socket;
+            const writer = tcpSocket.writable.getWriter();
+            await writer.write(rawClientData);
+            writer.releaseLock();
+            
+            return tcpSocket;
         } catch (error) {
-            lastError = error;
             log(`连接失败: ${error.message}`);
-            if (i < options.maxRetries - 1) {
-                log(`将在 ${options.delay}ms 后重试`);
-                await new Promise(resolve => setTimeout(resolve, options.delay));
-            }
+            log(`连接详情: 地址=${address}, 端口=${port}, 使用SOCKS5=${socks}`);
+            throw error;
         }
     }
 
-    throw lastError || new Error(`无法连接到 ${address}:${port}`);
-}
+    async function retry() {
+        try {
+            let tcpSocket;
+            if (enableSocks) {
+                tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
+            } else {
+                if (!proxyIP || proxyIP === '') {
+                    proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
+                } else {
+                    const [ip, port] = proxyIP.includes(']:') ? 
+                        proxyIP.split(']:') :
+                        proxyIP.split(':');
+                    
+                    proxyIP = ip;
+                    portRemote = port || portRemote;
 
-// 资源清理
-function cleanup(socket, webSocket, log) {
-    try {
-        if (socket) {
-            try {
-                socket.close();
-                log(`已关闭 TCP 连接`);
-            } catch (error) {
-                log(`关闭 TCP 连接时出错: ${error.message}`);
+                    if (proxyIP.includes('.tp')) {
+                        portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
+                    }
+                }
+                tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
             }
-        }
 
-        if (webSocket && webSocket.readyState === WS_READY_STATE_OPEN) {
-            utils.ws.safeClose(webSocket);
-            log(`已安全关闭 WebSocket`);
+            tcpSocket.closed
+                .catch(error => log('Retry tcpSocket closed error', error))
+                .finally(() => utils.ws.safeClose(webSocket));
+
+            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
+        } catch (error) {
+            log('Retry error:', error);
         }
-    } catch (error) {
-        log(`清理资源时出错: ${error.message}`);
     }
+
+    let shouldUseSocks = false;
+    if (go2Socks5s.length > 0 && enableSocks) {
+        shouldUseSocks = await useSocks5Pattern(addressRemote);
+    }
+
+    const tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
+    remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
@@ -783,41 +735,46 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let header = responseHeader;
     let isWebSocketClosed = false;
 
-    webSocket.addEventListener('close', () => {
+    const handleWebSocketClose = () => {
         isWebSocketClosed = true;
-    }, { once: true });
+    };
+
+    webSocket.addEventListener('close', handleWebSocketClose, { once: true });
 
     try {
-        await remoteSocket.readable.pipeTo(
-            new WritableStream({
-                async write(chunk) {
-                    if (isWebSocketClosed) {
-                        throw new Error('WebSocket closed');
-                    }
-
-                    hasIncomingData = true;
-
-                    try {
-                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                            const dataToSend = header ? await new Blob([header, chunk]).arrayBuffer() : chunk;
-                            webSocket.send(dataToSend);
-                            if (header) header = null;
-                        } else {
-                            throw new Error('WebSocket not open');
-                        }
-                    } catch (error) {
-                        log(`WebSocket发送数据失败: ${error.message}`);
-                        throw error; 
-                    }
-                },
-                close() {
-                    log(`远程连接已关闭, 是否收到数据: ${hasIncomingData}`);
-                },
-                abort(reason) {
-                    log(`远程连接异常中断: ${reason}`);
+        const dataProcessor = new WritableStream({
+            async write(chunk) {
+                if (isWebSocketClosed) {
+                    throw new Error('WebSocket closed');
                 }
-            })
-        );
+
+                hasIncomingData = true;
+
+                try {
+                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                        const dataToSend = header ? 
+                            await new Blob([header, chunk]).arrayBuffer() : 
+                            chunk;
+                        webSocket.send(dataToSend);
+                        
+                        if (header) header = null;
+                    } else {
+                        throw new Error('WebSocket not open');
+                    }
+                } catch (error) {
+                    log(`WebSocket发送数据失败: ${error.message}`);
+                    throw error; 
+                }
+            },
+            close() {
+                log(`远程连接已关闭, 是否收到数据: ${hasIncomingData}`);
+            },
+            abort(reason) {
+                log(`远程连接异常中断: ${reason}`);
+            }
+        });
+
+        await remoteSocket.readable.pipeTo(dataProcessor);
     } catch (error) {
         log(`remoteSocketToWS 异常: ${error.message}`);
         
@@ -860,77 +817,91 @@ function stringify(arr, offset = 0) {
 }
 
 async function socks5Connect(addressType, addressRemote, portRemote, log) {
-    const { username, password, hostname, port } = parsedSocks5Address;
-    const socket = connect({ hostname, port });
+    try {
+        const { username, password, hostname, port } = parsedSocks5Address;
+        const socket = connect({ hostname, port });
 
-    const socksGreeting = new Uint8Array([5, 2, 0, 2]);
-    const writer = socket.writable.getWriter();
-    await writer.write(socksGreeting);
-    log('SOCKS5 greeting sent');
+        // 添加超时处理
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('SOCKS5 connection timeout')), 10000);
+        });
 
-    const reader = socket.readable.getReader();
-    const encoder = new TextEncoder();
-    let res = (await reader.read()).value;
-
-    if (res[0] !== 0x05) {
-        log(`SOCKS5 version error: received ${res[0]}, expected 5`);
-        return;
-    }
-    if (res[1] === 0xff) {
-        log("No acceptable authentication methods");
-        return;
-    }
-
-    if (res[1] === 0x02) {
-        log("SOCKS5 requires authentication");
-        if (!username || !password) {
-            log("Username and password required");
-            return;
-        }
-        const authRequest = new Uint8Array([
-            1,
-            username.length,
-            ...encoder.encode(username),
-            password.length,
-            ...encoder.encode(password)
+        // 使用 Promise.race 添加超时处理
+        const socksGreeting = new Uint8Array([5, 2, 0, 2]);
+        const writer = socket.writable.getWriter();
+        await Promise.race([
+            writer.write(socksGreeting),
+            timeoutPromise
         ]);
-        await writer.write(authRequest);
-        res = (await reader.read()).value;
-        if (res[0] !== 0x01 || res[1] !== 0x00) {
-            log("SOCKS5 authentication failed");
+        log('SOCKS5 greeting sent');
+
+        const reader = socket.readable.getReader();
+        const encoder = new TextEncoder();
+        let res = (await reader.read()).value;
+
+        if (res[0] !== 0x05) {
+            log(`SOCKS5 version error: received ${res[0]}, expected 5`);
             return;
         }
-    }
-
-    let DSTADDR;
-    switch (addressType) {
-        case 1:
-            DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
-            break;
-        case 2:
-            DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
-            break;
-        case 3:
-            DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
-            break;
-        default:
-            log(`Invalid address type: ${addressType}`);
+        if (res[1] === 0xff) {
+            log("No acceptable authentication methods");
             return;
-    }
-    const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
-    await writer.write(socksRequest);
-    log('SOCKS5 request sent');
+        }
 
-    res = (await reader.read()).value;
-    if (res[1] === 0x00) {
-        log("SOCKS5 connection established");
-    } else {
-        log("SOCKS5 connection failed");
-        return;
+        if (res[1] === 0x02) {
+            log("SOCKS5 requires authentication");
+            if (!username || !password) {
+                log("Username and password required");
+                return;
+            }
+            const authRequest = new Uint8Array([
+                1,
+                username.length,
+                ...encoder.encode(username),
+                password.length,
+                ...encoder.encode(password)
+            ]);
+            await writer.write(authRequest);
+            res = (await reader.read()).value;
+            if (res[0] !== 0x01 || res[1] !== 0x00) {
+                log("SOCKS5 authentication failed");
+                return;
+            }
+        }
+
+        let DSTADDR;
+        switch (addressType) {
+            case 1:
+                DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
+                break;
+            case 2:
+                DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
+                break;
+            case 3:
+                DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
+                break;
+            default:
+                log(`Invalid address type: ${addressType}`);
+                return;
+        }
+        const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
+        await writer.write(socksRequest);
+        log('SOCKS5 request sent');
+
+        res = (await reader.read()).value;
+        if (res[1] === 0x00) {
+            log("SOCKS5 connection established");
+        } else {
+            log("SOCKS5 connection failed");
+            return;
+        }
+        writer.releaseLock();
+        reader.releaseLock();
+        return socket;
+    } catch (error) {
+        log(`SOCKS5 连接错误: ${error.message}`);
+        throw error;
     }
-    writer.releaseLock();
-    reader.releaseLock();
-    return socket;
 }
 
 function socks5AddressParser(address) {
@@ -1871,7 +1842,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-			${decodeURIComponent(atob('MS5BREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgoyLkFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKMy5BRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+			${decodeURIComponent(atob('MS5BREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgoyLkFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKMy5BRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
