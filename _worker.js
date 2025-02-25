@@ -363,44 +363,33 @@ async function 维列斯OverWSHandler(request) {
 
     webSocket.accept();
 
-    // 优化1: 使用对象解构和默认值
-    const {
-        address = '',
-        portWithRandomLog = ''
-    } = {};
+    let address = '';
+    let portWithRandomLog = '';
+    const log = (info, event = '') => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
+    };
 
-    // 优化2: 简化日志函数
-    const log = (info, event = '') => 
-        console.log(`[${new Date().toISOString()}] [${address}:${portWithRandomLog}] ${info}`, event);
+    const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
+    const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
 
-    // 优化3: 使用可选链操作符
-    const earlyDataHeader = request.headers?.get('sec-websocket-protocol') || '';
-    
-    // 优化4: 使用Set提升性能
+    let remoteSocketWrapper = { value: null };
+    let isDns = false;
     const banHostsSet = new Set(banHosts);
 
-    // 优化5: 使用async/await简化流程
-    try {
-        const wsManager = new WebSocketManager(webSocket, log);
-        const readableStream = wsManager.makeReadableStream(earlyDataHeader);
-        
-        let remoteSocket = null;
-        let isDns = false;
-
-        await readableStream.pipeTo(new WritableStream({
-            async write(chunk) {
+    readableWebSocketStream.pipeTo(new WritableStream({
+        async write(chunk, controller) {
+            try {
                 if (isDns) {
                     return handleDNSQuery(chunk, webSocket, null, log);
                 }
-
-                if (remoteSocket) {
-                    const writer = remoteSocket.writable.getWriter();
+                if (remoteSocketWrapper.value) {
+                    const writer = remoteSocketWrapper.value.writable.getWriter();
                     await writer.write(chunk);
                     writer.releaseLock();
                     return;
                 }
 
-                // 优化6: 解构赋值简化代码
                 const {
                     hasError,
                     message,
@@ -409,71 +398,54 @@ async function 维列斯OverWSHandler(request) {
                     addressRemote = '',
                     rawDataIndex,
                     维列斯Version = new Uint8Array([0, 0]),
-                    isUDP
+                    isUDP,
                 } = process维列斯Header(chunk, userID);
 
+                address = addressRemote;
+                portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
                 if (hasError) {
                     throw new Error(message);
                 }
-
-                // 优化7: 使用对象存储状态
-                const state = {
-                    address: addressRemote,
-                    portWithRandomLog: `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '}`
-                };
-                Object.assign(this, state);
-
                 if (isUDP) {
-                    isDns = portRemote === 53;
-                    if (!isDns) {
+                    if (portRemote === 53) {
+                        isDns = true;
+                    } else {
                         throw new Error('UDP 代理仅对 DNS（53 端口）启用');
                     }
                 }
-
                 const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
                 const rawClientData = chunk.slice(rawDataIndex);
 
                 if (isDns) {
                     return handleDNSQuery(rawClientData, webSocket, 维列斯ResponseHeader, log);
                 }
-
                 if (!banHostsSet.has(addressRemote)) {
                     log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
-                    await handleTCPOutBound(
-                        { value: remoteSocket }, 
-                        addressType,
-                        addressRemote,
-                        portRemote,
-                        rawClientData,
-                        webSocket,
-                        维列斯ResponseHeader,
-                        log
-                    );
+                    handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log);
                 } else {
                     throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
                 }
-            },
-            close() {
-                log('readableWebSocketStream 已关闭');
-            },
-            abort(reason) {
-                log('readableWebSocketStream 已中止', JSON.stringify(reason));
+            } catch (error) {
+                log('处理数据时发生错误', error.message);
+                webSocket.close(1011, '内部错误');
             }
-        })).catch(err => {
-            log('readableWebSocketStream 管道错误', err);
-            webSocket.close(1011, '管道错误');
-        });
+        },
+        close() {
+            log(`readableWebSocketStream 已关闭`);
+        },
+        abort(reason) {
+            log(`readableWebSocketStream 已中止`, JSON.stringify(reason));
+        },
+    })).catch((err) => {
+        log('readableWebSocketStream 管道错误', err);
+        webSocket.close(1011, '管道错误');
+    });
 
-        return new Response(null, {
-            status: 101,
-            webSocket: client
-        });
-
-    } catch (error) {
-        log('处理WebSocket连接时发生错误', error);
-        webSocket.close(1011, '内部错误');
-        throw error;
-    }
+    return new Response(null, {
+        status: 101,
+        // @ts-ignore
+        webSocket: client,
+    });
 }
 
 function mergeData(header, chunk) {
@@ -541,83 +513,104 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
-    async function useSocks5Pattern(address) {
-        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) {
-            return true;
-        }
-        return go2Socks5s.some(pattern => {
-            const regexPattern = pattern.replace(/\*/g, '.*');
-            return new RegExp(`^${regexPattern}$`, 'i').test(address);
-        });
-    }
+    try {
+        let tcpSocket;
 
-    async function connectAndWrite(address, port, socks = false) {
-        log(`正在连接 ${address}:${port}`);
-        
+        if (enableSocks) {
+            tcpSocket = await connectWithRetry(addressRemote, portRemote, true, log);
+        } else {
+            proxyIP = proxyIP || atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
+            
+            let proxyHost = proxyIP;
+            let proxyPort = portRemote;
+
+            if (proxyIP.includes(']:')) {
+                const match = proxyIP.match(/^\[([^\]]+)\]:(\d+)$/);
+                if (match) {
+                    proxyHost = match[1];
+                    proxyPort = parseInt(match[2], 10);
+                }
+            } else if (proxyIP.includes(':')) {
+                const [host, port] = proxyIP.split(':');
+                proxyHost = host;
+                proxyPort = port ? parseInt(port, 10) : portRemote;
+            }
+
+            if (proxyHost.includes('.tp')) {
+                proxyPort = parseInt(proxyHost.split('.tp')[1].split('.')[0], 10) || portRemote;
+            }
+
+            tcpSocket = await connectWithRetry(proxyHost || addressRemote, proxyPort, false, log);
+        }
+
+        remoteSocket.value = tcpSocket;
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(rawClientData);
+        writer.releaseLock();
+
+        tcpSocket.closed.catch(error => {
+            log(`TCP连接关闭时出错: ${error.message}`);
+            cleanup(tcpSocket, webSocket, log);
+        });
+
+        remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
+
+    } catch (error) {
+        log(`TCP连接失败: ${error.message}`);
+
+        if (error.message.includes('ECONNREFUSED')) {
+            throw new Error('服务暂时不可用 (503)');
+        }
+        if (error.message.includes('ETIMEDOUT')) {
+            throw new Error('连接超时 (504)');
+        }
+        throw error;
+    }
+}
+
+async function connectWithRetry(address, port, isSocks = false, log, options = { maxRetries: 3, delay: 1000 }) {
+    let lastError;
+    
+    for (let i = 0; i < options.maxRetries; i++) {
         try {
-            const tcpSocket = await (socks ? 
-                socks5Connect(addressType, address, port, log) :
-                connect({ 
+            log(`尝试连接: ${address}:${port} (第 ${i + 1} 次尝试)`);
+
+            const socket = await (isSocks 
+                ? socks5Connect(addressType, address, port, log) 
+                : connect({
                     hostname: address,
                     port: port,
                     allowHalfOpen: false,
                     keepAlive: true
                 })
             );
-
-            remoteSocket.value = tcpSocket;
-            
-            const writer = tcpSocket.writable.getWriter();
-            await writer.write(rawClientData);
-            writer.releaseLock();
-            
-            return tcpSocket;
+            return socket;
         } catch (error) {
+            lastError = error;
             log(`连接失败: ${error.message}`);
-            throw error;
-        }
-    }
-
-    async function retry() {
-        try {
-            let tcpSocket;
-            if (enableSocks) {
-                tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
-            } else {
-                if (!proxyIP || proxyIP === '') {
-                    proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
-                } else {
-                    const [ip, port] = proxyIP.includes(']:') ? 
-                        proxyIP.split(']:') :
-                        proxyIP.split(':');
-                    
-                    proxyIP = ip;
-                    portRemote = port || portRemote;
-
-                    if (proxyIP.includes('.tp')) {
-                        portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
-                    }
-                }
-                tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
+            if (i < options.maxRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, options.delay));
             }
-
-            tcpSocket.closed
-                .catch(error => log('Retry tcpSocket closed error', error))
-                .finally(() => utils.ws.safeClose(webSocket));
-
-            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
-        } catch (error) {
-            log('Retry error:', error);
         }
     }
 
-    let shouldUseSocks = false;
-    if (go2Socks5s.length > 0 && enableSocks) {
-        shouldUseSocks = await useSocks5Pattern(addressRemote);
-    }
+    throw lastError;
+}
 
-    const tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
-    remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
+function cleanup(socket, webSocket, log) {
+    try {
+        if (socket?.writable) {
+            socket.destroy();
+            log(`已销毁 TCP 连接`);
+        }
+
+        if (webSocket?.readyState === WS_READY_STATE_OPEN) {
+            utils.ws.safeClose(webSocket);
+            log(`已安全关闭 WebSocket`);
+        }
+    } catch (error) {
+        log(`清理资源时出错: ${error.message}`);
+    }
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
@@ -629,7 +622,6 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 
     try {
-        // 基础验证
         if (!维列斯Buffer || !userID) {
             return { hasError: true, message: '缺少必要参数' };
         }
@@ -641,14 +633,12 @@ function process维列斯Header(维列斯Buffer, userID) {
         const dataView = new DataView(维列斯Buffer);
         const bufferView = new Uint8Array(维列斯Buffer);
         
-        // 提取和验证数据
         const version = bufferView.slice(0, HEADER_STRUCTURE.VERSION_LENGTH);
         const userIDString = stringify(bufferView.slice(
             HEADER_STRUCTURE.VERSION_LENGTH, 
             HEADER_STRUCTURE.VERSION_LENGTH + HEADER_STRUCTURE.USER_ID_LENGTH
         ));
         
-        // 用户ID验证
         if (userIDString !== userID && userIDString !== userIDLow) {
             return { hasError: true, message: '无效用户ID' };
         }
@@ -657,7 +647,6 @@ function process维列斯Header(维列斯Buffer, userID) {
         const commandIndex = HEADER_STRUCTURE.OPT_LENGTH_INDEX + 1;
         const command = bufferView[commandIndex];
 
-        // 命令验证
         if (command !== 1 && command !== 2) {
             return { hasError: true, message: '不支持的命令类型' };
         }
@@ -696,7 +685,6 @@ function process维列斯Header(维列斯Buffer, userID) {
     }
 }
 
-// 添加新的辅助函数
 function extractAddressInfo(addressType, bufferView, startIndex, dataView) {
     let addressValue = '';
     let addressLength = 0;
