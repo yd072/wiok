@@ -513,24 +513,43 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
+    async function useSocks5Pattern(address) {
+        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) {
+            return true;
+        }
+        return go2Socks5s.some(pattern => {
+            const regexPattern = pattern.replace(/\*/g, '.*');
+            return new RegExp(`^${regexPattern}$`, 'i').test(address);
+        });
+    }
+
     try {
+        let shouldUseSocks = false;
+        if (go2Socks5s.length > 0 && enableSocks) {
+            shouldUseSocks = await useSocks5Pattern(addressRemote);
+        }
+
         let tcpSocket;
 
-        if (enableSocks) {
-            tcpSocket = await connectWithRetry(addressRemote, portRemote, true, log);
+        if (shouldUseSocks) {
+            tcpSocket = await connectWithRetry(addressRemote, portRemote, true, addressType, log);
         } else {
-            proxyIP = proxyIP || atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
+            if (!proxyIP || proxyIP === '') {
+                proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
+            }
             
             let proxyHost = proxyIP;
             let proxyPort = portRemote;
 
             if (proxyIP.includes(']:')) {
+                // IPv6 格式解析
                 const match = proxyIP.match(/^\[([^\]]+)\]:(\d+)$/);
                 if (match) {
                     proxyHost = match[1];
                     proxyPort = parseInt(match[2], 10);
                 }
             } else if (proxyIP.includes(':')) {
+                // 普通 IPv4 格式
                 const [host, port] = proxyIP.split(':');
                 proxyHost = host;
                 proxyPort = port ? parseInt(port, 10) : portRemote;
@@ -540,7 +559,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 proxyPort = parseInt(proxyHost.split('.tp')[1].split('.')[0], 10) || portRemote;
             }
 
-            tcpSocket = await connectWithRetry(proxyHost || addressRemote, proxyPort, false, log);
+            tcpSocket = await connectWithRetry(proxyHost || addressRemote, proxyPort, false, addressType, log);
         }
 
         remoteSocket.value = tcpSocket;
@@ -568,7 +587,8 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     }
 }
 
-async function connectWithRetry(address, port, isSocks = false, log, options = { maxRetries: 3, delay: 1000 }) {
+// 连接重试逻辑
+async function connectWithRetry(address, port, isSocks = false, addressType, log, options = { maxRetries: 3, delay: 1000 }) {
     let lastError;
     
     for (let i = 0; i < options.maxRetries; i++) {
@@ -584,27 +604,35 @@ async function connectWithRetry(address, port, isSocks = false, log, options = {
                     keepAlive: true
                 })
             );
+            
+            log(`成功连接到 ${address}:${port}`);
             return socket;
         } catch (error) {
             lastError = error;
             log(`连接失败: ${error.message}`);
             if (i < options.maxRetries - 1) {
+                log(`将在 ${options.delay}ms 后重试`);
                 await new Promise(resolve => setTimeout(resolve, options.delay));
             }
         }
     }
 
-    throw lastError;
+    throw lastError || new Error(`无法连接到 ${address}:${port}`);
 }
 
+// 资源清理
 function cleanup(socket, webSocket, log) {
     try {
-        if (socket?.writable) {
-            socket.destroy();
-            log(`已销毁 TCP 连接`);
+        if (socket) {
+            try {
+                socket.close();
+                log(`已关闭 TCP 连接`);
+            } catch (error) {
+                log(`关闭 TCP 连接时出错: ${error.message}`);
+            }
         }
 
-        if (webSocket?.readyState === WS_READY_STATE_OPEN) {
+        if (webSocket && webSocket.readyState === WS_READY_STATE_OPEN) {
             utils.ws.safeClose(webSocket);
             log(`已安全关闭 WebSocket`);
         }
@@ -622,6 +650,7 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 
     try {
+        // 基础验证
         if (!维列斯Buffer || !userID) {
             return { hasError: true, message: '缺少必要参数' };
         }
@@ -633,12 +662,14 @@ function process维列斯Header(维列斯Buffer, userID) {
         const dataView = new DataView(维列斯Buffer);
         const bufferView = new Uint8Array(维列斯Buffer);
         
+        // 提取和验证数据
         const version = bufferView.slice(0, HEADER_STRUCTURE.VERSION_LENGTH);
         const userIDString = stringify(bufferView.slice(
             HEADER_STRUCTURE.VERSION_LENGTH, 
             HEADER_STRUCTURE.VERSION_LENGTH + HEADER_STRUCTURE.USER_ID_LENGTH
         ));
         
+        // 用户ID验证
         if (userIDString !== userID && userIDString !== userIDLow) {
             return { hasError: true, message: '无效用户ID' };
         }
@@ -647,6 +678,7 @@ function process维列斯Header(维列斯Buffer, userID) {
         const commandIndex = HEADER_STRUCTURE.OPT_LENGTH_INDEX + 1;
         const command = bufferView[commandIndex];
 
+        // 命令验证
         if (command !== 1 && command !== 2) {
             return { hasError: true, message: '不支持的命令类型' };
         }
@@ -685,6 +717,7 @@ function process维列斯Header(维列斯Buffer, userID) {
     }
 }
 
+// 添加新的辅助函数
 function extractAddressInfo(addressType, bufferView, startIndex, dataView) {
     let addressValue = '';
     let addressLength = 0;
@@ -1838,7 +1871,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-			${decodeURIComponent(atob('MS5BREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgoyLkFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKMy5BRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+			${decodeURIComponent(atob('MS5BREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgoyLkFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKMy5BRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
