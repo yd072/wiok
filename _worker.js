@@ -426,31 +426,27 @@ async function handleDNSQuery(udpChunk, webSocket, log, responseHeader = null) {
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
     async function useSocks5Pattern(address) {
-        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) {
-            return true;
-        }
         return go2Socks5s.some(pattern => {
             const regexPattern = pattern.replace(/\*/g, '.*');
             return new RegExp(`^${regexPattern}$`, 'i').test(address);
         });
     }
 
-    async function connectAndWrite(address, port, socks = false) {
+    async function connectAndWrite(address, port, useSocks = false) {
         log(`正在连接 ${address}:${port}`);
-        
+
         try {
-            const tcpSocket = await (socks ? 
-                socks5Connect(addressType, address, port, log) :
-                connect({ 
+            const tcpSocket = useSocks ? 
+                await socks5Connect(addressType, address, port, log) : 
+                await connect({
                     hostname: address,
                     port: port,
                     allowHalfOpen: false,
                     keepAlive: true
-                })
-            );
+                });
 
             remoteSocket.value = tcpSocket;
-            
+
             const writer = tcpSocket.writable.getWriter();
             await writer.write(rawClientData);
             writer.releaseLock();
@@ -468,28 +464,18 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             if (enableSocks) {
                 tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
             } else {
-                if (!proxyIP || proxyIP === '') {
-                    proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
-                } else {
-                    const [ip, port] = proxyIP.includes(']:') ? 
-                        proxyIP.split(']:') :
-                        proxyIP.split(':');
-                    
-                    proxyIP = ip;
-                    portRemote = port || portRemote;
-
-                    if (proxyIP.includes('.tp')) {
-                        portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
-                    }
-                }
-                tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
+                const [ip, port] = proxyIP.includes(']:') ? 
+                    proxyIP.split(']:') :
+                    proxyIP.split(':');
+                
+                tcpSocket = await connectAndWrite(ip || addressRemote, port || portRemote);
             }
 
             tcpSocket.closed
                 .catch(error => log('Retry tcpSocket closed error', error))
                 .finally(() => utils.ws.safeClose(webSocket));
 
-            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
+            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
         } catch (error) {
             log('Retry error:', error);
         }
@@ -500,8 +486,13 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         shouldUseSocks = await useSocks5Pattern(addressRemote);
     }
 
-    const tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
-    remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
+    try {
+        const tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
+        remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
+    } catch (error) {
+        log('TCP Outbound 连接失败:', error.message);
+        webSocket.close(1011, 'TCP连接失败');
+    }
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
