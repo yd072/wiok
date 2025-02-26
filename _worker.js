@@ -67,6 +67,7 @@ const utils = {
 			}
 		}
 	},
+};
 
 // WebSocket连接管理类
 class WebSocketManager {
@@ -89,11 +90,8 @@ class WebSocketManager {
 		// 处理消息事件
 		this.webSocket.addEventListener('message', (event) => {
 			if (this.readableStreamCancel) return;
-			if (!this.backpressure) {
+			if (!this.backpressure) 
 			controller.enqueue(event.data);
-			} else {
-				this.log('Backpressure, message discarded');
-			}
 		});
 
 		// 处理关闭事件
@@ -129,7 +127,7 @@ class WebSocketManager {
 		if (this.readableStreamCancel) return;
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
-		safeCloseWebSocket(this.webSocket);
+		utils.ws.safeClose(this.webSocket);
 	}
 }
 
