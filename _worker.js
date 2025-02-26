@@ -127,7 +127,7 @@ class WebSocketManager {
 		if (this.readableStreamCancel) return;
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
-		utils.ws.safeClose(this.webSocket);
+		safeCloseWebSocket(this.webSocket);
 	}
 }
 
