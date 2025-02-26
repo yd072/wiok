@@ -407,8 +407,6 @@ async function 维列斯OverWSHandler(request) {
 }
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
-    const WS_READY_STATE_OPEN = 1;
-    
     try {
         // 只使用Google的备用DNS服务器,更快更稳定
         const dnsServer = '8.8.4.4';
@@ -416,16 +414,10 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         
         let 维列斯Header = 维列斯ResponseHeader;
         
-        // 使用Promise.race设置2秒超时
-        const tcpSocket = await Promise.race([
-            connect({
-                hostname: dnsServer,
-                port: dnsPort
-            }),
-            new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('DNS连接超时')), 2000)
-            )
-        ]);
+        const tcpSocket = await connect({
+            hostname: dnsServer,
+            port: dnsPort
+        });
 
         log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
 
@@ -460,73 +452,74 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
-	async function useSocks5Pattern(address) {
-		return go2Socks5s.some(pattern => {
-			const regexPattern = pattern.replace(/\*/g, '.*');
-			return new RegExp(`^${regexPattern}$`, 'i').test(address);
-		});
-	}
+    async function useSocks5Pattern(address) {
+        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
+        return go2Socks5s.some(pattern => {
+            let regexPattern = pattern.replace(/\*/g, '.*');
+            let regex = new RegExp(`^${regexPattern}$`, 'i');
+            return regex.test(address);
+        });
+    }
 
-	async function connectAndWrite(address, port, useSocks = false) {
-		log(`正在连接 ${address}:${port}`);
+    async function connectAndWrite(address, port, socks = false) {
+        log(`正在连接 ${address}:${port}`);
+        
+        const tcpSocket = await (socks ? 
+            await socks5Connect(addressType, address, port, log) :
+            connect({ 
+                hostname: address,
+                port: port,
+                allowHalfOpen: false,
+                keepAlive: true
+            })
+        );
 
-		try {
-			const tcpSocket = useSocks ? 
-				await socks5Connect(addressType, address, port, log) : 
-				await connect({
-					hostname: address,
-					port: port,
-					allowHalfOpen: false
-				});
+        remoteSocket.value = tcpSocket;
+        
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(rawClientData);
+        writer.releaseLock();
+        
+        return tcpSocket;
+    }
 
-			remoteSocket.value = tcpSocket;
+    async function retry() {
+        try {
+            if (enableSocks) {
+                tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
+            } else {
+                if (!proxyIP || proxyIP === '') {
+                    proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
+                } else {
+                    const proxyParts = proxyIP.split(':');
+                    if (proxyIP.includes(']:')) {
+                        [proxyIP, portRemote] = proxyIP.split(']:');
+                    } else if (proxyParts.length === 2) {
+                        [proxyIP, portRemote] = proxyParts;
+                    }
+                    if (proxyIP.includes('.tp')) {
+                        portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
+                    }
+                }
+                tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
+            }
+            tcpSocket.closed.catch(error => {
+                console.log('Retry tcpSocket closed error', error);
+            }).finally(() => {
+                utils.ws.safeClose(webSocket);
+            });
+            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
+        } catch (error) {
+            log('Retry error:', error);
+        }
+    }
 
-			const writer = tcpSocket.writable.getWriter();
-			await writer.write(rawClientData);
-			writer.releaseLock();
-			
-			return tcpSocket;
-		} catch (error) {
-			log(`连接失败: ${error.message}`);
-			throw error;
-		}
-	}
-
-	async function retry() {
-		try {
-			let tcpSocket;
-			if (enableSocks) {
-				tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
-			} else {
-				const [ip, port] = proxyIP.includes(']:') ? 
-					proxyIP.split(']:') :
-					proxyIP.split(':');
-				
-				tcpSocket = await connectAndWrite(ip || addressRemote, port || portRemote);
-			}
-
-			tcpSocket.closed
-				.catch(error => log('Retry tcpSocket closed error', error))
-				.finally(() => utils.ws.safeClose(webSocket));
-
-			remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
-		} catch (error) {
-			log('Retry error:', error);
-		}
-	}
-
-	let shouldUseSocks = false;
-	if (go2Socks5s.length > 0 && enableSocks) {
-		shouldUseSocks = await useSocks5Pattern(addressRemote);
-	}
-
-	try {
-		const tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
-		remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
-	} catch (error) {
-		log('TCP Outbound 连接失败:', error.message);
-		webSocket.close(1011, 'TCP连接失败');
-	}
+    let shouldUseSocks = false;
+    if (go2Socks5s.length > 0 && enableSocks) {
+        shouldUseSocks = await useSocks5Pattern(addressRemote);
+    }
+    let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
+    remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
