@@ -88,67 +88,56 @@ class WebSocketManager {
 	constructor(webSocket, log) {
 		this.webSocket = webSocket;
 		this.log = log;
-		this.readableStreamCancel = false;
+		this.controller = null;
 		this.initEventListeners();
 	}
 
 	initEventListeners() {
-		this.messageListener = (event) => {
-			if (this.readableStreamCancel) return;
-			this.controller.enqueue(event.data);
-		};
-
-		this.closeListener = () => {
-			utils.ws.safeClose(this.webSocket);
-			if (!this.readableStreamCancel) {
-				this.controller.close();
-			}
-		};
-
-		this.errorListener = (err) => {
-			this.log('WebSocket server error');
-			this.controller.error(err);
-		};
-
-		this.webSocket.addEventListener('message', this.messageListener);
-		this.webSocket.addEventListener('close', this.closeListener);
-		this.webSocket.addEventListener('error', this.errorListener);
+		this.webSocket.addEventListener('message', this.onMessage.bind(this));
+		this.webSocket.addEventListener('close', this.onClose.bind(this));
+		this.webSocket.addEventListener('error', this.onError.bind(this));
 	}
 
-	makeReadableStream(earlyDataHeader) {
-		return new ReadableStream({
-			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
-			cancel: (reason) => this.handleStreamCancel(reason)
-		});
+	onMessage(event) {
+		if (this.controller) this.controller.enqueue(event.data);
 	}
 
-	handleStreamStart(controller, earlyDataHeader) {
-		this.controller = controller;
-		try {
-			const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-			if (error) {
-				controller.error(error);
-			} else if (earlyData) {
-				controller.enqueue(earlyData);
-			}
-		} catch (err) {
-			this.log('Error processing early data', err);
-			controller.error(err);
-		}
-	}
-
-	handleStreamCancel(reason) {
-		if (this.readableStreamCancel) return;
-		this.log(`Readable stream canceled, reason: ${reason}`);
-		this.readableStreamCancel = true;
+	onClose() {
 		utils.ws.safeClose(this.webSocket);
 		this.cleanup();
 	}
 
+	onError(err) {
+		this.log('WebSocket server error');
+		if (this.controller) this.controller.error(err);
+	}
+
+	makeReadableStream(earlyDataHeader) {
+		return new ReadableStream({
+			start: (controller) => {
+				this.controller = controller;
+				try {
+					const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+					if (error) controller.error(error);
+					else if (earlyData) controller.enqueue(earlyData);
+				} catch (err) {
+					this.log('Error processing early data', err);
+					controller.error(err);
+				}
+			},
+			cancel: (reason) => {
+				this.log(`Readable stream canceled, reason: ${reason}`);
+				utils.ws.safeClose(this.webSocket);
+				this.cleanup();
+			}
+		});
+	}
+
 	cleanup() {
-		this.webSocket.removeEventListener('message', this.messageListener);
-		this.webSocket.removeEventListener('close', this.closeListener);
-		this.webSocket.removeEventListener('error', this.errorListener);
+		this.webSocket.removeEventListener('message', this.onMessage.bind(this));
+		this.webSocket.removeEventListener('close', this.onClose.bind(this));
+		this.webSocket.removeEventListener('error', this.onError.bind(this));
+		if (this.controller) this.controller.close();
 	}
 }
 
