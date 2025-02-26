@@ -406,29 +406,57 @@ async function 维列斯OverWSHandler(request) {
 	return new Response(null, { status: 101, webSocket: client });
 }
 
-async function handleDNSQuery(udpChunk, webSocket, log, responseHeader = null) {
-	try {
-		const dnsServer = '8.8.4.4';
-		const tcpSocket = await connect({ hostname: dnsServer, port: 53 });
-		log(`成功连接到DNS服务器 ${dnsServer}:53`);
+async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
+    const WS_READY_STATE_OPEN = 1;
+    
+    try {
+        // 只使用Google的备用DNS服务器,更快更稳定
+        const dnsServer = '8.8.4.4';
+        const dnsPort = 53;
+        
+        let 维列斯Header = 维列斯ResponseHeader;
+        
+        // 使用Promise.race设置2秒超时
+        const tcpSocket = await Promise.race([
+            connect({
+                hostname: dnsServer,
+                port: dnsPort
+            }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('DNS连接超时')), 2000)
+            )
+        ]);
 
-		const writer = tcpSocket.writable.getWriter();
-		await writer.write(udpChunk);
-		writer.releaseLock();
+        log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
 
-		await tcpSocket.readable.pipeTo(new WritableStream({
-			async write(chunk) {
-				if (webSocket.readyState !== WS_READY_STATE_OPEN) throw new Error('WebSocket closed');
-				webSocket.send(responseHeader ? new Uint8Array([...responseHeader, ...chunk]) : chunk);
-				responseHeader = null;
-			},
-			close: () => log('DNS连接已关闭'),
-			abort: (reason) => log('DNS连接异常中断', reason)
-		}));
-	} catch (error) {
-		log(`DNS查询错误: ${error.message}`);
-		if (webSocket.readyState === WS_READY_STATE_OPEN) utils.ws.safeClose(webSocket);
-	}
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(udpChunk);
+        writer.releaseLock();
+
+        await tcpSocket.readable.pipeTo(new WritableStream({
+            async write(chunk) {
+                if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                    try {
+                        const combinedData = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
+                        webSocket.send(combinedData);
+                        if (维列斯Header) 维列斯Header = null;
+                    } catch (error) {
+                        console.error(`发送数据时发生错误: ${error.message}`);
+                        utils.ws.safeClose(webSocket);
+                    }
+                }
+            },
+            close() {
+                log(`DNS连接已关闭`);
+            },
+            abort(reason) {
+                console.error(`DNS连接异常中断`, reason);
+            }
+        }));
+    } catch (error) {
+        console.error(`DNS查询异常: ${error.message}`, error.stack);
+        utils.ws.safeClose(webSocket);
+    }
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
@@ -520,10 +548,8 @@ function process维列斯Header(维列斯Buffer, userID) {
 	const bufferView = new Uint8Array(维列斯Buffer);
 	const dataView = new DataView(维列斯Buffer);
 
-	// 提取版本号
 	const version = bufferView.slice(0, HEADER_STRUCTURE.VERSION_LENGTH);
 
-	// 验证用户ID
 	const userIDString = stringify(bufferView.slice(
 		HEADER_STRUCTURE.VERSION_LENGTH, 
 		HEADER_STRUCTURE.VERSION_LENGTH + HEADER_STRUCTURE.USER_ID_LENGTH
@@ -532,14 +558,12 @@ function process维列斯Header(维列斯Buffer, userID) {
 		return { hasError: true, message: '无效用户ID' };
 	}
 
-	// 解析命令
 	const commandIndex = HEADER_STRUCTURE.OPT_LENGTH_INDEX + 1;
 	const command = bufferView[commandIndex];
 	if (![1, 2].includes(command)) {
 		return { hasError: true, message: '不支持的命令类型' };
 	}
 
-	// 解析端口和地址
 	const portIndex = commandIndex + 1;
 	const portRemote = dataView.getUint16(portIndex);
 	const addressType = bufferView[portIndex + 2];
@@ -592,38 +616,43 @@ function extractAddressInfo(addressType, bufferView, startIndex, dataView) {
 }
 
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
-	let hasIncomingData = false;
-	let isWebSocketClosed = false;
+    let hasIncomingData = false;
+    let header = responseHeader;
 
-	webSocket.addEventListener('close', () => isWebSocketClosed = true, { once: true });
+    await remoteSocket.readable
+        .pipeTo(
+            new WritableStream({
+                async write(chunk, controller) {
+                    hasIncomingData = true;
 
-	try {
-		await remoteSocket.readable.pipeTo(
-			new WritableStream({
-				async write(chunk) {
-					if (isWebSocketClosed) throw new Error('WebSocket closed');
-					hasIncomingData = true;
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        controller.error('WebSocket not open');
+                    }
 
-					if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-						throw new Error('WebSocket not open');
-					}
+                    if (header) {
+                        webSocket.send(await new Blob([header, chunk]).arrayBuffer());
+                        header = null;
+                    } else {
+                        webSocket.send(chunk);
+                    }
+                },
+                close() {
+                    log(`Remote connection closed, data received: ${hasIncomingData}`);
+                },
+                abort(reason) {
+                    console.error(`Remote connection aborted`);
+                },
+            })
+        )
+        .catch((error) => {
+            console.error(`remoteSocketToWS exception`);
+            utils.ws.safeClose(webSocket);
+        });
 
-					webSocket.send(responseHeader ? await new Blob([responseHeader, chunk]).arrayBuffer() : chunk);
-					responseHeader = null; // 发送一次后清空
-				},
-				close: () => log(`远程连接关闭, 是否收到数据: ${hasIncomingData}`),
-				abort: (reason) => log(`远程连接中断: ${reason}`)
-			})
-		);
-	} catch (error) {
-		log(`remoteSocketToWS 异常: ${error.message}`);
-		if (!isWebSocketClosed) utils.ws.safeClose(webSocket);
-	}
-
-	if (!hasIncomingData && retry) {
-		log(`重试连接`);
-		retry();
-	}
+    if (!hasIncomingData && retry) {
+        log(`Retrying connection`);
+        retry();
+    }
 }
 
 const WS_READY_STATE_OPEN = 1;
