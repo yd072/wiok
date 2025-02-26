@@ -74,11 +74,13 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
+		this.backpressure = false;
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
 			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+			pull: (controller) => this.handleStreamPull(controller),
 			cancel: (reason) => this.handleStreamCancel(reason)
 		});
 	}
@@ -87,7 +89,11 @@ class WebSocketManager {
 		// 处理消息事件
 		this.webSocket.addEventListener('message', (event) => {
 			if (this.readableStreamCancel) return;
+			if (!this.backpressure) {
 			controller.enqueue(event.data);
+			} else {
+				this.log('Backpressure, message discarded');
+			}
 		});
 
 		// 处理关闭事件
@@ -110,6 +116,12 @@ class WebSocketManager {
 			controller.error(error);
 		} else if (earlyData) {
 			controller.enqueue(earlyData);
+		}
+	}
+
+	handleStreamPull(controller) {
+		if (controller.desiredSize > 0) {
+			this.backpressure = false;
 		}
 	}
 
