@@ -441,8 +441,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 await connect({
                     hostname: address,
                     port: port,
-                    allowHalfOpen: false,
-                    keepAlive: true
+                    allowHalfOpen: false
                 });
 
             remoteSocket.value = tcpSocket;
