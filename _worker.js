@@ -503,132 +503,85 @@ function process维列斯Header(维列斯Buffer, userID) {
         OPT_LENGTH_INDEX: 17
     };
 
-    try {
-        // 基础验证
-        if (!维列斯Buffer || !userID) {
-            return { hasError: true, message: '缺少必要参数' };
-        }
-
-        if (维列斯Buffer.byteLength < HEADER_STRUCTURE.MIN_LENGTH) {
-            return { hasError: true, message: '数据长度不足' };
-        }
-
-        const dataView = new DataView(维列斯Buffer);
-        const bufferView = new Uint8Array(维列斯Buffer);
-        
-        // 提取和验证数据
-        const version = bufferView.slice(0, HEADER_STRUCTURE.VERSION_LENGTH);
-        const userIDString = stringify(bufferView.slice(
-            HEADER_STRUCTURE.VERSION_LENGTH, 
-            HEADER_STRUCTURE.VERSION_LENGTH + HEADER_STRUCTURE.USER_ID_LENGTH
-        ));
-        
-        // 用户ID验证
-        if (userIDString !== userID && userIDString !== userIDLow) {
-            return { hasError: true, message: '无效用户ID' };
-        }
-
-        const optLength = bufferView[HEADER_STRUCTURE.OPT_LENGTH_INDEX];
-        const commandIndex = HEADER_STRUCTURE.OPT_LENGTH_INDEX + 1;
-        const command = bufferView[commandIndex];
-
-        // 命令验证
-        if (command !== 1 && command !== 2) {
-            return { hasError: true, message: '不支持的命令类型' };
-        }
-
-        const portIndex = commandIndex + 1;
-        const portRemote = dataView.getUint16(portIndex);
-        const addressType = bufferView[portIndex + 2];
-        let addressValueIndex = portIndex + 3;
-        
-        const addressInfo = extractAddressInfo(
-            addressType, 
-            bufferView, 
-            addressValueIndex, 
-            dataView
-        );
-
-        if (addressInfo.hasError) {
-            return addressInfo;
-        }
-
-        return {
-            hasError: false,
-            addressRemote: addressInfo.addressValue,
-            addressType,
-            portRemote,
-            rawDataIndex: addressInfo.nextIndex,
-            维列斯Version: version,
-            isUDP: command === 2
-        };
-
-    } catch (error) {
-        return { 
-            hasError: true, 
-            message: `处理请求头时出错: ${error.message}` 
-        };
+    if (!维列斯Buffer || !userID) {
+        return { hasError: true, message: '缺少必要参数' };
     }
+
+    if (维列斯Buffer.byteLength < HEADER_STRUCTURE.MIN_LENGTH) {
+        return { hasError: true, message: '数据长度不足' };
+    }
+
+    const bufferView = new Uint8Array(维列斯Buffer);
+    const dataView = new DataView(维列斯Buffer);
+
+    // 提取版本号
+    const version = bufferView.slice(0, HEADER_STRUCTURE.VERSION_LENGTH);
+
+    // 验证用户ID
+    const userIDString = stringify(bufferView.slice(
+        HEADER_STRUCTURE.VERSION_LENGTH, 
+        HEADER_STRUCTURE.VERSION_LENGTH + HEADER_STRUCTURE.USER_ID_LENGTH
+    ));
+    if (userIDString !== userID && userIDString !== userIDLow) {
+        return { hasError: true, message: '无效用户ID' };
+    }
+
+    // 解析命令
+    const commandIndex = HEADER_STRUCTURE.OPT_LENGTH_INDEX + 1;
+    const command = bufferView[commandIndex];
+    if (![1, 2].includes(command)) {
+        return { hasError: true, message: '不支持的命令类型' };
+    }
+
+    // 解析端口和地址
+    const portIndex = commandIndex + 1;
+    const portRemote = dataView.getUint16(portIndex);
+    const addressType = bufferView[portIndex + 2];
+    const addressInfo = extractAddressInfo(addressType, bufferView, portIndex + 3, dataView);
+
+    if (addressInfo.hasError) return addressInfo;
+
+    return {
+        hasError: false,
+        addressRemote: addressInfo.addressValue,
+        addressType,
+        portRemote,
+        rawDataIndex: addressInfo.nextIndex,
+        维列斯Version: version,
+        isUDP: command === 2
+    };
 }
 
-// 添加新的辅助函数
 function extractAddressInfo(addressType, bufferView, startIndex, dataView) {
-    let addressValue = '';
-    let addressLength = 0;
-
     try {
-        switch (addressType) {
-            case 1: // IPv4
-                addressLength = 4;
-                addressValue = Array.from(
-                    bufferView.slice(startIndex, startIndex + addressLength)
-                ).join('.');
-                break;
-                
-            case 2: // Domain
-                addressLength = bufferView[startIndex];
-                startIndex++;
-                addressValue = new TextDecoder().decode(
-                    bufferView.slice(startIndex, startIndex + addressLength)
-                );
-                break;
-                
-            case 3: // IPv6
-                addressLength = 16;
-                const ipv6Parts = [];
-                for (let i = 0; i < 8; i++) {
-                    ipv6Parts.push(
-                        dataView.getUint16(startIndex + i * 2).toString(16)
-                    );
-                }
-                addressValue = ipv6Parts.join(':');
-                break;
-                
-            default:
-                return { 
-                    hasError: true, 
-                    message: '无效的地址类型' 
-                };
-        }
-
-        if (!addressValue) {
-            return { 
-                hasError: true, 
-                message: '地址值为空' 
+        if (addressType === 1) { // IPv4
+            return {
+                hasError: false,
+                addressValue: Array.from(bufferView.slice(startIndex, startIndex + 4)).join('.'),
+                nextIndex: startIndex + 4
             };
         }
 
-        return {
-            hasError: false,
-            addressValue,
-            nextIndex: startIndex + addressLength
-        };
+        if (addressType === 2) { // Domain
+            const domainLength = bufferView[startIndex];
+            return {
+                hasError: false,
+                addressValue: new TextDecoder().decode(bufferView.slice(startIndex + 1, startIndex + 1 + domainLength)),
+                nextIndex: startIndex + 1 + domainLength
+            };
+        }
 
+        if (addressType === 3) { // IPv6
+            return {
+                hasError: false,
+                addressValue: Array.from({ length: 8 }, (_, i) => dataView.getUint16(startIndex + i * 2).toString(16)).join(':'),
+                nextIndex: startIndex + 16
+            };
+        }
+
+        return { hasError: true, message: '无效的地址类型' };
     } catch (error) {
-        return { 
-            hasError: true, 
-            message: `解析地址时出错: ${error.message}` 
-        };
+        return { hasError: true, message: `解析地址时出错: ${error.message}` };
     }
 }
 
