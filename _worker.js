@@ -607,6 +607,42 @@ function extractAddressInfo(addressType, bufferView, startIndex, dataView) {
 	}
 }
 
+async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
+    let hasIncomingData = false;
+    let isWebSocketClosed = false;
+
+    webSocket.addEventListener('close', () => isWebSocketClosed = true, { once: true });
+
+    try {
+        await remoteSocket.readable.pipeTo(
+            new WritableStream({
+                async write(chunk) {
+                    if (isWebSocketClosed) throw new Error('WebSocket closed');
+                    hasIncomingData = true;
+
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        throw new Error('WebSocket not open');
+                    }
+
+                    webSocket.send(responseHeader ? await new Blob([responseHeader, chunk]).arrayBuffer() : chunk);
+                    responseHeader = null; // 发送一次后清空
+                },
+                close: () => log(`远程连接关闭, 是否收到数据: ${hasIncomingData}`),
+                abort: (reason) => log(`远程连接中断: ${reason}`)
+            })
+        );
+    } catch (error) {
+        log(`remoteSocketToWS 异常: ${error.message}`);
+        if (!isWebSocketClosed) utils.ws.safeClose(webSocket);
+    }
+
+    if (!hasIncomingData && retry) {
+        log(`重试连接`);
+        retry();
+    }
+}
+
+
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
 
