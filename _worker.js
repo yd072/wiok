@@ -89,6 +89,7 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
+		this.initEventListeners();
 	}
 
 	initEventListeners() {
@@ -114,14 +115,7 @@ class WebSocketManager {
 		this.webSocket.addEventListener('error', this.errorListener);
 	}
 
-	cleanup() {
-		this.webSocket.removeEventListener('message', this.messageListener);
-		this.webSocket.removeEventListener('close', this.closeListener);
-		this.webSocket.removeEventListener('error', this.errorListener);
-	}
-
 	makeReadableStream(earlyDataHeader) {
-		this.initEventListeners();
 		return new ReadableStream({
 			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
 			cancel: (reason) => this.handleStreamCancel(reason)
@@ -149,6 +143,12 @@ class WebSocketManager {
 		this.readableStreamCancel = true;
 		utils.ws.safeClose(this.webSocket);
 		this.cleanup();
+	}
+
+	cleanup() {
+		this.webSocket.removeEventListener('message', this.messageListener);
+		this.webSocket.removeEventListener('close', this.closeListener);
+		this.webSocket.removeEventListener('error', this.errorListener);
 	}
 }
 
@@ -524,23 +524,30 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     }
 
     async function connectAndWrite(address, port, socks = false) {
-        log(`创建新连接 ${address}:${port}`);
-        const tcpSocket = await (socks ? 
-            socks5Connect(addressType, address, port, log) :
-            connect({ 
-                hostname: address,
-                port: port
-                
-            })
-        );
+        log(`正在连接 ${address}:${port}`);
         
-        remoteSocket.value = tcpSocket;
-        
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(rawClientData);
-        writer.releaseLock();
-        
-        return tcpSocket;
+        try {
+            const tcpSocket = await (socks ? 
+                socks5Connect(addressType, address, port, log) :
+                connect({ 
+                    hostname: address,
+                    port: port,
+                    allowHalfOpen: false,
+                    keepAlive: true
+                })
+            );
+
+            remoteSocket.value = tcpSocket;
+            
+            const writer = tcpSocket.writable.getWriter();
+            await writer.write(rawClientData);
+            writer.releaseLock();
+            
+            return tcpSocket;
+        } catch (error) {
+            log(`连接失败: ${error.message}`);
+            throw error;
+        }
     }
 
     async function retry() {
@@ -570,7 +577,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 .catch(error => log('Retry tcpSocket closed error', error))
                 .finally(() => utils.ws.safeClose(webSocket));
 
-            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
+            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
             log('Retry error:', error);
         }
@@ -724,60 +731,31 @@ function extractAddressInfo(addressType, bufferView, startIndex, dataView) {
 
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
-    let header = responseHeader;
     let isWebSocketClosed = false;
 
-    const handleWebSocketClose = () => {
-        isWebSocketClosed = true;
-    };
-
-    webSocket.addEventListener('close', handleWebSocketClose, { once: true });
+    webSocket.addEventListener('close', () => isWebSocketClosed = true, { once: true });
 
     try {
         await remoteSocket.readable.pipeTo(
             new WritableStream({
                 async write(chunk) {
-                    if (isWebSocketClosed) {
-                        throw new Error('WebSocket closed');
-                    }
-
+                    if (isWebSocketClosed) throw new Error('WebSocket closed');
                     hasIncomingData = true;
 
-                    try {
-                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                            const dataToSend = header ? 
-                                await new Blob([header, chunk]).arrayBuffer() : 
-                                chunk;
-                            webSocket.send(dataToSend);
-                            
-                            if (header) header = null;
-                        } else {
-                            throw new Error('WebSocket not open');
-                        }
-                    } catch (error) {
-                        log(`WebSocket发送数据失败: ${error.message}`);
-                        throw error;
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        throw new Error('WebSocket not open');
                     }
+
+                    webSocket.send(responseHeader ? await new Blob([responseHeader, chunk]).arrayBuffer() : chunk);
+                    responseHeader = null; // 发送一次后清空
                 },
-                close() {
-                    log(`远程连接已关闭, 是否收到数据: ${hasIncomingData}`);
-                },
-                abort(reason) {
-                    log(`远程连接异常中断: ${reason}`);
-                }
+                close: () => log(`远程连接关闭, 是否收到数据: ${hasIncomingData}`),
+                abort: (reason) => log(`远程连接中断: ${reason}`)
             })
         );
     } catch (error) {
         log(`remoteSocketToWS 异常: ${error.message}`);
-        
-        if (!isWebSocketClosed) {
-            utils.ws.safeClose(webSocket);
-        }
-
-        if (!hasIncomingData && retry) {
-            log(`重试连接`);
-            retry();
-        }
+        if (!isWebSocketClosed) utils.ws.safeClose(webSocket);
     }
 
     if (!hasIncomingData && retry) {
@@ -809,91 +787,77 @@ function stringify(arr, offset = 0) {
 }
 
 async function socks5Connect(addressType, addressRemote, portRemote, log) {
-    try {
-        const { username, password, hostname, port } = parsedSocks5Address;
-        const socket = connect({ hostname, port });
+    const { username, password, hostname, port } = parsedSocks5Address;
+    const socket = connect({ hostname, port });
 
-        // 添加超时处理
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('SOCKS5 connection timeout')), 10000);
-        });
+    const socksGreeting = new Uint8Array([5, 2, 0, 2]);
+    const writer = socket.writable.getWriter();
+    await writer.write(socksGreeting);
+    log('SOCKS5 greeting sent');
 
-        // 使用 Promise.race 添加超时处理
-        const socksGreeting = new Uint8Array([5, 2, 0, 2]);
-        const writer = socket.writable.getWriter();
-        await Promise.race([
-            writer.write(socksGreeting),
-            timeoutPromise
-        ]);
-        log('SOCKS5 greeting sent');
+    const reader = socket.readable.getReader();
+    const encoder = new TextEncoder();
+    let res = (await reader.read()).value;
 
-        const reader = socket.readable.getReader();
-        const encoder = new TextEncoder();
-        let res = (await reader.read()).value;
-
-        if (res[0] !== 0x05) {
-            log(`SOCKS5 version error: received ${res[0]}, expected 5`);
-            return;
-        }
-        if (res[1] === 0xff) {
-            log("No acceptable authentication methods");
-            return;
-        }
-
-        if (res[1] === 0x02) {
-            log("SOCKS5 requires authentication");
-            if (!username || !password) {
-                log("Username and password required");
-                return;
-            }
-            const authRequest = new Uint8Array([
-                1,
-                username.length,
-                ...encoder.encode(username),
-                password.length,
-                ...encoder.encode(password)
-            ]);
-            await writer.write(authRequest);
-            res = (await reader.read()).value;
-            if (res[0] !== 0x01 || res[1] !== 0x00) {
-                log("SOCKS5 authentication failed");
-                return;
-            }
-        }
-
-        let DSTADDR;
-        switch (addressType) {
-            case 1:
-                DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
-                break;
-            case 2:
-                DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
-                break;
-            case 3:
-                DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
-                break;
-            default:
-                log(`Invalid address type: ${addressType}`);
-                return;
-        }
-        const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
-        await writer.write(socksRequest);
-        log('SOCKS5 request sent');
-
-        res = (await reader.read()).value;
-        if (res[1] === 0x00) {
-            log("SOCKS5 connection established");
-        } else {
-            log("SOCKS5 connection failed");
-            return;
-        }
-        writer.releaseLock();
-        reader.releaseLock();
-        return socket;
-    } catch (error) {
-        log(`SOCKS5 连接错误: ${error.message}`);
-        throw error;
+    if (res[0] !== 0x05) {
+        log(`SOCKS5 version error: received ${res[0]}, expected 5`);
+        return;
     }
+    if (res[1] === 0xff) {
+        log("No acceptable authentication methods");
+        return;
+    }
+
+    if (res[1] === 0x02) {
+        log("SOCKS5 requires authentication");
+        if (!username || !password) {
+            log("Username and password required");
+            return;
+        }
+        const authRequest = new Uint8Array([
+            1,
+            username.length,
+            ...encoder.encode(username),
+            password.length,
+            ...encoder.encode(password)
+        ]);
+        await writer.write(authRequest);
+        res = (await reader.read()).value;
+        if (res[0] !== 0x01 || res[1] !== 0x00) {
+            log("SOCKS5 authentication failed");
+            return;
+        }
+    }
+
+    let DSTADDR;
+    switch (addressType) {
+        case 1:
+            DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
+            break;
+        case 2:
+            DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
+            break;
+        case 3:
+            DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
+            break;
+        default:
+            log(`Invalid address type: ${addressType}`);
+            return;
+    }
+    const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
+    await writer.write(socksRequest);
+    log('SOCKS5 request sent');
+
+    res = (await reader.read()).value;
+    if (res[1] === 0x00) {
+        log("SOCKS5 connection established");
+    } else {
+        log("SOCKS5 connection failed");
+        return;
+    }
+    writer.releaseLock();
+    reader.releaseLock();
+    return socket;
 }
 
 function socks5AddressParser(address) {
