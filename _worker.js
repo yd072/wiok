@@ -1360,7 +1360,6 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	addresses = addresses.concat(newAddressescsv);
 	let notlsresponseBody;
 
-	// 生成噪声参数的函数
 	function 生成随机噪声(UA = '') {
 		// 生成随机噪声参数
 		const 噪声列表 = [
@@ -1382,13 +1381,10 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		const 数量 = Math.floor(Math.random() * 3) + 3;
 	
 		// 随机打乱并选择参数
-		const 结果 = 噪声列表
+		return 噪声列表
 			.sort(() => Math.random() - 0.5)
 			.slice(0, 数量)
 			.join('&');
-		
-		console.log('生成的噪声参数:', 结果); // 添加这行来查看生成的噪声
-		return 结果;
 	}
 	
 	if (noTLS == 'true') {
@@ -1449,7 +1445,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `type=ws&` + 
                 `host=${伪装域名}&` + 
                 `path=${encodeURIComponent(最终路径)}&` + 
-                `${生成随机噪声(UA)}` +  // 这里使用了噪声参数
+                `${生成随机噪声(UA)}` +  // 传入UA参数
                 `#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
@@ -1524,7 +1520,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`type=ws&` +
 			`host=${伪装域名}&` +
 			`path=${encodeURIComponent(最终路径)}&` + 
-			`${生成随机噪声(UA)}` +  // 这里使用了噪声参数
+			`${生成随机噪声(UA)}` +  // 传入UA参数
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
