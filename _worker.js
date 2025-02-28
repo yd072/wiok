@@ -2914,58 +2914,6 @@ var require_js_yaml = __commonJS({
 // src/index.js
 init_modules_watch_stub();
 var yaml = require_js_yaml();
-
-const frontendHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>订阅转换</title>
-  <link href="https://cdn.jsdelivr.net/npm/element-ui@2.15.13/lib/theme-chalk/index.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/vue@2.7.14/dist/vue.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15.13/lib/index.js"></script>
-  <style>
-    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif; }
-    #app { padding: 20px; max-width: 800px; margin: 0 auto; }
-    .el-input { margin: 10px 0; }
-    .el-button { margin: 10px 0; }
-  </style>
-</head>
-<body>
-  <div id="app">
-    <h2>订阅转换</h2>
-    <el-input v-model="sourceUrl" placeholder="请输入订阅链接"></el-input>
-    <el-input v-model="targetUrl" placeholder="请输入后端地址(可选)"></el-input>
-    <el-button type="primary" @click="convert">转换</el-button>
-    <el-input v-if="convertedUrl" readonly :value="convertedUrl"></el-input>
-  </div>
-  <script>
-    new Vue({
-      el: '#app',
-      data: {
-        sourceUrl: '',
-        targetUrl: '',
-        convertedUrl: ''
-      },
-      methods: {
-        convert() {
-          if (!this.sourceUrl) {
-            this.$message.error('请输入订阅链接');
-            return;
-          }
-          const url = new URL(window.location.href);
-          url.searchParams.set('url', this.sourceUrl);
-          if (this.targetUrl) {
-            url.searchParams.set('bd', this.targetUrl);
-          }
-          this.convertedUrl = url.toString();
-        }
-      }
-    })
-  </script>
-</body>
-</html>`;
-
 var src_default = {
   async fetch(request, env) {
     // 如果没有配置环境变量,使用默认值
@@ -2981,29 +2929,76 @@ var src_default = {
 
     const url = new URL(request.url);
     const host = url.origin;
-    // 替换外部链接为内置的HTML
-    // const frontendUrl = 'https://raw.githubusercontent.com/yd072/psub/refs/heads/main/frontend.html';
+    const frontendHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>订阅转换</title>
+  <link href="https://cdn.jsdelivr.net/npm/element-ui@2.15.13/lib/theme-chalk/index.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15.13/lib/index.js"></script>
+</head>
+<body>
+  <div id="app">
+    <el-container>
+      <el-main>
+        <el-form ref="form" :model="form" label-width="120px">
+          <el-form-item label="订阅链接">
+            <el-input v-model="form.url" placeholder="请输入订阅链接"></el-input>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="convert">转换</el-button>
+          </el-form-item>
+          <el-form-item label="转换结果" v-if="result">
+            <el-input type="textarea" v-model="result" :rows="5" readonly></el-input>
+            <el-button type="primary" size="small" @click="copy">复制</el-button>
+          </el-form-item>
+        </el-form>
+      </el-main>
+    </el-container>
+  </div>
+  <script>
+    new Vue({
+      el: '#app',
+      data: {
+        form: {
+          url: ''
+        },
+        result: ''
+      },
+      methods: {
+        async convert() {
+          try {
+            const resp = await fetch('sub?' + new URLSearchParams({url: this.form.url}));
+            this.result = await resp.text();
+          } catch(err) {
+            this.$message.error('转换失败:' + err.message);
+          }
+        },
+        copy() {
+          navigator.clipboard.writeText(this.result);
+          this.$message.success('已复制到剪贴板');
+        }
+      }
+    })
+  </script>
+</body>
+</html>`;
+
+    // 修改原来的frontendUrl为frontendHtml
+    const frontendUrl = frontendHtml;
+
     const subDir = "subscription";
     const pathSegments = url.pathname.split("/").filter((segment) => segment.length > 0);
 
     // 以下逻辑基本保持不变
     if (pathSegments.length === 0) {
-      return fetch(frontendHtml)
-        .then(response => {
-          if (response.status !== 200) {
-            return new Response('Failed to fetch frontend', { status: response.status });
-          }
-          return response.text();
-        })
-        .then(originalHtml => {
-          const modifiedHtml = originalHtml.replace(/https:\/\/bulianglin2023\.dev/, host);
-          return new Response(modifiedHtml, {
-            status: 200,
-            headers: {
-              'Content-Type': 'text/html',
-            },
-          });
-        });
+      return new Response(frontendHtml, {
+        headers: {
+          'content-type': 'text/html;charset=UTF-8'
+        }
+      });
     } else if (pathSegments[0] === subDir) {
       const key = pathSegments[pathSegments.length - 1];
       const object = await SUB_BUCKET.get(key);
