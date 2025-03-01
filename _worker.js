@@ -75,6 +75,10 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
+		this.bufferSize = 0;
+		this.maxBufferSize = 1024 * 1024; // 1MB 缓冲区上限
+		this.messageQueue = [];
+		this.processingQueue = false;
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -86,16 +90,30 @@ class WebSocketManager {
 	}
 
 	handleStreamStart(controller, earlyDataHeader) {
-		// 处理消息事件
+		// 处理消息事件 - 使用队列和批处理
 		this.webSocket.addEventListener('message', (event) => {
 			if (this.readableStreamCancel) return;
-			controller.enqueue(event.data);
+			
+			// 添加到消息队列
+			this.messageQueue.push(event.data);
+			this.bufferSize += event.data.byteLength || event.data.length || 0;
+			
+			// 如果队列过大，立即处理
+			if (this.bufferSize > this.maxBufferSize) {
+				this.processMessageQueue(controller);
+			} else if (!this.processingQueue) {
+				// 使用requestAnimationFrame或setTimeout进行批处理
+				this.processingQueue = true;
+				setTimeout(() => this.processMessageQueue(controller), 0);
+			}
 		});
 
 		// 处理关闭事件
 		this.webSocket.addEventListener('close', () => {
 			safeCloseWebSocket(this.webSocket); 
 			if (!this.readableStreamCancel) {
+				// 处理剩余队列
+				this.processMessageQueue(controller);
 				controller.close();
 			}
 		});
@@ -114,15 +132,39 @@ class WebSocketManager {
 			controller.enqueue(earlyData);
 		}
 	}
+	
+	processMessageQueue(controller) {
+		if (this.messageQueue.length === 0) {
+			this.processingQueue = false;
+			return;
+		}
+		
+		// 批量处理消息
+		const batchSize = Math.min(10, this.messageQueue.length);
+		for (let i = 0; i < batchSize; i++) {
+			const data = this.messageQueue.shift();
+			controller.enqueue(data);
+			this.bufferSize -= data.byteLength || data.length || 0;
+		}
+		
+		// 如果还有消息，继续处理
+		if (this.messageQueue.length > 0) {
+			setTimeout(() => this.processMessageQueue(controller), 0);
+		} else {
+			this.processingQueue = false;
+		}
+	}
 
 	handleStreamPull(controller) {
-
+		// 可以在这里实现流控制逻辑
 	}
 
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
+		this.messageQueue = []; // 清空队列
+		this.bufferSize = 0;
 		safeCloseWebSocket(this.webSocket);
 	}
 }
@@ -618,9 +660,53 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 }
 
+// 改进remoteSocketToWS函数，使用缓冲区和批处理
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
+    let buffer = [];
+    let bufferSize = 0;
+    const maxBufferSize = 64 * 1024; // 64KB
+    let processingBuffer = false;
+
+    // 处理缓冲区的函数
+    const processBuffer = async () => {
+        if (buffer.length === 0) {
+            processingBuffer = false;
+            return;
+        }
+        
+        processingBuffer = true;
+        
+        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+            buffer = [];
+            bufferSize = 0;
+            processingBuffer = false;
+            return;
+        }
+        
+        // 如果有头部数据，与第一个块合并
+        if (header && buffer.length > 0) {
+            const firstChunk = buffer.shift();
+            webSocket.send(await new Blob([header, firstChunk]).arrayBuffer());
+            header = null;
+        } else {
+            // 批量发送数据
+            const batchSize = Math.min(5, buffer.length);
+            for (let i = 0; i < batchSize; i++) {
+                if (buffer.length > 0) {
+                    webSocket.send(buffer.shift());
+                }
+            }
+        }
+        
+        // 如果还有数据，继续处理
+        if (buffer.length > 0) {
+            setTimeout(processBuffer, 0);
+        } else {
+            processingBuffer = false;
+        }
+    };
 
     await remoteSocket.readable
         .pipeTo(
@@ -630,25 +716,40 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
 
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                         controller.error('WebSocket not open');
+                        return;
                     }
 
-                    if (header) {
-                        webSocket.send(await new Blob([header, chunk]).arrayBuffer());
-                        header = null;
-                    } else {
-                        webSocket.send(chunk);
+                    // 添加到缓冲区
+                    buffer.push(chunk);
+                    bufferSize += chunk.byteLength || chunk.length || 0;
+                    
+                    // 如果缓冲区过大或者有头部数据，立即处理
+                    if (bufferSize > maxBufferSize || header) {
+                        if (!processingBuffer) {
+                            processBuffer();
+                        }
+                    } else if (!processingBuffer) {
+                        // 使用setTimeout进行批处理
+                        processingBuffer = true;
+                        setTimeout(processBuffer, 0);
                     }
                 },
                 close() {
                     log(`Remote connection closed, data received: ${hasIncomingData}`);
+                    // 处理剩余缓冲区
+                    if (buffer.length > 0 && !processingBuffer) {
+                        processBuffer();
+                    }
                 },
                 abort(reason) {
                     console.error(`Remote connection aborted`);
+                    buffer = [];
+                    bufferSize = 0;
                 },
             })
         )
         .catch((error) => {
-            console.error(`remoteSocketToWS exception`);
+            console.error(`remoteSocketToWS exception`, error);
             safeCloseWebSocket(webSocket);
         });
 
@@ -694,71 +795,104 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
     const { username, password, hostname, port } = parsedSocks5Address;
     const socket = connect({ hostname, port });
 
-    const socksGreeting = new Uint8Array([5, 2, 0, 2]);
+    // 使用更高效的二进制数据处理
     const writer = socket.writable.getWriter();
-    await writer.write(socksGreeting);
-    log('SOCKS5 greeting sent');
-
     const reader = socket.readable.getReader();
     const encoder = new TextEncoder();
+    
+    // SOCKS5握手
+    await writer.write(new Uint8Array([5, 2, 0, 2]));
+    log('SOCKS5 greeting sent');
+
     let res = (await reader.read()).value;
-
-    if (res[0] !== 0x05) {
-        log(`SOCKS5 version error: received ${res[0]}, expected 5`);
-        return;
-    }
-    if (res[1] === 0xff) {
-        log("No acceptable authentication methods");
-        return;
+    if (!res || res[0] !== 0x05) {
+        log(`SOCKS5 version error: received ${res ? res[0] : 'none'}, expected 5`);
+        writer.releaseLock();
+        reader.releaseLock();
+        return null;
     }
 
-    if (res[1] === 0x02) {
+    // 认证处理
+    if (res[1] === 0x02 && username && password) {
         log("SOCKS5 requires authentication");
-        if (!username || !password) {
-            log("Username and password required");
-            return;
-        }
-        const authRequest = new Uint8Array([
-            1,
-            username.length,
-            ...encoder.encode(username),
-            password.length,
-            ...encoder.encode(password)
-        ]);
+        const usernameBytes = encoder.encode(username);
+        const passwordBytes = encoder.encode(password);
+        
+        const authRequest = new Uint8Array(3 + usernameBytes.length + passwordBytes.length);
+        authRequest[0] = 1;
+        authRequest[1] = usernameBytes.length;
+        authRequest.set(usernameBytes, 2);
+        authRequest[2 + usernameBytes.length] = passwordBytes.length;
+        authRequest.set(passwordBytes, 3 + usernameBytes.length);
+        
         await writer.write(authRequest);
         res = (await reader.read()).value;
-        if (res[0] !== 0x01 || res[1] !== 0x00) {
+        
+        if (!res || res[0] !== 0x01 || res[1] !== 0x00) {
             log("SOCKS5 authentication failed");
-            return;
+            writer.releaseLock();
+            reader.releaseLock();
+            return null;
         }
+    } else if (res[1] === 0xff) {
+        log("No acceptable authentication methods");
+        writer.releaseLock();
+        reader.releaseLock();
+        return null;
     }
 
+    // 构建连接请求
     let DSTADDR;
     switch (addressType) {
-        case 1:
+        case 1: // IPv4
             DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
             break;
-        case 2:
-            DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
+        case 2: // 域名
+            const domainBytes = encoder.encode(addressRemote);
+            DSTADDR = new Uint8Array(2 + domainBytes.length);
+            DSTADDR[0] = 3;
+            DSTADDR[1] = domainBytes.length;
+            DSTADDR.set(domainBytes, 2);
             break;
-        case 3:
-            DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
+        case 3: // IPv6
+            const ipv6Parts = addressRemote.split(':').map(x => x ? parseInt(x, 16) : 0);
+            DSTADDR = new Uint8Array(17); // 1 byte type + 16 bytes IPv6
+            DSTADDR[0] = 4;
+            
+            // 填充IPv6地址
+            for (let i = 0; i < 8; i++) {
+                DSTADDR[1 + i * 2] = (ipv6Parts[i] >> 8) & 0xff;
+                DSTADDR[2 + i * 2] = ipv6Parts[i] & 0xff;
+            }
             break;
         default:
             log(`Invalid address type: ${addressType}`);
-            return;
+            writer.releaseLock();
+            reader.releaseLock();
+            return null;
     }
-    const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
+
+    // 发送连接请求
+    const socksRequest = new Uint8Array(4 + DSTADDR.length + 2);
+    socksRequest[0] = 5; // SOCKS版本
+    socksRequest[1] = 1; // 连接命令
+    socksRequest[2] = 0; // 保留字段
+    socksRequest.set(DSTADDR, 3);
+    socksRequest[3 + DSTADDR.length] = (portRemote >> 8) & 0xff;
+    socksRequest[4 + DSTADDR.length] = portRemote & 0xff;
+    
     await writer.write(socksRequest);
     log('SOCKS5 request sent');
 
     res = (await reader.read()).value;
-    if (res[1] === 0x00) {
-        log("SOCKS5 connection established");
-    } else {
-        log("SOCKS5 connection failed");
-        return;
+    if (!res || res[1] !== 0x00) {
+        log(`SOCKS5 connection failed: ${res ? res[1] : 'no response'}`);
+        writer.releaseLock();
+        reader.releaseLock();
+        return null;
     }
+    
+    log("SOCKS5 connection established");
     writer.releaseLock();
     reader.releaseLock();
     return socket;
@@ -1733,7 +1867,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
