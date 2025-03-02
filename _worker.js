@@ -791,111 +791,139 @@ function stringify(arr, offset = 0) {
     return uuid;
 }
 
+// 修复 socks5Connect 函数
 async function socks5Connect(addressType, addressRemote, portRemote, log) {
     const { username, password, hostname, port } = parsedSocks5Address;
-    const socket = connect({ hostname, port });
+    const socket = await connect({ hostname, port });
 
     // 使用更高效的二进制数据处理
     const writer = socket.writable.getWriter();
     const reader = socket.readable.getReader();
     const encoder = new TextEncoder();
     
-    // SOCKS5握手
-    await writer.write(new Uint8Array([5, 2, 0, 2]));
-    log('SOCKS5 greeting sent');
+    try {
+        // SOCKS5握手
+        await writer.write(new Uint8Array([5, 2, 0, 2]));
+        log('SOCKS5 greeting sent');
 
-    let res = (await reader.read()).value;
-    if (!res || res[0] !== 0x05) {
-        log(`SOCKS5 version error: received ${res ? res[0] : 'none'}, expected 5`);
-        writer.releaseLock();
-        reader.releaseLock();
-        return null;
-    }
-
-    // 认证处理
-    if (res[1] === 0x02 && username && password) {
-        log("SOCKS5 requires authentication");
-        const usernameBytes = encoder.encode(username);
-        const passwordBytes = encoder.encode(password);
-        
-        const authRequest = new Uint8Array(3 + usernameBytes.length + passwordBytes.length);
-        authRequest[0] = 1;
-        authRequest[1] = usernameBytes.length;
-        authRequest.set(usernameBytes, 2);
-        authRequest[2 + usernameBytes.length] = passwordBytes.length;
-        authRequest.set(passwordBytes, 3 + usernameBytes.length);
-        
-        await writer.write(authRequest);
-        res = (await reader.read()).value;
-        
-        if (!res || res[0] !== 0x01 || res[1] !== 0x00) {
-            log("SOCKS5 authentication failed");
-            writer.releaseLock();
-            reader.releaseLock();
-            return null;
+        const { value: res, done } = await reader.read();
+        if (done || !res || res[0] !== 0x05) {
+            log(`SOCKS5 version error: received ${res ? res[0] : 'none'}, expected 5`);
+            throw new Error('SOCKS5 protocol error');
         }
-    } else if (res[1] === 0xff) {
-        log("No acceptable authentication methods");
-        writer.releaseLock();
-        reader.releaseLock();
-        return null;
-    }
 
-    // 构建连接请求
-    let DSTADDR;
-    switch (addressType) {
-        case 1: // IPv4
-            DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
-            break;
-        case 2: // 域名
-            const domainBytes = encoder.encode(addressRemote);
-            DSTADDR = new Uint8Array(2 + domainBytes.length);
-            DSTADDR[0] = 3;
-            DSTADDR[1] = domainBytes.length;
-            DSTADDR.set(domainBytes, 2);
-            break;
-        case 3: // IPv6
-            const ipv6Parts = addressRemote.split(':').map(x => x ? parseInt(x, 16) : 0);
-            DSTADDR = new Uint8Array(17); // 1 byte type + 16 bytes IPv6
-            DSTADDR[0] = 4;
-            
-            // 填充IPv6地址
-            for (let i = 0; i < 8; i++) {
-                DSTADDR[1 + i * 2] = (ipv6Parts[i] >> 8) & 0xff;
-                DSTADDR[2 + i * 2] = ipv6Parts[i] & 0xff;
+        // 认证处理
+        if (res[1] === 0x02) {
+            if (!username || !password) {
+                log("Username and password required but not provided");
+                throw new Error('Authentication required');
             }
-            break;
-        default:
-            log(`Invalid address type: ${addressType}`);
+            
+            log("SOCKS5 requires authentication");
+            const usernameBytes = encoder.encode(username);
+            const passwordBytes = encoder.encode(password);
+            
+            const authRequest = new Uint8Array(3 + usernameBytes.length + passwordBytes.length);
+            authRequest[0] = 1;
+            authRequest[1] = usernameBytes.length;
+            authRequest.set(usernameBytes, 2);
+            authRequest[2 + usernameBytes.length] = passwordBytes.length;
+            authRequest.set(passwordBytes, 3 + usernameBytes.length);
+            
+            await writer.write(authRequest);
+            const { value: authRes, done: authDone } = await reader.read();
+            
+            if (authDone || !authRes || authRes[0] !== 0x01 || authRes[1] !== 0x00) {
+                log("SOCKS5 authentication failed");
+                throw new Error('Authentication failed');
+            }
+        } else if (res[1] === 0xff) {
+            log("No acceptable authentication methods");
+            throw new Error('No acceptable auth methods');
+        }
+
+        // 构建连接请求
+        let DSTADDR;
+        switch (addressType) {
+            case 1: // IPv4
+                DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
+                break;
+            case 2: // 域名
+                const domainBytes = encoder.encode(addressRemote);
+                DSTADDR = new Uint8Array(2 + domainBytes.length);
+                DSTADDR[0] = 3;
+                DSTADDR[1] = domainBytes.length;
+                DSTADDR.set(domainBytes, 2);
+                break;
+            case 3: // IPv6
+                // 修复IPv6地址处理
+                DSTADDR = new Uint8Array(17); // 1 byte type + 16 bytes IPv6
+                DSTADDR[0] = 4;
+                
+                // 将IPv6地址转换为字节数组
+                const ipv6Bytes = addressRemote.split(':').reduce((acc, part) => {
+                    if (part === '') {
+                        // 处理::缩写
+                        const padding = 8 - (addressRemote.match(/:/g).length - 1);
+                        for (let i = 0; i < padding; i++) {
+                            acc.push(0, 0);
+                        }
+                    } else {
+                        const num = parseInt(part, 16);
+                        acc.push((num >> 8) & 0xff, num & 0xff);
+                    }
+                    return acc;
+                }, []);
+                
+                // 确保我们有16个字节
+                const paddedBytes = ipv6Bytes.slice(0, 16);
+                while (paddedBytes.length < 16) paddedBytes.push(0);
+                
+                DSTADDR.set(paddedBytes, 1);
+                break;
+            default:
+                log(`Invalid address type: ${addressType}`);
+                throw new Error('Invalid address type');
+        }
+
+        // 发送连接请求
+        const socksRequest = new Uint8Array(4 + DSTADDR.length + 2);
+        socksRequest[0] = 5; // SOCKS版本
+        socksRequest[1] = 1; // 连接命令
+        socksRequest[2] = 0; // 保留字段
+        socksRequest.set(DSTADDR, 3);
+        socksRequest[3 + DSTADDR.length] = (portRemote >> 8) & 0xff;
+        socksRequest[4 + DSTADDR.length] = portRemote & 0xff;
+        
+        await writer.write(socksRequest);
+        log('SOCKS5 request sent');
+
+        const { value: connRes, done: connDone } = await reader.read();
+        if (connDone || !connRes || connRes[1] !== 0x00) {
+            log(`SOCKS5 connection failed: ${connRes ? connRes[1] : 'no response'}`);
+            throw new Error('Connection failed');
+        }
+        
+        log("SOCKS5 connection established");
+        return socket;
+    } catch (error) {
+        log(`SOCKS5 error: ${error.message}`);
+        try {
             writer.releaseLock();
             reader.releaseLock();
-            return null;
-    }
-
-    // 发送连接请求
-    const socksRequest = new Uint8Array(4 + DSTADDR.length + 2);
-    socksRequest[0] = 5; // SOCKS版本
-    socksRequest[1] = 1; // 连接命令
-    socksRequest[2] = 0; // 保留字段
-    socksRequest.set(DSTADDR, 3);
-    socksRequest[3 + DSTADDR.length] = (portRemote >> 8) & 0xff;
-    socksRequest[4 + DSTADDR.length] = portRemote & 0xff;
-    
-    await writer.write(socksRequest);
-    log('SOCKS5 request sent');
-
-    res = (await reader.read()).value;
-    if (!res || res[1] !== 0x00) {
-        log(`SOCKS5 connection failed: ${res ? res[1] : 'no response'}`);
-        writer.releaseLock();
-        reader.releaseLock();
+            await socket.close();
+        } catch (e) {
+            // 忽略关闭错误
+        }
         return null;
+    } finally {
+        try {
+            writer.releaseLock();
+            reader.releaseLock();
+        } catch (e) {
+            // 忽略锁释放错误
+        }
     }
-    
-    log("SOCKS5 connection established");
-    writer.releaseLock();
-    reader.releaseLock();
-    return socket;
 }
 
 function socks5AddressParser(address) {
