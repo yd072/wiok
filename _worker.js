@@ -1098,3 +1098,22 @@ rules:
 
 	return [威图瑞, 猫猫猫, CFA配置];
 }
+
+// 添加整理函数的定义
+async function 整理(文本) {
+    if (!文本 || 文本 === '') return [];
+    
+    // 处理可能的数组格式
+    if (文本.startsWith('[') && 文本.endsWith(']')) {
+        try {
+            return JSON.parse(文本);
+        } catch (e) {
+            // 如果解析失败，继续使用下面的方法处理
+        }
+    }
+    
+    // 处理多行文本
+    return 文本.split(/[,\n]/)
+        .map(item => item.trim())
+        .filter(item => item !== '');
+}
