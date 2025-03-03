@@ -636,13 +636,14 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    let buffer = new Uint8Array(0);
-    const BUFFER_SIZE = 64 * 1024; // 64KB buffer
+    // 增加预分配的缓冲区大小，减少内存重新分配
+    const CHUNK_SIZE = 128 * 1024; // 128KB
+    let buffer = new Uint8Array(CHUNK_SIZE);
+    let bufferOffset = 0;
     
     const transformStream = new TransformStream({
-        start(controller) {
-            // 初始化时不做任何操作
-        },
+        start() {},
+        
         async transform(chunk, controller) {
             hasIncomingData = true;
             
@@ -651,24 +652,49 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 return;
             }
             
-            // 合并header和数据
+            // 优化header处理
             if (header) {
-                chunk = await new Blob([header, chunk]).arrayBuffer();
+                const headerArray = new Uint8Array(header);
+                const combinedLength = headerArray.length + chunk.byteLength;
+                const combinedChunk = new Uint8Array(combinedLength);
+                combinedChunk.set(headerArray, 0);
+                combinedChunk.set(new Uint8Array(chunk), headerArray.length);
+                chunk = combinedChunk.buffer;
                 header = null;
             }
             
-            // 使用缓冲区发送数据
-            buffer = new Uint8Array([...buffer, ...new Uint8Array(chunk)]);
+            const chunkArray = new Uint8Array(chunk);
             
-            if (buffer.length >= BUFFER_SIZE) {
-                webSocket.send(buffer);
-                buffer = new Uint8Array(0);
+            // 如果当前chunk加上已有数据会超出缓冲区
+            if (bufferOffset + chunkArray.length > CHUNK_SIZE) {
+                // 发送当前缓冲区
+                if (bufferOffset > 0) {
+                    webSocket.send(buffer.slice(0, bufferOffset));
+                    bufferOffset = 0;
+                }
+                
+                // 如果单个chunk太大，直接发送
+                if (chunkArray.length >= CHUNK_SIZE) {
+                    webSocket.send(chunkArray);
+                    return;
+                }
+            }
+            
+            // 将数据添加到缓冲区
+            buffer.set(chunkArray, bufferOffset);
+            bufferOffset += chunkArray.length;
+            
+            // 如果缓冲区接近满，发送数据
+            if (bufferOffset >= CHUNK_SIZE * 0.8) {
+                webSocket.send(buffer.slice(0, bufferOffset));
+                bufferOffset = 0;
             }
         },
-        flush(controller) {
-            // 发送剩余的缓冲数据
-            if (buffer.length > 0) {
-                webSocket.send(buffer);
+        
+        flush() {
+            // 发送剩余数据
+            if (bufferOffset > 0) {
+                webSocket.send(buffer.slice(0, bufferOffset));
             }
             log(`Transform stream flush, data received: ${hasIncomingData}`);
         }
