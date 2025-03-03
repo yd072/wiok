@@ -75,56 +75,122 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
+		this.messageQueue = [];
+		this.queueLock = false;
+		this.streamController = new StreamController(); // 添加流控制器
+		this.chunkSize = 64 * 1024; // 64KB 的数据块大小
 	}
 
-	makeReadableStream(earlyDataHeader) {
-		return new ReadableStream({
-			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
-			pull: (controller) => this.handleStreamPull(controller),
-			cancel: (reason) => this.handleStreamCancel(reason)
-		});
-	}
-
-	handleStreamStart(controller, earlyDataHeader) {
-		// 处理消息事件 - 直接使用流处理
-		this.webSocket.addEventListener('message', (event) => {
-			if (this.readableStreamCancel) return;
-			
-			// 直接将数据传入控制器，不使用队列
-			controller.enqueue(event.data);
-		});
-
-		// 处理关闭事件
-		this.webSocket.addEventListener('close', () => {
-			safeCloseWebSocket(this.webSocket); 
-			if (!this.readableStreamCancel) {
-				controller.close();
-			}
-		});
-
-		// 处理错误事件
-		this.webSocket.addEventListener('error', (err) => {
-			this.log('WebSocket server error');
-			controller.error(err);
-		});
-
-		// 处理早期数据
+	async handleStreamStart(controller, earlyDataHeader) {
+		// 处理早期数据时使用缓冲优化
 		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
 		if (error) {
 			controller.error(error);
-		} else if (earlyData) {
-			controller.enqueue(earlyData);
+			return;
+		}
+		
+		if (earlyData) {
+			// 对早期数据进行分块处理
+			await this.processDataInChunks(earlyData, controller);
+		}
+
+		// 改进消息事件处理
+		this.webSocket.addEventListener('message', async (event) => {
+			if (this.readableStreamCancel) return;
+			
+			try {
+				// 使用优化的数据处理流程
+				await this.processWebSocketMessage(event.data, controller);
+			} catch (error) {
+				this.log('Error processing message:', error);
+				controller.error(error);
+			}
+		});
+
+		// 改进错误处理
+		this.webSocket.addEventListener('error', (err) => {
+			this.log('WebSocket error:', err);
+			controller.error(new Error('WebSocket connection failed'));
+		});
+
+		// 改进关闭处理
+		this.webSocket.addEventListener('close', () => {
+			this.log('WebSocket closed');
+			if (!this.readableStreamCancel) {
+				// 处理剩余队列数据
+				while (this.messageQueue.length > 0) {
+					controller.enqueue(this.messageQueue.shift());
+				}
+				controller.close();
+			}
+		});
+	}
+
+	async processDataInChunks(data, controller) {
+		// 将数据分成较小的块进行处理
+		const chunk = await this.streamController.write(data);
+		
+		if (chunk) {
+			const view = new Uint8Array(chunk);
+			for (let offset = 0; offset < view.length; offset += this.chunkSize) {
+				const piece = view.slice(offset, offset + this.chunkSize);
+				if (this.queueLock) {
+					this.messageQueue.push(piece);
+				} else {
+					controller.enqueue(piece);
+				}
+				// 添加小延迟避免阻塞
+				await new Promise(resolve => setTimeout(resolve, 1));
+			}
 		}
 	}
-	
-	handleStreamPull(controller) {
-		// Web Streams API会自动处理背压，这里不需要额外逻辑
+
+	async processWebSocketMessage(data, controller) {
+		// 优化的消息处理流程
+		const transformStream = new TransformStream({
+			async transform(chunk, controller) {
+				const buffer = chunk instanceof ArrayBuffer ? chunk : await chunk.arrayBuffer();
+				controller.enqueue(new Uint8Array(buffer));
+			}
+		});
+
+		const reader = transformStream.readable.getReader();
+		const writer = transformStream.writable.getWriter();
+
+		try {
+			await writer.write(data);
+			writer.releaseLock();
+
+			while (true) {
+				const {done, value} = await reader.read();
+				if (done) break;
+				
+				await this.processDataInChunks(value, controller);
+			}
+		} finally {
+			reader.releaseLock();
+		}
+	}
+
+	async handleStreamPull(controller) {
+		this.queueLock = false;
+		
+		// 分批处理队列中的数据
+		const batchSize = 10; // 每批处理的消息数量
+		while (this.messageQueue.length > 0) {
+			const batch = this.messageQueue.splice(0, batchSize);
+			for (const data of batch) {
+				controller.enqueue(data);
+				await new Promise(resolve => setTimeout(resolve, 1)); // 微小延迟
+			}
+		}
 	}
 
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
-		this.log(`Readable stream canceled, reason: ${reason}`);
+		this.log(`Stream cancelled: ${reason}`);
 		this.readableStreamCancel = true;
+		this.messageQueue = []; // 清空队列
 		safeCloseWebSocket(this.webSocket);
 	}
 }
@@ -620,65 +686,130 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 }
 
+class StreamController {
+	constructor(maxBufferSize = 2 * 1024 * 1024) { // 2MB default
+		this.maxBufferSize = maxBufferSize;
+		this.currentBufferSize = 0;
+		this.queue = [];
+		this.backpressure = false;
+		this.processingChunks = false;
+	}
+
+	async write(chunk) {
+		const size = chunk.byteLength;
+		this.currentBufferSize += size;
+
+		// 优化的背压控制
+		if (this.currentBufferSize > this.maxBufferSize) {
+			this.backpressure = true;
+			await new Promise(resolve => {
+				this.queue.push({
+					resolve,
+					size
+				});
+			});
+		}
+
+		// 如果数据块太大，进行分片处理
+		if (size > 64 * 1024) { // 64KB
+			return this.splitLargeChunk(chunk);
+		}
+
+		return chunk;
+	}
+
+	splitLargeChunk(chunk) {
+		const view = new Uint8Array(chunk);
+		const chunkSize = 64 * 1024; // 64KB
+		const chunks = [];
+		
+		for (let offset = 0; offset < view.length; offset += chunkSize) {
+			chunks.push(view.slice(offset, offset + chunkSize));
+		}
+  
+		return chunks;
+	}
+
+	read(chunk) {
+		const size = chunk.byteLength;
+		this.currentBufferSize -= size;
+
+		// 优化的背压释放
+		if (this.backpressure && this.currentBufferSize <= this.maxBufferSize * 0.7) { // 70% 阈值
+			this.backpressure = false;
+			while (this.queue.length > 0 && this.currentBufferSize <= this.maxBufferSize) {
+				const next = this.queue.shift();
+				if (next) {
+					this.currentBufferSize += next.size;
+					next.resolve();
+				}
+			}
+		}
+	}
+}
+
 // 改进remoteSocketToWS函数，使用更高效的流处理和批量传输
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    
-    // 使用TransformStream进行高效的数据处理
-    const transformStream = new TransformStream({
-        start(controller) {
-            // 初始化时不做任何操作
-        },
-        async transform(chunk, controller) {
-            hasIncomingData = true;
-            
-            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                controller.error('WebSocket not open');
-                return;
-            }
-            
-            // 如果有头部数据，与第一个块合并后发送
-            if (header) {
-                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
-                header = null;
-            } else {
-                // 直接发送二进制数据，避免不必要的转换
-                webSocket.send(chunk);
-            }
-        },
-        flush(controller) {
-            log(`Transform stream flush, data received: ${hasIncomingData}`);
-        }
-    });
-    
+    const streamController = new StreamController();
+
     try {
-        // 使用管道直接连接数据流，减少中间环节
+        const transformStream = new TransformStream({
+            start(controller) {
+                // 初始化时预分配缓冲区
+                controller.desiredSize = 64 * 1024; // 64KB
+            },
+            async transform(chunk, controller) {
+                hasIncomingData = true;
+                
+                if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                    controller.error('WebSocket not open');
+                    return;
+                }
+
+                // 使用 StreamController 处理数据
+                const processedChunk = await streamController.write(chunk);
+                
+                if (header) {
+                    const combinedData = await new Blob([header, processedChunk]).arrayBuffer();
+                    webSocket.send(combinedData);
+                    header = null;
+                } else {
+                    webSocket.send(processedChunk);
+                }
+                
+                // 处理完成后释放缓冲
+                streamController.read(chunk);
+            },
+            flush() {
+                log(`Transform stream complete, received data: ${hasIncomingData}`);
+            }
+        });
+
         await remoteSocket.readable
             .pipeThrough(transformStream)
             .pipeTo(new WritableStream({
-                write() {
-                    // 数据已在transform中处理，这里不需要额外操作
-                },
+                write() {},
                 close() {
                     log(`Remote connection closed, data received: ${hasIncomingData}`);
                     if (!hasIncomingData && retry) {
-                        log(`No data received, retrying connection`);
+                        log('No data received, retrying connection');
                         retry();
                     }
                 },
                 abort(reason) {
-                    console.error(`Remote connection aborted`, reason);
+                    log(`Remote connection aborted: ${reason}`);
                     safeCloseWebSocket(webSocket);
                 }
             }));
+
     } catch (error) {
-        console.error(`remoteSocketToWS exception`, error);
+        log('remoteSocketToWS error:', error);
         safeCloseWebSocket(webSocket);
-        
-        // 如果没有收到数据且提供了重试函数，则尝试重试
+
         if (!hasIncomingData && retry) {
-            log(`Connection failed, retrying`);
+            log('Connection failed, retrying');
             retry();
         }
     }
@@ -770,6 +901,7 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
         case 3:
             DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
                 break;
+                
             default:
             log(`Invalid address type: ${addressType}`);
             return;
@@ -1410,39 +1542,11 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv, UA) {
+function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
 	let notlsresponseBody;
-
-	function 生成随机噪声(UA = '') {
-		// 生成随机噪声参数
-		const 噪声列表 = [
-			`t=${Date.now()}`,
-			`neko=${Math.random().toString(36).substring(7)}`,
-			`timestamp=${Math.floor(Math.random() * 1000000)}`,
-			`auth=${btoa(Math.random().toString()).substring(10, 15)}`,
-			`mux=${Math.random() > 0.5 ? 'true' : 'false'}`,
-			`level=${Math.floor(Math.random() * 10)}`,
-			`pbk=${btoa(Math.random().toString()).substring(5, 15)}`,
-			`sid=${Math.random().toString(36).substring(5)}`,
-			`spx=${Math.random() > 0.5 ? 'true' : 'false'}`,
-			`client=${['chrome','firefox','safari','edge'][Math.floor(Math.random() * 4)]}`,
-			`zone=${['cn','hk','sg','us'][Math.floor(Math.random() * 4)]}`,
-			`ver=${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}`
-		];
-	
-		// 统一生成3-5个随机参数
-		const 数量 = Math.floor(Math.random() * 3) + 3;
-	
-		// 随机打乱并选择参数
-		return 噪声列表
-			.sort(() => Math.random() - 0.5)
-			.slice(0, 数量)
-			.join('&');
-	}
-	
 	if (noTLS == 'true') {
 		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
@@ -1500,8 +1604,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `security=none&` + 
                 `type=ws&` + 
                 `host=${伪装域名}&` + 
-                `path=${encodeURIComponent(最终路径)}&` + 
-                `${生成随机噪声(UA)}` +  // 传入UA参数
+                `path=${encodeURIComponent(最终路径)}` + 
                 `#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
@@ -1575,8 +1678,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`alpn=h3&` + 
 			`type=ws&` +
 			`host=${伪装域名}&` +
-			`path=${encodeURIComponent(最终路径)}&` + 
-			`${生成随机噪声(UA)}` +  // 传入UA参数
+                        `path=${encodeURIComponent(最终路径)}` + 
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
@@ -1789,7 +1891,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCglMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
@@ -1943,3 +2045,4 @@ async function handleGetRequest(env, txt) {
 		headers: { "Content-Type": "text/html;charset=utf-8" }
 	});
 }
+
