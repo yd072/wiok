@@ -69,16 +69,15 @@ const utils = {
 	},
 };
 
-// WebSocket连接管理类
+// 优化WebSocket管理类
 class WebSocketManager {
 	constructor(webSocket, log) {
 		this.webSocket = webSocket;
 		this.log = log;
-		this.closed = false;
+		this.isClosed = false;
 	}
 
 	createWebSocketTransform(earlyDataHeader) {
-		// 创建一个 TransformStream 来处理数据流
 		return new TransformStream({
 			start: (controller) => {
 				// 处理早期数据
@@ -91,38 +90,38 @@ class WebSocketManager {
 					}
 				}
 
-				// 设置 WebSocket 事件处理
+				// 设置WebSocket事件监听
 				this.webSocket.addEventListener('message', (event) => {
-					if (this.closed) return;
-					controller.enqueue(event.data);
+					if (!this.isClosed) {
+						controller.enqueue(event.data);
+					}
 				});
 
 				this.webSocket.addEventListener('close', () => {
-					if (!this.closed) {
+					if (!this.isClosed) {
 						controller.terminate();
-						this.closed = true;
+						safeCloseWebSocket(this.webSocket);
 					}
 				});
 
 				this.webSocket.addEventListener('error', (err) => {
-					this.log('WebSocket 服务器错误');
+					this.log('WebSocket error:', err);
 					controller.error(err);
 				});
 			},
 
 			transform: (chunk, controller) => {
-				// 直接传递数据，无需额外处理
 				if (this.webSocket.readyState === WS_READY_STATE_OPEN) {
 					try {
 						this.webSocket.send(chunk);
-					} catch (error) {
-						controller.error(error);
+					} catch (err) {
+						controller.error(err); 
 					}
 				}
 			},
 
 			flush: (controller) => {
-				this.log('TransformStream 已完成');
+				this.isClosed = true;
 				safeCloseWebSocket(this.webSocket);
 			}
 		});
@@ -334,6 +333,7 @@ export default {
 	},
 };
 
+// 优化维列斯OverWSHandler函数
 async function 维列斯OverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
@@ -349,89 +349,79 @@ async function 维列斯OverWSHandler(request) {
 
     const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
     const wsManager = new WebSocketManager(webSocket, log);
-    
-    let remoteSocket = null;
+    const transform = wsManager.createWebSocketTransform(earlyDataHeader);
+
+    let remoteSocketWrapper = { value: null };
     let isDns = false;
     const banHostsSet = new Set(banHosts);
 
-    // 创建处理 WebSocket 数据的函数
-    async function handleWebSocketData(chunk) {
-        try {
-            if (isDns) {
-                return handleDNSQuery(chunk, webSocket, null, log);
-            }
-            
-            if (remoteSocket) {
-                const writer = remoteSocket.writable.getWriter();
-                await writer.write(chunk);
-                writer.releaseLock();
-                return;
-            }
+    // 使用TransformStream处理WebSocket数据
+    request.body
+        .pipeThrough(transform)
+        .pipeTo(new WritableStream({
+            async write(chunk) {
+                try {
+                    if (isDns) {
+                        return handleDNSQuery(chunk, webSocket, null, log);
+                    }
+                    if (remoteSocketWrapper.value) {
+                        const writer = remoteSocketWrapper.value.writable.getWriter();
+                        await writer.write(chunk);
+                        writer.releaseLock();
+                        return;
+                    }
 
-            const {
-                hasError,
-                message,
-                addressType,
-                portRemote = 443,
-                addressRemote = '',
-                rawDataIndex,
-                维列斯Version = new Uint8Array([0, 0]),
-                isUDP,
-            } = process维列斯Header(chunk, userID);
+                    const {
+                        hasError,
+                        message,
+                        addressType,
+                        portRemote = 443,
+                        addressRemote = '',
+                        rawDataIndex,
+                        维列斯Version = new Uint8Array([0, 0]),
+                        isUDP,
+                    } = process维列斯Header(chunk, userID);
 
-            address = addressRemote;
-            portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
-            
-            if (hasError) {
-                throw new Error(message);
-            }
-            
-            if (isUDP) {
-                if (portRemote === 53) {
-                    isDns = true;
-                } else {
-                    throw new Error('UDP 代理仅对 DNS（53 端口）启用');
+                    address = addressRemote;
+                    portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
+                    if (hasError) {
+                        throw new Error(message);
+                    }
+                    if (isUDP) {
+                        if (portRemote === 53) {
+                            isDns = true;
+                        } else {
+                            throw new Error('UDP 代理仅对 DNS（53 端口）启用');
+                        }
+                    }
+                    const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
+                    const rawClientData = chunk.slice(rawDataIndex);
+
+                    if (isDns) {
+                        return handleDNSQuery(rawClientData, webSocket, 维列斯ResponseHeader, log);
+                    }
+                    if (!banHostsSet.has(addressRemote)) {
+                        log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
+                        handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log);
+                    } else {
+                        throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
+                    }
+                } catch (error) {
+                    log('处理数据时发生错误', error.message);
+                    webSocket.close(1011, '内部错误');
                 }
-            }
-            
-            const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
-            const rawClientData = chunk.slice(rawDataIndex);
-
-            if (isDns) {
-                return handleDNSQuery(rawClientData, webSocket, 维列斯ResponseHeader, log);
-            }
-            
-            if (!banHostsSet.has(addressRemote)) {
-                log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
-                await handleTCPOutBound(addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log);
-            } else {
-                throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
-            }
-        } catch (error) {
-            log('处理数据时发生错误', error.message);
-            safeCloseWebSocket(webSocket);
-        }
-    }
-
-    // 使用 TransformStream 处理 WebSocket 数据
-    const webSocketTransform = wsManager.createWebSocketTransform(earlyDataHeader);
-    
-    // 创建一个 WritableStream 来处理传入的数据
-    const dataHandler = new WritableStream({
-        write: handleWebSocketData,
-        close() {
-            log(`WebSocket 连接已关闭`);
-        },
-        abort(reason) {
-            log(`WebSocket 连接已中止`, JSON.stringify(reason));
-        }
-    });
-
-    // 将 WebSocket 数据通过 TransformStream 传递给处理函数
-    webSocketTransform.readable.pipeTo(dataHandler).catch((err) => {
-        log('数据处理管道错误', err);
-        safeCloseWebSocket(webSocket);
-    });
+            },
+            close() {
+                log(`readableWebSocketStream 已关闭`);
+            },
+            abort(reason) {
+                log(`readableWebSocketStream 已中止`, JSON.stringify(reason));
+            },
+        }))
+        .catch((err) => {
+            log('readableWebSocketStream 管道错误', err);
+            webSocket.close(1011, '管道错误');
+        });
 
     return new Response(null, {
         status: 101,
@@ -439,8 +429,60 @@ async function 维列斯OverWSHandler(request) {
     });
 }
 
-// 优化 TCP 出站连接处理函数
-async function handleTCPOutBound(addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
+function mergeData(header, chunk) {
+    const merged = new Uint8Array(header.length + chunk.length);
+    merged.set(header);
+    merged.set(chunk, header.length);
+    return merged;
+}
+
+async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
+    try {
+        // 只使用Google的备用DNS服务器,更快更稳定
+        const dnsServer = '8.8.4.4';
+        const dnsPort = 53;
+        
+        let 维列斯Header = 维列斯ResponseHeader;
+        
+        const tcpSocket = await connect({
+            hostname: dnsServer,
+            port: dnsPort
+        });
+
+        log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
+
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(udpChunk);
+        writer.releaseLock();
+
+        await tcpSocket.readable.pipeTo(new WritableStream({
+            async write(chunk) {
+                if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                    try {
+                        const combinedData = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
+                        webSocket.send(combinedData);
+                        if (维列斯Header) 维列斯Header = null;
+                    } catch (error) {
+                        console.error(`发送数据时发生错误: ${error.message}`);
+                        safeCloseWebSocket(webSocket);
+                    }
+                }
+            },
+            close() {
+                log(`DNS连接已关闭`);
+            },
+            abort(reason) {
+                console.error(`DNS连接异常中断`, reason);
+            }
+        }));
+    } catch (error) {
+        console.error(`DNS查询异常: ${error.message}`, error.stack);
+        safeCloseWebSocket(webSocket);
+    }
+}
+
+// 优化handleTCPOutBound函数
+async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, retry, log) {
     async function useSocks5Pattern(address) {
         if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
         return go2Socks5s.some(pattern => {
@@ -450,15 +492,10 @@ async function handleTCPOutBound(addressType, addressRemote, portRemote, rawClie
         });
     }
 
-    let tcpSocket = null;
-    let hasIncomingData = false;
-    let retry = null;
-
-    // 创建连接并发送数据的函数
     async function connectAndWrite(address, port, socks = false) {
         log(`正在连接 ${address}:${port}`);
         
-        const socket = await (socks ? 
+        const tcpSocket = await (socks ? 
             await socks5Connect(addressType, address, port, log) :
             connect({ 
                 hostname: address,
@@ -468,15 +505,56 @@ async function handleTCPOutBound(addressType, addressRemote, portRemote, rawClie
             })
         );
 
-        const writer = socket.writable.getWriter();
+        remoteSocket.value = tcpSocket;
+        
+        // 使用TransformStream处理数据流
+        const transform = new TransformStream({
+            start(controller) {
+                if (维列斯ResponseHeader) {
+                    controller.enqueue(维列斯ResponseHeader);
+                }
+            },
+            transform(chunk, controller) {
+                controller.enqueue(chunk);
+            }
+        });
+
+        // 使用pipe连接数据流
+        tcpSocket.readable
+            .pipeThrough(transform)
+            .pipeTo(new WritableStream({
+                write(chunk) {
+                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                        webSocket.send(chunk);
+                    }
+                },
+                close() {
+                    log('TCP连接已关闭');
+                    safeCloseWebSocket(webSocket);
+                },
+                abort(err) {
+                    log('TCP连接异常中断:', err);
+                    safeCloseWebSocket(webSocket);
+                }
+            }))
+            .catch(error => {
+                log('数据传输错误:', error);
+                safeCloseWebSocket(webSocket);
+                if (!hasIncomingData && retry) {
+                    log('尝试重新连接...');
+                    retry();
+                }
+            });
+
+        // 写入初始数据
+        const writer = tcpSocket.writable.getWriter();
         await writer.write(rawClientData);
         writer.releaseLock();
         
-        return socket;
+        return tcpSocket;
     }
 
-    // 重试连接的函数
-    async function retryConnection() {
+    async function retry() {
         try {
             if (enableSocks) {
                 tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
@@ -496,184 +574,23 @@ async function handleTCPOutBound(addressType, addressRemote, portRemote, rawClie
                 }
                 tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
             }
-            
-            // 使用 TransformStream 处理远程数据
-            const remoteToWSTransform = new TransformStream({
-                start(controller) {
-                    // 发送响应头
-                    if (维列斯ResponseHeader) {
-                        controller.enqueue(维列斯ResponseHeader);
-                    }
-                },
-                transform(chunk, controller) {
-                    hasIncomingData = true;
-                    controller.enqueue(chunk);
-                }
-            });
-
-            // 将远程数据通过 TransformStream 发送到 WebSocket
-            tcpSocket.readable
-                .pipeThrough(remoteToWSTransform)
-                .pipeTo(new WritableStream({
-                    write(chunk) {
-                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                            webSocket.send(chunk);
-                        }
-                    },
-                    close() {
-                        log(`远程连接已关闭，数据接收: ${hasIncomingData}`);
-                        safeCloseWebSocket(webSocket);
-                    },
-                    abort(reason) {
-                        log(`远程连接异常中断: ${reason}`);
-                        safeCloseWebSocket(webSocket);
-                    }
-                }))
-                .catch(error => {
-                    log(`远程到WebSocket管道错误: ${error.message}`);
-                    safeCloseWebSocket(webSocket);
-                });
-
             tcpSocket.closed.catch(error => {
-                log('TCP连接关闭错误', error);
+                console.log('Retry tcpSocket closed error', error);
             }).finally(() => {
-                if (!hasIncomingData && retry) {
-                    log(`未收到数据，尝试重新连接`);
-                    retry();
-                }
+                safeCloseWebSocket(webSocket);
             });
+            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
-            log('重试连接错误:', error);
-            safeCloseWebSocket(webSocket);
+            log('Retry error:', error);
         }
     }
 
-    // 设置重试函数
-    retry = retryConnection;
-
-    // 检查是否应该使用SOCKS5
     let shouldUseSocks = false;
     if (go2Socks5s.length > 0 && enableSocks) {
         shouldUseSocks = await useSocks5Pattern(addressRemote);
     }
-
-    // 首次连接尝试
-    try {
-        tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
-        
-        // 使用 TransformStream 处理远程数据
-        const remoteToWSTransform = new TransformStream({
-            start(controller) {
-                // 发送响应头
-                if (维列斯ResponseHeader) {
-                    controller.enqueue(维列斯ResponseHeader);
-                }
-            },
-            transform(chunk, controller) {
-                hasIncomingData = true;
-                controller.enqueue(chunk);
-            }
-        });
-
-        // 将远程数据通过 TransformStream 发送到 WebSocket
-        tcpSocket.readable
-            .pipeThrough(remoteToWSTransform)
-            .pipeTo(new WritableStream({
-                write(chunk) {
-                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                        webSocket.send(chunk);
-                    }
-                },
-                close() {
-                    log(`远程连接已关闭，数据接收: ${hasIncomingData}`);
-                    safeCloseWebSocket(webSocket);
-                },
-                abort(reason) {
-                    log(`远程连接异常中断: ${reason}`);
-                    safeCloseWebSocket(webSocket);
-                }
-            }))
-            .catch(error => {
-                log(`远程到WebSocket管道错误: ${error.message}`);
-                safeCloseWebSocket(webSocket);
-            });
-
-        tcpSocket.closed.catch(error => {
-            log('TCP连接关闭错误', error);
-        }).finally(() => {
-            if (!hasIncomingData && retry) {
-                log(`未收到数据，尝试重新连接`);
-                retry();
-            }
-        });
-    } catch (error) {
-        log('初始连接错误，尝试重试:', error);
-        retryConnection();
-    }
-}
-
-// 优化 DNS 查询处理函数
-async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
-    try {
-        // 只使用Google的备用DNS服务器,更快更稳定
-        const dnsServer = '8.8.4.4';
-        const dnsPort = 53;
-        
-        const tcpSocket = await connect({
-            hostname: dnsServer,
-            port: dnsPort
-        });
-
-        log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
-
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(udpChunk);
-        writer.releaseLock();
-
-        // 使用 TransformStream 处理 DNS 响应
-        const dnsResponseTransform = new TransformStream({
-            start(controller) {
-                if (维列斯ResponseHeader) {
-                    controller.enqueue(维列斯ResponseHeader);
-                }
-            },
-            transform(chunk, controller) {
-                controller.enqueue(chunk);
-            }
-        });
-
-        // 将 DNS 响应通过 TransformStream 发送到 WebSocket
-        tcpSocket.readable
-            .pipeThrough(dnsResponseTransform)
-            .pipeTo(new WritableStream({
-                write(chunk) {
-                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                        webSocket.send(chunk);
-                    }
-                },
-                close() {
-                    log(`DNS连接已关闭`);
-                },
-                abort(reason) {
-                    log(`DNS连接异常中断: ${reason}`);
-                    safeCloseWebSocket(webSocket);
-                }
-            }))
-            .catch(error => {
-                log(`DNS响应处理错误: ${error.message}`);
-                safeCloseWebSocket(webSocket);
-            });
-    } catch (error) {
-        log(`DNS查询异常: ${error.message}`);
-        safeCloseWebSocket(webSocket);
-    }
-}
-
-function mergeData(header, chunk) {
-    const merged = new Uint8Array(header.length + chunk.length);
-    merged.set(header);
-    merged.set(chunk, header.length);
-    return merged;
+    let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
+    remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
@@ -1863,7 +1780,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
