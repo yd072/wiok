@@ -75,48 +75,62 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
+		this.messageQueue = []; // 添加消息队列
+		this.controller = null;
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
-			pull: (controller) => this.handleStreamPull(controller),
+			start: (controller) => {
+				this.controller = controller;
+				this.handleStreamStart(controller, earlyDataHeader);
+				
+				// 立即处理early data以减少初始延迟
+				const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+				if (error) {
+					controller.error(error);
+				} else if (earlyData) {
+					controller.enqueue(earlyData);
+				}
+			},
+			pull: (controller) => {
+				// 处理队列中的消息
+				while (this.messageQueue.length > 0 && !this.readableStreamCancel) {
+					controller.enqueue(this.messageQueue.shift());
+				}
+			},
 			cancel: (reason) => this.handleStreamCancel(reason)
 		});
 	}
 
-	handleStreamStart(controller, earlyDataHeader) {
-		// 处理消息事件
+	handleStreamStart(controller) {
 		this.webSocket.addEventListener('message', (event) => {
 			if (this.readableStreamCancel) return;
-			controller.enqueue(event.data);
+			
+			if (this.controller) {
+				// 直接发送数据，减少延迟
+				this.controller.enqueue(event.data);
+			} else {
+				// 如果controller还未准备好，先放入队列
+				this.messageQueue.push(event.data);
+			}
 		});
 
-		// 处理关闭事件
 		this.webSocket.addEventListener('close', () => {
-			safeCloseWebSocket(this.webSocket); 
+			safeCloseWebSocket(this.webSocket);
 			if (!this.readableStreamCancel) {
 				controller.close();
 			}
 		});
 
-		// 处理错误事件
 		this.webSocket.addEventListener('error', (err) => {
 			this.log('WebSocket server error');
 			controller.error(err);
 		});
-
-		// 处理早期数据
-		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-		if (error) {
-			controller.error(error);
-		} else if (earlyData) {
-			controller.enqueue(earlyData);
-		}
 	}
-
+	
 	handleStreamPull(controller) {
-
+		// Web Streams API会自动处理背压，这里不需要额外逻辑
 	}
 
 	handleStreamCancel(reason) {
@@ -618,52 +632,75 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 }
 
+// 改进remoteSocketToWS函数，使用更高效的流处理和批量传输
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    const reader = remoteSocket.readable.getReader();
+    let buffer = new Uint8Array(0);
+    const BUFFER_SIZE = 64 * 1024; // 64KB buffer
+    
+    const transformStream = new TransformStream({
+        start(controller) {
+            // 初始化时不做任何操作
+        },
+        async transform(chunk, controller) {
+            hasIncomingData = true;
+            
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                controller.error('WebSocket not open');
+                return;
+            }
+            
+            // 合并header和数据
+            if (header) {
+                chunk = await new Blob([header, chunk]).arrayBuffer();
+                header = null;
+            }
+            
+            // 使用缓冲区发送数据
+            buffer = new Uint8Array([...buffer, ...new Uint8Array(chunk)]);
+            
+            if (buffer.length >= BUFFER_SIZE) {
+                webSocket.send(buffer);
+                buffer = new Uint8Array(0);
+            }
+        },
+        flush(controller) {
+            // 发送剩余的缓冲数据
+            if (buffer.length > 0) {
+                webSocket.send(buffer);
+            }
+            log(`Transform stream flush, data received: ${hasIncomingData}`);
+        }
+    });
 
     try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            hasIncomingData = true;
-
-            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                console.error('WebSocket not open');
-                break;
-            }
-
-            // **Cloudflare 限流优化**：如果缓冲区数据 > 512KB，暂停 5ms，避免 CF 断流
-            while (webSocket.bufferedAmount > 512 * 1024) {
-                await new Promise(resolve => setTimeout(resolve, 5));
-            }
-
-            if (header) {
-                let combined = new Uint8Array(header.length + value.length);
-                combined.set(header, 0);
-                combined.set(value, header.length);
-                webSocket.send(combined);
-                header = null;
-            } else {
-                webSocket.send(value);
-            }
-        }
+        await remoteSocket.readable
+            .pipeThrough(transformStream)
+            .pipeTo(new WritableStream({
+                write() {},
+                close() {
+                    log(`Remote connection closed, data received: ${hasIncomingData}`);
+                    if (!hasIncomingData && retry) {
+                        log(`No data received, retrying connection`);
+                        retry();
+                    }
+                },
+                abort(reason) {
+                    console.error(`Remote connection aborted`, reason);
+                    safeCloseWebSocket(webSocket);
+                }
+            }));
     } catch (error) {
         console.error(`remoteSocketToWS exception`, error);
-    } finally {
-        log(`Remote connection closed, data received: ${hasIncomingData}`);
-        reader.releaseLock();
         safeCloseWebSocket(webSocket);
-
+        
         if (!hasIncomingData && retry) {
             log(`Connection failed, retrying`);
             retry();
         }
     }
 }
-
 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
@@ -698,30 +735,30 @@ function stringify(arr, offset = 0) {
 }
 
 async function socks5Connect(addressType, addressRemote, portRemote, log) {
-    const { username, password, hostname, port } = parsedSocks5Address;
+        const { username, password, hostname, port } = parsedSocks5Address;
     const socket = connect({ hostname, port });
 
     const socksGreeting = new Uint8Array([5, 2, 0, 2]);
-    const writer = socket.writable.getWriter();
+        const writer = socket.writable.getWriter();
     await writer.write(socksGreeting);
     log('SOCKS5 greeting sent');
 
-    const reader = socket.readable.getReader();
+        const reader = socket.readable.getReader();
     const encoder = new TextEncoder();
     let res = (await reader.read()).value;
 
     if (res[0] !== 0x05) {
         log(`SOCKS5 version error: received ${res[0]}, expected 5`);
         return;
-    }
+        }
     if (res[1] === 0xff) {
         log("No acceptable authentication methods");
         return;
-    }
-
+        }
+        
     if (res[1] === 0x02) {
         log("SOCKS5 requires authentication");
-        if (!username || !password) {
+            if (!username || !password) {
             log("Username and password required");
             return;
         }
@@ -732,26 +769,26 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
             password.length,
             ...encoder.encode(password)
         ]);
-        await writer.write(authRequest);
+            await writer.write(authRequest);
         res = (await reader.read()).value;
         if (res[0] !== 0x01 || res[1] !== 0x00) {
             log("SOCKS5 authentication failed");
             return;
         }
-    }
-
+        }
+        
     let DSTADDR;
-    switch (addressType) {
+        switch (addressType) {
         case 1:
             DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
-            break;
+                break;
         case 2:
             DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
-            break;
+                break;
         case 3:
             DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
-            break;
-        default:
+                break;
+            default:
             log(`Invalid address type: ${addressType}`);
             return;
     }
@@ -765,10 +802,10 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
     } else {
         log("SOCKS5 connection failed");
         return;
-    }
-    writer.releaseLock();
-    reader.releaseLock();
-    return socket;
+        }
+        writer.releaseLock();
+        reader.releaseLock();
+        return socket;
 }
 
 function socks5AddressParser(address) {
@@ -898,7 +935,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
@@ -1391,11 +1428,39 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
+function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv, UA) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
 	let notlsresponseBody;
+
+	function 生成随机噪声(UA = '') {
+		// 生成随机噪声参数
+		const 噪声列表 = [
+			`t=${Date.now()}`,
+			`neko=${Math.random().toString(36).substring(7)}`,
+			`timestamp=${Math.floor(Math.random() * 1000000)}`,
+			`auth=${btoa(Math.random().toString()).substring(10, 15)}`,
+			`mux=${Math.random() > 0.5 ? 'true' : 'false'}`,
+			`level=${Math.floor(Math.random() * 10)}`,
+			`pbk=${btoa(Math.random().toString()).substring(5, 15)}`,
+			`sid=${Math.random().toString(36).substring(5)}`,
+			`spx=${Math.random() > 0.5 ? 'true' : 'false'}`,
+			`client=${['chrome','firefox','safari','edge'][Math.floor(Math.random() * 4)]}`,
+			`zone=${['cn','hk','sg','us'][Math.floor(Math.random() * 4)]}`,
+			`ver=${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}`
+		];
+	
+		// 统一生成3-5个随机参数
+		const 数量 = Math.floor(Math.random() * 3) + 3;
+	
+		// 随机打乱并选择参数
+		return 噪声列表
+			.sort(() => Math.random() - 0.5)
+			.slice(0, 数量)
+			.join('&');
+	}
+	
 	if (noTLS == 'true') {
 		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
@@ -1453,7 +1518,8 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `security=none&` + 
                 `type=ws&` + 
                 `host=${伪装域名}&` + 
-                `path=${encodeURIComponent(最终路径)}` + 
+                `path=${encodeURIComponent(最终路径)}&` + 
+                `${生成随机噪声(UA)}` +  // 传入UA参数
                 `#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
@@ -1527,7 +1593,8 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`alpn=h3&` + 
 			`type=ws&` +
 			`host=${伪装域名}&` +
-                        `path=${encodeURIComponent(最终路径)}` + 
+			`path=${encodeURIComponent(最终路径)}&` + 
+			`${生成随机噪声(UA)}` +  // 传入UA参数
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
