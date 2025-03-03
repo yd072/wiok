@@ -79,7 +79,7 @@ class WebSocketManager {
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: async (controller) => {
+			start: (controller) => {
 				// 处理早期数据
 				if (earlyDataHeader) {
 					const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
@@ -103,7 +103,6 @@ class WebSocketManager {
 					if (!this.readableStreamCancel) {
 						controller.close();
 					}
-					safeCloseWebSocket(this.webSocket);
 				});
 
 				// 处理错误事件
@@ -112,10 +111,13 @@ class WebSocketManager {
 					controller.error(err);
 				});
 			},
+			pull: (controller) => {
+				// 按需拉取数据
+			},
 			cancel: (reason) => {
 				this.readableStreamCancel = true;
 				this.log(`Readable stream canceled, reason: ${reason}`);
-				safeCloseWebSocket(this.webSocket);
+				安全关闭WebSocket(this.webSocket);
 			}
 		});
 	}
@@ -494,10 +496,14 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
         remoteSocket.value = tcpSocket;
         
-        // 直接写入初始数据
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(rawClientData);
-        writer.releaseLock();
+        try {
+            const writer = tcpSocket.writable.getWriter();
+            await writer.write(rawClientData);
+            writer.releaseLock();
+        } catch (error) {
+            console.error('Error writing initial data:', error);
+            throw error;
+        }
         
         return tcpSocket;
     }
@@ -616,39 +622,40 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-
+    
     try {
-        await remoteSocket.readable
-            .pipeThrough(new TransformStream({
-                transform(chunk, controller) {
-                    hasIncomingData = true;
-                    if (header) {
-                        controller.enqueue(new Blob([header, chunk]));
-                        header = null;
-                    } else {
-                        controller.enqueue(chunk);
-                    }
-                },
-                flush() {
-                    if (!hasIncomingData && retry) {
-                        log(`No incoming data, retrying connection`);
-                        retry();
-                    }
+        const reader = remoteSocket.readable.getReader();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+                break;
+            }
+            
+            hasIncomingData = true;
+            
+            if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                if (header) {
+                    const mergedData = new Uint8Array(header.length + value.length);
+                    mergedData.set(header);
+                    mergedData.set(value, header.length);
+                    webSocket.send(mergedData);
+                    header = null;
+                } else {
+                    webSocket.send(value);
                 }
-            }))
-            .pipeTo(new WritableStream({
-                write(chunk) {
-                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                        webSocket.send(chunk);
-                    }
-                },
-                close() {
-                    log(`Remote connection closed, data received: ${hasIncomingData}`);
-                },
-                abort(reason) {
-                    console.error(`Remote connection aborted`, reason);
-                }
-            }));
+            } else {
+                break;
+            }
+        }
+        
+        reader.releaseLock();
+        
+        if (!hasIncomingData && retry) {
+            log(`No incoming data, retrying connection`);
+            retry();
+        }
     } catch (error) {
         console.error(`remoteSocketToWS exception`, error);
         safeCloseWebSocket(webSocket);
