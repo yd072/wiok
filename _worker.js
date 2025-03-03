@@ -341,20 +341,24 @@ async function 维列斯OverWSHandler(request) {
     let isDns = false;
     const banHostsSet = new Set(banHosts);
 
-    // 优化: 使用TransformStream直接处理WebSocket数据
+    // 优化: 使用更高效的数据流处理
     const transformStream = new TransformStream({
         async transform(chunk, controller) {
             try {
                 if (isDns) {
-                    await handleDNSQuery(chunk, webSocket, null);
+                    await handleDNSQuery(chunk, webSocket);
                     return;
                 }
 
+                // 优化: 使用已存在的连接
                 if (remoteSocketWrapper.value) {
-                    await remoteSocketWrapper.value.writable.getWriter().write(chunk);
+                    const writer = remoteSocketWrapper.value.writable.getWriter();
+                    await writer.write(chunk);
+                    writer.releaseLock();
                     return;
                 }
 
+                // 处理新连接
                 const {
                     hasError,
                     message,
@@ -370,50 +374,37 @@ async function 维列斯OverWSHandler(request) {
                     throw new Error(message);
                 }
 
-                const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
-                const rawClientData = chunk.slice(rawDataIndex);
-
+                // DNS查询处理
                 if (isUDP && portRemote === 53) {
                     isDns = true;
-                    await handleDNSQuery(rawClientData, webSocket, 维列斯ResponseHeader);
+                    const header = new Uint8Array([维列斯Version[0], 0]);
+                    await handleDNSQuery(chunk.slice(rawDataIndex), webSocket, header);
                     return;
                 }
 
+                // 检查黑名单
                 if (banHostsSet.has(addressRemote)) {
                     throw new Error(`Connection blocked: ${addressRemote}:${portRemote}`);
                 }
 
-                // 优化: 使用更高效的TCP连接处理
+                // 优化: 建立TCP连接
                 const remoteSocket = await connect({
                     hostname: addressRemote,
                     port: portRemote,
-                    allowHalfOpen: true, // 优化连接性能
-                    keepAlive: true      // 保持连接活跃
+                    allowHalfOpen: true,
+                    keepAlive: true,
+                    noDelay: true // 减少延迟
                 });
 
                 remoteSocketWrapper.value = remoteSocket;
 
-                // 优化: 一次性写入数据
-                await remoteSocket.writable.getWriter().write(rawClientData);
+                // 发送初始数据
+                const writer = remoteSocket.writable.getWriter();
+                await writer.write(chunk.slice(rawDataIndex));
+                writer.releaseLock();
 
-                // 优化: 使用更高效的数据流转发
-                remoteSocket.readable
-                    .pipeThrough(new TransformStream({
-                        transform(chunk, controller) {
-                            if (webSocket.readyState === 1) {
-                                // 创建新的响应数据，而不是修改const变量
-                                const responseData = 维列斯ResponseHeader ? 
-                                    mergeData(维列斯ResponseHeader, chunk) : 
-                                    chunk;
-                                webSocket.send(responseData);
-                            }
-                        }
-                    }))
-                    .pipeTo(new WritableStream())
-                    .catch(error => {
-                        console.error('Data forwarding error:', error);
-                        cleanup();
-                    });
+                // 优化: 设置数据转发
+                setupDataForwarding(remoteSocket, webSocket, new Uint8Array([维列斯Version[0], 0]));
 
             } catch (error) {
                 console.error('Connection error:', error);
@@ -422,33 +413,8 @@ async function 维列斯OverWSHandler(request) {
         }
     });
 
-    // 优化: 使用更高效的数据流处理
-    const readableWebSocketStream = new ReadableStream({
-        start(controller) {
-            webSocket.addEventListener('message', event => {
-                controller.enqueue(event.data);
-            });
-
-            webSocket.addEventListener('close', () => {
-                controller.close();
-                cleanup();
-            });
-
-            webSocket.addEventListener('error', err => {
-                controller.error(err);
-                cleanup();
-            });
-        },
-        cancel() {
-            cleanup();
-        }
-    });
-
-    // 优化: 简化管道处理
-    readableWebSocketStream
-        .pipeThrough(transformStream)
-        .pipeTo(new WritableStream())
-        .catch(cleanup);
+    // 优化: 设置WebSocket数据流
+    setupWebSocketStream(webSocket, transformStream);
 
     function cleanup() {
         if (remoteSocketWrapper.value) {
@@ -473,6 +439,65 @@ async function 维列斯OverWSHandler(request) {
         status: 101,
         webSocket: client
     });
+}
+
+// 优化: 提取数据转发逻辑
+function setupDataForwarding(remoteSocket, webSocket, header) {
+    let headerSent = false;
+
+    remoteSocket.readable
+        .pipeThrough(new TransformStream({
+            transform(chunk, controller) {
+                if (webSocket.readyState === 1) {
+                    const data = !headerSent && header ? 
+                        mergeArrayBuffers(header, chunk) : 
+                        chunk;
+                    webSocket.send(data);
+                    headerSent = true;
+                }
+            }
+        }))
+        .pipeTo(new WritableStream())
+        .catch(error => {
+            console.error('Data forwarding error:', error);
+            remoteSocket.close();
+            webSocket.close();
+        });
+}
+
+// 优化: 提取WebSocket流设置逻辑
+function setupWebSocketStream(webSocket, transformStream) {
+    const readableStream = new ReadableStream({
+        start(controller) {
+            webSocket.addEventListener('message', event => {
+                controller.enqueue(event.data);
+            });
+
+            webSocket.addEventListener('close', () => {
+                controller.close();
+            });
+
+            webSocket.addEventListener('error', err => {
+                controller.error(err);
+            });
+        }
+    });
+
+    readableStream
+        .pipeThrough(transformStream)
+        .pipeTo(new WritableStream())
+        .catch(error => {
+            console.error('Stream error:', error);
+            webSocket.close();
+        });
+}
+
+// 优化: 合并ArrayBuffer的辅助函数
+function mergeArrayBuffers(header, chunk) {
+    const merged = new Uint8Array(header.length + chunk.length);
+    merged.set(header);
+    merged.set(new Uint8Array(chunk), header.length);
+    return merged.buffer;
 }
 
 // 优化DNS查询处理
