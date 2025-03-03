@@ -622,43 +622,63 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-
-    try {
-        const reader = remoteSocket.readable.getReader();
-        
-        while (true) {
-            const { done, value } = await reader.read();
-            
-            if (done) {
-                break;
-            }
-            
+    
+    // 使用TransformStream进行高效的数据处理
+    const transformStream = new TransformStream({
+        start(controller) {
+            // 初始化时不做任何操作
+        },
+        async transform(chunk, controller) {
             hasIncomingData = true;
             
-            if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                if (header) {
-                    const mergedData = new Uint8Array(header.length + value.length);
-                    mergedData.set(header);
-                    mergedData.set(value, header.length);
-                    webSocket.send(mergedData);
-                    header = null;
-                } else {
-                    webSocket.send(value);
-                }
-            } else {
-                break;
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                controller.error('WebSocket not open');
+                return;
             }
+            
+            // 如果有头部数据，与第一个块合并后发送
+            if (header) {
+                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
+                header = null;
+            } else {
+                // 直接发送二进制数据，避免不必要的转换
+                webSocket.send(chunk);
+            }
+        },
+        flush(controller) {
+            log(`Transform stream flush, data received: ${hasIncomingData}`);
         }
-        
-        reader.releaseLock();
-        
-        if (!hasIncomingData && retry) {
-            log(`No incoming data, retrying connection`);
-            retry();
-        }
+    });
+    
+    try {
+        // 使用管道直接连接数据流，减少中间环节
+        await remoteSocket.readable
+            .pipeThrough(transformStream)
+            .pipeTo(new WritableStream({
+                write() {
+                    // 数据已在transform中处理，这里不需要额外操作
+                },
+                close() {
+                    log(`Remote connection closed, data received: ${hasIncomingData}`);
+                    if (!hasIncomingData && retry) {
+                        log(`No data received, retrying connection`);
+                        retry();
+                    }
+                },
+                abort(reason) {
+                    console.error(`Remote connection aborted`, reason);
+                    safeCloseWebSocket(webSocket);
+                }
+            }));
     } catch (error) {
         console.error(`remoteSocketToWS exception`, error);
         safeCloseWebSocket(webSocket);
+        
+        // 如果没有收到数据且提供了重试函数，则尝试重试
+        if (!hasIncomingData && retry) {
+            log(`Connection failed, retrying`);
+            retry();
+        }
     }
 }
 
@@ -895,7 +915,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
