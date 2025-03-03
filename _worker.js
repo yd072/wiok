@@ -1784,3 +1784,15 @@ async function handleGetRequest(env, txt) {
 		headers: { "Content-Type": "text/html;charset=utf-8" }
 	});
 }
+
+// 添加缺失的恢复伪装信息函数
+async function 恢复伪装信息(伪装信息) {
+    if (!伪装信息) return '';
+    try {
+        // 尝试解码Base64
+        return atob(伪装信息);
+    } catch (e) {
+        // 如果不是Base64，直接返回原始信息
+        return 伪装信息;
+    }
+}
