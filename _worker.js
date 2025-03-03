@@ -622,62 +622,42 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    const CHUNK_SIZE = 64 * 1024; // 64KB chunks
-    let buffer = new Uint8Array(0);
 
     try {
-        await remoteSocket.readable
-            .pipeThrough(new TransformStream({
-                transform(chunk, controller) {
-                    hasIncomingData = true;
-                    
-                    // 处理header
-                    if (header) {
-                        const mergedData = new Uint8Array(header.length + chunk.length);
-                        mergedData.set(header);
-                        mergedData.set(chunk, header.length);
-                        chunk = mergedData;
-                        header = null;
-                    }
-
-                    // 将新数据添加到缓冲区
-                    const newBuffer = new Uint8Array(buffer.length + chunk.length);
-                    newBuffer.set(buffer);
-                    newBuffer.set(chunk, buffer.length);
-                    buffer = newBuffer;
-
-                    // 当缓冲区达到一定大小时发送数据
-                    while (buffer.length >= CHUNK_SIZE) {
-                        controller.enqueue(buffer.slice(0, CHUNK_SIZE));
-                        buffer = buffer.slice(CHUNK_SIZE);
-                    }
-                },
-                flush(controller) {
-                    // 发送剩余的缓冲数据
-                    if (buffer.length > 0) {
-                        controller.enqueue(buffer);
-                    }
-                    if (!hasIncomingData && retry) {
-                        log(`No incoming data, retrying connection`);
-                        retry();
-                    }
+        const reader = remoteSocket.readable.getReader();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+                break;
+            }
+            
+            hasIncomingData = true;
+            
+            if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                if (header) {
+                    const mergedData = new Uint8Array(header.length + value.length);
+                    mergedData.set(header);
+                    mergedData.set(value, header.length);
+                    webSocket.send(mergedData);
+                    header = null;
+                } else {
+                    webSocket.send(value);
                 }
-            }))
-            .pipeTo(new WritableStream({
-                write(chunk) {
-                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                        webSocket.send(chunk);
-                    }
-                }
-            }), {
-                signal: AbortSignal.timeout(300000)
-            });
-    } catch (error) {
-        if (error.name === 'AbortError') {
-            log('Connection timed out');
-        } else {
-            console.error(`remoteSocketToWS exception:`, error);
+            } else {
+                break;
+            }
         }
+        
+        reader.releaseLock();
+        
+        if (!hasIncomingData && retry) {
+            log(`No incoming data, retrying connection`);
+            retry();
+        }
+    } catch (error) {
+        console.error(`remoteSocketToWS exception`, error);
         safeCloseWebSocket(webSocket);
     }
 }
