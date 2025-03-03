@@ -434,45 +434,46 @@ function mergeData(header, chunk) {
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
     try {
-        // 只使用Google的备用DNS服务器,更快更稳定
         const dnsServer = '8.8.4.4';
         const dnsPort = 53;
-        
-        let 维列斯Header = 维列斯ResponseHeader;
         
         const tcpSocket = await connect({
             hostname: dnsServer,
             port: dnsPort
         });
 
-        log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
-
+        // 创建异步写入流
         const writer = tcpSocket.writable.getWriter();
         await writer.write(udpChunk);
         writer.releaseLock();
 
-        await tcpSocket.readable.pipeTo(new WritableStream({
-            async write(chunk) {
-                if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                    try {
-                        const combinedData = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
-                        webSocket.send(combinedData);
-                        if (维列斯Header) 维列斯Header = null;
-                    } catch (error) {
-                        console.error(`发送数据时发生错误: ${error.message}`);
-                        safeCloseWebSocket(webSocket);
+        // 创建独立的读取流
+        const reader = tcpSocket.readable.getReader();
+        
+        // 异步处理响应数据
+        (async () => {
+            try {
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    
+                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                        if (维列斯ResponseHeader) {
+                            webSocket.send(value);
+                            维列斯ResponseHeader = null;
+                        } else {
+                            webSocket.send(value);
+                        }
                     }
                 }
-            },
-            close() {
-                log(`DNS连接已关闭`);
-            },
-            abort(reason) {
-                console.error(`DNS连接异常中断`, reason);
+            } catch (error) {
+                console.error('读取DNS响应错误:', error);
+                safeCloseWebSocket(webSocket);
             }
-        }));
+        })();
+
     } catch (error) {
-        console.error(`DNS查询异常: ${error.message}`, error.stack);
+        console.error(`DNS查询异常: ${error.message}`);
         safeCloseWebSocket(webSocket);
     }
 }
