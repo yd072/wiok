@@ -401,11 +401,11 @@ async function 维列斯OverWSHandler(request) {
                     .pipeThrough(new TransformStream({
                         transform(chunk, controller) {
                             if (webSocket.readyState === 1) {
-                                const data = 维列斯ResponseHeader ? 
+                                // 创建新的响应数据，而不是修改const变量
+                                const responseData = 维列斯ResponseHeader ? 
                                     mergeData(维列斯ResponseHeader, chunk) : 
                                     chunk;
-                                webSocket.send(data);
-                                维列斯ResponseHeader = null;
+                                webSocket.send(responseData);
                             }
                         }
                     }))
@@ -487,18 +487,21 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader) {
             allowHalfOpen: true
         });
 
-        // 优化: 使用更高效的数据传输
         await tcpSocket.writable.getWriter().write(udpChunk);
 
+        // 使用闭包来保存header状态
+        let headerSent = false;
+        
         await tcpSocket.readable
             .pipeThrough(new TransformStream({
                 transform(chunk, controller) {
                     if (webSocket.readyState === 1) {
-                        const data = 维列斯ResponseHeader ? 
+                        // 只在第一次发送时添加header
+                        const responseData = !headerSent && 维列斯ResponseHeader ? 
                             mergeData(维列斯ResponseHeader, chunk) : 
                             chunk;
-                        webSocket.send(data);
-                        维列斯ResponseHeader = null;
+                        webSocket.send(responseData);
+                        headerSent = true;
                     }
                 }
             }))
@@ -898,7 +901,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
