@@ -127,8 +127,25 @@ class WebSocketManager {
 	}
 }
 
+// 添加DNS缓存，但不在全局作用域设置定时器
+const dnsCache = new Map();
+let lastCacheClearTime = Date.now();
+
+// 在请求处理函数中清理缓存
+function checkAndClearCache() {
+    const now = Date.now();
+    // 如果距离上次清理超过5分钟，则清理缓存
+    if (now - lastCacheClearTime > 300000) {
+        dnsCache.clear();
+        lastCacheClearTime = now;
+    }
+}
+
 export default {
 	async fetch(request, env, ctx) {
+		// 在每次请求时检查是否需要清理缓存
+		checkAndClearCache();
+		
 		try {
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
@@ -1767,10 +1784,3 @@ async function handleGetRequest(env, txt) {
 		headers: { "Content-Type": "text/html;charset=utf-8" }
 	});
 }
-
-// 添加DNS缓存
-const dnsCache = new Map();
-// 定期清理缓存
-setInterval(() => {
-    dnsCache.clear();
-}, 300000); // 5分钟清理一次
