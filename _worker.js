@@ -75,6 +75,8 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
+		this.messageQueue = []; // 添加消息队列
+		this.queueLock = false; // 添加队列锁
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -85,46 +87,86 @@ class WebSocketManager {
 		});
 	}
 
-	handleStreamStart(controller, earlyDataHeader) {
-		// 处理消息事件 - 直接使用流处理
-		this.webSocket.addEventListener('message', (event) => {
-			if (this.readableStreamCancel) return;
-			
-			// 直接将数据传入控制器，不使用队列
-			controller.enqueue(event.data);
-		});
-
-		// 处理关闭事件
-		this.webSocket.addEventListener('close', () => {
-			safeCloseWebSocket(this.webSocket); 
-			if (!this.readableStreamCancel) {
-				controller.close();
-			}
-		});
-
-		// 处理错误事件
-		this.webSocket.addEventListener('error', (err) => {
-			this.log('WebSocket server error');
-			controller.error(err);
-		});
-
+	async handleStreamStart(controller, earlyDataHeader) {
 		// 处理早期数据
 		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
 		if (error) {
 			controller.error(error);
-		} else if (earlyData) {
+			return;
+		}
+		if (earlyData) {
 			controller.enqueue(earlyData);
 		}
+
+		// 改进消息事件处理
+		this.webSocket.addEventListener('message', async (event) => {
+			if (this.readableStreamCancel) return;
+			
+			try {
+				// 使用 TransformStream 处理数据
+				const transformStream = new TransformStream({
+					transform(chunk, controller) {
+						controller.enqueue(chunk);
+					}
+				});
+
+				// 将数据写入转换流
+				const writer = transformStream.writable.getWriter();
+				await writer.write(event.data);
+				writer.releaseLock();
+
+				// 读取转换后的数据
+				const reader = transformStream.readable.getReader();
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+					
+					// 使用队列管理数据
+					if (this.queueLock) {
+						this.messageQueue.push(value);
+					} else {
+						controller.enqueue(value);
+					}
+				}
+			} catch (error) {
+				this.log('Error processing message:', error);
+				controller.error(error);
+			}
+		});
+
+		// 改进错误处理
+		this.webSocket.addEventListener('error', (err) => {
+			this.log('WebSocket error:', err);
+			controller.error(new Error('WebSocket connection failed'));
+		});
+
+		// 改进关闭处理
+		this.webSocket.addEventListener('close', () => {
+			this.log('WebSocket closed');
+			if (!this.readableStreamCancel) {
+				// 处理剩余队列数据
+				while (this.messageQueue.length > 0) {
+					controller.enqueue(this.messageQueue.shift());
+				}
+				controller.close();
+			}
+		});
 	}
-	
-	handleStreamPull(controller) {
-		// Web Streams API会自动处理背压，这里不需要额外逻辑
+
+	async handleStreamPull(controller) {
+		// 实现背压控制
+		this.queueLock = false;
+		while (this.messageQueue.length > 0) {
+			const data = this.messageQueue.shift();
+			controller.enqueue(data);
+		}
 	}
 
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
-		this.log(`Readable stream canceled, reason: ${reason}`);
+		this.log(`Stream cancelled: ${reason}`);
 		this.readableStreamCancel = true;
+		this.messageQueue = []; // 清空队列
 		safeCloseWebSocket(this.webSocket);
 	}
 }
@@ -620,68 +662,132 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 }
 
+class StreamController {
+	constructor(maxBufferSize = 1024 * 1024) { // 1MB default
+	  this.maxBufferSize = maxBufferSize;
+	  this.currentBufferSize = 0;
+	  this.queue = [];
+	  this.backpressure = false;
+	}
+  
+	async write(chunk) {
+	  this.currentBufferSize += chunk.byteLength;
+	  
+	  // 实现背压控制
+	  if (this.currentBufferSize > this.maxBufferSize) {
+		this.backpressure = true;
+		await new Promise(resolve => {
+		  this.queue.push(resolve);
+		});
+	  }
+  
+	  return chunk;
+	}
+  
+	read(chunk) {
+	  this.currentBufferSize -= chunk.byteLength;
+	  
+	  // 释放背压
+	  if (this.backpressure && this.currentBufferSize <= this.maxBufferSize) {
+		this.backpressure = false;
+		const resolve = this.queue.shift();
+		if (resolve) resolve();
+	  }
+	}
+  }
+  
+  class ConnectionManager {
+	constructor(maxRetries = 3) {
+	  this.maxRetries = maxRetries;
+	  this.retryCount = 0;
+	  this.retryDelay = 1000; // 初始重试延迟 1 秒
+	}
+  
+	async connect(connectFn) {
+	  while (this.retryCount < this.maxRetries) {
+		try {
+		  return await connectFn();
+		} catch (error) {
+		  this.retryCount++;
+		  if (this.retryCount >= this.maxRetries) {
+			throw new Error(`Connection failed after ${this.maxRetries} retries`);
+		  }
+		  
+		  // 指数退避重试
+		  await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+		  this.retryDelay *= 2;
+		}
+	  }
+	}
+  
+	reset() {
+	  this.retryCount = 0;
+	  this.retryDelay = 1000;
+	}
+  }
+
 // 改进remoteSocketToWS函数，使用更高效的流处理和批量传输
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
-    let hasIncomingData = false;
-    let header = responseHeader;
-    
-    // 使用TransformStream进行高效的数据处理
+  let hasIncomingData = false;
+  let header = responseHeader;
+
+  try {
+    // 使用 TransformStream 优化数据传输
     const transformStream = new TransformStream({
-        start(controller) {
-            // 初始化时不做任何操作
-        },
-        async transform(chunk, controller) {
-            hasIncomingData = true;
-            
-            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                controller.error('WebSocket not open');
-                return;
-            }
-            
-            // 如果有头部数据，与第一个块合并后发送
-            if (header) {
-                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
-                header = null;
-            } else {
-                // 直接发送二进制数据，避免不必要的转换
-                webSocket.send(chunk);
-            }
-        },
-        flush(controller) {
-            log(`Transform stream flush, data received: ${hasIncomingData}`);
-        }
-    });
-    
-    try {
-        // 使用管道直接连接数据流，减少中间环节
-        await remoteSocket.readable
-            .pipeThrough(transformStream)
-            .pipeTo(new WritableStream({
-                write() {
-                    // 数据已在transform中处理，这里不需要额外操作
-                },
-                close() {
-                    log(`Remote connection closed, data received: ${hasIncomingData}`);
-                    if (!hasIncomingData && retry) {
-                        log(`No data received, retrying connection`);
-                        retry();
-                    }
-                },
-                abort(reason) {
-                    console.error(`Remote connection aborted`, reason);
-                    safeCloseWebSocket(webSocket);
-                }
-            }));
-    } catch (error) {
-        console.error(`remoteSocketToWS exception`, error);
-        safeCloseWebSocket(webSocket);
+      start(controller) {
+        // 初始化转换流
+      },
+      async transform(chunk, controller) {
+        hasIncomingData = true;
         
-        // 如果没有收到数据且提供了重试函数，则尝试重试
-        if (!hasIncomingData && retry) {
-            log(`Connection failed, retrying`);
-            retry();
+        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+          controller.error('WebSocket not open');
+          return;
         }
+        
+        // 处理头部数据
+        if (header) {
+          const combinedData = await new Blob([header, chunk]).arrayBuffer();
+          webSocket.send(combinedData);
+          header = null;
+        } else {
+          webSocket.send(chunk);
+        }
+      },
+      flush() {
+        log(`Transform stream complete, received data: ${hasIncomingData}`);
+      }
+    });
+
+    // 使用管道处理数据流
+    await remoteSocket.readable
+      .pipeThrough(transformStream)
+      .pipeTo(new WritableStream({
+        write() {
+          // 数据已在 transform 中处理
+        },
+        close() {
+          log(`Remote connection closed, data received: ${hasIncomingData}`);
+          if (!hasIncomingData && retry) {
+            log('No data received, retrying connection');
+            retry();
+          }
+        },
+        abort(reason) {
+          log(`Remote connection aborted: ${reason}`);
+          safeCloseWebSocket(webSocket);
+        }
+      }));
+
+  } catch (error) {
+    log('remoteSocketToWS error:', error);
+    safeCloseWebSocket(webSocket);
+
+    if (!hasIncomingData && retry) {
+      log('Connection failed, retrying');
+      retry();
     }
+  }
 }
 
 const WS_READY_STATE_OPEN = 1;
@@ -1029,8 +1135,8 @@ function 配置信息(UUID, 域名地址) {
 	return [威图瑞, 猫猫猫];
 }
 
-let subParams = ['sub', 'base64', 'b64', 'clash', 'clashr', 'singbox', 'sb', 'loon'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
@@ -1205,9 +1311,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			clash订阅地址:<br>
 			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}?clash</a><br>
 			<div id="qrcode_2" style="margin: 10px 10px 10px 10px;"></div>
-			旧版Clash(R)订阅地址:<br>
-			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clashr','qrcode_2r')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}?clashr</a><br>
-			<div id="qrcode_2r" style="margin: 10px 10px 10px 10px;"></div>
 			singbox订阅地址:<br>
 			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}?sb</a><br>
 			<div id="qrcode_3" style="margin: 10px 10px 10px 10px;"></div>
@@ -1352,18 +1455,15 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			console.log(`虚假订阅: ${url}`);
 		}
 
-		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64') && !_url.searchParams.has('base64')) {
+		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
 			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
 				url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			} else if (_url.searchParams.has('clashr') || userAgent.includes('clash-r') || userAgent.includes('clashr')) {
-				// 添加旧版Clash for Android (ClashR)支持 - 使用vmess协议替代vless
-				url = `${subProtocol}://${subConverter}/sub?target=clashr&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true&include=vmess`;
 				isBase64 = false;
 			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
 				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			} else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
+				// 添加Loon支持
 				url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			}
@@ -1878,7 +1978,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCglMOTklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
@@ -2032,3 +2132,4 @@ async function handleGetRequest(env, txt) {
 		headers: { "Content-Type": "text/html;charset=utf-8" }
 	});
 }
+
