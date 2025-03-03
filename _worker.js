@@ -75,58 +75,46 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
-		this.messageQueue = []; // 添加消息队列
-		this.controller = null;
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: (controller) => {
-				this.controller = controller;
-				this.handleStreamStart(controller, earlyDataHeader);
-				
-				// 立即处理early data以减少初始延迟
-				const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-				if (error) {
-					controller.error(error);
-				} else if (earlyData) {
-					controller.enqueue(earlyData);
-				}
-			},
-			pull: (controller) => {
-				// 处理队列中的消息
-				while (this.messageQueue.length > 0 && !this.readableStreamCancel) {
-					controller.enqueue(this.messageQueue.shift());
-				}
-			},
+			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+			pull: (controller) => this.handleStreamPull(controller),
 			cancel: (reason) => this.handleStreamCancel(reason)
 		});
 	}
 
-	handleStreamStart(controller) {
+	handleStreamStart(controller, earlyDataHeader) {
+		// 处理消息事件 - 直接使用流处理
 		this.webSocket.addEventListener('message', (event) => {
 			if (this.readableStreamCancel) return;
 			
-			if (this.controller) {
-				// 直接发送数据，减少延迟
-				this.controller.enqueue(event.data);
-			} else {
-				// 如果controller还未准备好，先放入队列
-				this.messageQueue.push(event.data);
-			}
+			// 直接将数据传入控制器，不使用队列
+			controller.enqueue(event.data);
 		});
 
+		// 处理关闭事件
 		this.webSocket.addEventListener('close', () => {
-			safeCloseWebSocket(this.webSocket);
+			safeCloseWebSocket(this.webSocket); 
 			if (!this.readableStreamCancel) {
 				controller.close();
 			}
 		});
 
+		// 处理错误事件
 		this.webSocket.addEventListener('error', (err) => {
 			this.log('WebSocket server error');
 			controller.error(err);
 		});
+
+		// 处理早期数据
+		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+		if (error) {
+			controller.error(error);
+		} else if (earlyData) {
+			controller.enqueue(earlyData);
+		}
 	}
 	
 	handleStreamPull(controller) {
@@ -636,14 +624,12 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    // 增加预分配的缓冲区大小，减少内存重新分配
-    const CHUNK_SIZE = 128 * 1024; // 128KB
-    let buffer = new Uint8Array(CHUNK_SIZE);
-    let bufferOffset = 0;
     
+    // 使用TransformStream进行高效的数据处理
     const transformStream = new TransformStream({
-        start() {},
-        
+        start(controller) {
+            // 初始化时不做任何操作
+        },
         async transform(chunk, controller) {
             hasIncomingData = true;
             
@@ -652,59 +638,28 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 return;
             }
             
-            // 优化header处理
+            // 如果有头部数据，与第一个块合并后发送
             if (header) {
-                const headerArray = new Uint8Array(header);
-                const combinedLength = headerArray.length + chunk.byteLength;
-                const combinedChunk = new Uint8Array(combinedLength);
-                combinedChunk.set(headerArray, 0);
-                combinedChunk.set(new Uint8Array(chunk), headerArray.length);
-                chunk = combinedChunk.buffer;
+                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
                 header = null;
-            }
-            
-            const chunkArray = new Uint8Array(chunk);
-            
-            // 如果当前chunk加上已有数据会超出缓冲区
-            if (bufferOffset + chunkArray.length > CHUNK_SIZE) {
-                // 发送当前缓冲区
-                if (bufferOffset > 0) {
-                    webSocket.send(buffer.slice(0, bufferOffset));
-                    bufferOffset = 0;
-                }
-                
-                // 如果单个chunk太大，直接发送
-                if (chunkArray.length >= CHUNK_SIZE) {
-                    webSocket.send(chunkArray);
-                    return;
-                }
-            }
-            
-            // 将数据添加到缓冲区
-            buffer.set(chunkArray, bufferOffset);
-            bufferOffset += chunkArray.length;
-            
-            // 如果缓冲区接近满，发送数据
-            if (bufferOffset >= CHUNK_SIZE * 0.8) {
-                webSocket.send(buffer.slice(0, bufferOffset));
-                bufferOffset = 0;
+            } else {
+                // 直接发送二进制数据，避免不必要的转换
+                webSocket.send(chunk);
             }
         },
-        
-        flush() {
-            // 发送剩余数据
-            if (bufferOffset > 0) {
-                webSocket.send(buffer.slice(0, bufferOffset));
-            }
+        flush(controller) {
             log(`Transform stream flush, data received: ${hasIncomingData}`);
         }
     });
-
+    
     try {
+        // 使用管道直接连接数据流，减少中间环节
         await remoteSocket.readable
             .pipeThrough(transformStream)
             .pipeTo(new WritableStream({
-                write() {},
+                write() {
+                    // 数据已在transform中处理，这里不需要额外操作
+                },
                 close() {
                     log(`Remote connection closed, data received: ${hasIncomingData}`);
                     if (!hasIncomingData && retry) {
@@ -721,6 +676,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         console.error(`remoteSocketToWS exception`, error);
         safeCloseWebSocket(webSocket);
         
+        // 如果没有收到数据且提供了重试函数，则尝试重试
         if (!hasIncomingData && retry) {
             log(`Connection failed, retrying`);
             retry();
