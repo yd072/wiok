@@ -1771,7 +1771,6 @@ async function handleGetRequest(env, txt) {
 				<br>
 				################################################################<br>
 				${cmad}
-				` : '<p>未绑定KV空间</p>'}
 			</div>
 	
 			<script>
