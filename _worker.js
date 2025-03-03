@@ -139,50 +139,39 @@ class WebSocketManager {
 				} else {
 					controller.enqueue(piece);
 				}
-				// 添加小延迟避免阻塞
-				await new Promise(resolve => setTimeout(resolve, 1));
+				// 将延迟改小或移除
+				// await new Promise(resolve => setTimeout(resolve, 1)); // 移除这行
 			}
 		}
 	}
 
 	async processWebSocketMessage(data, controller) {
-		// 优化的消息处理流程
-		const transformStream = new TransformStream({
-			async transform(chunk, controller) {
-				const buffer = chunk instanceof ArrayBuffer ? chunk : await chunk.arrayBuffer();
-				controller.enqueue(new Uint8Array(buffer));
-			}
-		});
-
-		const reader = transformStream.readable.getReader();
-		const writer = transformStream.writable.getWriter();
-
+		// 直接处理数据,减少转换步骤
 		try {
-			await writer.write(data);
-			writer.releaseLock();
-
-			while (true) {
-				const {done, value} = await reader.read();
-				if (done) break;
-				
-				await this.processDataInChunks(value, controller);
+			const buffer = data instanceof ArrayBuffer ? data : await data.arrayBuffer();
+			const chunk = await this.streamController.write(buffer);
+			
+			if (Array.isArray(chunk)) {
+				// 处理分片数据
+				for (const piece of chunk) {
+					controller.enqueue(piece);
+				}
+			} else if (chunk) {
+				controller.enqueue(chunk);
 			}
-		} finally {
-			reader.releaseLock();
+		} catch (error) {
+			this.log('Error processing message:', error);
+			controller.error(error);
 		}
 	}
 
 	async handleStreamPull(controller) {
 		this.queueLock = false;
 		
-		// 分批处理队列中的数据
-		const batchSize = 10; // 每批处理的消息数量
+		// 直接处理队列数据,不需要批处理
 		while (this.messageQueue.length > 0) {
-			const batch = this.messageQueue.splice(0, batchSize);
-			for (const data of batch) {
-				controller.enqueue(data);
-				await new Promise(resolve => setTimeout(resolve, 1)); // 微小延迟
-			}
+			const data = this.messageQueue.shift();
+			controller.enqueue(data);
 		}
 	}
 
@@ -687,12 +676,24 @@ function process维列斯Header(维列斯Buffer, userID) {
 }
 
 class StreamController {
-	constructor(maxBufferSize = 2 * 1024 * 1024) { // 2MB default
+	constructor(maxBufferSize = 8 * 1024 * 1024) { // 增加到 8MB
 		this.maxBufferSize = maxBufferSize;
 		this.currentBufferSize = 0;
 		this.queue = [];
 		this.backpressure = false;
 		this.processingChunks = false;
+	}
+	
+	// 修改分片大小
+	splitLargeChunk(chunk) {
+		const view = new Uint8Array(chunk);
+		const chunkSize = 128 * 1024; // 增加到 128KB
+		const chunks = [];
+		
+		for (let offset = 0; offset < view.length; offset += chunkSize) {
+			chunks.push(view.slice(offset, offset + chunkSize));
+		}
+		return chunks;
 	}
 
 	async write(chunk) {
@@ -718,18 +719,6 @@ class StreamController {
 		return chunk;
 	}
 
-	splitLargeChunk(chunk) {
-		const view = new Uint8Array(chunk);
-		const chunkSize = 64 * 1024; // 64KB
-		const chunks = [];
-		
-		for (let offset = 0; offset < view.length; offset += chunkSize) {
-			chunks.push(view.slice(offset, offset + chunkSize));
-		}
-  
-		return chunks;
-	}
-
 	read(chunk) {
 		const size = chunk.byteLength;
 		this.currentBufferSize -= size;
@@ -752,49 +741,28 @@ class StreamController {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    const streamController = new StreamController();
 
     try {
-        const transformStream = new TransformStream({
-            start(controller) {
-                // 初始化时预分配缓冲区
-                controller.desiredSize = 64 * 1024; // 64KB
-            },
-            async transform(chunk, controller) {
-                hasIncomingData = true;
-                
-                if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                    controller.error('WebSocket not open');
-                    return;
-                }
-
-                // 使用 StreamController 处理数据
-                const processedChunk = await streamController.write(chunk);
-                
-                if (header) {
-                    const combinedData = await new Blob([header, processedChunk]).arrayBuffer();
-                    webSocket.send(combinedData);
-                    header = null;
-                } else {
-                    webSocket.send(processedChunk);
-                }
-                
-                // 处理完成后释放缓冲
-                streamController.read(chunk);
-            },
-            flush() {
-                log(`Transform stream complete, received data: ${hasIncomingData}`);
-            }
-        });
-
         await remoteSocket.readable
-            .pipeThrough(transformStream)
             .pipeTo(new WritableStream({
-                write() {},
+                async write(chunk) {
+                    hasIncomingData = true;
+                    
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        throw new Error('WebSocket not open');
+                    }
+                    
+                    if (header) {
+                        const combinedData = await new Blob([header, chunk]).arrayBuffer();
+                        webSocket.send(combinedData);
+                        header = null;
+                    } else {
+                        webSocket.send(chunk);
+                    }
+                },
                 close() {
                     log(`Remote connection closed, data received: ${hasIncomingData}`);
                     if (!hasIncomingData && retry) {
-                        log('No data received, retrying connection');
                         retry();
                     }
                 },
@@ -803,13 +771,11 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     safeCloseWebSocket(webSocket);
                 }
             }));
-
     } catch (error) {
         log('remoteSocketToWS error:', error);
         safeCloseWebSocket(webSocket);
-
+        
         if (!hasIncomingData && retry) {
-            log('Connection failed, retrying');
             retry();
         }
     }
