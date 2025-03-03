@@ -74,22 +74,18 @@ class WebSocketManager {
 	constructor(webSocket, log) {
 		this.webSocket = webSocket;
 		this.log = log;
+		this.readableStreamCancel = false;
 		this.transformStream = new TransformStream({
-			start: (controller) => {
-				this.controller = controller;
-			},
 			transform: (chunk, controller) => {
-				if (this.webSocket.readyState === WS_READY_STATE_OPEN) {
-					this.webSocket.send(chunk);
-				}
-			},
-			flush: (controller) => {
-				safeCloseWebSocket(this.webSocket);
+				if (this.readableStreamCancel) return;
+				controller.enqueue(chunk);
 			}
 		});
 	}
 
 	makeReadableStream(earlyDataHeader) {
+		const { readable, writable } = this.transformStream;
+
 		// 处理早期数据
 		if (earlyDataHeader) {
 			const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
@@ -97,26 +93,35 @@ class WebSocketManager {
 				throw error;
 			}
 			if (earlyData) {
-				this.controller.enqueue(earlyData);
+				const writer = writable.getWriter();
+				writer.write(earlyData).catch(console.error);
+				writer.releaseLock();
 			}
 		}
 
-		// 设置WebSocket事件监听器
-		this.webSocket.addEventListener('message', (event) => {
-			this.controller.enqueue(event.data);
+		// 处理 WebSocket 消息
+		this.webSocket.addEventListener('message', async (event) => {
+			if (this.readableStreamCancel) return;
+			const writer = writable.getWriter();
+			await writer.write(event.data);
+			writer.releaseLock();
 		});
 
+		// 处理关闭事件
 		this.webSocket.addEventListener('close', () => {
-			this.controller.close();
+			const writer = writable.getWriter();
+			writer.close().catch(console.error);
 			safeCloseWebSocket(this.webSocket);
 		});
 
+		// 处理错误事件
 		this.webSocket.addEventListener('error', (err) => {
-			this.log('WebSocket server error:', err);
-			this.controller.error(err);
+			this.log('WebSocket server error');
+			const writer = writable.getWriter();
+			writer.abort(err);
 		});
 
-		return this.transformStream.readable;
+		return readable;
 	}
 }
 
@@ -478,89 +483,74 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         });
     }
 
-    async function connectAndWrite(address, port, socks = false, isRetry = false) {
-        log(`正在连接 ${address}:${port} ${socks ? '(通过SOCKS5)' : ''}`);
+    async function connectAndWrite(address, port, socks = false) {
+        log(`正在连接 ${address}:${port}`);
         
-        let tcpSocket;
-        try {
-            if (socks) {
-                tcpSocket = await socks5Connect(addressType, address, port, log);
-            } else {
-                // 添加连接选项以提高性能
-                tcpSocket = await connect({ 
-                    hostname: address,
-                    port: port,
-                    allowHalfOpen: false,
-                    keepAlive: true,
-                    secureTransport: false, // 禁用TLS/SSL
-                    noDelay: true // 启用TCP_NODELAY
-                });
-            }
-
-            remoteSocket.value = tcpSocket;
-            
-            const writer = tcpSocket.writable.getWriter();
-            await writer.write(rawClientData);
-            writer.releaseLock();
-            
-            return tcpSocket;
-        } catch (error) {
-            log(`连接失败: ${error.message}`);
-            if (!isRetry && proxyIP) {
-                // 如果是第一次尝试且有备用代理IP，则重试
-                return await retryWithProxyIP();
-            }
-            throw error;
-        }
-    }
-
-    async function retryWithProxyIP() {
-        log('尝试使用代理IP重新连接');
-        if (!proxyIP || proxyIP === '') {
-            proxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-        }
-
-        // 解析代理IP和端口
-        let proxyPort = portRemote;
-        if (proxyIP.includes(':')) {
-            const [ip, port] = proxyIP.split(':');
-            proxyIP = ip;
-            proxyPort = parseInt(port) || portRemote;
-        } else if (proxyIP.includes('.tp')) {
-            const portMatch = proxyIP.match(/\.tp(\d+)\./);
-            if (portMatch) {
-                proxyPort = parseInt(portMatch[1]) || portRemote;
-            }
-        }
-
-        // 使用备用代理IP重试连接
-        return await connectAndWrite(proxyIP, proxyPort, false, true);
-    }
-
-    let tcpSocket;
-    try {
-        const shouldUseSocks = go2Socks5s.length > 0 && enableSocks && await useSocks5Pattern(addressRemote);
-        tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
-        
-        // 设置TCP保活
-        if (tcpSocket.setKeepAlive) {
-            tcpSocket.setKeepAlive(true, 30000); // 30秒保活间隔
-        }
-
-        tcpSocket.closed
-            .catch(error => {
-                log('TCP连接关闭错误:', error);
+        const tcpSocket = await (socks ? 
+            await socks5Connect(addressType, address, port, log) :
+            connect({ 
+                hostname: address,
+                port: port,
+                allowHalfOpen: false,
+                keepAlive: true
             })
-            .finally(() => {
+        );
+
+        remoteSocket.value = tcpSocket;
+
+        // 使用 TransformStream 处理初始数据
+        const initialDataStream = new TransformStream({
+            transform(chunk, controller) {
+                controller.enqueue(chunk);
+            }
+        });
+
+        const writer = initialDataStream.writable.getWriter();
+        await writer.write(rawClientData);
+        writer.close();
+
+        await initialDataStream.readable.pipeTo(tcpSocket.writable);
+        
+        return tcpSocket;
+    }
+
+    async function retry() {
+        try {
+            if (enableSocks) {
+                tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
+            } else {
+                if (!proxyIP || proxyIP === '') {
+                    proxyIP = atob(`UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==`);
+                } else {
+                    const proxyParts = proxyIP.split(':');
+                    if (proxyIP.includes(']:')) {
+                        [proxyIP, portRemote] = proxyIP.split(']:');
+                    } else if (proxyParts.length === 2) {
+                        [proxyIP, portRemote] = proxyParts;
+                    }
+                    if (proxyIP.includes('.tp')) {
+                        portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
+                    }
+                }
+                tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
+            }
+            tcpSocket.closed.catch(error => {
+                console.log('Retry tcpSocket closed error', error);
+            }).finally(() => {
                 safeCloseWebSocket(webSocket);
             });
-
-        // 使用TransformStream处理数据传输
-        await remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
-    } catch (error) {
-        log('TCP连接处理错误:', error);
-        safeCloseWebSocket(webSocket);
+            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
+        } catch (error) {
+            log('Retry error:', error);
+        }
     }
+
+    let shouldUseSocks = false;
+    if (go2Socks5s.length > 0 && enableSocks) {
+        shouldUseSocks = await useSocks5Pattern(addressRemote);
+    }
+    let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
+    remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
@@ -651,7 +641,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             controller.enqueue(chunk);
         },
         flush(controller) {
-            log(`Remote connection closed, data received: ${hasIncomingData}`);
+            if (!hasIncomingData && retry) {
+                log(`No incoming data, retrying connection`);
+                retry();
+            }
         }
     });
 
@@ -665,24 +658,15 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     }
                 },
                 close() {
-                    log(`WritableStream closed`);
+                    log(`Remote connection closed, data received: ${hasIncomingData}`);
                 },
                 abort(reason) {
-                    log(`WritableStream aborted:`, reason);
-                    safeCloseWebSocket(webSocket);
+                    console.error(`Remote connection aborted`, reason);
                 }
-            }), {
-                signal: AbortSignal.timeout(60000) // 60秒超时
-            });
+            }));
     } catch (error) {
-        log(`remoteSocketToWS error:`, error);
+        console.error(`remoteSocketToWS exception`, error);
         safeCloseWebSocket(webSocket);
-        
-        // 如果提供了重试函数且没有收到数据，则尝试重试
-        if (!hasIncomingData && retry) {
-            log(`No data received, retrying connection`);
-            retry();
-        }
     }
 }
 
@@ -1761,7 +1745,12 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+			</div>
+			<div class="editor-container">
+				${hasKV ? `
+				<textarea class="editor" 
+					placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
 					id="content">${content}</textarea>
 				<div class="save-container">
 					<button class="back-btn" onclick="goBack()">返回配置页</button>
@@ -1771,6 +1760,7 @@ async function handleGetRequest(env, txt) {
 				<br>
 				################################################################<br>
 				${cmad}
+				` : '<p>未绑定KV空间</p>'}
 			</div>
 	
 			<script>
