@@ -45,11 +45,6 @@ let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 
-const DNS_SERVERS = [
-    'https://cloudflare-dns.com/dns-query',
-    'https://dns.google/dns-query'
-];
-
 // 添加工具函数
 const utils = {
 	// UUID校验
@@ -91,11 +86,9 @@ class WebSocketManager {
 	}
 
 	handleStreamStart(controller, earlyDataHeader) {
-		// 处理消息事件 - 直接使用流处理
+		// 处理消息事件
 		this.webSocket.addEventListener('message', (event) => {
 			if (this.readableStreamCancel) return;
-			
-			// 直接将数据传入控制器，不使用队列
 			controller.enqueue(event.data);
 		});
 
@@ -121,9 +114,9 @@ class WebSocketManager {
 			controller.enqueue(earlyData);
 		}
 	}
-	
+
 	handleStreamPull(controller) {
-		// Web Streams API会自动处理背压，这里不需要额外逻辑
+
 	}
 
 	handleStreamCancel(reason) {
@@ -437,38 +430,45 @@ function mergeData(header, chunk) {
     return merged;
 }
 
-// 改进DNS查询处理函数
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
     try {
-        // 使用DNS-over-HTTPS而不是直接TCP连接
-        const dnsServer = 'https://cloudflare-dns.com/dns-query';
+        // 只使用Google的备用DNS服务器,更快更稳定
+        const dnsServer = '8.8.4.4';
+        const dnsPort = 53;
         
-        const response = await fetch(dnsServer, {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/dns-message'
-            },
-            body: udpChunk
+        let 维列斯Header = 维列斯ResponseHeader;
+        
+        const tcpSocket = await connect({
+            hostname: dnsServer,
+            port: dnsPort
         });
 
-        if (!response.ok) {
-            throw new Error(`DNS查询失败: ${response.status}`);
-        }
+        log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
 
-        const dnsQueryResult = await response.arrayBuffer();
-        
-        if (webSocket.readyState === WS_READY_STATE_OPEN) {
-            try {
-                const combinedData = 维列斯ResponseHeader ? 
-                    mergeData(维列斯ResponseHeader, new Uint8Array(dnsQueryResult)) : 
-                    new Uint8Array(dnsQueryResult);
-                    
-                webSocket.send(combinedData);
-            } catch (error) {
-                console.error(`发送DNS响应时出错: ${error.message}`);
-                safeCloseWebSocket(webSocket);
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(udpChunk);
+        writer.releaseLock();
+
+        await tcpSocket.readable.pipeTo(new WritableStream({
+            async write(chunk) {
+                if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                    try {
+                        const combinedData = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
+                        webSocket.send(combinedData);
+                        if (维列斯Header) 维列斯Header = null;
+                    } catch (error) {
+                        console.error(`发送数据时发生错误: ${error.message}`);
+                        safeCloseWebSocket(webSocket);
+                    }
+                }
+            },
+            close() {
+                log(`DNS连接已关闭`);
+            },
+            abort(reason) {
+                console.error(`DNS连接异常中断`, reason);
             }
-        }
+        }));
     } catch (error) {
         console.error(`DNS查询异常: ${error.message}`, error.stack);
         safeCloseWebSocket(webSocket);
@@ -618,69 +618,75 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 }
 
-// 改进remoteSocketToWS函数，使用更高效的流处理和批量传输
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    
-    // 使用TransformStream进行高效的数据处理
-    const transformStream = new TransformStream({
-        start(controller) {
-            // 初始化时不做任何操作
-        },
-        async transform(chunk, controller) {
-            hasIncomingData = true;
-            
-            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                controller.error('WebSocket not open');
-                return;
-            }
-            
-            // 如果有头部数据，与第一个块合并后发送
-            if (header) {
-                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
-                header = null;
-            } else {
-                // 直接发送二进制数据，避免不必要的转换
-                webSocket.send(chunk);
-            }
-        },
-        flush(controller) {
-            log(`Transform stream flush, data received: ${hasIncomingData}`);
-        }
-    });
-    
-    try {
-        // 使用管道直接连接数据流，减少中间环节
-        await remoteSocket.readable
-            .pipeThrough(transformStream)
-            .pipeTo(new WritableStream({
-                write() {
-                    // 数据已在transform中处理，这里不需要额外操作
+
+    await remoteSocket.readable
+        .pipeTo(
+            new WritableStream({
+                async write(chunk, controller) {
+                    hasIncomingData = true;
+
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        controller.error('WebSocket not open');
+                    }
+
+                    if (header) {
+                        webSocket.send(await new Blob([header, chunk]).arrayBuffer());
+                        header = null;
+                    } else {
+                        webSocket.send(chunk);
+                    }
                 },
                 close() {
                     log(`Remote connection closed, data received: ${hasIncomingData}`);
-                    if (!hasIncomingData && retry) {
-                        log(`No data received, retrying connection`);
-                        retry();
-                    }
                 },
                 abort(reason) {
-                    console.error(`Remote connection aborted`, reason);
-                    safeCloseWebSocket(webSocket);
-                }
-            }));
-    } catch (error) {
-        console.error(`remoteSocketToWS exception`, error);
-        safeCloseWebSocket(webSocket);
-        
-        // 如果没有收到数据且提供了重试函数，则尝试重试
-        if (!hasIncomingData && retry) {
-            log(`Connection failed, retrying`);
-            retry();
-        }
+                    console.error(`Remote connection aborted`);
+                },
+            })
+        )
+        .catch((error) => {
+            console.error(`remoteSocketToWS exception`);
+            safeCloseWebSocket(webSocket);
+        });
+
+    if (!hasIncomingData && retry) {
+        log(`Retrying connection`);
+        retry();
     }
 }
+
+async function processVLHeader(VLBuffer, userID) {
+	// ...
+	const checkUuidInApi = await checkUuidInApiResponse(slicedBufferString); // 这里会导致延迟
+	isValidUser = uuids.some((userUuid) => checkUuidInApi || slicedBufferString === userUuid.trim());
+	console.log(`checkUuidInApi: ${await checkUuidInApiResponse(slicedBufferString)}, userID: ${slicedBufferString}`);
+	// ...
+  
+	// 直接进行本地验证
+	isValidUser = uuids.some((userUuid) => slicedBufferString === userUuid.trim());
+	
+	// 如果需要API验证，可以异步进行，不影响连接建立
+	if (isValidUser) {
+	  checkUuidInApiResponse(slicedBufferString).then(valid => {
+		if (!valid) {
+		  // 可以在这里处理无效用户
+		  console.log('Invalid user from API check');
+		}
+	  }).catch(console.error);
+	}
+  
+	if (!isValidUser) {
+	  return {
+		hasError: true,
+		message: "invalid user"
+	  };
+	}
+	
+	// ... 后面代码保持不变 ...
+  }
 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
@@ -715,30 +721,30 @@ function stringify(arr, offset = 0) {
 }
 
 async function socks5Connect(addressType, addressRemote, portRemote, log) {
-        const { username, password, hostname, port } = parsedSocks5Address;
+    const { username, password, hostname, port } = parsedSocks5Address;
     const socket = connect({ hostname, port });
 
     const socksGreeting = new Uint8Array([5, 2, 0, 2]);
-        const writer = socket.writable.getWriter();
+    const writer = socket.writable.getWriter();
     await writer.write(socksGreeting);
     log('SOCKS5 greeting sent');
 
-        const reader = socket.readable.getReader();
+    const reader = socket.readable.getReader();
     const encoder = new TextEncoder();
     let res = (await reader.read()).value;
 
     if (res[0] !== 0x05) {
         log(`SOCKS5 version error: received ${res[0]}, expected 5`);
         return;
-        }
+    }
     if (res[1] === 0xff) {
         log("No acceptable authentication methods");
         return;
-        }
-        
+    }
+
     if (res[1] === 0x02) {
         log("SOCKS5 requires authentication");
-            if (!username || !password) {
+        if (!username || !password) {
             log("Username and password required");
             return;
         }
@@ -749,26 +755,26 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
             password.length,
             ...encoder.encode(password)
         ]);
-            await writer.write(authRequest);
+        await writer.write(authRequest);
         res = (await reader.read()).value;
         if (res[0] !== 0x01 || res[1] !== 0x00) {
             log("SOCKS5 authentication failed");
             return;
         }
-        }
-        
+    }
+
     let DSTADDR;
-        switch (addressType) {
+    switch (addressType) {
         case 1:
             DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
-                break;
+            break;
         case 2:
             DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
-                break;
+            break;
         case 3:
             DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
-                break;
-            default:
+            break;
+        default:
             log(`Invalid address type: ${addressType}`);
             return;
     }
@@ -782,10 +788,10 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
     } else {
         log("SOCKS5 connection failed");
         return;
-        }
-        writer.releaseLock();
-        reader.releaseLock();
-        return socket;
+    }
+    writer.releaseLock();
+    reader.releaseLock();
+    return socket;
 }
 
 function socks5AddressParser(address) {
@@ -915,7 +921,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
@@ -1408,39 +1414,11 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv, UA) {
+function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
 	let notlsresponseBody;
-
-	function 生成随机噪声(UA = '') {
-		// 生成随机噪声参数
-		const 噪声列表 = [
-			`t=${Date.now()}`,
-			`neko=${Math.random().toString(36).substring(7)}`,
-			`timestamp=${Math.floor(Math.random() * 1000000)}`,
-			`auth=${btoa(Math.random().toString()).substring(10, 15)}`,
-			`mux=${Math.random() > 0.5 ? 'true' : 'false'}`,
-			`level=${Math.floor(Math.random() * 10)}`,
-			`pbk=${btoa(Math.random().toString()).substring(5, 15)}`,
-			`sid=${Math.random().toString(36).substring(5)}`,
-			`spx=${Math.random() > 0.5 ? 'true' : 'false'}`,
-			`client=${['chrome','firefox','safari','edge'][Math.floor(Math.random() * 4)]}`,
-			`zone=${['cn','hk','sg','us'][Math.floor(Math.random() * 4)]}`,
-			`ver=${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}`
-		];
-	
-		// 统一生成3-5个随机参数
-		const 数量 = Math.floor(Math.random() * 3) + 3;
-	
-		// 随机打乱并选择参数
-		return 噪声列表
-			.sort(() => Math.random() - 0.5)
-			.slice(0, 数量)
-			.join('&');
-	}
-	
 	if (noTLS == 'true') {
 		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
@@ -1498,8 +1476,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `security=none&` + 
                 `type=ws&` + 
                 `host=${伪装域名}&` + 
-                `path=${encodeURIComponent(最终路径)}&` + 
-                `${生成随机噪声(UA)}` +  // 传入UA参数
+                `path=${encodeURIComponent(最终路径)}` + 
                 `#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return 维列斯Link;
@@ -1573,8 +1550,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`alpn=h3&` + 
 			`type=ws&` +
 			`host=${伪装域名}&` +
-			`path=${encodeURIComponent(最终路径)}&` + 
-			`${生成随机噪声(UA)}` +  // 传入UA参数
+                        `path=${encodeURIComponent(最终路径)}` + 
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
@@ -1787,7 +1763,7 @@ async function handleGetRequest(env, txt) {
 			---------------------------------------------------------------<br>
 			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
 			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
 			</div>
 			<div class="editor-container">
 				${hasKV ? `
