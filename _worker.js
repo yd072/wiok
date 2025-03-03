@@ -75,53 +75,49 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
-		this.transformStream = new TransformStream({
-			transform: (chunk, controller) => {
-				if (this.readableStreamCancel) return;
-				controller.enqueue(chunk);
-			}
-		});
 	}
 
 	makeReadableStream(earlyDataHeader) {
-		const { readable, writable } = this.transformStream;
+		return new ReadableStream({
+			start: async (controller) => {
+				// 处理早期数据
+				if (earlyDataHeader) {
+					const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+					if (error) {
+						controller.error(error);
+						return;
+					}
+					if (earlyData) {
+						controller.enqueue(earlyData);
+					}
+				}
 
-		// 处理早期数据
-		if (earlyDataHeader) {
-			const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-			if (error) {
-				throw error;
+				// 处理 WebSocket 消息
+				this.webSocket.addEventListener('message', (event) => {
+					if (this.readableStreamCancel) return;
+					controller.enqueue(event.data);
+				});
+
+				// 处理关闭事件
+				this.webSocket.addEventListener('close', () => {
+					if (!this.readableStreamCancel) {
+						controller.close();
+					}
+					safeCloseWebSocket(this.webSocket);
+				});
+
+				// 处理错误事件
+				this.webSocket.addEventListener('error', (err) => {
+					this.log('WebSocket server error');
+					controller.error(err);
+				});
+			},
+			cancel: (reason) => {
+				this.readableStreamCancel = true;
+				this.log(`Readable stream canceled, reason: ${reason}`);
+				safeCloseWebSocket(this.webSocket);
 			}
-			if (earlyData) {
-				const writer = writable.getWriter();
-				writer.write(earlyData).catch(console.error);
-				writer.releaseLock();
-			}
-		}
-
-		// 处理 WebSocket 消息
-		this.webSocket.addEventListener('message', async (event) => {
-			if (this.readableStreamCancel) return;
-			const writer = writable.getWriter();
-			await writer.write(event.data);
-			writer.releaseLock();
 		});
-
-		// 处理关闭事件
-		this.webSocket.addEventListener('close', () => {
-			const writer = writable.getWriter();
-			writer.close().catch(console.error);
-			safeCloseWebSocket(this.webSocket);
-		});
-
-		// 处理错误事件
-		this.webSocket.addEventListener('error', (err) => {
-			this.log('WebSocket server error');
-			const writer = writable.getWriter();
-			writer.abort(err);
-		});
-
-		return readable;
 	}
 }
 
@@ -497,19 +493,11 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         );
 
         remoteSocket.value = tcpSocket;
-
-        // 使用 TransformStream 处理初始数据
-        const initialDataStream = new TransformStream({
-            transform(chunk, controller) {
-                controller.enqueue(chunk);
-            }
-        });
-
-        const writer = initialDataStream.writable.getWriter();
+        
+        // 直接写入初始数据
+        const writer = tcpSocket.writable.getWriter();
         await writer.write(rawClientData);
-        writer.close();
-
-        await initialDataStream.readable.pipeTo(tcpSocket.writable);
+        writer.releaseLock();
         
         return tcpSocket;
     }
@@ -629,28 +617,25 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let hasIncomingData = false;
     let header = responseHeader;
 
-    const transformStream = new TransformStream({
-        start(controller) {
-            if (header) {
-                controller.enqueue(header);
-                header = null;
-            }
-        },
-        transform(chunk, controller) {
-            hasIncomingData = true;
-            controller.enqueue(chunk);
-        },
-        flush(controller) {
-            if (!hasIncomingData && retry) {
-                log(`No incoming data, retrying connection`);
-                retry();
-            }
-        }
-    });
-
     try {
         await remoteSocket.readable
-            .pipeThrough(transformStream)
+            .pipeThrough(new TransformStream({
+                transform(chunk, controller) {
+                    hasIncomingData = true;
+                    if (header) {
+                        controller.enqueue(new Blob([header, chunk]));
+                        header = null;
+                    } else {
+                        controller.enqueue(chunk);
+                    }
+                },
+                flush() {
+                    if (!hasIncomingData && retry) {
+                        log(`No incoming data, retrying connection`);
+                        retry();
+                    }
+                }
+            }))
             .pipeTo(new WritableStream({
                 write(chunk) {
                     if (webSocket.readyState === WS_READY_STATE_OPEN) {
