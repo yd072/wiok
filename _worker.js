@@ -1087,16 +1087,16 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				<style>
 					:root {
 						--primary-color: #2196F3;
-						--secondary-color: #1976D2;
-						--success-color: #4CAF50;
-						--warning-color: #FFC107;
-						--danger-color: #F44336;
-						--border-color: #E0E0E0;
-						--text-color: #333;
-						--text-secondary: #666;
-						--background-color: #F5F5F5;
-						--section-bg: #FFFFFF;
-						--hover-bg: #F8F9FA;
+						--primary-dark: #1976D2;
+						--secondary-color: #4CAF50;
+						--secondary-dark: #388E3C;
+						--border-color: #e0e0e0;
+						--text-color: #2c3e50;
+						--text-light: #666;
+						--background-color: #f8f9fa;
+						--section-bg: #ffffff;
+						--danger-color: #ff5252;
+						--success-color: #4caf50;
 					}
 					
 					body {
@@ -1106,7 +1106,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
-						background-image: linear-gradient(120deg, #fdfbfb 0%, #ebedee 100%);
 						min-height: 100vh;
 					}
 
@@ -1139,18 +1138,24 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						margin-bottom: 20px;
 						padding-bottom: 12px;
 						border-bottom: 2px solid var(--border-color);
+						font-weight: 600;
 						display: flex;
 						align-items: center;
 						gap: 8px;
+					}
+
+					.section-title i {
+						font-size: 1.2em;
 					}
 
 					.subscription-link {
 						display: block;
 						margin: 15px 0;
 						padding: 16px;
-						background: var(--hover-bg);
+						background: #f8f9fa;
 						border-radius: 10px;
 						border: 1px solid var(--border-color);
+						word-break: break-all;
 						transition: all 0.3s ease;
 					}
 
@@ -1159,15 +1164,21 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						box-shadow: 0 2px 8px rgba(33,150,243,0.1);
 					}
 
+					.subscription-link .link-label {
+						font-weight: 500;
+						color: var(--text-light);
+						margin-bottom: 8px;
+					}
+
 					.subscription-link a {
 						color: var(--primary-color);
 						text-decoration: none;
 						font-size: 0.95em;
-						display: inline-block;
-						margin-top: 6px;
-						padding: 4px 8px;
-						border-radius: 4px;
-						transition: all 0.3s ease;
+						display: block;
+						padding: 8px;
+						background: rgba(33,150,243,0.05);
+						border-radius: 6px;
+						transition: all 0.2s ease;
 					}
 
 					.subscription-link a:hover {
@@ -1180,7 +1191,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						padding: 15px;
 						background: white;
 						border-radius: 8px;
-						box-shadow: inset 0 0 8px rgba(0,0,0,0.05);
+						box-shadow: 0 2px 6px rgba(0,0,0,0.05);
 					}
 
 					.notice-toggle {
@@ -1189,34 +1200,35 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						text-decoration: none;
 						display: inline-flex;
 						align-items: center;
+						gap: 6px;
 						margin: 10px 0;
 						font-weight: 500;
 						padding: 8px 16px;
-						border-radius: 6px;
+						background: rgba(33,150,243,0.1);
+						border-radius: 20px;
 						transition: all 0.3s ease;
 					}
 
 					.notice-toggle:hover {
-						background: rgba(33,150,243,0.1);
+						background: rgba(33,150,243,0.15);
 					}
 
 					.notice-content {
-						background: var(--hover-bg);
+						background: #fff;
 						border-left: 4px solid var(--primary-color);
 						padding: 20px;
 						margin: 15px 0;
 						border-radius: 0 12px 12px 0;
-						font-size: 0.95em;
-						line-height: 1.7;
+						box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 					}
 
 					.config-info {
-						background: var(--hover-bg);
+						background: #fff;
 						padding: 20px;
 						border-radius: 10px;
-						font-family: Monaco, Consolas, "Courier New", monospace;
+						font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 						font-size: 13px;
-						line-height: 1.7;
+						line-height: 1.6;
 						overflow-x: auto;
 						border: 1px solid var(--border-color);
 					}
@@ -1229,16 +1241,16 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						background: var(--primary-color);
 						color: white;
 						border: none;
-						border-radius: 6px;
+						border-radius: 20px;
 						cursor: pointer;
 						font-size: 14px;
 						font-weight: 500;
-						margin: 8px 0;
+						margin: 10px 0;
 						transition: all 0.3s ease;
 					}
 
 					.copy-button:hover {
-						background: var(--secondary-color);
+						background: var(--primary-dark);
 						transform: translateY(-1px);
 					}
 
@@ -1246,23 +1258,36 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						transform: translateY(0);
 					}
 
+					.success-message {
+						position: fixed;
+						bottom: 20px;
+						right: 20px;
+						padding: 12px 24px;
+						background: var(--success-color);
+						color: white;
+						border-radius: 8px;
+						box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+						animation: slideIn 0.3s ease;
+					}
+
+					@keyframes slideIn {
+						from {
+							transform: translateY(100%);
+							opacity: 0;
+						}
+						to {
+							transform: translateY(0);
+							opacity: 1;
+						}
+					}
+
 					.divider {
 						height: 1px;
-						background: linear-gradient(to right, transparent, var(--border-color), transparent);
+						background: var(--border-color);
 						margin: 25px 0;
+						opacity: 0.5;
 					}
 
-					/* 添加动画效果 */
-					@keyframes fadeIn {
-						from { opacity: 0; transform: translateY(10px); }
-						to { opacity: 1; transform: translateY(0); }
-					}
-
-					.section {
-						animation: fadeIn 0.5s ease-out;
-					}
-
-					/* 添加响应式设计 */
 					@media (max-width: 768px) {
 						body {
 							padding: 10px;
@@ -1276,51 +1301,34 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							padding: 20px;
 							margin: 15px 0;
 						}
-						
+
 						.subscription-link {
 							padding: 12px;
 						}
-						
+
 						.notice-content {
 							padding: 15px;
 						}
 					}
-
-					/* 添加深色模式支持 */
-					@media (prefers-color-scheme: dark) {
-						:root {
-							--text-color: #E0E0E0;
-							--text-secondary: #AAAAAA;
-							--background-color: #1A1A1A;
-							--section-bg: #242424;
-							--hover-bg: #2A2A2A;
-							--border-color: #333333;
-						}
-
-						.subscription-link a:hover {
-							background: rgba(33,150,243,0.2);
-						}
-
-						.config-info {
-							background: #1E1E1E;
-						}
-					}
 				</style>
+				<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
 			</head>
 			<body>
 				<div class="container">
 					<div class="section">
-						<div class="section-title">📋 订阅信息</div>
+						<div class="section-title">
+							<i class="bi bi-link-45deg"></i>订阅信息
+						</div>
 						<div class="subscription-link">
-							自适应订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
+							<div class="link-label">自适应订阅地址</div>
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')">
 								https://${proxyhost}${hostName}/${uuid}
 							</a>
 							<div id="qrcode_0" class="qrcode-container"></div>
 						</div>
 
 						<div class="subscription-link">
-							Base64订阅地址:<br>
+							<div class="link-label">Base64订阅地址</div>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?b64
 							</a>
@@ -1328,7 +1336,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						</div>
 
 						<div class="subscription-link">
-							clash订阅地址:<br>
+							<div class="link-label">clash订阅地址</div>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?clash
 							</a>
@@ -1336,7 +1344,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						</div>
 
 						<div class="subscription-link">
-							singbox订阅地址:<br>
+							<div class="link-label">singbox订阅地址</div>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?sb
 							</a>
@@ -1344,7 +1352,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						</div>
 
 						<div class="subscription-link">
-							Loon订阅地址:<br>
+							<div class="link-label">Loon订阅地址</div>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?loon
 							</a>
@@ -1353,9 +1361,11 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					</div>
 
 					<div class="section">
-						<div class="section-title">ℹ️ 使用说明</div>
+						<div class="section-title">
+							<i class="bi bi-info-circle"></i>使用说明
+						</div>
 						<a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
-							实用订阅技巧 ∨
+							<i class="bi bi-chevron-down"></i>实用订阅技巧
 						</a>
 						<div id="noticeContent" class="notice-content" style="display: none">
 							<strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br><br>
@@ -1372,7 +1382,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					</div>
 
 					<div class="section">
-						<div class="section-title">🔧 配置信息</div>
+						<div class="section-title">
+							<i class="bi bi-gear"></i>配置信息
+						</div>
 						<div class="config-info">
 							${动态UUID信息.replace(/\n/g, '<br>')}
 							HOST: ${hostName}<br>
@@ -1384,7 +1396,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					</div>
 
 					<div class="section">
-						<div class="section-title">📝 代理配置</div>
+						<div class="section-title">
+							<i class="bi bi-file-earmark-code"></i>代理配置
+						</div>
 						<div class="config-info">
 							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
 							<div>${proxyConfig}</div>
@@ -1393,7 +1407,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					</div>
 
 					<div class="section">
-						<div class="section-title">⚙️ Clash Meta 配置</div>
+						<div class="section-title">
+							<i class="bi bi-file-earmark-text"></i>Clash Meta 配置
+						</div>
 						<div class="config-info">
 							${clash}
 						</div>
@@ -1407,27 +1423,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				<script>
 					function copyToClipboard(text, qrcode) {
 						navigator.clipboard.writeText(text).then(() => {
-							const toast = document.createElement('div');
-							// 使用style属性而不是cssText
-							toast.style.position = 'fixed';
-							toast.style.bottom = '20px';
-							toast.style.left = '50%';
-							toast.style.transform = 'translateX(-50%)';
-							toast.style.background = 'rgba(0,0,0,0.8)';
-							toast.style.color = 'white';
-							toast.style.padding = '12px 24px';
-							toast.style.borderRadius = '8px';
-							toast.style.fontSize = '14px';
-							toast.style.zIndex = '1000';
-							toast.style.animation = 'fadeIn 0.3s ease';
-							
-							toast.textContent = '✅ 已复制到剪贴板';
-							document.body.appendChild(toast);
-							
-							setTimeout(() => {
-								toast.style.animation = 'fadeOut 0.3s ease';
-								setTimeout(() => toast.remove(), 300);
-							}, 2000);
+							showSuccessMessage('已复制到剪贴板');
 						}).catch(err => {
 							console.error('复制失败:', err);
 						});
@@ -1438,11 +1434,24 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							text: text,
 							width: 220,
 							height: 220,
-							colorDark: "#000000",
+							colorDark: "#2c3e50",
 							colorLight: "#ffffff",
 							correctLevel: QRCode.CorrectLevel.Q,
 							scale: 1
 						});
+					}
+
+					function showSuccessMessage(message) {
+						const messageDiv = document.createElement('div');
+						messageDiv.className = 'success-message';
+						messageDiv.textContent = message;
+						document.body.appendChild(messageDiv);
+						
+						setTimeout(() => {
+							messageDiv.style.opacity = '0';
+							messageDiv.style.transform = 'translateY(100%)';
+							setTimeout(() => messageDiv.remove(), 300);
+						}, 2000);
 					}
 
 					function toggleNotice() {
@@ -1450,10 +1459,10 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						const noticeToggle = document.getElementById('noticeToggle');
 						if (noticeContent.style.display === 'none') {
 							noticeContent.style.display = 'block';
-							noticeToggle.textContent = '实用订阅技巧 ∧';
+							noticeToggle.innerHTML = '<i class="bi bi-chevron-up"></i>实用订阅技巧';
 						} else {
 							noticeContent.style.display = 'none';
-							noticeToggle.textContent = '实用订阅技巧 ∨';
+							noticeToggle.innerHTML = '<i class="bi bi-chevron-down"></i>实用订阅技巧';
 						}
 					}
 				</script>
@@ -1976,9 +1985,9 @@ async function handleGetRequest(env, txt) {
         <!DOCTYPE html>
         <html>
         <head>
+            <title>优选订阅列表</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>优选订阅列表</title>
             <style>
                 :root {
                     --primary-color: #4CAF50;
@@ -2124,20 +2133,20 @@ async function handleGetRequest(env, txt) {
         </head>
         <body>
             <div class="container">
-                <div class="title">📝 优选订阅列表</div>
+                <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                     ℹ️ 注意事项 ∨
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
+                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
                 </div>
 
                 <div class="editor-container">
                     ${hasKV ? `
                         <textarea class="editor" 
-                            placeholder="请输入内容..."
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
@@ -2146,59 +2155,59 @@ async function handleGetRequest(env, txt) {
                         </div>
                         <div class="divider"></div>
                         ${cmad}
-                    ` : `<p>未绑定KV空间</p>`}
+                    ` : '<p>未绑定KV空间</p>'}
                 </div>
             </div>
 
             <script>
-                function goBack() {
-                    const pathParts = window.location.pathname.split('/');
-                    pathParts.pop();
-                    const newPath = pathParts.join('/');
-                    window.location.href = newPath;
-                }
+            function goBack() {
+                const pathParts = window.location.pathname.split('/');
+                pathParts.pop(); // 移除 "edit"
+                const newPath = pathParts.join('/');
+                window.location.href = newPath;
+            }
 
-                async function saveContent(button) {
-                    try {
-                        button.disabled = true;
-                        const content = document.getElementById('content').value;
-                        const saveStatus = document.getElementById('saveStatus');
-                        
-                        saveStatus.textContent = '保存中...';
-                        
-                        const response = await fetch(window.location.href, {
-                            method: 'POST',
-                            body: content
-                        });
+            async function saveContent(button) {
+                try {
+                    button.disabled = true;
+                    const content = document.getElementById('content').value;
+                    const saveStatus = document.getElementById('saveStatus');
+                    
+                    saveStatus.textContent = '保存中...';
+                    
+                    const response = await fetch(window.location.href, {
+                        method: 'POST',
+                        body: content
+                    });
 
-                        if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
-                            setTimeout(() => {
-                                saveStatus.textContent = '';
-                            }, 3000);
-                        } else {
-                            throw new Error('保存失败');
-                        }
-                    } catch (error) {
-                        const saveStatus = document.getElementById('saveStatus');
-                        saveStatus.textContent = '❌ ' + error.message;
-                        console.error('保存时发生错误:', error);
-                    } finally {
-                        button.disabled = false;
-                    }
-                }
-
-                function toggleNotice() {
-                    const noticeContent = document.getElementById('noticeContent');
-                    const noticeToggle = document.getElementById('noticeToggle');
-                    if (noticeContent.style.display === 'none') {
-                        noticeContent.style.display = 'block';
-                        noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                    if (response.ok) {
+                        saveStatus.textContent = '✅ 保存成功';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
                     } else {
-                        noticeContent.style.display = 'none';
-                        noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                        throw new Error('保存失败');
                     }
+                } catch (error) {
+                    const saveStatus = document.getElementById('saveStatus');
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存时发生错误:', error);
+                } finally {
+                    button.disabled = false;
                 }
+            }
+
+            function toggleNotice() {
+                const noticeContent = document.getElementById('noticeContent');
+                const noticeToggle = document.getElementById('noticeToggle');
+                if (noticeContent.style.display === 'none') {
+                    noticeContent.style.display = 'block';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                } else {
+                    noticeContent.style.display = 'none';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                }
+            }
             </script>
         </body>
         </html>
