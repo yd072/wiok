@@ -2165,92 +2165,55 @@ async function handleGetRequest(env, txt) {
                         height: 400px;
                     }
                 }
-
-                .settings-panel {
-                    background: #f8f9fa;
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    padding: 20px;
-                    margin: 20px 0;
-                }
-
-                .settings-group {
-                    margin-bottom: 20px;
-                }
-
-                .settings-title {
-                    font-weight: 500;
-                    margin-bottom: 10px;
-                    color: var(--primary-color);
-                }
-
-                .settings-input {
-                    width: 100%;
-                    padding: 8px 12px;
-                    border: 1px solid var(--border-color);
-                    border-radius: 4px;
-                    margin-bottom: 8px;
-                    font-family: Monaco, Consolas, "Courier New", monospace;
-                }
-
-                .settings-input:focus {
-                    outline: none;
-                    border-color: var(--primary-color);
-                    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
-                }
-
-                .settings-description {
-                    font-size: 12px;
-                    color: #666;
-                    margin-top: 4px;
-                }
-
-                .settings-toggle {
-                    color: var(--primary-color);
-                    cursor: pointer;
-                    text-decoration: none;
-                    display: inline-block;
-                    margin: 10px 0;
-                    font-weight: 500;
-                }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
-
-                <!-- 添加设置面板 -->
-                <a href="javascript:void(0);" id="settingsToggle" class="settings-toggle" onclick="toggleSettings()">
-                    ⚙️ 高级设置 ∨
-                </a>
                 
-                <div id="settingsContent" class="settings-panel" style="display: none">
-                    <div class="settings-group">
-                        <div class="settings-title">DNS 设置</div>
-                        <input type="text" class="settings-input" id="remoteDns" placeholder="远程 DNS (例如: 8.8.8.8:53)" />
-                        <div class="settings-description">设置远程 DNS 服务器地址和端口</div>
-                        
-                        <input type="text" class="settings-input" id="localDns" placeholder="本地 DNS (例如: 223.5.5.5:53)" />
-                        <div class="settings-description">设置本地 DNS 服务器地址和端口</div>
-                    </div>
-
-                    <div class="settings-group">
-                        <div class="settings-title">Proxy IP 设置</div>
-                        <input type="text" class="settings-input" id="proxyIp" placeholder="Proxy IP (例如: 1.1.1.1:443)" />
-                        <div class="settings-description">设置代理服务器 IP 地址和端口</div>
-                    </div>
-
-                    <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
-                    <span class="save-status" id="settingsSaveStatus"></span>
-                </div>
-
-                <!-- 原有的注意事项部分 -->
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                     ℹ️ 注意事项 ∨
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTk1JUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                </div>
+
+                <div class="settings-panel">
+                    <h3 style="margin-top: 0;">⚙️ 高级设置</h3>
+                    
+                    <div class="settings-group">
+                        <label>远程 DNS 服务器</label>
+                        <input type="text" id="remoteDns" class="settings-input" 
+                               placeholder="8.8.8.8, 8.8.4.4"
+                               value="8.8.4.4">
+                        <div class="settings-description">
+                            用逗号分隔多个DNS服务器地址
+                        </div>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label>本地 DNS 服务器</label>
+                        <input type="text" id="localDns" class="settings-input" 
+                               placeholder="223.5.5.5, 223.6.6.6"
+                               value="223.5.5.5">
+                        <div class="settings-description">
+                            用于本地网络解析的DNS服务器
+                        </div>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label>Proxy IP</label>
+                        <input type="text" id="proxyIp" class="settings-input" 
+                               placeholder="proxyip.fxxk.dedyn.io:443"
+                               value="${proxyIP || ''}">
+                        <div class="settings-description">
+                            用于代理连接的IP地址和端口
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                    <span class="save-status" id="settingsSaveStatus"></span>
                 </div>
 
                 <div class="editor-container">
@@ -2319,41 +2282,30 @@ async function handleGetRequest(env, txt) {
                 }
             }
 
-            function toggleSettings() {
-                const settingsContent = document.getElementById('settingsContent');
-                const settingsToggle = document.getElementById('settingsToggle');
-                if (settingsContent.style.display === 'none') {
-                    settingsContent.style.display = 'block';
-                    settingsToggle.textContent = '⚙️ 高级设置 ∧';
-                } else {
-                    settingsContent.style.display = 'none';
-                    settingsToggle.textContent = '⚙️ 高级设置 ∨';
-                }
-            }
-
             async function saveSettings() {
+                const remoteDns = document.getElementById('remoteDns').value;
+                const localDns = document.getElementById('localDns').value;
+                const proxyIp = document.getElementById('proxyIp').value;
+                const settingsSaveStatus = document.getElementById('settingsSaveStatus');
+                
                 try {
-                    const remoteDns = document.getElementById('remoteDns').value;
-                    const localDns = document.getElementById('localDns').value;
-                    const proxyIp = document.getElementById('proxyIp').value;
-                    
-                    const settingsSaveStatus = document.getElementById('settingsSaveStatus');
-                    settingsSaveStatus.textContent = '保存中...';
-
                     // 这里可以添加设置验证逻辑
                     const settings = {
-                        remoteDns,
-                        localDns,
-                        proxyIp
+                        remoteDns: remoteDns.split(',').map(s => s.trim()),
+                        localDns: localDns.split(',').map(s => s.trim()),
+                        proxyIp: proxyIp.trim()
                     };
-
-                    // 将设置保存到KV存储
-                    const response = await fetch(window.location.href + '?type=settings', {
+                    
+                    // 保存设置到KV存储
+                    const response = await fetch(window.location.href, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify(settings)
+                        body: JSON.stringify({
+                            type: 'settings',
+                            settings: settings
+                        })
                     });
 
                     if (response.ok) {
@@ -2365,8 +2317,8 @@ async function handleGetRequest(env, txt) {
                         throw new Error('保存设置失败');
                     }
                 } catch (error) {
-                    console.error('保存设置时发生错误:', error);
                     settingsSaveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存设置时发生错误:', error);
                 }
             }
             </script>
