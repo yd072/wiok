@@ -145,8 +145,8 @@ export default {
 							// 更新 proxyIP 和相关变量
 							proxyIP = settings.proxyIp;
 							customProxyIP = settings.proxyIp;
-							proxyIPs = [settings.proxyIp]; // 确保只使用设置的代理IP
-							RproxyIP = 'false'; // 禁用随机代理IP
+							RproxyIP = 'false'; // 禁用随机代理
+							proxyIPs = [settings.proxyIp]; // 设置为单一代理
 						}
 						if (settings.remoteDns) {
 							remoteDNS = settings.remoteDns;
@@ -193,7 +193,7 @@ export default {
 			const fakeHostName = `${fakeUserIDMD5.slice(6, 9)}.${fakeUserIDMD5.slice(13, 19)}`;
 
 			// 修改代理IP的设置逻辑
-			if (!customProxyIP) { // 只在没有自定义代理IP时使用环境变量
+			if (!customProxyIP) {
 				proxyIP = env.PROXYIP || env.proxyip || proxyIP;
 				proxyIPs = await 整理(proxyIP);
 				proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
@@ -1109,7 +1109,7 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
@@ -1202,7 +1202,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		}
 	}
 
-	const uuid = (_url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
+	const uuid = (url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
 	const userAgent = UA.toLowerCase();
 	const Config = 配置信息(userID, hostName);
 	const proxyConfig = Config[0];
@@ -2340,8 +2340,8 @@ async function handleGetRequest(env, txt) {
                             <input type="text" id="proxyIp" placeholder="已禁用" value="">
                         </div>
                         <div class="settings-actions">
-                            <button class="btn btn-primary" id="saveSettingsBtn">保存设置</button>
-                            <button class="btn btn-secondary" id="resetSettingsBtn">重置</button>
+                            <button class="btn btn-primary" onclick="saveDnsSettings()">保存设置</button>
+                            <button class="btn btn-secondary" onclick="resetDnsSettings()">重置</button>
                         </div>
                     </div>
                 </div>
@@ -2423,99 +2423,71 @@ async function handleGetRequest(env, txt) {
                 }
 
                 // 添加新的 DNS 设置相关函数
-                async function saveDnsSettings() {
-                    try {
-                        const remoteDns = document.getElementById('remoteDns').value;
-                        const localDns = document.getElementById('localDns').value;
-                        const proxyIp = document.getElementById('proxyIp').value;
+                function saveDnsSettings() {
+                    const remoteDns = document.getElementById('remoteDns').value;
+                    const localDns = document.getElementById('localDns').value;
+                    const proxyIp = document.getElementById('proxyIp').value;
 
-                        // 更新全局变量
-                        remoteDNS = remoteDns;
-                        localDNS = localDns;
-                        
-                        if (proxyIp) {
-                            customProxyIP = proxyIp;
-                            proxyIP = proxyIp;
-                            proxyIPs = [proxyIp];
-                            RproxyIP = 'false';
-                        } else {
-                            customProxyIP = '';
-                            // 重置为环境变量中的设置
-                            proxyIP = env.PROXYIP || env.proxyip || '';
-                            if (proxyIP) {
-                                proxyIPs = await 整理(proxyIP);
-                                proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
-                            } else {
-                                proxyIPs = [];
-                            }
-                            RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
-                        }
-
-                        // 保存到 cookie 和 localStorage
-                        const settings = JSON.stringify({
-                            remoteDns,
-                            localDns,
-                            proxyIp
-                        });
-                        
-                        document.cookie = 'dnsSettings=' + encodeURIComponent(settings) + '; path=/; max-age=31536000';
-                        localStorage.setItem('dnsSettings', settings);
-
-                        // 显示保存成功消息
-                        alert('设置已保存，正在刷新页面...');
-                        
-                        // 延迟一下再刷新，让用户看到提示
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 500);
-                    } catch (error) {
-                        console.error('保存设置时出错:', error);
-                        alert('保存设置时出错: ' + error.message);
-                    }
-                }
-
-                // 修改按钮的事件绑定
-                function initializeSettings() {
-                    const saveButton = document.querySelector('button[onclick="saveDnsSettings()"]');
-                    if (saveButton) {
-                        saveButton.onclick = () => {
-                            saveDnsSettings().catch(error => {
-                                console.error('保存设置时出错:', error);
-                                alert('保存设置时出错: ' + error.message);
-                            });
-                        };
-                    }
-                }
-
-                // 在页面加载完成后初始化设置
-                window.addEventListener('load', () => {
-                    initializeSettings();
+                    // 更新全局变量
+                    remoteDNS = remoteDns;
+                    localDNS = localDns;
                     
-                    // 恢复保存的设置
+                    // 更新代理相关设置
+                    if (proxyIp) {
+                        customProxyIP = proxyIp;
+                        proxyIP = proxyIp;
+                        RproxyIP = 'false';
+                        proxyIPs = [proxyIp];
+                    } else {
+                        customProxyIP = '';
+                        proxyIP = env.PROXYIP || '';
+                        RproxyIP = env.RPROXYIP || 'true';
+                    }
+
+                    // 保存到 cookie 和 localStorage
+                    const settings = JSON.stringify({
+                        remoteDns,
+                        localDns,
+                        proxyIp
+                    });
+                    
+                    document.cookie = 'dnsSettings=' + encodeURIComponent(settings) + '; path=/; max-age=31536000';
+                    localStorage.setItem('dnsSettings', settings);
+
+                    // 刷新页面以应用新设置
+                    window.location.reload();
+                }
+
+                function resetDnsSettings() {
+                    // 重置为默认值
+                    document.getElementById('remoteDns').value = 'https://8.8.8.8/dns-query';
+                    document.getElementById('localDns').value = '8.8.4.4';
+                    document.getElementById('proxyIp').value = '';
+
+                    // 清除 localStorage 中的设置
+                    localStorage.removeItem('dnsSettings');
+
+                    alert('设置已重置');
+                }
+
+                // 页面加载时恢复保存的设置
+                window.addEventListener('load', () => {
                     const savedSettings = localStorage.getItem('dnsSettings');
                     if (savedSettings) {
-                        try {
-                            const settings = JSON.parse(savedSettings);
-                            
-                            // 更新全局变量
-                            remoteDNS = settings.remoteDns || remoteDNS;
-                            localDNS = settings.localDns || localDNS;
-                            customProxyIP = settings.proxyIp || customProxyIP;
-
-                            // 更新输入框
-                            document.getElementById('remoteDns').value = remoteDNS;
-                            document.getElementById('localDns').value = localDNS;
-                            document.getElementById('proxyIp').value = customProxyIP;
-
-                            // 更新实际配置
-                            if (settings.proxyIp) {
-                                proxyIP = settings.proxyIp;
-                                proxyIPs = [settings.proxyIp];
-                                RproxyIP = 'false';
-                            }
-                        } catch (error) {
-                            console.error('恢复设置时出错:', error);
+                        const settings = JSON.parse(savedSettings);
+                        
+                        // 更新全局变量
+                        remoteDNS = settings.remoteDns || remoteDNS;
+                        localDNS = settings.localDns || localDNS;
+                        
+                        if (settings.proxyIp) {
+                            proxyIP = settings.proxyIp; // 直接更新 proxyIP
                         }
+
+                        // 更新输入框
+                        document.getElementById('remoteDns').value = remoteDNS;
+                        document.getElementById('localDns').value = localDNS;
+                        document.getElementById('proxyIp').value = customProxyIP;
                     }
                 });
             </script>
