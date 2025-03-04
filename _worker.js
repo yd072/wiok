@@ -229,7 +229,9 @@ export default {
 				if (路径 == '/') {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
-					else return new Response(`
+					else {
+						// 生成美化后的系统信息页面
+						const html = `
 						<!DOCTYPE html>
 						<html>
 						<head>
@@ -240,8 +242,10 @@ export default {
 								:root {
 									--primary-color: #4CAF50;
 									--border-color: #e0e0e0;
-									--text-color: #333;
 									--background-color: #f5f5f5;
+									--warning-bg: #fff3f3;
+									--warning-border: #ffcdd2;
+									--warning-text: #d32f2f;
 								}
 								
 								body {
@@ -249,7 +253,6 @@ export default {
 									padding: 20px;
 									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 									line-height: 1.6;
-									color: var(--text-color);
 									background-color: var(--background-color);
 								}
 
@@ -266,45 +269,64 @@ export default {
 									font-size: 1.5em;
 									color: var(--primary-color);
 									margin-bottom: 20px;
-									padding-bottom: 10px;
-									border-bottom: 2px solid var(--border-color);
-								}
-
-								.info-section {
-									margin: 20px 0;
-									padding: 15px;
-									background: #f8f9fa;
-									border-radius: 6px;
-									border-left: 4px solid var(--primary-color);
-								}
-
-								.info-item {
 									display: flex;
-									margin: 8px 0;
-									padding: 8px;
-									background: white;
-									border-radius: 4px;
-									box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+									align-items: center;
+									gap: 10px;
+								}
+
+								.title .icon {
+									font-size: 1.2em;
+								}
+
+								.warning-box {
+									background-color: var(--warning-bg);
+									border: 1px solid var(--warning-border);
+									border-radius: 6px;
+									padding: 15px;
+									margin-bottom: 20px;
+									color: var(--warning-text);
+									display: flex;
+									align-items: center;
+									gap: 10px;
+								}
+
+								.warning-box .icon {
+									font-size: 1.2em;
+								}
+
+								.info-grid {
+									display: grid;
+									grid-template-columns: auto 1fr;
+									gap: 12px;
+									background: #fff;
+									border-radius: 8px;
+									overflow: hidden;
+								}
+
+								.info-row {
+									display: contents;
+								}
+
+								.info-row:hover > * {
+									background-color: #f8f9fa;
 								}
 
 								.info-label {
-									font-weight: 500;
-									min-width: 160px;
+									padding: 12px 15px;
 									color: #666;
+									font-weight: 500;
+									border-bottom: 1px solid var(--border-color);
 								}
 
 								.info-value {
-									flex: 1;
+									padding: 12px 15px;
 									color: #333;
+									border-bottom: 1px solid var(--border-color);
 								}
 
-								.error-message {
-									color: #dc3545;
-									padding: 15px;
-									margin: 10px 0;
-									background: #fff5f5;
-									border-left: 4px solid #dc3545;
-									border-radius: 0 4px 4px 0;
+								.info-row:last-child .info-label,
+								.info-row:last-child .info-value {
+									border-bottom: none;
 								}
 
 								@media (max-width: 768px) {
@@ -315,62 +337,105 @@ export default {
 									.container {
 										padding: 15px;
 									}
-									
-									.info-item {
-										flex-direction: column;
-									}
-									
-									.info-label {
-										margin-bottom: 4px;
-									}
 								}
 							</style>
 						</head>
 						<body>
 							<div class="container">
-								<div class="title">🔍 系统信息</div>
-								<div class="error-message">
-									⚠️ 请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
+								<div class="title">
+									<span class="icon">🔍</span>
+									系统信息
 								</div>
-								<div class="info-section">
-									<div class="info-item">
-										<span class="info-label">TLS 版本</span>
-										<span class="info-value">${request.cf?.tlsVersion || 'N/A'}</span>
+
+								<div class="warning-box">
+									<span class="icon">⚠️</span>
+									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
+								</div>
+
+								<div class="info-grid">
+									<div class="info-row">
+										<div class="info-label">TLS 版本</div>
+										<div class="info-value">${request.cf?.tlsVersion || 'TLSv1.3'}</div>
 									</div>
-									<div class="info-item">
-										<span class="info-label">HTTP 协议</span>
-										<span class="info-value">${request.cf?.httpProtocol || 'N/A'}</span>
+									<div class="info-row">
+										<div class="info-label">HTTP 协议</div>
+										<div class="info-value">${request.cf?.httpProtocol || 'HTTP/2'}</div>
 									</div>
-									<div class="info-item">
-										<span class="info-label">客户端 TCP RTT</span>
-										<span class="info-value">${request.cf?.clientTcpRtt || 'N/A'} ms</span>
+									<div class="info-row">
+										<div class="info-label">客户端 TCP RTT</div>
+										<div class="info-value">${request.cf?.clientTcpRtt || '3'} ms</div>
 									</div>
-									<div class="info-item">
-										<span class="info-label">地理位置</span>
-										<span class="info-value">${request.cf?.continent || 'N/A'}</span>
+									<div class="info-row">
+										<div class="info-label">地理位置</div>
+										<div class="info-value">${request.cf?.continent || 'EU'}</div>
 									</div>
-									<div class="info-item">
-										<span class="info-label">时区</span>
-										<span class="info-value">${request.cf?.timezone || 'N/A'}</span>
+									<div class="info-row">
+										<div class="info-label">时区</div>
+										<div class="info-value">${request.cf?.timezone || 'Europe/Vilnius'}</div>
 									</div>
-									<div class="info-item">
-										<span class="info-label">客户端 IP</span>
-										<span class="info-value">${request.headers.get('CF-Connecting-IP') || 'N/A'}</span>
+									<div class="info-row">
+										<div class="info-label">客户端 IP</div>
+										<div class="info-value">${request.headers.get('CF-Connecting-IP') || '2a04:2181:c011:1::7a78:e132'}</div>
 									</div>
-									<div class="info-item">
-										<span class="info-label">User Agent</span>
-										<span class="info-value">${request.headers.get('User-Agent') || 'N/A'}</span>
+									<div class="info-row">
+										<div class="info-label">User Agent</div>
+										<div class="info-value">${request.headers.get('User-Agent') || 'Mozilla/5.0'}</div>
 									</div>
 								</div>
 							</div>
 						</body>
-						</html>
-					`, {
-						status: 404,
-						headers: {
-							"Content-Type": "text/html;charset=utf-8",
-						}
-					});
+						</html>`;
+
+						return new Response(html, {
+							status: 200,
+							headers: {
+								'content-type': 'text/html;charset=utf-8',
+							},
+						});
+					}
+				} else if (路径 == `/${fakeUserID}`) {
+					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
+					return new Response(`${fakeConfig}`, { status: 200 });
+				} else if (url.pathname == `/${动态UUID}/edit` || 路径 == `/${userID}/edit`) {
+					const html = await KV(request, env);
+					return html;
+				} else if (url.pathname == `/${动态UUID}` || 路径 == `/${userID}`) {
+					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
+					const 维列斯Config = await 生成配置信息(userID, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
+					const now = Date.now();
+					//const timestamp = Math.floor(now / 1000);
+					const today = new Date(now);
+					today.setHours(0, 0, 0, 0);
+					const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
+					let pagesSum = UD;
+					let workersSum = UD;
+					let total = 24 * 1099511627776;
+
+					if (userAgent && userAgent.includes('mozilla')) {
+						return new Response(`<div style="font-size:13px;">${维列斯Config}</div>`, {
+							status: 200,
+							headers: {
+								"Content-Type": "text/html;charset=utf-8",
+								"Profile-Update-Interval": "6",
+								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+								"Cache-Control": "no-store",
+							}
+						});
+					} else {
+						return new Response(`${维列斯Config}`, {
+							status: 200,
+							headers: {
+								"Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
+								"Content-Type": "text/plain;charset=utf-8",
+								"Profile-Update-Interval": "6",
+								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+							}
+						});
+					}
+				} else {
+					if (env.URL302) return Response.redirect(env.URL302, 302);
+					else if (env.URL) return await 代理URL(env.URL, url);
+					else return new Response('不用怀疑！你UUID就是错的！！！', { status: 404 });
 				}
 			} else {
 				socks5Address = url.searchParams.get('socks5') || socks5Address;
