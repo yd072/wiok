@@ -2022,204 +2022,434 @@ async function KV(request, env, txt = 'ADD.txt') {
 }
 
 async function handlePostRequest(request, env, txt) {
-    if (!env.KV) {
-        return new Response("未绑定KV空间", { status: 400 });
-    }
-    try {
-        const content = await request.text();
-        const url = new URL(request.url);
-        const type = url.searchParams.get('type');
+	if (!env.KV) {
+		return new Response("未绑定KV空间", { status: 400 });
+	}
+	try {
+		const content = await request.text();
+		const url = new URL(request.url);
+		const type = url.searchParams.get('type');
 
-        // 根据类型保存到不同的KV
-        if (type === 'proxyip') {
-            await env.KV.put('PROXYIP.txt', content);
-        } else if (type === 'fragment') {
-            await env.KV.put('FRAGMENT.txt', content);
-        } else {
-            await env.KV.put(txt, content);
-        }
-        
-        return new Response("保存成功");
-    } catch (error) {
-        console.error('保存KV时发生错误:', error);
-        return new Response("保存失败: " + error.message, { status: 500 });
-    }
+		switch (type) {
+			case 'proxyip':
+				await env.KV.put('PROXYIP.txt', content);
+				break;
+			case 'fragment':
+				await env.KV.put('FRAGMENT_SETTINGS', content);
+				break;
+			default:
+				await env.KV.put(txt, content);
+		}
+		
+		return new Response("保存成功");
+	} catch (error) {
+		console.error('保存KV时发生错误:', error);
+		return new Response("保存失败: " + error.message, { status: 500 });
+	}
 }
 
 async function handleGetRequest(env, txt) {
     let content = '';
     let hasKV = !!env.KV;
     let proxyIPContent = '';
-    let fragmentContent = '';  // 添加片段配置内容
+    let fragmentSettings = {
+        lengthMin: '100',
+        lengthMax: '200',
+        intervalMin: '1',
+        intervalMax: '1',
+        packetType: 'random'
+    };
 
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
-            fragmentContent = await env.KV.get('FRAGMENT.txt') || '100-200\n1-1\ntlshello';  // 默认值
+            const savedFragmentSettings = await env.KV.get('FRAGMENT_SETTINGS');
+            if (savedFragmentSettings) {
+                fragmentSettings = JSON.parse(savedFragmentSettings);
+            }
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
         }
     }
 
-    // 在高级设置部分添加片段配置
+    // 在高级设置部分添加片段设置
+    const advancedSettingsHtml = `
+        <div class="advanced-settings">
+            <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
+                <h3 style="margin: 0;">⚙️ 高级设置</h3>
+                <span id="advanced-settings-toggle">∨</span>
+            </div>
+            <div id="advanced-settings-content" class="advanced-settings-content">
+                <div class="settings-section">
+                    <label for="proxyip"><strong>PROXYIP 设置</strong></label>
+                    <p style="margin: 5px 0; color: #666;">每行一个代理IP，格式：IP:端口</p>
+                    <textarea 
+                        id="proxyip" 
+                        class="proxyip-editor" 
+                        placeholder="例如:
+1.2.3.4:443
+proxy.example.com:8443"
+                    >${proxyIPContent}</textarea>
+                    <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveProxyIP()">保存PROXYIP设置</button>
+                    <span id="proxyip-save-status" class="save-status"></span>
+                </div>
+
+                <div class="settings-section" style="margin-top: 20px;">
+                    <label><strong>片段设置</strong></label>
+                    <div class="fragment-settings">
+                        <div class="setting-group">
+                            <label>长度范围:</label>
+                            <input type="number" id="lengthMin" value="${fragmentSettings.lengthMin}" min="1" max="65535" style="width: 80px;"> - 
+                            <input type="number" id="lengthMax" value="${fragmentSettings.lengthMax}" min="1" max="65535" style="width: 80px;">
+                        </div>
+                        <div class="setting-group">
+                            <label>间隔范围:</label>
+                            <input type="number" id="intervalMin" value="${fragmentSettings.intervalMin}" min="1" max="60" style="width: 80px;"> - 
+                            <input type="number" id="intervalMax" value="${fragmentSettings.intervalMax}" min="1" max="60" style="width: 80px;">
+                        </div>
+                        <div class="setting-group">
+                            <label>数据包类型:</label>
+                            <select id="packetType">
+                                <option value="random" ${fragmentSettings.packetType === 'random' ? 'selected' : ''}>随机</option>
+                                <option value="fixed" ${fragmentSettings.packetType === 'fixed' ? 'selected' : ''}>固定</option>
+                                <option value="inc" ${fragmentSettings.packetType === 'inc' ? 'selected' : ''}>递增</option>
+                                <option value="dec" ${fragmentSettings.packetType === 'dec' ? 'selected' : ''}>递减</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveFragmentSettings()">保存片段设置</button>
+                        <span id="fragment-save-status" class="save-status"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
     const html = `
         <!DOCTYPE html>
         <html>
-        <!-- ... head部分保持不变 ... -->
-        <body>
-            <div class="container">
-                <div class="title">📝 ${FileName} 优选订阅列表</div>
-                
-                <!-- 修改高级设置部分 -->
-                <div class="advanced-settings">
-                    <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
-                        <h3 style="margin: 0;">⚙️ 高级设置</h3>
-                        <span id="advanced-settings-toggle">∨</span>
-                    </div>
-                    <div id="advanced-settings-content" class="advanced-settings-content">
-                        <!-- PROXYIP设置 -->
-                        <div class="setting-section">
-                            <label for="proxyip"><strong>PROXYIP 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">每行一个代理IP，格式：IP:端口</p>
-                            <textarea 
-                                id="proxyip" 
-                                class="proxyip-editor" 
-                                placeholder="例如:
-1.2.3.4:443
-proxy.example.com:8443"
-                            >${proxyIPContent}</textarea>
-                            <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveProxyIP()">保存PROXYIP设置</button>
-                            <span id="proxyip-save-status" class="save-status"></span>
-                        </div>
-
-                        <!-- 片段设置 -->
-                        <div class="setting-section" style="margin-top: 20px;">
-                            <label><strong>🔧 片段设置</strong></label>
-                            <div class="fragment-inputs">
-                                <div class="input-group">
-                                    <label for="fragment-length">长度范围:</label>
-                                    <input type="number" id="fragment-length-min" style="width: 80px;" placeholder="最小值">
-                                    <span>-</span>
-                                    <input type="number" id="fragment-length-max" style="width: 80px;" placeholder="最大值">
-                                </div>
-                                <div class="input-group">
-                                    <label for="fragment-interval">间隔范围:</label>
-                                    <input type="number" id="fragment-interval-min" style="width: 80px;" placeholder="最小值">
-                                    <span>-</span>
-                                    <input type="number" id="fragment-interval-max" style="width: 80px;" placeholder="最大值">
-                                </div>
-                                <div class="input-group">
-                                    <label for="fragment-data">数据包:</label>
-                                    <select id="fragment-data" style="width: 200px;">
-                                        <option value="tlshello">tlshello</option>
-                                        <option value="random">random</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveFragment()">保存片段设置</button>
-                            <span id="fragment-save-status" class="save-status"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ... 其他现有内容 ... -->
-            </div>
-
+        <head>
+            <title>优选订阅列表</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
-                .setting-section {
-                    padding: 15px;
-                    background: #fff;
-                    border-radius: 8px;
-                    margin-bottom: 15px;
+                :root {
+                    --primary-color: #4CAF50;
+                    --secondary-color: #45a049;
+                    --border-color: #e0e0e0;
+                    --text-color: #333;
+                    --background-color: #f5f5f5;
+                    --section-bg: #ffffff;
+                }
+                
+                body {
+                    margin: 0;
+                    padding: 20px;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    line-height: 1.6;
+                    color: var(--text-color);
+                    background-color: var(--background-color);
                 }
 
-                .fragment-inputs {
+                .container {
+                    max-width: 1000px;
+                    margin: 0 auto;
+                    background: var(--section-bg);
+                    padding: 25px;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+
+                .section {
+                    margin: 20px 0;
+                    padding: 20px;
+                    background: var(--section-bg);
+                    border-radius: 8px;
+                    border: 1px solid var(--border-color);
+                }
+
+                .section-title {
+                    font-size: 1.2em;
+                    color: var(--primary-color);
+                    margin-bottom: 15px;
+                    padding-bottom: 10px;
+                    border-bottom: 2px solid var(--border-color);
+                }
+
+                .divider {
+                    height: 1px;
+                    background: var(--border-color);
+                    margin: 15px 0;
+                }
+
+                .subscription-link {
+                    display: block;
+                    margin: 10px 0;
+                    padding: 12px;
+                    background: #f8f9fa;
+                    border-radius: 6px;
+                    border: 1px solid var(--border-color);
+                    word-break: break-all;
+                }
+
+                .subscription-link a {
+                    color: #0066cc;
+                    text-decoration: none;
+                }
+
+                .subscription-link a:hover {
+                    text-decoration: underline;
+                }
+
+                .qrcode-container {
+                    margin: 10px 0;
+                    text-align: center;
+                }
+
+                .notice-toggle {
+                    color: var(--primary-color);
+                    cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                    margin: 10px 0;
+                    font-weight: 500;
+                }
+
+                .notice-content {
+                    background: #f8f9fa;
+                    border-left: 4px solid var(--primary-color);
+                    padding: 15px;
+                    margin: 10px 0;
+                    border-radius: 0 8px 8px 0;
+                }
+
+                .config-info {
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 6px;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
+                    font-size: 13px;
+                    overflow-x: auto;
+                }
+
+                .copy-button {
+                    display: inline-block;
+                    padding: 6px 12px;
+                    background: var(--primary-color);
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    margin: 5px 0;
+                }
+
+                .copy-button:hover {
+                    background: var(--secondary-color);
+                }
+
+                @media (max-width: 768px) {
+                    body {
+                        padding: 10px;
+                    }
+                    
+                    .container {
+                        padding: 15px;
+                    }
+                    
+                    .section {
+                        padding: 15px;
+                    }
+                }
+
+                .settings-section {
+                    margin-bottom: 20px;
+                    padding-bottom: 20px;
+                    border-bottom: 1px solid var(--border-color);
+                }
+
+                .fragment-settings {
                     margin-top: 10px;
                 }
 
-                .input-group {
+                .setting-group {
                     margin: 10px 0;
                     display: flex;
                     align-items: center;
                     gap: 10px;
                 }
 
-                .input-group label {
+                .setting-group label {
                     min-width: 80px;
                 }
 
-                .input-group input {
+                .setting-group input {
                     padding: 5px;
                     border: 1px solid var(--border-color);
                     border-radius: 4px;
                 }
 
-                .input-group select {
+                .setting-group select {
                     padding: 5px;
                     border: 1px solid var(--border-color);
                     border-radius: 4px;
+                    width: 100px;
                 }
             </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="title">📝 ${FileName} 优选订阅列表</div>
+                
+                ${advancedSettingsHtml}
+                
+                <!-- 保持现有内容 -->
+                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                    ℹ️ 注意事项 ∨
+                </a>
+                
+                <div id="noticeContent" class="notice-content" style="display: none">
+                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCiUwOSUwOSUwOSUwOSUwOSUzQ3N0cm9uZyUzRTEuJTNDJTJGc3Ryb25nJTNFJTJBRERBQkklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                </div>
+
+                <div class="editor-container">
+                    ${hasKV ? `
+                        <textarea class="editor" 
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+                            id="content">${content}</textarea>
+                        <div class="button-group">
+                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <span class="save-status" id="saveStatus"></span>
+                        </div>
+                        <div class="divider"></div>
+                        ${cmad}
+                    ` : '<p>未绑定KV空间</p>'}
+                </div>
+            </div>
 
             <script>
-                // ... 保持现有的JavaScript函数 ...
+            function goBack() {
+                const pathParts = window.location.pathname.split('/');
+                pathParts.pop(); // 移除 "edit"
+                const newPath = pathParts.join('/');
+                window.location.href = newPath;
+            }
 
-                // 页面加载时初始化片段设置
-                window.addEventListener('load', function() {
-                    initializeFragmentSettings('${fragmentContent}');
-                });
+            async function saveContent(button) {
+                try {
+                    button.disabled = true;
+                    const content = document.getElementById('content').value;
+                    const saveStatus = document.getElementById('saveStatus');
+                    
+                    saveStatus.textContent = '保存中...';
+                    
+                    const response = await fetch(window.location.href, {
+                        method: 'POST',
+                        body: content
+                    });
 
-                function initializeFragmentSettings(content) {
-                    const lines = content.split('\\n');
-                    if (lines.length >= 3) {
-                        const [length, interval, data] = lines;
-                        const [lengthMin, lengthMax] = length.split('-');
-                        const [intervalMin, intervalMax] = interval.split('-');
-                        
-                        document.getElementById('fragment-length-min').value = lengthMin;
-                        document.getElementById('fragment-length-max').value = lengthMax;
-                        document.getElementById('fragment-interval-min').value = intervalMin;
-                        document.getElementById('fragment-interval-max').value = intervalMax;
-                        document.getElementById('fragment-data').value = data;
+                    if (response.ok) {
+                        saveStatus.textContent = '✅ 保存成功';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败');
                     }
+                } catch (error) {
+                    const saveStatus = document.getElementById('saveStatus');
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存时发生错误:', error);
+                } finally {
+                    button.disabled = false;
                 }
+            }
 
-                async function saveFragment() {
-                    try {
-                        const lengthMin = document.getElementById('fragment-length-min').value;
-                        const lengthMax = document.getElementById('fragment-length-max').value;
-                        const intervalMin = document.getElementById('fragment-interval-min').value;
-                        const intervalMax = document.getElementById('fragment-interval-max').value;
-                        const data = document.getElementById('fragment-data').value;
+            function toggleNotice() {
+                const noticeContent = document.getElementById('noticeContent');
+                const noticeToggle = document.getElementById('noticeToggle');
+                if (noticeContent.style.display === 'none') {
+                    noticeContent.style.display = 'block';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                } else {
+                    noticeContent.style.display = 'none';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                }
+            }
 
-                        const content = \`\${lengthMin}-\${lengthMax}
-\${intervalMin}-\${intervalMax}
-\${data}\`;
+            function toggleAdvancedSettings() {
+                const content = document.getElementById('advanced-settings-content');
+                const toggle = document.getElementById('advanced-settings-toggle');
+                if (content.style.display === 'none' || !content.style.display) {
+                    content.style.display = 'block';
+                    toggle.textContent = '∧';
+                } else {
+                    content.style.display = 'none';
+                    toggle.textContent = '∨';
+                }
+            }
 
-                        const saveStatus = document.getElementById('fragment-save-status');
-                        saveStatus.textContent = '保存中...';
-                        
-                        const response = await fetch(window.location.href + '?type=fragment', {
-                            method: 'POST',
-                            body: content
-                        });
+            async function saveProxyIP() {
+                try {
+                    const content = document.getElementById('proxyip').value;
+                    const saveStatus = document.getElementById('proxyip-save-status');
+                    
+                    saveStatus.textContent = '保存中...';
+                    
+                    const response = await fetch(window.location.href + '?type=proxyip', {
+                        method: 'POST',
+                        body: content
+                    });
 
-                        if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
-                            setTimeout(() => {
-                                saveStatus.textContent = '';
-                            }, 3000);
-                        } else {
-                            throw new Error('保存失败');
-                        }
-                    } catch (error) {
-                        const saveStatus = document.getElementById('fragment-save-status');
-                        saveStatus.textContent = '❌ ' + error.message;
-                        console.error('保存片段设置时发生错误:', error);
+                    if (response.ok) {
+                        saveStatus.textContent = '✅ 保存成功';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败');
                     }
+                } catch (error) {
+                    const saveStatus = document.getElementById('proxyip-save-status');
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存PROXYIP时发生错误:', error);
                 }
+            }
+
+            async function saveFragmentSettings() {
+                try {
+                    const settings = {
+                        lengthMin: document.getElementById('lengthMin').value,
+                        lengthMax: document.getElementById('lengthMax').value,
+                        intervalMin: document.getElementById('intervalMin').value,
+                        intervalMax: document.getElementById('intervalMax').value,
+                        packetType: document.getElementById('packetType').value
+                    };
+
+                    const saveStatus = document.getElementById('fragment-save-status');
+                    saveStatus.textContent = '保存中...';
+                    
+                    const response = await fetch(window.location.href + '?type=fragment', {
+                        method: 'POST',
+                        body: JSON.stringify(settings)
+                    });
+
+                    if (response.ok) {
+                        saveStatus.textContent = '✅ 保存成功';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败');
+                    }
+                } catch (error) {
+                    const saveStatus = document.getElementById('fragment-save-status');
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存片段设置时发生错误:', error);
+                }
+            }
             </script>
         </body>
         </html>
@@ -2228,4 +2458,5 @@ proxy.example.com:8443"
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
+}
 }
