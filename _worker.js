@@ -1086,17 +1086,12 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				<title>${FileName} 配置信息</title>
 				<style>
 					:root {
-						--primary-color: #2196F3;
-						--primary-dark: #1976D2;
-						--secondary-color: #4CAF50;
-						--secondary-dark: #388E3C;
+						--primary-color: #4CAF50;
+						--secondary-color: #45a049;
 						--border-color: #e0e0e0;
-						--text-color: #2c3e50;
-						--text-light: #666;
-						--background-color: #f8f9fa;
+						--text-color: #333;
+						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
-						--danger-color: #ff5252;
-						--success-color: #4caf50;
 					}
 					
 					body {
@@ -1106,186 +1101,103 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
-						min-height: 100vh;
 					}
 
 					.container {
 						max-width: 1000px;
 						margin: 0 auto;
 						background: var(--section-bg);
-						padding: 30px;
-						border-radius: 16px;
-						box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+						padding: 25px;
+						border-radius: 10px;
+						box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 					}
 
 					.section {
-						margin: 25px 0;
-						padding: 25px;
+						margin: 20px 0;
+						padding: 20px;
 						background: var(--section-bg);
-						border-radius: 12px;
+						border-radius: 8px;
 						border: 1px solid var(--border-color);
-						transition: all 0.3s ease;
-					}
-
-					.section:hover {
-						box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-						transform: translateY(-2px);
 					}
 
 					.section-title {
-						font-size: 1.25em;
+						font-size: 1.2em;
 						color: var(--primary-color);
-						margin-bottom: 20px;
-						padding-bottom: 12px;
+						margin-bottom: 15px;
+						padding-bottom: 10px;
 						border-bottom: 2px solid var(--border-color);
-						font-weight: 600;
-						display: flex;
-						align-items: center;
-						gap: 8px;
 					}
 
-					.section-title i {
-						font-size: 1.2em;
+					.divider {
+						height: 1px;
+						background: var(--border-color);
+						margin: 15px 0;
 					}
 
 					.subscription-link {
 						display: block;
-						margin: 15px 0;
-						padding: 16px;
+						margin: 10px 0;
+						padding: 12px;
 						background: #f8f9fa;
-						border-radius: 10px;
+						border-radius: 6px;
 						border: 1px solid var(--border-color);
 						word-break: break-all;
-						transition: all 0.3s ease;
-					}
-
-					.subscription-link:hover {
-						border-color: var(--primary-color);
-						box-shadow: 0 2px 8px rgba(33,150,243,0.1);
-					}
-
-					.subscription-link .link-label {
-						font-weight: 500;
-						color: var(--text-light);
-						margin-bottom: 8px;
 					}
 
 					.subscription-link a {
-						color: var(--primary-color);
+						color: #0066cc;
 						text-decoration: none;
-						font-size: 0.95em;
-						display: block;
-						padding: 8px;
-						background: rgba(33,150,243,0.05);
-						border-radius: 6px;
-						transition: all 0.2s ease;
 					}
 
 					.subscription-link a:hover {
-						background: rgba(33,150,243,0.1);
+						text-decoration: underline;
 					}
 
 					.qrcode-container {
-						margin: 15px 0;
+						margin: 10px 0;
 						text-align: center;
-						padding: 15px;
-						background: white;
-						border-radius: 8px;
-						box-shadow: 0 2px 6px rgba(0,0,0,0.05);
 					}
 
 					.notice-toggle {
 						color: var(--primary-color);
 						cursor: pointer;
 						text-decoration: none;
-						display: inline-flex;
-						align-items: center;
-						gap: 6px;
+						display: inline-block;
 						margin: 10px 0;
 						font-weight: 500;
-						padding: 8px 16px;
-						background: rgba(33,150,243,0.1);
-						border-radius: 20px;
-						transition: all 0.3s ease;
-					}
-
-					.notice-toggle:hover {
-						background: rgba(33,150,243,0.15);
 					}
 
 					.notice-content {
-						background: #fff;
+						background: #f8f9fa;
 						border-left: 4px solid var(--primary-color);
-						padding: 20px;
-						margin: 15px 0;
-						border-radius: 0 12px 12px 0;
-						box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+						padding: 15px;
+						margin: 10px 0;
+						border-radius: 0 8px 8px 0;
 					}
 
 					.config-info {
-						background: #fff;
-						padding: 20px;
-						border-radius: 10px;
-						font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+						background: #f8f9fa;
+						padding: 15px;
+						border-radius: 6px;
+						font-family: Monaco, Consolas, "Courier New", monospace;
 						font-size: 13px;
-						line-height: 1.6;
 						overflow-x: auto;
-						border: 1px solid var(--border-color);
 					}
 
 					.copy-button {
-						display: inline-flex;
-						align-items: center;
-						gap: 6px;
-						padding: 8px 16px;
+						display: inline-block;
+						padding: 6px 12px;
 						background: var(--primary-color);
 						color: white;
 						border: none;
-						border-radius: 20px;
+						border-radius: 4px;
 						cursor: pointer;
 						font-size: 14px;
-						font-weight: 500;
-						margin: 10px 0;
-						transition: all 0.3s ease;
+						margin: 5px 0;
 					}
 
 					.copy-button:hover {
-						background: var(--primary-dark);
-						transform: translateY(-1px);
-					}
-
-					.copy-button:active {
-						transform: translateY(0);
-					}
-
-					.success-message {
-						position: fixed;
-						bottom: 20px;
-						right: 20px;
-						padding: 12px 24px;
-						background: var(--success-color);
-						color: white;
-						border-radius: 8px;
-						box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-						animation: slideIn 0.3s ease;
-					}
-
-					@keyframes slideIn {
-						from {
-							transform: translateY(100%);
-							opacity: 0;
-						}
-						to {
-							transform: translateY(0);
-							opacity: 1;
-						}
-					}
-
-					.divider {
-						height: 1px;
-						background: var(--border-color);
-						margin: 25px 0;
-						opacity: 0.5;
+						background: var(--secondary-color);
 					}
 
 					@media (max-width: 768px) {
@@ -1294,41 +1206,29 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						}
 						
 						.container {
-							padding: 20px;
+							padding: 15px;
 						}
 						
 						.section {
-							padding: 20px;
-							margin: 15px 0;
-						}
-
-						.subscription-link {
-							padding: 12px;
-						}
-
-						.notice-content {
 							padding: 15px;
 						}
 					}
 				</style>
-				<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
 			</head>
 			<body>
 				<div class="container">
 					<div class="section">
-						<div class="section-title">
-							<i class="bi bi-link-45deg"></i>订阅信息
-						</div>
+						<div class="section-title">📋 订阅信息</div>
 						<div class="subscription-link">
-							<div class="link-label">自适应订阅地址</div>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')">
+							自适应订阅地址:<br>
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}
 							</a>
 							<div id="qrcode_0" class="qrcode-container"></div>
 						</div>
 
 						<div class="subscription-link">
-							<div class="link-label">Base64订阅地址</div>
+							Base64订阅地址:<br>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?b64
 							</a>
@@ -1336,7 +1236,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						</div>
 
 						<div class="subscription-link">
-							<div class="link-label">clash订阅地址</div>
+							clash订阅地址:<br>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?clash
 							</a>
@@ -1344,7 +1244,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						</div>
 
 						<div class="subscription-link">
-							<div class="link-label">singbox订阅地址</div>
+							singbox订阅地址:<br>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?sb
 							</a>
@@ -1352,7 +1252,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						</div>
 
 						<div class="subscription-link">
-							<div class="link-label">Loon订阅地址</div>
+							Loon订阅地址:<br>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?loon
 							</a>
@@ -1361,11 +1261,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					</div>
 
 					<div class="section">
-						<div class="section-title">
-							<i class="bi bi-info-circle"></i>使用说明
-						</div>
+						<div class="section-title">ℹ️ 使用说明</div>
 						<a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
-							<i class="bi bi-chevron-down"></i>实用订阅技巧
+							实用订阅技巧 ∨
 						</a>
 						<div id="noticeContent" class="notice-content" style="display: none">
 							<strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br><br>
@@ -1382,9 +1280,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					</div>
 
 					<div class="section">
-						<div class="section-title">
-							<i class="bi bi-gear"></i>配置信息
-						</div>
+						<div class="section-title">🔧 配置信息</div>
 						<div class="config-info">
 							${动态UUID信息.replace(/\n/g, '<br>')}
 							HOST: ${hostName}<br>
@@ -1396,9 +1292,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					</div>
 
 					<div class="section">
-						<div class="section-title">
-							<i class="bi bi-file-earmark-code"></i>代理配置
-						</div>
+						<div class="section-title">📝 代理配置</div>
 						<div class="config-info">
 							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
 							<div>${proxyConfig}</div>
@@ -1407,9 +1301,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					</div>
 
 					<div class="section">
-						<div class="section-title">
-							<i class="bi bi-file-earmark-text"></i>Clash Meta 配置
-						</div>
+						<div class="section-title">⚙️ Clash Meta 配置</div>
 						<div class="config-info">
 							${clash}
 						</div>
@@ -1423,35 +1315,21 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				<script>
 					function copyToClipboard(text, qrcode) {
 						navigator.clipboard.writeText(text).then(() => {
-							showSuccessMessage('已复制到剪贴板');
+							alert('已复制到剪贴板');
 						}).catch(err => {
 							console.error('复制失败:', err);
 						});
-						
 						const qrcodeDiv = document.getElementById(qrcode);
 						qrcodeDiv.innerHTML = '';
 						new QRCode(qrcodeDiv, {
 							text: text,
 							width: 220,
 							height: 220,
-							colorDark: "#2c3e50",
+							colorDark: "#000000",
 							colorLight: "#ffffff",
 							correctLevel: QRCode.CorrectLevel.Q,
 							scale: 1
 						});
-					}
-
-					function showSuccessMessage(message) {
-						const messageDiv = document.createElement('div');
-						messageDiv.className = 'success-message';
-						messageDiv.textContent = message;
-						document.body.appendChild(messageDiv);
-						
-						setTimeout(() => {
-							messageDiv.style.opacity = '0';
-							messageDiv.style.transform = 'translateY(100%)';
-							setTimeout(() => messageDiv.remove(), 300);
-						}, 2000);
 					}
 
 					function toggleNotice() {
@@ -1459,10 +1337,10 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						const noticeToggle = document.getElementById('noticeToggle');
 						if (noticeContent.style.display === 'none') {
 							noticeContent.style.display = 'block';
-							noticeToggle.innerHTML = '<i class="bi bi-chevron-up"></i>实用订阅技巧';
+							noticeToggle.textContent = '实用订阅技巧 ∧';
 						} else {
 							noticeContent.style.display = 'none';
-							noticeToggle.innerHTML = '<i class="bi bi-chevron-down"></i>实用订阅技巧';
+							noticeToggle.textContent = '实用订阅技巧 ∨';
 						}
 					}
 				</script>
@@ -2140,7 +2018,7 @@ async function handleGetRequest(env, txt) {
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
+                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
