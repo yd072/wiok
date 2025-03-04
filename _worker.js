@@ -45,11 +45,6 @@ let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 
-// 在文件开头添加新的变量声明
-let remoteDNS = 'https://8.8.8.8/dns-query';  // 默认远程 DNS
-let localDNS = '8.8.4.4';  // 默认本地 DNS
-let customProxyIP = '';  // 默认代理 IP
-
 // 添加工具函数
 const utils = {
 	// UUID校验
@@ -591,8 +586,8 @@ function mergeData(header, chunk) {
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
     try {
-        // 使用设置的 DNS 服务器,而不是硬编码的值
-        const dnsServer = localDNS;  // 使用本地 DNS
+        // 只使用Google的备用DNS服务器,更快更稳定
+        const dnsServer = '8.8.4.4';
         const dnsPort = 53;
         
         let 维列斯Header = 维列斯ResponseHeader;
@@ -1376,65 +1371,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							padding: 15px;
 						}
 					}
-
-					.dns-settings {
-						margin: 20px 0;
-						padding: 20px;
-						background: #fff;
-						border-radius: 8px;
-						border: 1px solid var(--border-color);
-					}
-
-					.dns-settings h3 {
-						margin-top: 0;
-						color: var(--primary-color);
-						font-size: 1.1em;
-					}
-
-					.settings-grid {
-						display: grid;
-						grid-template-columns: 1fr;
-						gap: 15px;
-					}
-
-					.setting-item {
-						display: flex;
-						flex-direction: column;
-						gap: 8px;
-					}
-
-					.setting-item label {
-						font-weight: 500;
-						color: var(--text-color);
-					}
-
-					.setting-item input {
-						padding: 8px 12px;
-						border: 1px solid var(--border-color);
-						border-radius: 6px;
-						font-size: 14px;
-						transition: border-color 0.3s ease;
-					}
-
-					.setting-item input:focus {
-						outline: none;
-						border-color: var(--primary-color);
-						box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
-					}
-
-					.setting-item select {
-						padding: 8px 12px;
-						border: 1px solid var(--border-color);
-						border-radius: 6px;
-						font-size: 14px;
-						background-color: white;
-					}
-
-					.settings-actions {
-						margin-top: 15px;
-						display: flex;
-						gap: 10px;
-					}
 				</style>
 			</head>
 			<body>
@@ -2069,26 +2005,26 @@ async function handlePostRequest(request, env, txt) {
 }
 
 async function handleGetRequest(env, txt) {
-	let content = '';
-	let hasKV = !!env.KV;
+    let content = '';
+    let hasKV = !!env.KV;
 
-	if (hasKV) {
-		try {
-			content = await env.KV.get(txt) || '';
-		} catch (error) {
-			console.error('读取KV时发生错误:', error);
-			content = '读取数据时发生错误: ' + error.message;
-		}
-	}
+    if (hasKV) {
+        try {
+            content = await env.KV.get(txt) || '';
+        } catch (error) {
+            console.error('读取KV时发生错误:', error);
+            content = '读取数据时发生错误: ' + error.message;
+        }
+    }
 
-	const html = `
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<title>优选订阅列表</title>
-			<meta charset="utf-8">
-			<meta name="viewport" content="width=device-width, initial-scale=1">
-			<style>
+    const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>优选订阅列表</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
                 :root {
                     --primary-color: #4CAF50;
                     --secondary-color: #45a049;
@@ -2140,7 +2076,7 @@ async function handleGetRequest(env, txt) {
 					line-height: 1.5;
                     resize: vertical;
                     transition: border-color 0.3s ease;
-                }
+				}
 
                 .editor:focus {
                     outline: none;
@@ -2152,7 +2088,7 @@ async function handleGetRequest(env, txt) {
 					display: flex;
                     gap: 12px;
                     margin-top: 15px;
-                }
+				}
 
                 .btn {
                     padding: 8px 20px;
@@ -2172,11 +2108,11 @@ async function handleGetRequest(env, txt) {
                 .btn-primary {
                     background: var(--primary-color);
                     color: white;
-                }
+				}
 
                 .btn-primary:hover:not(:disabled) {
                     background: var(--secondary-color);
-                }
+				}
 
                 .btn-secondary {
 					background: #666;
@@ -2228,234 +2164,180 @@ async function handleGetRequest(env, txt) {
                     .editor {
                         height: 400px;
                     }
-                }
+				}
 
-                .dns-settings {
-                    margin: 20px 0;
-                    padding: 20px;
-                    background: #fff;
-                    border-radius: 8px;
+                .settings-panel {
+                    background: #f8f9fa;
                     border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    padding: 20px;
+                    margin: 20px 0;
                 }
 
-                .dns-settings h3 {
-                    margin-top: 0;
-                    color: var(--primary-color);
-                    font-size: 1.1em;
+                .settings-group {
+                    margin-bottom: 15px;
                 }
 
-                .settings-grid {
-                    display: grid;
-                    grid-template-columns: 1fr;
-                    gap: 15px;
+                .settings-group:last-child {
+                    margin-bottom: 0;
                 }
 
-                .setting-item {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 8px;
-                }
-
-                .setting-item label {
+                .settings-title {
                     font-weight: 500;
-                    color: var(--text-color);
+                    margin-bottom: 10px;
+                    color: var(--primary-color);
                 }
 
-                .setting-item input {
+                .settings-input {
+                    width: 100%;
                     padding: 8px 12px;
                     border: 1px solid var(--border-color);
-                    border-radius: 6px;
+                    border-radius: 4px;
                     font-size: 14px;
-                    transition: border-color 0.3s ease;
+                    margin-bottom: 5px;
                 }
 
-                .setting-item input:focus {
+                .settings-input:focus {
                     outline: none;
                     border-color: var(--primary-color);
                     box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
                 }
 
-                .setting-item select {
-                    padding: 8px 12px;
-                    border: 1px solid var(--border-color);
-                    border-radius: 6px;
-                    font-size: 14px;
-                    background-color: white;
+                .settings-description {
+                    font-size: 12px;
+                    color: #666;
+                    margin-top: 4px;
                 }
-
-                .settings-actions {
-                    margin-top: 15px;
-                    display: flex;
-                    gap: 10px;
-				}
 			</style>
 		</head>
 		<body>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
-                <!-- 添加 DNS 和代理设置部分 -->
-                <div class="dns-settings">
-                    <h3>DNS 和代理设置</h3>
-                    <div class="settings-grid">
-                        <div class="setting-item">
-                            <label for="remoteDns">远程 DNS</label>
-                            <input type="text" id="remoteDns" placeholder="https://8.8.8.8/dns-query" value="https://8.8.8.8/dns-query">
-                        </div>
-                        <div class="setting-item">
-                            <label for="localDns">本地 DNS</label>
-                            <input type="text" id="localDns" placeholder="8.8.4.4" value="8.8.4.4">
-                        </div>
-                        <div class="setting-item">
-                            <label for="proxyIp">ProxyIP/ 域名</label>
-                            <input type="text" id="proxyIp" placeholder="已禁用" value="">
-                        </div>
-                        <div class="settings-actions">
-                            <button class="btn btn-primary" onclick="saveDnsSettings()">保存设置</button>
-                            <button class="btn btn-secondary" onclick="resetDnsSettings()">重置</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 保留原有的注意事项部分 -->
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                     ℹ️ 注意事项 ∨
                 </a>
+                
                 <div id="noticeContent" class="notice-content" style="display: none">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCiUyMCUyMDEyNy4wLjAuMSUzQTIwNTMlMjMlRTQlQkMlOTglRTklODAlODklRTUlQUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
 			</div>
 
-                <!-- 保留原有的编辑器部分 -->
+			<div class="settings-panel">
+				<div class="settings-group">
+					<div class="settings-title">🌐 DNS 设置</div>
+					<input type="text" class="settings-input" id="remoteDNS" placeholder="远程 DNS (例如: 8.8.8.8,8.8.4.4)" />
+					<div class="settings-description">多个DNS服务器使用逗号分隔</div>
+					
+					<input type="text" class="settings-input" id="localDNS" placeholder="本地 DNS (例如: 223.5.5.5,223.6.6.6)" />
+					<div class="settings-description">用于本地网络解析的DNS服务器</div>
+				</div>
+
+				<div class="settings-group">
+					<div class="settings-title">🔄 Proxy IP 设置</div>
+					<input type="text" class="settings-input" id="proxyIP" placeholder="Proxy IP (例如: proxyip.fxxk.dedyn.io:443)" />
+					<div class="settings-description">用于代理连接的IP地址和端口</div>
+				</div>
+			</div>
+
 			<div class="editor-container">
 				${hasKV ? `
 				<textarea class="editor" 
-                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg'))}"
+					placeholder="..."
 					id="content">${content}</textarea>
-                        <div class="button-group">
-                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+				<div class="button-group">
+					<button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+					<button class="btn btn-primary" onclick="saveContent(this)">保存全部设置</button>
 					<span class="save-status" id="saveStatus"></span>
 				</div>
-                        <div class="divider"></div>
+				<div class="divider"></div>
 				${cmad}
 				` : '<p>未绑定KV空间</p>'}
-                </div>
 			</div>
+		</div>
 	
-			<script>
-                // 保留原有的 JavaScript 函数
-				function goBack() {
-                    const pathParts = window.location.pathname.split('/');
-                    pathParts.pop();
-                    const newPath = pathParts.join('/');
-                    window.location.href = newPath;
-                }
-
-                async function saveContent(button) {
-                    try {
-						button.disabled = true;
-                        const content = document.getElementById('content').value;
-                        const saveStatus = document.getElementById('saveStatus');
-                        
-                        saveStatus.textContent = '保存中...';
-                        
-                        const response = await fetch(window.location.href, {
-								method: 'POST',
-                            body: content
-                        });
-
-                        if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
-                            setTimeout(() => {
-                                saveStatus.textContent = '';
-                            }, 3000);
-						} else {
-                            throw new Error('保存失败');
-						}
-					} catch (error) {
-                        const saveStatus = document.getElementById('saveStatus');
-                        saveStatus.textContent = '❌ ' + error.message;
-                        console.error('保存时发生错误:', error);
-                    } finally {
-						button.disabled = false;
-                    }
+		<script>
+			function goBack() {
+				const pathParts = window.location.pathname.split('/');
+				pathParts.pop(); // 移除 "edit"
+				const newPath = pathParts.join('/');
+				window.location.href = newPath;
 			}
-		
+	
+			async function saveContent(button) {
+				try {
+					button.disabled = true;
+					const content = document.getElementById('content').value;
+					const remoteDNS = document.getElementById('remoteDNS').value;
+					const localDNS = document.getElementById('localDNS').value;
+					const proxyIP = document.getElementById('proxyIP').value;
+					
+					const saveStatus = document.getElementById('saveStatus');
+					saveStatus.textContent = '保存中...';
+					
+					// 构建要保存的配置
+					let configContent = content;
+					if (remoteDNS) {
+						configContent = "# Remote DNS\nDNS=" + remoteDNS + "\n\n" + configContent;
+					}
+					if (localDNS) {
+						configContent = "# Local DNS\nLOCALDNS=" + localDNS + "\n\n" + configContent;
+					}
+					if (proxyIP) {
+						configContent = "# Proxy IP\nPROXYIP=" + proxyIP + "\n\n" + configContent;
+					}
+					
+					const response = await fetch(window.location.href, {
+						method: 'POST',
+						body: configContent
+					});
+
+					if (response.ok) {
+						saveStatus.textContent = '✅ 保存成功';
+						setTimeout(() => {
+							saveStatus.textContent = '';
+						}, 3000);
+					} else {
+						throw new Error('保存失败');
+					}
+				} catch (error) {
+					const saveStatus = document.getElementById('saveStatus');
+					saveStatus.textContent = '❌ ' + error.message;
+					console.error('保存时发生错误:', error);
+				} finally {
+					button.disabled = false;
+				}
+			}
+	
+			// 页面加载时从内容中提取现有设置
+			window.onload = function() {
+				const content = document.getElementById('content').value;
+				const lines = content.split('\\n');
+				
+				for (const line of lines) {
+					if (line.startsWith('DNS=')) {
+						document.getElementById('remoteDNS').value = line.substring(4);
+					} else if (line.startsWith('LOCALDNS=')) {
+						document.getElementById('localDNS').value = line.substring(9);
+					} else if (line.startsWith('PROXYIP=')) {
+						document.getElementById('proxyIP').value = line.substring(8);
+					}
+				}
+			}
+	
 			function toggleNotice() {
 				const noticeContent = document.getElementById('noticeContent');
 				const noticeToggle = document.getElementById('noticeToggle');
-                    if (noticeContent.style.display === 'none') {
+				if (noticeContent.style.display === 'none') {
 					noticeContent.style.display = 'block';
-                        noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+					noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
 				} else {
 					noticeContent.style.display = 'none';
-                        noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
-                    }
-                }
-
-                // 添加新的 DNS 设置相关函数
-                function saveDnsSettings() {
-                    const remoteDns = document.getElementById('remoteDns').value;
-                    const localDns = document.getElementById('localDns').value;
-                    const proxyIp = document.getElementById('proxyIp').value;
-
-                    // 更新全局变量
-                    remoteDNS = remoteDns;
-                    localDNS = localDns;
-                    customProxyIP = PROXYIP;
-
-                    // 保存到 localStorage
-                    localStorage.setItem('dnsSettings', JSON.stringify({
-                        remoteDns,
-                        localDns,
-                        PROXYIP
-                    }));
-
-                    // 更新实际配置
-                    if (customProxyIP) {
-                        PROXYIP = customProxyIP;  // 更新代理 IP
-                    }
-
-                    alert('设置已保存');
-                }
-
-                function resetDnsSettings() {
-                    // 重置为默认值
-                    document.getElementById('remoteDns').value = 'https://8.8.8.8/dns-query';
-                    document.getElementById('localDns').value = '8.8.4.4';
-                    document.getElementById('proxyIp').value = '';
-
-                    // 清除 localStorage 中的设置
-                    localStorage.removeItem('dnsSettings');
-
-                    alert('设置已重置');
-                }
-
-                // 页面加载时恢复保存的设置
-                window.addEventListener('load', () => {
-                    const savedSettings = localStorage.getItem('dnsSettings');
-                    if (savedSettings) {
-                        const settings = JSON.parse(savedSettings);
-                        
-                        // 更新全局变量
-                        remoteDNS = settings.remoteDns || remoteDNS;
-                        localDNS = settings.localDns || localDNS;
-                        customProxyIP = settings.proxyIp || customProxyIP;
-
-                        // 更新输入框
-                        document.getElementById('remoteDns').value = remoteDNS;
-                        document.getElementById('localDns').value = localDNS;
-                        document.getElementById('proxyIp').value = customProxyIP;
-
-                        // 更新实际配置
-                        if (customProxyIP) {
-                            proxyIP = customProxyIP;
-                        }
-                    }
-			});
-			</script>
-		</body>
-		</html>
+					noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+				}
+			}
+		</script>
+	</body>
+	</html>
 	`;
 
 	return new Response(html, {
