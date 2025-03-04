@@ -2022,26 +2022,28 @@ async function KV(request, env, txt = 'ADD.txt') {
 }
 
 async function handlePostRequest(request, env, txt) {
-	if (!env.KV) {
-		return new Response("未绑定KV空间", { status: 400 });
-	}
-	try {
-		const content = await request.text();
-		const url = new URL(request.url);
-		const type = url.searchParams.get('type');
+    if (!env.KV) {
+        return new Response("未绑定KV空间", { status: 400 });
+    }
+    try {
+        const content = await request.text();
+        const url = new URL(request.url);
+        const type = url.searchParams.get('type');
 
-		// 根据类型保存到不同的KV
-		if (type === 'proxyip') {
-			await env.KV.put('PROXYIP.txt', content);
-		} else {
-			await env.KV.put(txt, content);
-		}
-		
-		return new Response("保存成功");
-	} catch (error) {
-		console.error('保存KV时发生错误:', error);
-		return new Response("保存失败: " + error.message, { status: 500 });
-	}
+        // 根据类型保存到不同的KV
+        if (type === 'proxyip') {
+            await env.KV.put('PROXYIP.txt', content);
+        } else if (type === 'fragment') {
+            await env.KV.put('FRAGMENT.txt', content);
+        } else {
+            await env.KV.put(txt, content);
+        }
+        
+        return new Response("保存成功");
+    } catch (error) {
+        console.error('保存KV时发生错误:', error);
+        return new Response("保存失败: " + error.message, { status: 500 });
+    }
 }
 
 async function handleGetRequest(env, txt) {
@@ -2226,30 +2228,4 @@ proxy.example.com:8443"
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
-}
-
-// 修改handlePostRequest函数以支持片段设置的保存
-async function handlePostRequest(request, env, txt) {
-    if (!env.KV) {
-        return new Response("未绑定KV空间", { status: 400 });
-    }
-    try {
-        const content = await request.text();
-        const url = new URL(request.url);
-        const type = url.searchParams.get('type');
-
-        // 根据类型保存到不同的KV
-        if (type === 'proxyip') {
-            await env.KV.put('PROXYIP.txt', content);
-        } else if (type === 'fragment') {
-            await env.KV.put('FRAGMENT.txt', content);
-        } else {
-            await env.KV.put(txt, content);
-        }
-        
-        return new Response("保存成功");
-    } catch (error) {
-        console.error('保存KV时发生错误:', error);
-        return new Response("保存失败: " + error.message, { status: 500 });
-    }
 }
