@@ -2,6 +2,9 @@ import { connect } from 'cloudflare:sockets';
 
 let userID = '';
 let proxyIP = '';
+let customProxyIP = '';  // 默认代理 IP
+let remoteDNS = 'https://8.8.8.8/dns-query';  // 默认远程 DNS
+let localDNS = '8.8.4.4';  // 默认本地 DNS
 //let sub = '';
 let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
@@ -44,11 +47,6 @@ let path = '/?ed=2560';
 let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
-
-// 在文件开头添加新的变量声明
-let remoteDNS = 'https://8.8.8.8/dns-query';  // 默认远程 DNS
-let localDNS = '8.8.4.4';  // 默认本地 DNS
-let customProxyIP = '';  // 默认代理 IP
 
 // 添加工具函数
 const utils = {
@@ -142,9 +140,8 @@ export default {
 					try {
 						const settings = JSON.parse(decodeURIComponent(savedSettings));
 						if (settings.proxyIp) {
-							// 更新 proxyIP
-							proxyIP = settings.proxyIp;
-							customProxyIP = settings.proxyIp;
+							proxyIP = settings.proxyIp; // 直接设置 proxyIP
+							RproxyIP = 'false'; // 禁用随机代理
 						}
 						if (settings.remoteDns) {
 							remoteDNS = settings.remoteDns;
@@ -190,9 +187,14 @@ export default {
 
 			const fakeHostName = `${fakeUserIDMD5.slice(6, 9)}.${fakeUserIDMD5.slice(13, 19)}`;
 
-			proxyIP = env.PROXYIP || env.proxyip || proxyIP;
-			proxyIPs = await 整理(proxyIP);
-			proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+			// 修改这部分代码，避免覆盖已设置的 proxyIP
+			if (!proxyIP) { // 只在没有设置时使用环境变量
+				proxyIP = env.PROXYIP || env.proxyip || '';
+				if (proxyIP) {
+					proxyIPs = await 整理(proxyIP);
+					proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+				}
+			}
 
 			socks5Address = env.SOCKS5 || socks5Address;
 			socks5s = await 整理(socks5Address);
@@ -1104,7 +1106,7 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env) {
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
@@ -1197,7 +1199,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		}
 	}
 
-	const uuid = (_url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
+	const uuid = (url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
 	const userAgent = UA.toLowerCase();
 	const Config = 配置信息(userID, hostName);
 	const proxyConfig = Config[0];
@@ -2426,8 +2428,15 @@ async function handleGetRequest(env, txt) {
                     // 更新全局变量
                     remoteDNS = remoteDns;
                     localDNS = localDns;
-                    customProxyIP = proxyIp;
-                    proxyIP = proxyIp || proxyIP;
+                    
+                    // 直接更新 proxyIP
+                    if (proxyIp) {
+                        proxyIP = proxyIp;
+                        RproxyIP = 'false'; // 禁用随机代理
+                    } else {
+                        proxyIP = '';
+                        RproxyIP = 'true'; // 启用随机代理
+                    }
 
                     // 保存到 cookie 和 localStorage
                     const settings = JSON.stringify({
@@ -2436,7 +2445,6 @@ async function handleGetRequest(env, txt) {
                         proxyIp
                     });
                     
-                    // 修复 cookie 字符串语法
                     document.cookie = 'dnsSettings=' + encodeURIComponent(settings) + '; path=/; max-age=31536000';
                     localStorage.setItem('dnsSettings', settings);
 
@@ -2465,7 +2473,6 @@ async function handleGetRequest(env, txt) {
                         // 更新全局变量
                         remoteDNS = settings.remoteDns || remoteDNS;
                         localDNS = settings.localDns || localDNS;
-                        customProxyIP = settings.proxyIp || customProxyIP;
                         
                         if (settings.proxyIp) {
                             proxyIP = settings.proxyIp; // 直接更新 proxyIP
@@ -2474,7 +2481,7 @@ async function handleGetRequest(env, txt) {
                         // 更新输入框
                         document.getElementById('remoteDns').value = remoteDNS;
                         document.getElementById('localDns').value = localDNS;
-                        document.getElementById('proxyIp').value = customProxyIP;
+                        document.getElementById('proxyIp').value = proxyIP;
                     }
                 });
             </script>
