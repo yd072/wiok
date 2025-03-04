@@ -1408,21 +1408,22 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					function copyToClipboard(text, qrcode) {
 						navigator.clipboard.writeText(text).then(() => {
 							const toast = document.createElement('div');
-							toast.style.cssText = `
-								position: fixed;
-								bottom: 20px;
-								left: 50%;
-								transform: translateX(-50%);
-								background: rgba(0,0,0,0.8);
-								color: white;
-								padding: 12px 24px;
-								border-radius: 8px;
-								font-size: 14px;
-								z-index: 1000;
-								animation: fadeIn 0.3s ease;
-							`;
+							// 使用style属性而不是cssText
+							toast.style.position = 'fixed';
+							toast.style.bottom = '20px';
+							toast.style.left = '50%';
+							toast.style.transform = 'translateX(-50%)';
+							toast.style.background = 'rgba(0,0,0,0.8)';
+							toast.style.color = 'white';
+							toast.style.padding = '12px 24px';
+							toast.style.borderRadius = '8px';
+							toast.style.fontSize = '14px';
+							toast.style.zIndex = '1000';
+							toast.style.animation = 'fadeIn 0.3s ease';
+							
 							toast.textContent = '✅ 已复制到剪贴板';
 							document.body.appendChild(toast);
+							
 							setTimeout(() => {
 								toast.style.animation = 'fadeOut 0.3s ease';
 								setTimeout(() => toast.remove(), 300);
