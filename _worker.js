@@ -1291,22 +1291,20 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							<button class="theme-switch-button" onclick="toggleTheme()">
 								切换主题 🌓
 							</button>
-						</div>
+				</div>
 					</div>
 
 					<div class="editor-container">
 						${hasKV ? `
 							<textarea class="editor" 
-								placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+								placeholder="请输入订阅内容..."
 								id="content">${content}</textarea>
 							<div class="button-group">
 								<button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
 								<button class="btn btn-primary" onclick="saveContent(this)">保存</button>
 								<span class="save-status" id="saveStatus"></span>
 							</div>
-							<div class="divider"></div>
-							${cmad}
-						` : '<p>未绑定KV空间</p>'}
+						` : '<p style="color: var(--text-color);">未绑定KV空间</p>'}
 					</div>
 				</div>
 
@@ -1364,23 +1362,13 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							button.disabled = false;
 						}
 					}
-
-					function toggleNotice() {
-						const noticeContent = document.getElementById('noticeContent');
-						const noticeToggle = document.getElementById('noticeToggle');
-						if (noticeContent.style.display === 'none') {
-							noticeContent.style.display = 'block';
-							noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
-						} else {
-							noticeContent.style.display = 'none';
-							noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
-						}
-					}
 				</script>
 			</body>
 			</html>
 		`;
-		return 节点配置页;
+		return new Response(节点配置页, {
+			headers: { "Content-Type": "text/html;charset=utf-8" }
+		});
 	} else {
 		if (typeof fetch != 'function') {
 			return 'Error: fetch is not available in this environment.';
@@ -1881,7 +1869,7 @@ async function handlePostRequest(request, env, txt) {
 
 async function handleGetRequest(env, txt) {
     let content = '';
-    let hasKV = !!env.KV;
+    let hasKV = !!env.KV;  // 确保 hasKV 被定义
 
     if (hasKV) {
         try {
@@ -1896,7 +1884,7 @@ async function handleGetRequest(env, txt) {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>优选订阅列表</title>
+            <title>${FileName} 配置信息</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
@@ -1906,8 +1894,25 @@ async function handleGetRequest(env, txt) {
                     --border-color: #e0e0e0;
                     --text-color: #333;
                     --background-color: #f5f5f5;
+                    --card-background: #ffffff;
+                    --hover-color: #f0f0f0;
                 }
-                
+
+                [data-theme="dark"] {
+                    --primary-color: #66bb6a;
+                    --secondary-color: #81c784;
+                    --border-color: #424242;
+                    --text-color: #e0e0e0;
+                    --background-color: #121212;
+                    --card-background: #1e1e1e;
+                    --hover-color: #2d2d2d;
+                }
+
+                * {
+                    box-sizing: border-box;
+                    transition: background-color 0.3s ease;
+                }
+
                 body {
                     margin: 0;
                     padding: 20px;
@@ -1920,22 +1925,49 @@ async function handleGetRequest(env, txt) {
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: white;
+                    background: var(--card-background);
                     padding: 25px;
-                    border-radius: 10px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    border-radius: 12px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                }
+
+                .header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid var(--border-color);
                 }
 
                 .title {
                     font-size: 1.5em;
                     color: var(--text-color);
-                    margin-bottom: 20px;
-                    padding-bottom: 10px;
-                    border-bottom: 2px solid var(--border-color);
+                    margin: 0;
+                }
+
+                .theme-switch {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .theme-switch-button {
+                    padding: 8px 12px;
+                    border: none;
+                    border-radius: 6px;
+                    background: var(--primary-color);
+                    color: white;
+                    cursor: pointer;
+                    font-size: 14px;
+                    transition: all 0.3s ease;
+                }
+
+                .theme-switch-button:hover {
+                    background: var(--secondary-color);
                 }
 
                 .editor-container {
-                    width: 100%;
                     margin: 20px 0;
                 }
 
@@ -1943,14 +1975,15 @@ async function handleGetRequest(env, txt) {
                     width: 100%;
                     height: 520px;
                     padding: 15px;
-                    box-sizing: border-box;
                     border: 1px solid var(--border-color);
                     border-radius: 8px;
+                    background: var(--card-background);
+                    color: var(--text-color);
                     font-family: Monaco, Consolas, "Courier New", monospace;
                     font-size: 14px;
                     line-height: 1.5;
                     resize: vertical;
-                    transition: border-color 0.3s ease;
+                    transition: all 0.3s ease;
                 }
 
                 .editor:focus {
@@ -1966,7 +1999,7 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .btn {
-                    padding: 8px 20px;
+                    padding: 10px 20px;
                     border: none;
                     border-radius: 6px;
                     font-size: 14px;
@@ -1987,6 +2020,7 @@ async function handleGetRequest(env, txt) {
 
                 .btn-primary:hover:not(:disabled) {
                     background: var(--secondary-color);
+                    transform: translateY(-1px);
                 }
 
                 .btn-secondary {
@@ -1996,12 +2030,14 @@ async function handleGetRequest(env, txt) {
 
                 .btn-secondary:hover:not(:disabled) {
                     background: #555;
+                    transform: translateY(-1px);
                 }
 
                 .save-status {
                     margin-left: 10px;
                     font-size: 14px;
-                    color: #666;
+                    color: var(--text-color);
+                    opacity: 0.8;
                 }
 
                 .notice-toggle {
@@ -2014,7 +2050,7 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .notice-content {
-                    background: #f8f9fa;
+                    background: var(--card-background);
                     border-left: 4px solid var(--primary-color);
                     padding: 15px;
                     margin: 10px 0;
@@ -2039,86 +2075,96 @@ async function handleGetRequest(env, txt) {
                     .editor {
                         height: 400px;
                     }
+
+                    .button-group {
+                        flex-direction: column;
+                    }
+
+                    .btn {
+                        width: 100%;
+                    }
                 }
             </style>
         </head>
         <body>
             <div class="container">
-                <div class="title">📝 ${FileName} 优选订阅列表</div>
-                
-                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
-                    ℹ️ 注意事项 ∨
-                </a>
-                
-                <div id="noticeContent" class="notice-content" style="display: none">
-                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
+                <div class="header">
+                    <h1 class="title">📝 ${FileName} 优选订阅列表</h1>
+                    <div class="theme-switch">
+                        <button class="theme-switch-button" onclick="toggleTheme()">
+                            切换主题 🌓
+                        </button>
+                    </div>
                 </div>
 
                 <div class="editor-container">
                     ${hasKV ? `
                         <textarea class="editor" 
-                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+                            placeholder="请输入订阅内容..."
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                             <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
-                        <div class="divider"></div>
-                        ${cmad}
-                    ` : '<p>未绑定KV空间</p>'}
+                    ` : '<p style="color: var(--text-color);">未绑定KV空间</p>'}
                 </div>
             </div>
 
             <script>
-            function goBack() {
-                const pathParts = window.location.pathname.split('/');
-                pathParts.pop(); // 移除 "edit"
-                const newPath = pathParts.join('/');
-                window.location.href = newPath;
-            }
+                // 检查并设置主题
+                function initTheme() {
+                    const savedTheme = localStorage.getItem('theme') || 'light';
+                    document.documentElement.setAttribute('data-theme', savedTheme);
+                }
 
-            async function saveContent(button) {
-                try {
-                    button.disabled = true;
-                    const content = document.getElementById('content').value;
-                    const saveStatus = document.getElementById('saveStatus');
-                    
-                    saveStatus.textContent = '保存中...';
-                    
-                    const response = await fetch(window.location.href, {
-                        method: 'POST',
-                        body: content
-                    });
+                // 切换主题
+                function toggleTheme() {
+                    const currentTheme = document.documentElement.getAttribute('data-theme');
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                }
 
-                    if (response.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => {
-                            saveStatus.textContent = '';
-                        }, 3000);
-                    } else {
-                        throw new Error('保存失败');
+                // 初始化主题
+                initTheme();
+
+                function goBack() {
+                    const pathParts = window.location.pathname.split('/');
+                    pathParts.pop();
+                    const newPath = pathParts.join('/');
+                    window.location.href = newPath;
+                }
+
+                async function saveContent(button) {
+                    try {
+                        button.disabled = true;
+                        const content = document.getElementById('content').value;
+                        const saveStatus = document.getElementById('saveStatus');
+                        
+                        saveStatus.textContent = '保存中...';
+                        
+                        const response = await fetch(window.location.href, {
+                            method: 'POST',
+                            body: content
+                        });
+
+                        if (response.ok) {
+                            saveStatus.textContent = '✅ 保存成功';
+                            setTimeout(() => {
+                                saveStatus.textContent = '';
+                            }, 3000);
+                        } else {
+                            throw new Error('保存失败');
+                        }
+                    } catch (error) {
+                        const saveStatus = document.getElementById('saveStatus');
+                        saveStatus.textContent = '❌ ' + error.message;
+                        console.error('保存时发生错误:', error);
+                    } finally {
+                        button.disabled = false;
                     }
-                } catch (error) {
-                    const saveStatus = document.getElementById('saveStatus');
-                    saveStatus.textContent = '❌ ' + error.message;
-                    console.error('保存时发生错误:', error);
-                } finally {
-                    button.disabled = false;
                 }
-            }
-
-            function toggleNotice() {
-                const noticeContent = document.getElementById('noticeContent');
-                const noticeToggle = document.getElementById('noticeToggle');
-                if (noticeContent.style.display === 'none') {
-                    noticeContent.style.display = 'block';
-                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
-                } else {
-                    noticeContent.style.display = 'none';
-                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
-                }
-            }
             </script>
         </body>
         </html>
