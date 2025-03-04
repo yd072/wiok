@@ -1079,9 +1079,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
     // 检查 URL 中是否有 proxyip 参数
     const pageProxyIP = _url.searchParams.get('proxyip');
     if (pageProxyIP) {
-        proxyIP = pageProxyIP;  // 使用页面设置的 proxyIP
+        PROXYIP = pageProxyIP;  // 使用页面设置的 proxyIP
         RproxyIP = 'false';     // 禁用自动获取
-        path = `/?ed=2560&proxyip=${proxyIP}`; // 更新路径
+        path = `/?ed=2560&proxyip=${PROXYIP}`; // 更新路径
     }
 
     const userAgent = UA.toLowerCase();
