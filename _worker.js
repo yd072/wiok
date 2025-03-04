@@ -2304,10 +2304,10 @@ async function handleGetRequest(env, txt) {
                         </div>
                         <div class="setting-item">
                             <label for="localDns">本地 DNS</label>
-                            <input type="text" id="localDns" placeholder="8.8.8.8" value="8.8.8.8">
+                            <input type="text" id="localDns" placeholder="8.8.4.4" value="8.8.4.4">
                         </div>
                         <div class="setting-item">
-                            <label for="proxyIp">代理 IP / 域名</label>
+                            <label for="proxyIp">ProxyIP/ 域名</label>
                             <input type="text" id="proxyIp" placeholder="已禁用" value="">
                         </div>
                         <div class="settings-actions">
@@ -2422,7 +2422,7 @@ async function handleGetRequest(env, txt) {
                 function resetDnsSettings() {
                     // 重置为默认值
                     document.getElementById('remoteDns').value = 'https://8.8.8.8/dns-query';
-                    document.getElementById('localDns').value = '8.8.8.8';
+                    document.getElementById('localDns').value = '8.8.4.4';
                     document.getElementById('proxyIp').value = '';
 
                     // 清除 localStorage 中的设置
