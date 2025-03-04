@@ -806,43 +806,46 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    
-    await remoteSocket.readable
-        .pipeTo(
-            new WritableStream({
-                async write(chunk, controller) {
+    const reader = remoteSocket.readable.getReader();
+
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
             hasIncomingData = true;
-            
+
             if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                controller.error('WebSocket not open');
+                console.error('WebSocket not open');
+                break;
             }
-            
-            // 如果有头部数据，与第一个块合并后发送
+
+            // **Cloudflare 限流优化**：如果缓冲区数据 > 512KB，暂停 5ms，避免 CF 断流
+            while (webSocket.bufferedAmount > 512 * 1024) {
+                await new Promise(resolve => setTimeout(resolve, 5));
+            }
+
             if (header) {
-                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
+                let combined = new Uint8Array(header.length + value.length);
+                combined.set(header, 0);
+                combined.set(value, header.length);
+                webSocket.send(combined);
                 header = null;
             } else {
-                // 直接发送二进制数据，避免不必要的转换
-                webSocket.send(chunk);
+                webSocket.send(value);
             }
-                },
-                close() {
-                    log(`Remote connection closed, data received: ${hasIncomingData}`);
-                },
-                abort(reason) {
-                    console.error(`Remote connection aborted`);
-                },
-            })
-        )
-        .catch((error) => {
-            console.error(`remoteSocketToWS exception`);
-                    safeCloseWebSocket(webSocket);
-        });
-        
-        // 如果没有收到数据且提供了重试函数，则尝试重试
+        }
+    } catch (error) {
+        console.error(`remoteSocketToWS exception`, error);
+    } finally {
+        log(`Remote connection closed, data received: ${hasIncomingData}`);
+        reader.releaseLock();
+        safeCloseWebSocket(webSocket);
+
         if (!hasIncomingData && retry) {
-        log(`Retrying connection`);
+            log(`Connection failed, retrying`);
             retry();
+        }
     }
 }
 
