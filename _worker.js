@@ -2033,7 +2033,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`type=ws&` +
 			`host=${伪装域名}&` +
                         `path=${encodeURIComponent(最终路径)}&` + 
-			fragmentParam + // 添加片段参数
+			`fragmentParam `+ // 添加片段参数
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
