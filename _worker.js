@@ -832,11 +832,6 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                                 return;
                             }
 
-                            // 添加缓冲区检查,防止内存溢出
-                            while (webSocket.bufferedAmount > 512 * 1024) {
-                                await new Promise(resolve => setTimeout(resolve, 5));
-                            }
-
                             // 优化数据传输
                             if (header) {
                                 // 使用 Uint8Array 合并数据,提高效率
