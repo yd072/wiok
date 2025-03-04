@@ -2010,6 +2010,18 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
 		if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
 
+		// 添加片段设置参数
+		if (fragmentConfig && fragmentConfig.packetType !== 'none') {
+			const fragmentParams = {
+				lengthMin: fragmentConfig.lengthMin,
+				lengthMax: fragmentConfig.lengthMax,
+				intervalMin: fragmentConfig.intervalMin,
+				intervalMax: fragmentConfig.intervalMax,
+				packetType: fragmentConfig.packetType
+			};
+			最终路径 += `&fragment=${encodeURIComponent(JSON.stringify(fragmentParams))}`;
+		}
+
 		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
 			最终路径 = `/${伪装域名}${最终路径}`;
 			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
@@ -2017,12 +2029,6 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		}
 
 		const 协议类型 = atob(啥啥啥_写的这是啥啊);
-
-		// 添加片段参数
-		let fragmentParam = '';
-		if (fragmentConfig && fragmentConfig.packetType !== 'none') {
-			fragmentParam = `&fragment=${encodeURIComponent(JSON.stringify(fragmentConfig))}`;
-		}
 
 		const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
 			`encryption=none&` +
@@ -2032,8 +2038,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`alpn=h3&` + 
 			`type=ws&` +
 			`host=${伪装域名}&` +
-                        `path=${encodeURIComponent(最终路径)}&` + 
-			`fragmentParam `+ // 添加片段参数
+                        `path=${encodeURIComponent(最终路径)}` + 
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
