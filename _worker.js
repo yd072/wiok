@@ -99,7 +99,6 @@ class WebSocketManager {
 
 				// 处理关闭事件
 				this.webSocket.addEventListener('close', () => {
-			safeCloseWebSocket(this.webSocket); 
 					if (!this.readableStreamCancel) {
 						controller.close();
 					}
