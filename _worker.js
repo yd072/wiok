@@ -2459,4 +2459,3 @@ proxy.example.com:8443"
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
 }
-}
