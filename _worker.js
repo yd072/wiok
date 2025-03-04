@@ -2020,7 +2020,6 @@ async function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddress
 		const 协议类型 = atob(啥啥啥_写的这是啥啊);
 
 		// 添加片段参数到路径
-		let 最终路径 = path;
 		if (fragmentConfig.packetType !== 'none') {
 			const fragmentParams = {
 				lengthMin: fragmentConfig.lengthMin,
