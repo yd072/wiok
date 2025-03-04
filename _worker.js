@@ -1172,43 +1172,32 @@ async function 代理URL(代理网址, 目标网址) {
 
 const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
 function 配置信息(UUID, 域名地址) {
-    const 协议类型 = atob(啥啥啥_写的这是啥啊);
+	const 协议类型 = atob(啥啥啥_写的这是啥啊);
 
-    const 别名 = FileName;
-    let 地址 = 域名地址;
-    let 端口 = 443;
+	const 别名 = FileName;
+	let 地址 = 域名地址;
+	let 端口 = 443;
 
-    const 用户ID = UUID;
-    const 加密方式 = 'none';
+	const 用户ID = UUID;
+	const 加密方式 = 'none';
 
-    const 传输层协议 = 'ws';
-    const 伪装域名 = 域名地址;
-    // 根据片段设置添加fragment参数
-    let 路径 = path;
-    if (fragmentConfig && fragmentConfig.packetType !== 'none') {
-        const fragmentParams = {
-            lengthMin: fragmentConfig.lengthMin,
-            lengthMax: fragmentConfig.lengthMax,
-            intervalMin: fragmentConfig.intervalMin,
-            intervalMax: fragmentConfig.intervalMax,
-            packetType: fragmentConfig.packetType
-        };
-        路径 += '&fragment=' + encodeURIComponent(JSON.stringify(fragmentParams));
-    }
+	const 传输层协议 = 'ws';
+	const 伪装域名 = 域名地址;
+	const 路径 = path;
 
-    let 传输层安全 = ['tls', true];
-    const SNI = 域名地址;
-    const 指纹 = 'randomized';
+	let 传输层安全 = ['tls', true];
+	const SNI = 域名地址;
+	const 指纹 = 'randomized';
 
-    if (域名地址.includes('.workers.dev')) {
-        地址 = atob('dmlzYS5jbg==');
-        端口 = 80;
-        传输层安全 = ['', false];
-    }
+	if (域名地址.includes('.workers.dev')) {
+		地址 = atob('dmlzYS5jbg==');
+		端口 = 80;
+		传输层安全 = ['', false];
+	}
 
-    const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
-    const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
-    return [威图瑞, 猫猫猫];
+	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
+	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
+	return [威图瑞, 猫猫猫];
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
@@ -2029,6 +2018,12 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 
 		const 协议类型 = atob(啥啥啥_写的这是啥啊);
 
+		// 添加片段参数
+		let fragmentParam = '';
+		if (fragmentConfig && fragmentConfig.packetType !== 'none') {
+			fragmentParam = `&fragment=${encodeURIComponent(JSON.stringify(fragmentConfig))}`;
+		}
+
 		const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
 			`encryption=none&` +
 			`security=tls&` +
@@ -2037,7 +2032,8 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`alpn=h3&` + 
 			`type=ws&` +
 			`host=${伪装域名}&` +
-                        `path=${encodeURIComponent(最终路径)}` + 
+                        `path=${encodeURIComponent(最终路径)}&` + 
+			fragmentParam + // 添加片段参数
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return 维列斯Link;
