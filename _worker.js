@@ -84,11 +84,26 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
+		this.fragmentSettings = null; // 添加片段设置属性
+	}
+
+	async loadFragmentSettings(env) {
+		try {
+			if (env.KV) {
+				const savedSettings = await env.KV.get('FRAGMENT_SETTINGS');
+				if (savedSettings) {
+					this.fragmentSettings = JSON.parse(savedSettings);
+					this.log('已加载片段设置:', this.fragmentSettings);
+				}
+			}
+		} catch (error) {
+			console.error('加载片段设置时发生错误:', error);
+		}
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: (controller) => {
+			start: async (controller) => {
 				// 处理早期数据
 				if (earlyDataHeader) {
 					const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
@@ -97,14 +112,25 @@ class WebSocketManager {
 						return;
 					}
 					if (earlyData) {
-						this.processAndEnqueue(earlyData, controller);
+						// 如果有片段设置,对早期数据进行分片处理
+						if (this.fragmentSettings && this.fragmentSettings.packetType !== 'none') {
+							await this.handleFragmentData(earlyData, controller);
+						} else {
+							controller.enqueue(earlyData);
+						}
 					}
 				}
 
 				// 处理 WebSocket 消息
 				this.webSocket.addEventListener('message', async (event) => {
 					if (this.readableStreamCancel) return;
-					await this.processAndEnqueue(event.data, controller);
+					
+					// 如果有片段设置,对消息数据进行分片处理
+					if (this.fragmentSettings && this.fragmentSettings.packetType !== 'none') {
+						await this.handleFragmentData(event.data, controller);
+					} else {
+						controller.enqueue(event.data);
+					}
 				});
 
 				// 处理关闭事件
@@ -131,57 +157,51 @@ class WebSocketManager {
 		});
 	}
 
-	async processAndEnqueue(data, controller) {
-		if (fragmentConfig.packetType === 'none') {
-			controller.enqueue(data);
-			return;
-		}
+	async handleFragmentData(data, controller) {
+		const settings = this.fragmentSettings;
+		if (!settings) return controller.enqueue(data);
 
-		const chunks = this.splitIntoChunks(data);
-		for (const chunk of chunks) {
-			controller.enqueue(chunk);
-			if (fragmentConfig.intervalMin > 0) {
-				const delay = Math.floor(Math.random() * 
-					(fragmentConfig.intervalMax - fragmentConfig.intervalMin + 1)) + 
-					fragmentConfig.intervalMin;
-				await new Promise(resolve => setTimeout(resolve, delay));
+		const lengthMin = parseInt(settings.lengthMin);
+		const lengthMax = parseInt(settings.lengthMax);
+		const intervalMin = parseInt(settings.intervalMin);
+		const intervalMax = parseInt(settings.intervalMax);
+
+		// 将数据分片
+		const chunks = this.splitIntoChunks(data, lengthMin, lengthMax);
+		
+		for (let i = 0; i < chunks.length; i++) {
+			// 发送数据片段
+			controller.enqueue(chunks[i]);
+			
+			// 如果不是最后一个片段,添加延迟
+			if (i < chunks.length - 1) {
+				const interval = Math.floor(Math.random() * (intervalMax - intervalMin + 1)) + intervalMin;
+				await new Promise(resolve => setTimeout(resolve, interval));
 			}
 		}
 	}
 
-	splitIntoChunks(data) {
+	splitIntoChunks(data, minSize, maxSize) {
 		const chunks = [];
-		const buffer = data instanceof ArrayBuffer ? data : data.buffer;
-		const view = new Uint8Array(buffer);
-		let offset = 0;
+		let remaining = data;
 
-		while (offset < view.length) {
-			const chunkSize = Math.floor(Math.random() * 
-				(fragmentConfig.lengthMax - fragmentConfig.lengthMin + 1)) + 
-				fragmentConfig.lengthMin;
-				
-			const chunk = new Uint8Array(chunkSize);
-			const remainingBytes = view.length - offset;
-			const bytesToCopy = Math.min(chunkSize, remainingBytes);
-
-			// 复制实际数据
-			chunk.set(view.slice(offset, offset + bytesToCopy));
-
-			// 填充剩余空间
-			if (bytesToCopy < chunkSize) {
-				if (fragmentConfig.packetType === 'random') {
-					// 使用随机数据填充
-					for (let i = bytesToCopy; i < chunkSize; i++) {
-						chunk[i] = Math.floor(Math.random() * 256);
-					}
-				} else {
-					// 使用固定数据填充
-					chunk.fill(0, bytesToCopy);
-				}
+		while (remaining.byteLength > 0) {
+			const chunkSize = Math.floor(Math.random() * (maxSize - minSize + 1)) + minSize;
+			const chunk = remaining.slice(0, Math.min(chunkSize, remaining.byteLength));
+			
+			if (this.fragmentSettings.packetType === 'random') {
+				// 添加随机填充数据
+				const paddingSize = Math.floor(Math.random() * 64); // 0-63字节的随机填充
+				const paddedChunk = new Uint8Array(chunk.byteLength + paddingSize);
+				paddedChunk.set(new Uint8Array(chunk), 0);
+				crypto.getRandomValues(paddedChunk.subarray(chunk.byteLength));
+				chunks.push(paddedChunk.buffer);
+			} else {
+				// 固定数据模式
+				chunks.push(chunk);
 			}
-
-			chunks.push(chunk.buffer);
-			offset += bytesToCopy;
+			
+			remaining = remaining.slice(chunk.byteLength);
 		}
 
 		return chunks;
@@ -582,7 +602,7 @@ export default {
 					enableSocks = false;
 				}
 
-				return await 维列斯OverWSHandler(request);
+				return await 维列斯OverWSHandler(request, env);
 			}
 		} catch (err) {
 			let e = err;
@@ -591,11 +611,15 @@ export default {
 	},
 };
 
-async function 维列斯OverWSHandler(request) {
+async function 维列斯OverWSHandler(request, env) {
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
 
     webSocket.accept();
+
+    const wsManager = new WebSocketManager(webSocket, log);
+    // 加载片段设置
+    await wsManager.loadFragmentSettings(env);
 
     let address = '';
     let portWithRandomLog = '';
@@ -605,7 +629,7 @@ async function 维列斯OverWSHandler(request) {
     };
 
     const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
-    const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
+    const readableWebSocketStream = wsManager.makeReadableStream(earlyDataHeader);
 
     let remoteSocketWrapper = { value: null };
     let isDns = false;
@@ -677,7 +701,6 @@ async function 维列斯OverWSHandler(request) {
 
     return new Response(null, {
         status: 101,
-        // @ts-ignore
         webSocket: client,
     });
 }
