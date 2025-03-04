@@ -807,9 +807,8 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let hasIncomingData = false;
     let header = responseHeader;
     let isSocketClosed = false;
-    const reader = remoteSocket.readable.getReader();
 
-    // **WebSocket 连接状态监测（每30s检查一次）**
+    // 监控 WebSocket 连接状态，避免意外断开
     const heartbeat = setInterval(() => {
         if (webSocket.readyState !== WS_READY_STATE_OPEN) {
             clearInterval(heartbeat);
@@ -821,40 +820,55 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }, 30000);
 
     try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+        await remoteSocket.readable.pipeTo(
+            new WritableStream({
+                async write(chunk, controller) {
+                    try {
+                        hasIncomingData = true;
 
-            hasIncomingData = true;
+                        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                            controller.error('WebSocket 未连接');
+                            return;
+                        }
 
-            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                log('WebSocket 连接已关闭，停止发送');
-                break;
-            }
+                        // **Cloudflare 限流优化**: 如果 WebSocket 发送缓冲区超过 512KB，暂停 5ms
+                        while (webSocket.bufferedAmount > 512 * 1024) {
+                            await new Promise(resolve => setTimeout(resolve, 5));
+                        }
 
-            // **Cloudflare 限流优化**：如果 `bufferedAmount` > 512KB，暂停 5ms 避免 WebSocket 断流
-            while (webSocket.bufferedAmount > 512 * 1024) {
-                await new Promise(resolve => setTimeout(resolve, 5));
-            }
-
-            if (header) {
-                // **使用 Uint8Array 直接拼接数据，避免 Blob**
-                const combinedData = new Uint8Array(header.byteLength + value.byteLength);
-                combinedData.set(new Uint8Array(header), 0);
-                combinedData.set(new Uint8Array(value), header.byteLength);
-                webSocket.send(combinedData);
-                header = null;
-            } else {
-                webSocket.send(value);
-            }
-        }
+                        // **优化数据传输：SOCKS5 支持**
+                        if (header) {
+                            // 使用 `Uint8Array` 合并数据
+                            const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                            combinedData.set(new Uint8Array(header), 0);
+                            combinedData.set(new Uint8Array(chunk), header.byteLength);
+                            webSocket.send(combinedData);
+                            header = null;
+                        } else {
+                            webSocket.send(chunk);
+                        }
+                    } catch (error) {
+                        log(`数据写入错误: ${error.message}`);
+                        controller.error(error);
+                    }
+                },
+                close() {
+                    isSocketClosed = true;
+                    clearInterval(heartbeat);
+                    log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
+                },
+                abort(reason) {
+                    isSocketClosed = true;
+                    clearInterval(heartbeat);
+                    log(`远程连接中断: ${reason}`);
+                }
+            })
+        );
     } catch (error) {
         log(`数据传输异常: ${error.message}`);
     } finally {
         isSocketClosed = true;
         clearInterval(heartbeat);
-        log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
-        reader.releaseLock();
         safeCloseWebSocket(webSocket);
 
         // **如果没有收到数据且提供了重试函数，尝试重试**
