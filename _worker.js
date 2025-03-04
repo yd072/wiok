@@ -1078,99 +1078,275 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		else 订阅器 += `<br>SUBAPI（订阅转换后端）: ${subProtocol}://${subConverter}<br>SUBCONFIG（订阅转换配置文件）: ${subConfig}`;
 		const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${有效时间} 天<br>UPTIME（动态UUID更新时间）: ${更新时间} 时（北京时间）<br><br>` : `${userIDTime}`;
 		const 节点配置页 = `
-			################################################################<br>
-			Subscribe / sub 订阅地址, 点击链接自动 <strong>复制订阅链接</strong> 并 <strong>生成订阅二维码</strong> <br>
-			---------------------------------------------------------------<br>
-			自适应订阅地址:<br>
-			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}</a><br>
-			<div id="qrcode_0" style="margin: 10px 10px 10px 10px;"></div>
-			Base64订阅地址:<br>
-			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}?b64</a><br>
-			<div id="qrcode_1" style="margin: 10px 10px 10px 10px;"></div>
-			clash订阅地址:<br>
-			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}?clash</a><br>
-			<div id="qrcode_2" style="margin: 10px 10px 10px 10px;"></div>
-			singbox订阅地址:<br>
-			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}?sb</a><br>
-			<div id="qrcode_3" style="margin: 10px 10px 10px 10px;"></div>
-			Loon订阅地址:<br>
-			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}?loon</a><br>
-			<div id="qrcode_4" style="margin: 10px 10px 10px 10px;"></div>
-			<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">实用订阅技巧∨</a></strong><br>
-				<div id="noticeContent" class="notice-content" style="display: none;">
-                    <strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br>
-					<br>
-					<strong>2.</strong> 如您使用的是 SSR+ 等路由插件，推荐使用 <strong>Base64订阅地址</strong> 进行订阅；<br>
-					<br>
-					<strong>3.</strong> 快速切换 <a href='${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}'>优选订阅生成器</a> 至：sub.google.com，您可将"?sub=sub.google.com"参数添加到链接末尾，例如：<br>
-					&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br>
-					<br>
-					<strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
-					&nbsp;&nbsp; https://${proxyhost}${hostName}/${uuid}<strong>?proxyip=proxyip.fxxk.dedyn.io:443</strong><br>
-					<br>
-					<strong>5.</strong> 快速更换 SOCKS5 至：user:password@127.0.0.1:1080，您可将"?socks5=user:password@127.0.0.1:1080"参数添加到链接末尾，例如：<br>
-					&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?socks5=user:password@127.0.0.1:1080</strong><br>
-					<br>
-					<strong>6.</strong> 如需指定多个参数则需要使用'&'做间隔，例如：<br>
-					&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}?sub=sub.google.com<strong>&</strong>proxyip=proxyip.fxxk.dedyn.io<br>
-				</div>
-			<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
-			<script>
-			function copyToClipboard(text, qrcode) {
-				navigator.clipboard.writeText(text).then(() => {
-					alert('已复制到剪贴板');
-				}).catch(err => {
-					console.error('复制失败:', err);
-				});
-				const qrcodeDiv = document.getElementById(qrcode);
-				qrcodeDiv.innerHTML = '';
-				new QRCode(qrcodeDiv, {
-					text: text,
-					width: 220, // 调整宽度
-					height: 220, // 调整高度
-					colorDark: "#000000", // 二维码颜色
-					colorLight: "#ffffff", // 背景颜色
-					correctLevel: QRCode.CorrectLevel.Q, // 设置纠错级别
-					scale: 1 // 调整像素颗粒度
-				});
-			}
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<meta charset="utf-8">
+				<meta name="viewport" content="width=device-width, initial-scale=1">
+				<title>${FileName} 配置信息</title>
+				<style>
+					:root {
+						--primary-color: #4CAF50;
+						--secondary-color: #45a049;
+						--border-color: #e0e0e0;
+						--text-color: #333;
+						--background-color: #f5f5f5;
+						--section-bg: #ffffff;
+					}
+					
+					body {
+						margin: 0;
+						padding: 20px;
+						font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+						line-height: 1.6;
+						color: var(--text-color);
+						background-color: var(--background-color);
+					}
 
-			function toggleNotice() {
-				const noticeContent = document.getElementById('noticeContent');
-				const noticeToggle = document.getElementById('noticeToggle');
-				if (noticeContent.style.display === 'none') {
-					noticeContent.style.display = 'block';
-					noticeToggle.textContent = '实用订阅技巧∧';
-				} else {
-					noticeContent.style.display = 'none'; 
-					noticeToggle.textContent = '实用订阅技巧∨';
-				}
-			}
-			</script>
-			---------------------------------------------------------------<br>
-			################################################################<br>
-			${FileName} 配置信息<br>
-			---------------------------------------------------------------<br>
-			${动态UUID信息}HOST: ${hostName}<br>
-			UUID: ${userID}<br>
-			FKID: ${fakeUserID}<br>
-			UA: ${UA}<br>
-			${订阅器}<br>
-			---------------------------------------------------------------<br>
-			################################################################<br>
-			proxyConfig<br>
-			---------------------------------------------------------------<br>
-			<a href="javascript:void(0)" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')" style="color:blue;text-decoration:underline;cursor:pointer;">${proxyConfig}</a><br>
-			<div id="qrcode_proxyConfig" style="margin: 10px 10px 10px 10px;"></div>
-			---------------------------------------------------------------<br>
-			################################################################<br>
-			clash-meta<br>
-			---------------------------------------------------------------<br>
-			${clash}<br>
-			---------------------------------------------------------------<br>
-			################################################################<br>
-			${cmad}
-			`;
+					.container {
+						max-width: 1000px;
+						margin: 0 auto;
+						background: var(--section-bg);
+						padding: 25px;
+						border-radius: 10px;
+						box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+					}
+
+					.section {
+						margin: 20px 0;
+						padding: 20px;
+						background: var(--section-bg);
+						border-radius: 8px;
+						border: 1px solid var(--border-color);
+					}
+
+					.section-title {
+						font-size: 1.2em;
+						color: var(--primary-color);
+						margin-bottom: 15px;
+						padding-bottom: 10px;
+						border-bottom: 2px solid var(--border-color);
+					}
+
+					.divider {
+						height: 1px;
+						background: var(--border-color);
+						margin: 15px 0;
+					}
+
+					.subscription-link {
+						display: block;
+						margin: 10px 0;
+						padding: 12px;
+						background: #f8f9fa;
+						border-radius: 6px;
+						border: 1px solid var(--border-color);
+						word-break: break-all;
+					}
+
+					.subscription-link a {
+						color: #0066cc;
+						text-decoration: none;
+					}
+
+					.subscription-link a:hover {
+						text-decoration: underline;
+					}
+
+					.qrcode-container {
+						margin: 10px 0;
+						text-align: center;
+					}
+
+					.notice-toggle {
+						color: var(--primary-color);
+						cursor: pointer;
+						text-decoration: none;
+						display: inline-block;
+						margin: 10px 0;
+						font-weight: 500;
+					}
+
+					.notice-content {
+						background: #f8f9fa;
+						border-left: 4px solid var(--primary-color);
+						padding: 15px;
+						margin: 10px 0;
+						border-radius: 0 8px 8px 0;
+					}
+
+					.config-info {
+						background: #f8f9fa;
+						padding: 15px;
+						border-radius: 6px;
+						font-family: Monaco, Consolas, "Courier New", monospace;
+						font-size: 13px;
+						overflow-x: auto;
+					}
+
+					.copy-button {
+						display: inline-block;
+						padding: 6px 12px;
+						background: var(--primary-color);
+						color: white;
+						border: none;
+						border-radius: 4px;
+						cursor: pointer;
+						font-size: 14px;
+						margin: 5px 0;
+					}
+
+					.copy-button:hover {
+						background: var(--secondary-color);
+					}
+
+					@media (max-width: 768px) {
+						body {
+							padding: 10px;
+						}
+						
+						.container {
+							padding: 15px;
+						}
+						
+						.section {
+							padding: 15px;
+						}
+					}
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<div class="section">
+						<div class="section-title">📋 订阅信息</div>
+						<div class="subscription-link">
+							自适应订阅地址:<br>
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
+								https://${proxyhost}${hostName}/${uuid}
+							</a>
+							<div id="qrcode_0" class="qrcode-container"></div>
+						</div>
+
+						<div class="subscription-link">
+							Base64订阅地址:<br>
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
+								https://${proxyhost}${hostName}/${uuid}?b64
+							</a>
+							<div id="qrcode_1" class="qrcode-container"></div>
+						</div>
+
+						<div class="subscription-link">
+							clash订阅地址:<br>
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;">
+								https://${proxyhost}${hostName}/${uuid}?clash
+							</a>
+							<div id="qrcode_2" class="qrcode-container"></div>
+						</div>
+
+						<div class="subscription-link">
+							singbox订阅地址:<br>
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;">
+								https://${proxyhost}${hostName}/${uuid}?sb
+							</a>
+							<div id="qrcode_3" class="qrcode-container"></div>
+						</div>
+
+						<div class="subscription-link">
+							Loon订阅地址:<br>
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;">
+								https://${proxyhost}${hostName}/${uuid}?loon
+							</a>
+							<div id="qrcode_4" class="qrcode-container"></div>
+						</div>
+					</div>
+
+					<div class="section">
+						<div class="section-title">ℹ️ 使用说明</div>
+						<a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+							实用订阅技巧 ∨
+						</a>
+						<div id="noticeContent" class="notice-content" style="display: none">
+							<strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br><br>
+							<strong>2.</strong> 如您使用的是 SSR+ 等路由插件，推荐使用 <strong>Base64订阅地址</strong> 进行订阅；<br><br>
+							<strong>3.</strong> 快速切换 <a href='${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}'>优选订阅生成器</a> 至：sub.google.com，您可将"?sub=sub.google.com"参数添加到链接末尾，例如：<br>
+							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br><br>
+							<strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
+							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?proxyip=proxyip.fxxk.dedyn.io:443</strong><br><br>
+							<strong>5.</strong> 快速更换 SOCKS5 至：user:password@127.0.0.1:1080，您可将"?socks5=user:password@127.0.0.1:1080"参数添加到链接末尾，例如：<br>
+							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?socks5=user:password@127.0.0.1:1080</strong><br><br>
+							<strong>6.</strong> 如需指定多个参数则需要使用'&'做间隔，例如：<br>
+							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}?sub=sub.google.com<strong>&</strong>proxyip=proxyip.fxxk.dedyn.io
+						</div>
+					</div>
+
+					<div class="section">
+						<div class="section-title">🔧 配置信息</div>
+						<div class="config-info">
+							${动态UUID信息.replace(/\n/g, '<br>')}
+							HOST: ${hostName}<br>
+							UUID: ${userID}<br>
+							FKID: ${fakeUserID}<br>
+							UA: ${UA}<br>
+							${订阅器.replace(/\n/g, '<br>')}
+						</div>
+					</div>
+
+					<div class="section">
+						<div class="section-title">📝 代理配置</div>
+						<div class="config-info">
+							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
+							<div>${proxyConfig}</div>
+							<div id="qrcode_proxyConfig" class="qrcode-container"></div>
+						</div>
+					</div>
+
+					<div class="section">
+						<div class="section-title">⚙️ Clash Meta 配置</div>
+						<div class="config-info">
+							${clash}
+						</div>
+					</div>
+
+					<div class="divider"></div>
+					${cmad}
+				</div>
+
+				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
+				<script>
+					function copyToClipboard(text, qrcode) {
+						navigator.clipboard.writeText(text).then(() => {
+							alert('已复制到剪贴板');
+						}).catch(err => {
+							console.error('复制失败:', err);
+						});
+						const qrcodeDiv = document.getElementById(qrcode);
+						qrcodeDiv.innerHTML = '';
+						new QRCode(qrcodeDiv, {
+							text: text,
+							width: 220,
+							height: 220,
+							colorDark: "#000000",
+							colorLight: "#ffffff",
+							correctLevel: QRCode.CorrectLevel.Q,
+							scale: 1
+						});
+					}
+
+					function toggleNotice() {
+						const noticeContent = document.getElementById('noticeContent');
+						const noticeToggle = document.getElementById('noticeToggle');
+						if (noticeContent.style.display === 'none') {
+							noticeContent.style.display = 'block';
+							noticeToggle.textContent = '实用订阅技巧 ∧';
+						} else {
+							noticeContent.style.display = 'none';
+							noticeToggle.textContent = '实用订阅技巧 ∨';
+						}
+					}
+				</script>
+			</body>
+			</html>
+		`;
 		return 节点配置页;
 	} else {
 		if (typeof fetch != 'function') {
