@@ -1531,31 +1531,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 					<div class="divider"></div>
 					${cmad}
-
-					<div class="section">
-						<div class="section-title">🌐 DNS 和代理设置</div>
-						<div class="dns-settings">
-							<h3>DNS 设置</h3>
-							<div class="settings-grid">
-								<div class="setting-item">
-									<label for="remoteDns">远程 DNS</label>
-									<input type="text" id="remoteDns" value="${remoteDNS}">
-								</div>
-								<div class="setting-item">
-									<label for="localDns">本地 DNS</label>
-									<input type="text" id="localDns" value="${localDNS}">
-								</div>
-								<div class="setting-item">
-									<label for="proxyIp">代理 IP/域名</label>
-									<input type="text" id="proxyIp" value="${customProxyIP || ''}">
-								</div>
-							</div>
-							<div class="settings-actions">
-								<button class="copy-button" onclick="saveDnsSettings()">保存</button>
-								<button class="copy-button" onclick="resetDnsSettings()">重置</button>
-							</div>
-						</div>
-					</div>
 				</div>
 
 			<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
@@ -1589,62 +1564,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					noticeContent.style.display = 'none'; 
 							noticeToggle.textContent = '实用订阅技巧 ∨';
 				}
-			}
-
-			// 在保存设置时更新全局变量和 proxyIP
-			function saveDnsSettings() {
-				const remoteDns = document.getElementById('remoteDns').value;
-				const localDns = document.getElementById('localDns').value;
-				const proxyIp = document.getElementById('proxyIp').value;
-
-				// 更新全局变量
-				remoteDNS = remoteDns;
-				localDNS = localDns;
-				customProxyIP = proxyIp;
-
-				// 保存到 localStorage
-				localStorage.setItem('dnsSettings', JSON.stringify({
-					remoteDns,
-					localDns,
-					proxyIp
-				}));
-
-				// 更新实际配置
-				if (customProxyIP) {
-					proxyIP = customProxyIP;  // 更新代理 IP
-				}
-
-				alert('设置已保存');
-			}
-
-			// 在 fetch 或其他使用 proxyIP 的地方
-			async function fetch(request, env, ctx) {
-				// 确保在使用 proxyIP 前已经更新
-				if (customProxyIP) {
-					proxyIP = customProxyIP;
-				}
-
-				// 其他逻辑...
-			}
-
-			// 在页面加载时恢复设置
-			window.addEventListener('DOMContentLoaded', () => {
-				const savedSettings = localStorage.getItem('dnsSettings');
-				if (savedSettings) {
-					const { remoteDns, localDns, proxyIp } = JSON.parse(savedSettings);
-					document.getElementById('remoteDns').value = remoteDns;
-					document.getElementById('localDns').value = localDns;
-					document.getElementById('proxyIp').value = proxyIp;
-				}
-			});
-
-			// 重置设置
-			function resetDnsSettings() {
-				document.getElementById('remoteDns').value = 'https://8.8.8.8/dns-query';
-				document.getElementById('localDns').value = '8.8.8.8';
-				document.getElementById('proxyIp').value = '';
-				localStorage.removeItem('dnsSettings');
-				alert('设置已重置');
 			}
 			</script>
 			</body>
@@ -2410,7 +2329,7 @@ async function handleGetRequest(env, txt) {
 			<div class="editor-container">
 				${hasKV ? `
 				<textarea class="editor" 
-                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNSU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg'))}"
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg'))}"
 					id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
@@ -2483,18 +2402,18 @@ async function handleGetRequest(env, txt) {
                     // 更新全局变量
                     remoteDNS = remoteDns;
                     localDNS = localDns;
-                    customProxyIP = proxyIp;
+                    customProxyIP = PROXYIP;
 
                     // 保存到 localStorage
                     localStorage.setItem('dnsSettings', JSON.stringify({
                         remoteDns,
                         localDns,
-                        proxyIp
+                        PROXYIP
                     }));
 
                     // 更新实际配置
                     if (customProxyIP) {
-                        proxyIP = customProxyIP;  // 更新代理 IP
+                        PROXYIP = customProxyIP;  // 更新代理 IP
                     }
 
                     alert('设置已保存');
