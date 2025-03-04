@@ -131,7 +131,8 @@ class WebSocketManager {
 export default {
 	async fetch(request, env, ctx) {
 		try {
-			// 在处理请求前先检查是否有保存的设置
+			const UA = request.headers.get('User-Agent') || 'null';
+			const userAgent = UA.toLowerCase();
 			const url = new URL(request.url);
 			
 			// 如果是浏览器请求，尝试获取保存的设置
@@ -157,8 +158,6 @@ export default {
 				}
 			}
 
-			const UA = request.headers.get('User-Agent') || 'null';
-			const userAgent = UA.toLowerCase();
 			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
 			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
 				动态UUID = env.KEY || env.TOKEN || userID;
@@ -218,7 +217,6 @@ export default {
 			}
 
 			const upgradeHeader = request.headers.get('Upgrade');
-			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
 				if (env.ADD) addresses = await 整理(env.ADD);
 				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
@@ -2429,7 +2427,7 @@ async function handleGetRequest(env, txt) {
                     remoteDNS = remoteDns;
                     localDNS = localDns;
                     customProxyIP = proxyIp;
-                    proxyIP = proxyIp || proxyIP; // 如果有新设置就使用新设置，否则保持原值
+                    proxyIP = proxyIp || proxyIP;
 
                     // 保存到 cookie 和 localStorage
                     const settings = JSON.stringify({
@@ -2438,7 +2436,8 @@ async function handleGetRequest(env, txt) {
                         proxyIp
                     });
                     
-                    document.cookie = `dnsSettings=${encodeURIComponent(settings)}; path=/; max-age=31536000`;
+                    // 修复 cookie 字符串语法
+                    document.cookie = 'dnsSettings=' + encodeURIComponent(settings) + '; path=/; max-age=31536000';
                     localStorage.setItem('dnsSettings', settings);
 
                     // 刷新页面以应用新设置
