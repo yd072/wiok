@@ -1086,12 +1086,17 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				<title>${FileName} 配置信息</title>
 				<style>
 					:root {
-						--primary-color: #4CAF50;
-						--secondary-color: #45a049;
-						--border-color: #e0e0e0;
+						--primary-color: #2196F3;
+						--secondary-color: #1976D2;
+						--success-color: #4CAF50;
+						--warning-color: #FFC107;
+						--danger-color: #F44336;
+						--border-color: #E0E0E0;
 						--text-color: #333;
-						--background-color: #f5f5f5;
-						--section-bg: #ffffff;
+						--text-secondary: #666;
+						--background-color: #F5F5F5;
+						--section-bg: #FFFFFF;
+						--hover-bg: #F8F9FA;
 					}
 					
 					body {
@@ -1101,116 +1106,203 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
+						background-image: linear-gradient(120deg, #fdfbfb 0%, #ebedee 100%);
+						min-height: 100vh;
 					}
 
 					.container {
 						max-width: 1000px;
 						margin: 0 auto;
 						background: var(--section-bg);
-						padding: 25px;
-						border-radius: 10px;
-						box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+						padding: 30px;
+						border-radius: 16px;
+						box-shadow: 0 4px 20px rgba(0,0,0,0.08);
 					}
 
 					.section {
-						margin: 20px 0;
-						padding: 20px;
+						margin: 25px 0;
+						padding: 25px;
 						background: var(--section-bg);
-						border-radius: 8px;
+						border-radius: 12px;
 						border: 1px solid var(--border-color);
+						transition: all 0.3s ease;
+					}
+
+					.section:hover {
+						box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+						transform: translateY(-2px);
 					}
 
 					.section-title {
-						font-size: 1.2em;
+						font-size: 1.25em;
 						color: var(--primary-color);
-						margin-bottom: 15px;
-						padding-bottom: 10px;
+						margin-bottom: 20px;
+						padding-bottom: 12px;
 						border-bottom: 2px solid var(--border-color);
-					}
-
-					.divider {
-						height: 1px;
-						background: var(--border-color);
-						margin: 15px 0;
+						display: flex;
+						align-items: center;
+						gap: 8px;
 					}
 
 					.subscription-link {
 						display: block;
-						margin: 10px 0;
-						padding: 12px;
-						background: #f8f9fa;
-						border-radius: 6px;
+						margin: 15px 0;
+						padding: 16px;
+						background: var(--hover-bg);
+						border-radius: 10px;
 						border: 1px solid var(--border-color);
-						word-break: break-all;
+						transition: all 0.3s ease;
+					}
+
+					.subscription-link:hover {
+						border-color: var(--primary-color);
+						box-shadow: 0 2px 8px rgba(33,150,243,0.1);
 					}
 
 					.subscription-link a {
-						color: #0066cc;
+						color: var(--primary-color);
 						text-decoration: none;
+						font-size: 0.95em;
+						display: inline-block;
+						margin-top: 6px;
+						padding: 4px 8px;
+						border-radius: 4px;
+						transition: all 0.3s ease;
 					}
 
 					.subscription-link a:hover {
-						text-decoration: underline;
+						background: rgba(33,150,243,0.1);
 					}
 
 					.qrcode-container {
-						margin: 10px 0;
+						margin: 15px 0;
 						text-align: center;
+						padding: 15px;
+						background: white;
+						border-radius: 8px;
+						box-shadow: inset 0 0 8px rgba(0,0,0,0.05);
 					}
 
 					.notice-toggle {
 						color: var(--primary-color);
 						cursor: pointer;
 						text-decoration: none;
-						display: inline-block;
+						display: inline-flex;
+						align-items: center;
 						margin: 10px 0;
 						font-weight: 500;
+						padding: 8px 16px;
+						border-radius: 6px;
+						transition: all 0.3s ease;
+					}
+
+					.notice-toggle:hover {
+						background: rgba(33,150,243,0.1);
 					}
 
 					.notice-content {
-						background: #f8f9fa;
+						background: var(--hover-bg);
 						border-left: 4px solid var(--primary-color);
-						padding: 15px;
-						margin: 10px 0;
-						border-radius: 0 8px 8px 0;
+						padding: 20px;
+						margin: 15px 0;
+						border-radius: 0 12px 12px 0;
+						font-size: 0.95em;
+						line-height: 1.7;
 					}
 
 					.config-info {
-						background: #f8f9fa;
-						padding: 15px;
-						border-radius: 6px;
+						background: var(--hover-bg);
+						padding: 20px;
+						border-radius: 10px;
 						font-family: Monaco, Consolas, "Courier New", monospace;
 						font-size: 13px;
+						line-height: 1.7;
 						overflow-x: auto;
+						border: 1px solid var(--border-color);
 					}
 
 					.copy-button {
-						display: inline-block;
-						padding: 6px 12px;
+						display: inline-flex;
+						align-items: center;
+						gap: 6px;
+						padding: 8px 16px;
 						background: var(--primary-color);
 						color: white;
 						border: none;
-						border-radius: 4px;
+						border-radius: 6px;
 						cursor: pointer;
 						font-size: 14px;
-						margin: 5px 0;
+						font-weight: 500;
+						margin: 8px 0;
+						transition: all 0.3s ease;
 					}
 
 					.copy-button:hover {
 						background: var(--secondary-color);
+						transform: translateY(-1px);
 					}
 
+					.copy-button:active {
+						transform: translateY(0);
+					}
+
+					.divider {
+						height: 1px;
+						background: linear-gradient(to right, transparent, var(--border-color), transparent);
+						margin: 25px 0;
+					}
+
+					/* 添加动画效果 */
+					@keyframes fadeIn {
+						from { opacity: 0; transform: translateY(10px); }
+						to { opacity: 1; transform: translateY(0); }
+					}
+
+					.section {
+						animation: fadeIn 0.5s ease-out;
+					}
+
+					/* 添加响应式设计 */
 					@media (max-width: 768px) {
 						body {
 							padding: 10px;
 						}
 						
 						.container {
-							padding: 15px;
+							padding: 20px;
 						}
 						
 						.section {
+							padding: 20px;
+							margin: 15px 0;
+						}
+						
+						.subscription-link {
+							padding: 12px;
+						}
+						
+						.notice-content {
 							padding: 15px;
+						}
+					}
+
+					/* 添加深色模式支持 */
+					@media (prefers-color-scheme: dark) {
+						:root {
+							--text-color: #E0E0E0;
+							--text-secondary: #AAAAAA;
+							--background-color: #1A1A1A;
+							--section-bg: #242424;
+							--hover-bg: #2A2A2A;
+							--border-color: #333333;
+						}
+
+						.subscription-link a:hover {
+							background: rgba(33,150,243,0.2);
+						}
+
+						.config-info {
+							background: #1E1E1E;
 						}
 					}
 				</style>
@@ -1315,10 +1407,30 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				<script>
 					function copyToClipboard(text, qrcode) {
 						navigator.clipboard.writeText(text).then(() => {
-							alert('已复制到剪贴板');
+							const toast = document.createElement('div');
+							toast.style.cssText = `
+								position: fixed;
+								bottom: 20px;
+								left: 50%;
+								transform: translateX(-50%);
+								background: rgba(0,0,0,0.8);
+								color: white;
+								padding: 12px 24px;
+								border-radius: 8px;
+								font-size: 14px;
+								z-index: 1000;
+								animation: fadeIn 0.3s ease;
+							`;
+							toast.textContent = '✅ 已复制到剪贴板';
+							document.body.appendChild(toast);
+							setTimeout(() => {
+								toast.style.animation = 'fadeOut 0.3s ease';
+								setTimeout(() => toast.remove(), 300);
+							}, 2000);
 						}).catch(err => {
 							console.error('复制失败:', err);
 						});
+						
 						const qrcodeDiv = document.getElementById(qrcode);
 						qrcodeDiv.innerHTML = '';
 						new QRCode(qrcodeDiv, {
@@ -1863,9 +1975,9 @@ async function handleGetRequest(env, txt) {
         <!DOCTYPE html>
         <html>
         <head>
+            <title>优选订阅列表</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>${FileName} 配置编辑</title>
             <style>
                 :root {
                     --primary-color: #4CAF50;
@@ -1873,9 +1985,6 @@ async function handleGetRequest(env, txt) {
                     --border-color: #e0e0e0;
                     --text-color: #333;
                     --background-color: #f5f5f5;
-                    --section-bg: #ffffff;
-                    --error-color: #dc3545;
-                    --success-color: #28a745;
                 }
                 
                 body {
@@ -1885,42 +1994,33 @@ async function handleGetRequest(env, txt) {
                     line-height: 1.6;
                     color: var(--text-color);
                     background-color: var(--background-color);
-                    min-height: 100vh;
                 }
 
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: var(--section-bg);
+                    background: white;
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                 }
 
-                .header {
-                    margin-bottom: 30px;
-                    text-align: center;
-                }
-
                 .title {
-                    font-size: 1.8em;
+                    font-size: 1.5em;
                     color: var(--text-color);
-                    margin-bottom: 10px;
-                    font-weight: 500;
-                }
-
-                .subtitle {
-                    color: #666;
-                    font-size: 1em;
+                    margin-bottom: 20px;
+                    padding-bottom: 10px;
+                    border-bottom: 2px solid var(--border-color);
                 }
 
                 .editor-container {
+                    width: 100%;
                     margin: 20px 0;
                 }
 
                 .editor {
                     width: 100%;
-                    min-height: 520px;
+                    height: 520px;
                     padding: 15px;
                     box-sizing: border-box;
                     border: 1px solid var(--border-color);
@@ -1929,8 +2029,7 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     line-height: 1.5;
                     resize: vertical;
-                    transition: all 0.3s ease;
-                    background: #f8f9fa;
+                    transition: border-color 0.3s ease;
                 }
 
                 .editor:focus {
@@ -1942,22 +2041,17 @@ async function handleGetRequest(env, txt) {
                 .button-group {
                     display: flex;
                     gap: 12px;
-                    margin-top: 20px;
-                    align-items: center;
+                    margin-top: 15px;
                 }
 
                 .btn {
-                    padding: 10px 20px;
+                    padding: 8px 20px;
                     border: none;
                     border-radius: 6px;
                     font-size: 14px;
                     font-weight: 500;
                     cursor: pointer;
                     transition: all 0.3s ease;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    min-width: 100px;
                 }
 
                 .btn:disabled {
@@ -1972,7 +2066,6 @@ async function handleGetRequest(env, txt) {
 
                 .btn-primary:hover:not(:disabled) {
                     background: var(--secondary-color);
-                    transform: translateY(-1px);
                 }
 
                 .btn-secondary {
@@ -1982,25 +2075,12 @@ async function handleGetRequest(env, txt) {
 
                 .btn-secondary:hover:not(:disabled) {
                     background: #555;
-                    transform: translateY(-1px);
                 }
 
                 .save-status {
                     margin-left: 10px;
                     font-size: 14px;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    animation: fadeIn 0.3s ease;
-                }
-
-                .save-status.success {
-                    background: rgba(40, 167, 69, 0.1);
-                    color: var(--success-color);
-                }
-
-                .save-status.error {
-                    background: rgba(220, 53, 69, 0.1);
-                    color: var(--error-color);
+                    color: #666;
                 }
 
                 .notice-toggle {
@@ -2010,11 +2090,6 @@ async function handleGetRequest(env, txt) {
                     display: inline-block;
                     margin: 10px 0;
                     font-weight: 500;
-                    transition: all 0.3s ease;
-                }
-
-                .notice-toggle:hover {
-                    opacity: 0.8;
                 }
 
                 .notice-content {
@@ -2023,18 +2098,12 @@ async function handleGetRequest(env, txt) {
                     padding: 15px;
                     margin: 10px 0;
                     border-radius: 0 8px 8px 0;
-                    font-size: 14px;
                 }
 
                 .divider {
                     height: 1px;
                     background: var(--border-color);
                     margin: 20px 0;
-                }
-
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
                 }
 
                 @media (max-width: 768px) {
@@ -2047,95 +2116,97 @@ async function handleGetRequest(env, txt) {
                     }
                     
                     .editor {
-                        min-height: 400px;
-                    }
-                    
-                    .button-group {
-                        flex-direction: column;
-                    }
-                    
-                    .btn {
-                        width: 100%;
-                    }
-                    
-                    .save-status {
-                        text-align: center;
-                        margin: 10px 0 0 0;
+                        height: 400px;
                     }
                 }
             </style>
         </head>
         <body>
             <div class="container">
-                <div class="header">
-                    <div class="title">📝 ${FileName} 配置编辑</div>
-                    <div class="subtitle">编辑并保存您的优选订阅列表</div>
-                </div>
+                <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
+                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                    ℹ️ 注意事项 ∨
+                </a>
+                
+                <div id="noticeContent" class="notice-content" style="display: none">
+                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+                            id="content">${content}</textarea>
+                        <div class="button-group">
+                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <span class="save-status" id="saveStatus"></span>
+                        </div>
+                        <div class="divider"></div>
+                        ${cmad}
+                    ` : '<p>未绑定KV空间</p>'}
+                </div>
+
                 <div class="editor-container">
                     ${hasKV ? `
                         <textarea class="editor" 
                             placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
                             id="content">${content}</textarea>
                         <div class="button-group">
-                            <button class="btn btn-secondary" onclick="goBack()">
-                                <span>返回配置页</span>
-                            </button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">
-                                <span>保存配置</span>
-                            </button>
+                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
-                    ` : '<p class="notice-content">⚠️ 未绑定KV空间，请先绑定KV空间后再进行编辑。</p>'}
+                        <div class="divider"></div>
+                        ${cmad}
+                    ` : '<p>未绑定KV空间</p>'}
                 </div>
-                
-                ${hasKV ? `
-                    <div class="divider"></div>
-                    ${cmad}
-                ` : ''}
             </div>
 
             <script>
-                function goBack() {
-                    const pathParts = window.location.pathname.split('/');
-                    pathParts.pop();
-                    const newPath = pathParts.join('/');
-                    window.location.href = newPath;
-                }
+            function goBack() {
+                const pathParts = window.location.pathname.split('/');
+                pathParts.pop(); // 移除 "edit"
+                const newPath = pathParts.join('/');
+                window.location.href = newPath;
+            }
 
-                async function saveContent(button) {
-                    try {
-                        button.disabled = true;
-                        const content = document.getElementById('content').value;
-                        const saveStatus = document.getElementById('saveStatus');
-                        
-                        saveStatus.textContent = '保存中...';
-                        saveStatus.className = 'save-status';
-                        
-                        const response = await fetch(window.location.href, {
-                            method: 'POST',
-                            body: content
-                        });
+            async function saveContent(button) {
+                try {
+                    button.disabled = true;
+                    const content = document.getElementById('content').value;
+                    const saveStatus = document.getElementById('saveStatus');
+                    
+                    saveStatus.textContent = '保存中...';
+                    
+                    const response = await fetch(window.location.href, {
+                        method: 'POST',
+                        body: content
+                    });
 
-                        if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
-                            saveStatus.className = 'save-status success';
-                            setTimeout(() => {
-                                saveStatus.textContent = '';
-                                saveStatus.className = 'save-status';
-                            }, 3000);
-                        } else {
-                            throw new Error('保存失败');
-                        }
-                    } catch (error) {
-                        const saveStatus = document.getElementById('saveStatus');
-                        saveStatus.textContent = '❌ ' + error.message;
-                        saveStatus.className = 'save-status error';
-                        console.error('保存时发生错误:', error);
-                    } finally {
-                        button.disabled = false;
+                    if (response.ok) {
+                        saveStatus.textContent = '✅ 保存成功';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败');
                     }
+                } catch (error) {
+                    const saveStatus = document.getElementById('saveStatus');
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存时发生错误:', error);
+                } finally {
+                    button.disabled = false;
                 }
+            }
+
+            function toggleNotice() {
+                const noticeContent = document.getElementById('noticeContent');
+                const noticeToggle = document.getElementById('noticeToggle');
+                if (noticeContent.style.display === 'none') {
+                    noticeContent.style.display = 'block';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                } else {
+                    noticeContent.style.display = 'none';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                }
+            }
             </script>
         </body>
         </html>
