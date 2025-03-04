@@ -75,31 +75,31 @@ class WebSocketManager {
 		this.webSocket = webSocket;
 		this.log = log;
 		this.readableStreamCancel = false;
+		this.backpressure = false;
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: (controller) => {
-				// 处理早期数据
-				if (earlyDataHeader) {
-					const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-					if (error) {
-						controller.error(error);
-						return;
-					}
-					if (earlyData) {
-						controller.enqueue(earlyData);
-					}
+			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+			pull: (controller) => this.handleStreamPull(controller),
+			cancel: (reason) => this.handleStreamCancel(reason)
+		});
 				}
 
-				// 处理 WebSocket 消息
+	handleStreamStart(controller, earlyDataHeader) {
+		// 处理消息事件
 				this.webSocket.addEventListener('message', (event) => {
 					if (this.readableStreamCancel) return;
+			if (!this.backpressure) {
 					controller.enqueue(event.data);
+			} else {
+				this.log('Backpressure, message discarded');
+			}
 				});
 
 				// 处理关闭事件
 				this.webSocket.addEventListener('close', () => {
+			safeCloseWebSocket(this.webSocket); 
 					if (!this.readableStreamCancel) {
 						controller.close();
 					}
@@ -110,18 +110,29 @@ class WebSocketManager {
 					this.log('WebSocket server error');
 					controller.error(err);
 				});
-			},
-			pull: (controller) => {
-				// 按需拉取数据
-			},
-			cancel: (reason) => {
-				this.readableStreamCancel = true;
-				this.log(`Readable stream canceled, reason: ${reason}`);
-				安全关闭WebSocket(this.webSocket);
-			}
-		});
+
+		// 处理早期数据
+		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+		if (error) {
+			controller.error(error);
+		} else if (earlyData) {
+			controller.enqueue(earlyData);
+		}
 	}
-}
+
+	handleStreamPull(controller) {
+		if (controller.desiredSize > 0) {
+			this.backpressure = false;
+		}
+	}
+
+	handleStreamCancel(reason) {
+		if (this.readableStreamCancel) return;
+		this.log(`Readable stream canceled, reason: ${reason}`);
+				this.readableStreamCancel = true;
+				safeCloseWebSocket(this.webSocket); 
+			}
+		};
 
 export default {
 	async fetch(request, env, ctx) {
@@ -603,10 +614,11 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         
         let 维列斯Header = 维列斯ResponseHeader;
         
-        const tcpSocket = await connect({
-            hostname: dnsServer,
-            port: dnsPort
-        });
+        // 使用Promise.race设置2秒超时
+        const tcpSocket = await Promise.race([
+            connect({ hostname: dnsServer, port: dnsPort }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('DNS连接超时')), 2000))
+        ]);
 
         log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
 
@@ -653,26 +665,29 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     async function connectAndWrite(address, port, socks = false) {
         log(`正在连接 ${address}:${port}`);
         
-        const tcpSocket = await (socks ? 
+        // 添加连接超时处理
+        const tcpSocket = await Promise.race([
+            socks ? 
             await socks5Connect(addressType, address, port, log) :
             connect({ 
                 hostname: address,
                 port: port,
+                    // 添加 TCP 连接优化选项
                 allowHalfOpen: false,
-                keepAlive: true
-            })
-        );
+                    keepAlive: true,
+                    keepAliveInitialDelay: 60000
+                }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('连接超时')), 3000)
+            )
+        ]);
 
         remoteSocket.value = tcpSocket;
         
-        try {
+       
             const writer = tcpSocket.writable.getWriter();
             await writer.write(rawClientData);
             writer.releaseLock();
-        } catch (error) {
-            console.error('Error writing initial data:', error);
-            throw error;
-        }
         
         return tcpSocket;
     }
@@ -792,17 +807,14 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let hasIncomingData = false;
     let header = responseHeader;
     
-    // 使用TransformStream进行高效的数据处理
-    const transformStream = new TransformStream({
-        start(controller) {
-            // 初始化时不做任何操作
-        },
-        async transform(chunk, controller) {
+    await remoteSocket.readable
+        .pipeTo(
+            new WritableStream({
+                async write(chunk, controller) {
             hasIncomingData = true;
             
             if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                 controller.error('WebSocket not open');
-                return;
             }
             
             // 如果有头部数据，与第一个块合并后发送
@@ -813,41 +825,24 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 // 直接发送二进制数据，避免不必要的转换
                 webSocket.send(chunk);
             }
-        },
-        flush(controller) {
-            log(`Transform stream flush, data received: ${hasIncomingData}`);
-        }
-    });
-    
-    try {
-        // 使用管道直接连接数据流，减少中间环节
-        await remoteSocket.readable
-            .pipeThrough(transformStream)
-            .pipeTo(new WritableStream({
-                write() {
-                    // 数据已在transform中处理，这里不需要额外操作
                 },
                 close() {
                     log(`Remote connection closed, data received: ${hasIncomingData}`);
-                    if (!hasIncomingData && retry) {
-                        log(`No data received, retrying connection`);
-                        retry();
-                    }
                 },
                 abort(reason) {
-                    console.error(`Remote connection aborted`, reason);
+                    console.error(`Remote connection aborted`);
+                },
+            })
+        )
+        .catch((error) => {
+            console.error(`remoteSocketToWS exception`);
                     safeCloseWebSocket(webSocket);
-                }
-            }));
-    } catch (error) {
-        console.error(`remoteSocketToWS exception`, error);
-        safeCloseWebSocket(webSocket);
+        });
         
         // 如果没有收到数据且提供了重试函数，则尝试重试
         if (!hasIncomingData && retry) {
-            log(`Connection failed, retrying`);
+        log(`Retrying connection`);
             retry();
-        }
     }
 }
 
