@@ -131,6 +131,32 @@ class WebSocketManager {
 export default {
 	async fetch(request, env, ctx) {
 		try {
+			// 在处理请求前先检查是否有保存的设置
+			const url = new URL(request.url);
+			
+			// 如果是浏览器请求，尝试获取保存的设置
+			if (!request.headers.get('Upgrade')) {
+				const savedSettings = request.headers.get('Cookie')?.match(/dnsSettings=([^;]+)/)?.[1];
+				if (savedSettings) {
+					try {
+						const settings = JSON.parse(decodeURIComponent(savedSettings));
+						if (settings.proxyIp) {
+							// 更新 proxyIP
+							proxyIP = settings.proxyIp;
+							customProxyIP = settings.proxyIp;
+						}
+						if (settings.remoteDns) {
+							remoteDNS = settings.remoteDns;
+						}
+						if (settings.localDns) {
+							localDNS = settings.localDns;
+						}
+					} catch (e) {
+						console.error('解析保存的设置时出错:', e);
+					}
+				}
+			}
+
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
 			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
@@ -2403,20 +2429,20 @@ async function handleGetRequest(env, txt) {
                     remoteDNS = remoteDns;
                     localDNS = localDns;
                     customProxyIP = proxyIp;
+                    proxyIP = proxyIp || proxyIP; // 如果有新设置就使用新设置，否则保持原值
 
-                    // 保存到 localStorage
-                    localStorage.setItem('dnsSettings', JSON.stringify({
+                    // 保存到 cookie 和 localStorage
+                    const settings = JSON.stringify({
                         remoteDns,
                         localDns,
                         proxyIp
-                    }));
+                    });
+                    
+                    document.cookie = `dnsSettings=${encodeURIComponent(settings)}; path=/; max-age=31536000`;
+                    localStorage.setItem('dnsSettings', settings);
 
-                    // 更新实际配置
-                    if (customProxyIP) {
-                        proxyIP = customProxyIP;  // 更新代理 IP
-                    }
-
-                    alert('设置已保存');
+                    // 刷新页面以应用新设置
+                    window.location.reload();
                 }
 
                 function resetDnsSettings() {
@@ -2441,16 +2467,15 @@ async function handleGetRequest(env, txt) {
                         remoteDNS = settings.remoteDns || remoteDNS;
                         localDNS = settings.localDns || localDNS;
                         customProxyIP = settings.proxyIp || customProxyIP;
+                        
+                        if (settings.proxyIp) {
+                            proxyIP = settings.proxyIp; // 直接更新 proxyIP
+                        }
 
                         // 更新输入框
                         document.getElementById('remoteDns').value = remoteDNS;
                         document.getElementById('localDns').value = localDNS;
                         document.getElementById('proxyIp').value = customProxyIP;
-
-                        // 更新实际配置
-                        if (customProxyIP) {
-                            proxyIP = customProxyIP;
-                        }
                     }
                 });
             </script>
