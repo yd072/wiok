@@ -242,6 +242,7 @@ export default {
 									--border-color: #e0e0e0;
 									--text-color: #333;
 									--background-color: #f5f5f5;
+									--card-background: #ffffff;
 								}
 								
 								body {
@@ -256,7 +257,7 @@ export default {
 								.container {
 									max-width: 800px;
 									margin: 0 auto;
-									background: white;
+									background: var(--card-background);
 									padding: 25px;
 									border-radius: 10px;
 									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
@@ -280,31 +281,29 @@ export default {
 
 								.info-item {
 									display: flex;
-									margin: 8px 0;
-									padding: 8px;
-									background: white;
-									border-radius: 4px;
-									box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+									margin: 10px 0;
+									padding: 8px 0;
+									border-bottom: 1px dashed var(--border-color);
 								}
 
 								.info-label {
 									font-weight: 500;
-									min-width: 160px;
+									width: 180px;
 									color: #666;
 								}
 
 								.info-value {
 									flex: 1;
-									color: #333;
+									word-break: break-all;
 								}
 
-								.error-message {
-									color: #dc3545;
+								.notice {
+									margin-top: 20px;
 									padding: 15px;
-									margin: 10px 0;
-									background: #fff5f5;
-									border-left: 4px solid #dc3545;
-									border-radius: 0 4px 4px 0;
+									background: #fff3cd;
+									border: 1px solid #ffeeba;
+									border-radius: 6px;
+									color: #856404;
 								}
 
 								@media (max-width: 768px) {
@@ -321,7 +320,8 @@ export default {
 									}
 									
 									.info-label {
-										margin-bottom: 4px;
+										width: 100%;
+										margin-bottom: 5px;
 									}
 								}
 							</style>
@@ -329,47 +329,59 @@ export default {
 						<body>
 							<div class="container">
 								<div class="title">🔍 系统信息</div>
-								<div class="error-message">
-									⚠️ 请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
-								</div>
+								
 								<div class="info-section">
 									<div class="info-item">
-										<span class="info-label">TLS 版本</span>
-										<span class="info-value">${request.cf?.tlsVersion || 'N/A'}</span>
+										<div class="info-label">客户端 TCP RTT:</div>
+										<div class="info-value">${request.cf?.clientTcpRtt || 'N/A'} ms</div>
 									</div>
+									
 									<div class="info-item">
-										<span class="info-label">HTTP 协议</span>
-										<span class="info-value">${request.cf?.httpProtocol || 'N/A'}</span>
+										<div class="info-label">HTTP 协议版本:</div>
+										<div class="info-value">${request.cf?.httpProtocol || 'N/A'}</div>
 									</div>
+									
 									<div class="info-item">
-										<span class="info-label">客户端 TCP RTT</span>
-										<span class="info-value">${request.cf?.clientTcpRtt || 'N/A'} ms</span>
+										<div class="info-label">TLS 版本:</div>
+										<div class="info-value">${request.cf?.tlsVersion || 'N/A'}</div>
 									</div>
+									
 									<div class="info-item">
-										<span class="info-label">地理位置</span>
-										<span class="info-value">${request.cf?.continent || 'N/A'}</span>
+										<div class="info-label">TLS 加密套件:</div>
+										<div class="info-value">${request.cf?.tlsCipher || 'N/A'}</div>
 									</div>
+									
 									<div class="info-item">
-										<span class="info-label">时区</span>
-										<span class="info-value">${request.cf?.timezone || 'N/A'}</span>
+										<div class="info-label">地理位置:</div>
+										<div class="info-value">${request.cf?.continent || 'N/A'}</div>
 									</div>
+									
 									<div class="info-item">
-										<span class="info-label">客户端 IP</span>
-										<span class="info-value">${request.headers.get('CF-Connecting-IP') || 'N/A'}</span>
+										<div class="info-label">时区:</div>
+										<div class="info-value">${request.cf?.timezone || 'N/A'}</div>
 									</div>
+									
 									<div class="info-item">
-										<span class="info-label">User Agent</span>
-										<span class="info-value">${request.headers.get('User-Agent') || 'N/A'}</span>
+										<div class="info-label">ASN:</div>
+										<div class="info-value">${request.cf?.asn || 'N/A'}</div>
 									</div>
+									
+									<div class="info-item">
+										<div class="info-label">ASN 组织:</div>
+										<div class="info-value">${request.cf?.asOrganization || 'N/A'}</div>
+									</div>
+								</div>
+
+								<div class="notice">
+									⚠️ 请注意：此页面显示系统连接信息。如需访问服务，请确保使用正确的 UUID。
 								</div>
 							</div>
 						</body>
 						</html>
 					`, {
-						status: 404,
 						headers: {
-							"Content-Type": "text/html;charset=utf-8",
-						}
+							'content-type': 'text/html;charset=utf-8',
+						},
 					});
 				}
 			} else {
@@ -2187,193 +2199,4 @@ async function handleGetRequest(env, txt) {
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
-}
-
-if (路径 == '/') {
-    if (env.URL302) return Response.redirect(env.URL302, 302);
-    else if (env.URL) return await 代理URL(env.URL, url);
-    else return new Response(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>系统信息</title>
-            <style>
-                :root {
-                    --primary-color: #4CAF50;
-                    --border-color: #e0e0e0;
-                    --text-color: #333;
-                    --background-color: #f5f5f5;
-                }
-                
-                body {
-                    margin: 0;
-                    padding: 20px;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                    line-height: 1.6;
-                    color: var(--text-color);
-                    background-color: var(--background-color);
-                }
-
-                .container {
-                    max-width: 800px;
-                    margin: 0 auto;
-                    background: white;
-                    padding: 25px;
-                    border-radius: 10px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }
-
-                .title {
-                    font-size: 1.5em;
-                    color: var(--primary-color);
-                    margin-bottom: 20px;
-                    padding-bottom: 10px;
-                    border-bottom: 2px solid var(--border-color);
-                }
-
-                .info-section {
-                    margin: 20px 0;
-                    padding: 15px;
-                    background: #f8f9fa;
-                    border-radius: 6px;
-                    border-left: 4px solid var(--primary-color);
-                }
-
-                .info-item {
-                    display: flex;
-                    margin: 8px 0;
-                    padding: 8px;
-                    background: white;
-                    border-radius: 4px;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                }
-
-                .info-label {
-                    font-weight: 500;
-                    min-width: 160px;
-                    color: #666;
-                }
-
-                .info-value {
-                    flex: 1;
-                    color: #333;
-                }
-
-                .error-message {
-                    color: #dc3545;
-                    padding: 15px;
-                    margin: 10px 0;
-                    background: #fff5f5;
-                    border-left: 4px solid #dc3545;
-                    border-radius: 0 4px 4px 0;
-                }
-
-                @media (max-width: 768px) {
-                    body {
-                        padding: 10px;
-                    }
-                    
-                    .container {
-                        padding: 15px;
-                    }
-                    
-                    .info-item {
-                        flex-direction: column;
-                    }
-                    
-                    .info-label {
-                        margin-bottom: 4px;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="title">🔍 系统信息</div>
-                <div class="error-message">
-                    ⚠️ 请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
-                </div>
-                <div class="info-section">
-                    <div class="info-item">
-                        <span class="info-label">TLS 版本</span>
-                        <span class="info-value">${request.cf?.tlsVersion || 'N/A'}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">HTTP 协议</span>
-                        <span class="info-value">${request.cf?.httpProtocol || 'N/A'}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">客户端 TCP RTT</span>
-                        <span class="info-value">${request.cf?.clientTcpRtt || 'N/A'} ms</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">地理位置</span>
-                        <span class="info-value">${request.cf?.continent || 'N/A'}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">时区</span>
-                        <span class="info-value">${request.cf?.timezone || 'N/A'}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">客户端 IP</span>
-                        <span class="info-value">${request.headers.get('CF-Connecting-IP') || 'N/A'}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">User Agent</span>
-                        <span class="info-value">${request.headers.get('User-Agent') || 'N/A'}</span>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-    `, {
-        status: 404,
-        headers: {
-            "Content-Type": "text/html;charset=utf-8",
-        }
-    });
-} else if (路径 == `/${fakeUserID}`) {
-    const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
-    return new Response(`${fakeConfig}`, { status: 200 });
-} else if (url.pathname == `/${动态UUID}/edit` || 路径 == `/${userID}/edit`) {
-    const html = await KV(request, env);
-    return html;
-} else if (url.pathname == `/${动态UUID}` || 路径 == `/${userID}`) {
-    await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
-    const 维列斯Config = await 生成配置信息(userID, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
-    const now = Date.now();
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
-    const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
-    let pagesSum = UD;
-    let workersSum = UD;
-    let total = 24 * 1099511627776;
-
-    if (userAgent && userAgent.includes('mozilla')) {
-        return new Response(`<div style="font-size:13px;">${维列斯Config}</div>`, {
-            status: 200,
-            headers: {
-                "Content-Type": "text/html;charset=utf-8",
-                "Profile-Update-Interval": "6",
-                "Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
-                "Cache-Control": "no-store",
-            }
-        });
-    } else {
-        return new Response(`${维列斯Config}`, {
-            status: 200,
-            headers: {
-                "Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
-                "Content-Type": "text/plain;charset=utf-8",
-                "Profile-Update-Interval": "6",
-                "Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
-            }
-        });
-    }
-} else {
-    if (env.URL302) return Response.redirect(env.URL302, 302);
-    else if (env.URL) return await 代理URL(env.URL, url);
-    else return new Response('不用怀疑！你UUID就是错的！！！', { status: 404 });
 }
