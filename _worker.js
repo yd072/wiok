@@ -45,6 +45,15 @@ let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 
+// 添加全局变量
+let fragmentConfig = {
+    lengthMin: 100,
+    lengthMax: 200,
+    intervalMin: 1,
+    intervalMax: 1,
+    packetType: 'random'
+};
+
 // 添加工具函数
 const utils = {
 	// UUID校验
@@ -69,88 +78,17 @@ const utils = {
 	},
 };
 
-// 添加分片处理相关函数
-async function handleWebSocketData(webSocket, data, env) {
-    try {
-        // 获取分片设置
-        let fragmentSettings = {
-            lengthMin: 100,
-            lengthMax: 200,
-            intervalMin: 1,
-            intervalMax: 1,
-            packetType: 'random'
-        };
-
-        if (env.KV) {
-            const savedSettings = await env.KV.get('FRAGMENT_SETTINGS');
-            if (savedSettings) {
-                fragmentSettings = JSON.parse(savedSettings);
-            }
-        }
-
-        // 如果选择不分片，直接发送
-        if (fragmentSettings.packetType === 'none') {
-            webSocket.send(data);
-            return;
-        }
-
-        // 将数据分片
-        const chunks = [];
-        let offset = 0;
-        while (offset < data.byteLength) {
-            // 随机选择包大小
-            const chunkSize = Math.floor(
-                Math.random() * 
-                (fragmentSettings.lengthMax - fragmentSettings.lengthMin + 1) + 
-                parseInt(fragmentSettings.lengthMin)
-            );
-            
-            const chunk = data.slice(offset, offset + chunkSize);
-            chunks.push(chunk);
-            offset += chunkSize;
-        }
-
-        // 发送分片
-        for (const chunk of chunks) {
-            if (fragmentSettings.packetType === 'random') {
-                // 添加随机填充数据
-                const paddingSize = Math.floor(Math.random() * 64); // 0-63字节的随机填充
-                const paddedChunk = new Uint8Array(chunk.byteLength + paddingSize);
-                paddedChunk.set(new Uint8Array(chunk), 0);
-                // 填充随机数据
-                crypto.getRandomValues(paddedChunk.subarray(chunk.byteLength));
-                webSocket.send(paddedChunk);
-            } else {
-                // 固定数据填充
-                webSocket.send(chunk);
-            }
-
-            // 随机延迟
-            const delay = Math.floor(
-                Math.random() * 
-                (fragmentSettings.intervalMax - fragmentSettings.intervalMin + 1) + 
-                parseInt(fragmentSettings.intervalMin)
-            );
-            await new Promise(resolve => setTimeout(resolve, delay));
-        }
-    } catch (error) {
-        console.error('分片处理错误:', error);
-        webSocket.send(data); // 出错时直接发送原始数据
-    }
-}
-
 // WebSocket连接管理类
 class WebSocketManager {
-	constructor(webSocket, log, env) {
+	constructor(webSocket, log) {
 		this.webSocket = webSocket;
 		this.log = log;
-		this.env = env;
 		this.readableStreamCancel = false;
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: async (controller) => {
+			start: (controller) => {
 				// 处理早期数据
 				if (earlyDataHeader) {
 					const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
@@ -159,14 +97,14 @@ class WebSocketManager {
 						return;
 					}
 					if (earlyData) {
-						await handleWebSocketData(this.webSocket, earlyData, this.env);
+						this.processAndEnqueue(earlyData, controller);
 					}
 				}
 
 				// 处理 WebSocket 消息
 				this.webSocket.addEventListener('message', async (event) => {
 					if (this.readableStreamCancel) return;
-					await handleWebSocketData(this.webSocket, event.data, this.env);
+					await this.processAndEnqueue(event.data, controller);
 				});
 
 				// 处理关闭事件
@@ -191,6 +129,62 @@ class WebSocketManager {
 				安全关闭WebSocket(this.webSocket);
 			}
 		});
+	}
+
+	async processAndEnqueue(data, controller) {
+		if (fragmentConfig.packetType === 'none') {
+			controller.enqueue(data);
+			return;
+		}
+
+		const chunks = this.splitIntoChunks(data);
+		for (const chunk of chunks) {
+			controller.enqueue(chunk);
+			if (fragmentConfig.intervalMin > 0) {
+				const delay = Math.floor(Math.random() * 
+					(fragmentConfig.intervalMax - fragmentConfig.intervalMin + 1)) + 
+					fragmentConfig.intervalMin;
+				await new Promise(resolve => setTimeout(resolve, delay));
+			}
+		}
+	}
+
+	splitIntoChunks(data) {
+		const chunks = [];
+		const buffer = data instanceof ArrayBuffer ? data : data.buffer;
+		const view = new Uint8Array(buffer);
+		let offset = 0;
+
+		while (offset < view.length) {
+			const chunkSize = Math.floor(Math.random() * 
+				(fragmentConfig.lengthMax - fragmentConfig.lengthMin + 1)) + 
+				fragmentConfig.lengthMin;
+				
+			const chunk = new Uint8Array(chunkSize);
+			const remainingBytes = view.length - offset;
+			const bytesToCopy = Math.min(chunkSize, remainingBytes);
+
+			// 复制实际数据
+			chunk.set(view.slice(offset, offset + bytesToCopy));
+
+			// 填充剩余空间
+			if (bytesToCopy < chunkSize) {
+				if (fragmentConfig.packetType === 'random') {
+					// 使用随机数据填充
+					for (let i = bytesToCopy; i < chunkSize; i++) {
+						chunk[i] = Math.floor(Math.random() * 256);
+					}
+				} else {
+					// 使用固定数据填充
+					chunk.fill(0, bytesToCopy);
+				}
+			}
+
+			chunks.push(chunk.buffer);
+			offset += bytesToCopy;
+		}
+
+		return chunks;
 	}
 }
 
@@ -268,8 +262,37 @@ export default {
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 
+			// 读取片段设置
+			if (env.KV) {
+				try {
+					const savedFragmentSettings = await env.KV.get('FRAGMENT_SETTINGS');
+					if (savedFragmentSettings) {
+						fragmentConfig = JSON.parse(savedFragmentSettings);
+					}
+				} catch (error) {
+					console.error('读取片段设置时发生错误:', error);
+				}
+			}
+
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
+			
+			// 从URL参数读取片段设置
+			if (url.searchParams.has('fragment')) {
+				try {
+					const fragmentParams = JSON.parse(url.searchParams.get('fragment'));
+					fragmentConfig = {
+						lengthMin: parseInt(fragmentParams.lengthMin) || 100,
+						lengthMax: parseInt(fragmentParams.lengthMax) || 200,
+						intervalMin: parseInt(fragmentParams.intervalMin) || 1,
+						intervalMax: parseInt(fragmentParams.intervalMax) || 1,
+						packetType: fragmentParams.packetType || 'random'
+					};
+				} catch (error) {
+					console.error('解析URL片段参数时发生错误:', error);
+				}
+			}
+
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
 				if (env.ADD) addresses = await 整理(env.ADD);
 				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
@@ -582,7 +605,7 @@ async function 维列斯OverWSHandler(request) {
     };
 
     const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
-    const readableWebSocketStream = new WebSocketManager(webSocket, log, env).makeReadableStream(earlyDataHeader);
+    const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
 
     let remoteSocketWrapper = { value: null };
     let isDns = false;
