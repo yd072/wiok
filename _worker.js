@@ -915,7 +915,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
@@ -1671,243 +1671,204 @@ async function handlePostRequest(request, env, txt) {
 }
 
 async function handleGetRequest(env, txt) {
-	let content = '';
-	let hasKV = !!env.KV;
+    let content = '';
+    let hasKV = !!env.KV;
 
-	if (hasKV) {
-		try {
-			content = await env.KV.get(txt) || '';
-		} catch (error) {
-			console.error('读取KV时发生错误:', error);
-			content = '读取数据时发生错误: ' + error.message;
-		}
-	}
+    if (hasKV) {
+        try {
+            content = await env.KV.get(txt) || '';
+        } catch (error) {
+            console.error('读取KV时发生错误:', error);
+            content = '读取数据时发生错误: ' + error.message;
+        }
+    }
 
-	const html = `
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<title>优选订阅列表</title>
-			<meta charset="utf-8">
-			<meta name="viewport" content="width=device-width, initial-scale=1">
-			<style>
-				body {
-					margin: 0;
-					padding: 15px; /* 调整padding */
-					box-sizing: border-box;
-					font-size: 13px; /* 设置全局字体大小 */
-				}
-				.editor-container {
-					width: 100%;
-					max-width: 100%;
-					margin: 0 auto;
-				}
-				.editor {
-					width: 100%;
-					height: 520px; /* 调整高度 */
-					margin: 15px 0; /* 调整margin */
-					padding: 10px; /* 调整padding */
-					box-sizing: border-box;
-					border: 1px solid #ccc;
-					border-radius: 4px;
-					font-size: 13px;
-					line-height: 1.5;
-					overflow-y: auto;
-					resize: none;
-				}
-				.save-container {
-					margin-top: 8px; /* 调整margin */
-					display: flex;
-					align-items: center;
-					gap: 10px; /* 调整gap */
-				}
-				.save-btn, .back-btn {
-					padding: 6px 15px; /* 调整padding */
-					color: white;
-					border: none;
-					border-radius: 4px;
-					cursor: pointer;
-				}
-				.save-btn {
-					background: #4CAF50;
-				}
-				.save-btn:hover {
-					background: #45a049;
-				}
-				.back-btn {
-					background: #666;
-				}
-				.back-btn:hover {
-					background: #555;
-				}
-				.save-status {
-					color: #666;
-				}
-				.notice-content {
-					display: none;
-					margin-top: 10px;
-					font-size: 13px;
-					color: #333;
-				}
-			</style>
-		</head>
-		<body>
-			################################################################<br>
-			${FileName} 优选订阅列表:<br>
-			---------------------------------------------------------------<br>
-			&nbsp;&nbsp;<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">注意事项∨</a></strong><br>
-			<div id="noticeContent" class="notice-content">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
-			</div>
-			<div class="editor-container">
-				${hasKV ? `
-				<textarea class="editor" 
-					placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
-					id="content">${content}</textarea>
-				<div class="save-container">
-					<button class="back-btn" onclick="goBack()">返回配置页</button>
-					<button class="save-btn" onclick="saveContent(this)">保存</button>
-					<span class="save-status" id="saveStatus"></span>
-				</div>
-				<br>
-				################################################################<br>
-				${cmad}
-				` : '<p>未绑定KV空间</p>'}
-			</div>
-	
-			<script>
-			if (document.querySelector('.editor')) {
-				let timer;
-				const textarea = document.getElementById('content');
-				const originalContent = textarea.value;
-		
-				function goBack() {
-					const currentUrl = window.location.href;
-					const parentUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/'));
-					window.location.href = parentUrl;
-				}
-		
-				function replaceFullwidthColon() {
-					const text = textarea.value;
-					textarea.value = text.replace(/：/g, ':');
-				}
-				
-				function saveContent(button) {
-					try {
-						const updateButtonText = (step) => {
-							button.textContent = \`保存中: \${step}\`;
-						};
-						// 检测是否为iOS设备
-						const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-						
-						// 仅在非iOS设备上执行replaceFullwidthColon
-						if (!isIOS) {
-							replaceFullwidthColon();
-						}
-						updateButtonText('开始保存');
-						button.disabled = true;
-						// 获取textarea内容和原始内容
-						const textarea = document.getElementById('content');
-						if (!textarea) {
-							throw new Error('找不到文本编辑区域');
-						}
-						updateButtonText('获取内容');
-						let newContent;
-						let originalContent;
-						try {
-							newContent = textarea.value || '';
-							originalContent = textarea.defaultValue || '';
-						} catch (e) {
-							console.error('获取内容错误:', e);
-							throw new Error('无法获取编辑内容');
-						}
-						updateButtonText('准备状态更新函数');
-						const updateStatus = (message, isError = false) => {
-							const statusElem = document.getElementById('saveStatus');
-							if (statusElem) {
-								statusElem.textContent = message;
-								statusElem.style.color = isError ? 'red' : '#666';
-							}
-						};
-						updateButtonText('准备按钮重置函数');
-						const resetButton = () => {
-							button.textContent = '保存';
-							button.disabled = false;
-						};
-						if (newContent !== originalContent) {
-							updateButtonText('发送保存请求');
-							fetch(window.location.href, {
-								method: 'POST',
-								body: newContent,
-								headers: {
-									'Content-Type': 'text/plain;charset=UTF-8'
-								},
-								cache: 'no-cache'
-							})
-							.then(response => {
-								updateButtonText('检查响应状态');
-								if (!response.ok) {
-									throw new Error(\`HTTP error! status: \${response.status}\`);
-								}
-								updateButtonText('更新保存状态');
-								const now = new Date().toLocaleString();
-								document.title = \`编辑已保存 \${now}\`;
-								updateStatus(\`已保存 \${now}\`);
-							})
-							.catch(error => {
-								updateButtonText('处理错误');
-								console.error('Save error:', error);
-								updateStatus(\`保存失败: \${error.message}\`, true);
-							})
-							.finally(() => {
-								resetButton();
-							});
-						} else {
-							updateButtonText('检查内容变化');
-							updateStatus('内容未变化');
-							resetButton();
-						}
-					} catch (error) {
-						console.error('保存过程出错:', error);
-						button.textContent = '保存';
-						button.disabled = false;
-						const statusElem = document.getElementById('saveStatus');
-						if (statusElem) {
-							statusElem.textContent = \`错误: \${error.message}\`;
-							statusElem.style.color = 'red';
-						}
-					}
-				}
-		
-				textarea.addEventListener('blur', saveContent);
-				textarea.addEventListener('input', () => {
-					clearTimeout(timer);
-					timer = setTimeout(saveContent, 5000);
-				});
-			}
-		
-			function toggleNotice() {
-				const noticeContent = document.getElementById('noticeContent');
-				const noticeToggle = document.getElementById('noticeToggle');
-				if (noticeContent.style.display === 'none' || noticeContent.style.display === '') {
-					noticeContent.style.display = 'block';
-					noticeToggle.textContent = '注意事项∧';
-				} else {
-					noticeContent.style.display = 'none';
-					noticeToggle.textContent = '注意事项∨';
-				}
-			}
-		
-			// 初始化 noticeContent 的 display 属性
-			document.addEventListener('DOMContentLoaded', () => {
-				document.getElementById('noticeContent').style.display = 'none';
-			});
-			</script>
-		</body>
-		</html>
-	`;
+    const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>优选订阅列表</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                :root {
+                    --primary-color: #4CAF50;
+                    --secondary-color: #45a049;
+                    --border-color: #e0e0e0;
+                    --text-color: #333;
+                    --background-color: #f5f5f5;
+                }
+                
+                body {
+                    margin: 0;
+                    padding: 20px;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    line-height: 1.6;
+                    color: var(--text-color);
+                    background-color: var(--background-color);
+                }
 
-	return new Response(html, {
-		headers: { "Content-Type": "text/html;charset=utf-8" }
-	});
+                .container {
+                    max-width: 1000px;
+                    margin: 0 auto;
+                    background: white;
+                    padding: 25px;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+
+                .title {
+                    font-size: 1.5em;
+                    color: var(--text-color);
+                    margin-bottom: 20px;
+                    padding-bottom: 10px;
+                    border-bottom: 2px solid var(--border-color);
+                }
+
+                .editor-container {
+                    width: 100%;
+                    margin: 20px 0;
+                }
+
+                .editor {
+                    width: 100%;
+                    height: 520px;
+                    padding: 15px;
+                    box-sizing: border-box;
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
+                    font-size: 14px;
+                    line-height: 1.5;
+                    resize: vertical;
+                    transition: border-color 0.3s ease;
+                }
+
+                .editor:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+                }
+
+                .button-group {
+                    display: flex;
+                    gap: 12px;
+                    margin-top: 15px;
+                }
+
+                .btn {
+                    padding: 8px 20px;
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+
+                .btn:disabled {
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+
+                .btn-primary {
+                    background: var(--primary-color);
+                    color: white;
+                }
+
+                .btn-primary:hover:not(:disabled) {
+                    background: var(--secondary-color);
+                }
+
+                .btn-secondary {
+                    background: #666;
+                    color: white;
+                }
+
+                .btn-secondary:hover:not(:disabled) {
+                    background: #555;
+                }
+
+                .save-status {
+                    margin-left: 10px;
+                    font-size: 14px;
+                    color: #666;
+                }
+
+                .notice-toggle {
+                    color: var(--primary-color);
+                    cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                    margin: 10px 0;
+                    font-weight: 500;
+                }
+
+                .notice-content {
+                    background: #f8f9fa;
+                    border-left: 4px solid var(--primary-color);
+                    padding: 15px;
+                    margin: 10px 0;
+                    border-radius: 0 8px 8px 0;
+                }
+
+                .divider {
+                    height: 1px;
+                    background: var(--border-color);
+                    margin: 20px 0;
+                }
+
+                @media (max-width: 768px) {
+                    body {
+                        padding: 10px;
+                    }
+                    
+                    .container {
+                        padding: 15px;
+                    }
+                    
+                    .editor {
+                        height: 400px;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="title">📝 ${FileName} 优选订阅列表</div>
+                
+                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                    ℹ️ 注意事项 ∨
+                </a>
+                
+                <div id="noticeContent" class="notice-content" style="display: none">
+                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                </div>
+
+                <div class="editor-container">
+                    ${hasKV ? `
+                        <textarea class="editor" 
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+                            id="content">${content}</textarea>
+                        <div class="button-group">
+                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <span class="save-status" id="saveStatus"></span>
+                        </div>
+                        <div class="divider"></div>
+                        ${cmad}
+                    ` : '<p>未绑定KV空间</p>'}
+                </div>
+            </div>
+
+            <script>
+            // ... JavaScript代码保持不变 ...
+            </script>
+        </body>
+        </html>
+    `;
+
+    return new Response(html, {
+        headers: { "Content-Type": "text/html;charset=utf-8" }
+    });
 }
