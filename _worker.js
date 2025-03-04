@@ -387,11 +387,11 @@ export default {
 						</html>`;
 
 						return new Response(html, {
-						status: 200,
-						headers: {
+							status: 200,
+							headers: {
 								'content-type': 'text/html;charset=utf-8',
-						},
-					});
+							},
+						});
 					}
 				} else if (路径 == `/${fakeUserID}`) {
 					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
@@ -1378,7 +1378,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					<div class="section">
 						<div class="section-title">📋 订阅信息</div>
 						<div class="subscription-link">
-			自适应订阅地址:<br>
+							自适应订阅地址:<br>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}
 							</a>
@@ -1386,7 +1386,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						</div>
 
 						<div class="subscription-link">
-			Base64订阅地址:<br>
+							Base64订阅地址:<br>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?b64
 							</a>
@@ -1394,7 +1394,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						</div>
 
 						<div class="subscription-link">
-			clash订阅地址:<br>
+							clash订阅地址:<br>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?clash
 							</a>
@@ -1402,7 +1402,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						</div>
 
 						<div class="subscription-link">
-			singbox订阅地址:<br>
+							singbox订阅地址:<br>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?sb
 							</a>
@@ -1410,7 +1410,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						</div>
 
 						<div class="subscription-link">
-			Loon订阅地址:<br>
+							Loon订阅地址:<br>
 							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}?loon
 							</a>
@@ -1426,15 +1426,15 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						<div id="noticeContent" class="notice-content" style="display: none">
 							<strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br><br>
 							<strong>2.</strong> 如您使用的是 SSR+ 等路由插件，推荐使用 <strong>Base64订阅地址</strong> 进行订阅；<br><br>
-					<strong>3.</strong> 快速切换 <a href='${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}'>优选订阅生成器</a> 至：sub.google.com，您可将"?sub=sub.google.com"参数添加到链接末尾，例如：<br>
+							<strong>3.</strong> 快速切换 <a href='${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}'>优选订阅生成器</a> 至：sub.google.com，您可将"?sub=sub.google.com"参数添加到链接末尾，例如：<br>
 							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br><br>
-					<strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
+							<strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
 							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?proxyip=proxyip.fxxk.dedyn.io:443</strong><br><br>
-					<strong>5.</strong> 快速更换 SOCKS5 至：user:password@127.0.0.1:1080，您可将"?socks5=user:password@127.0.0.1:1080"参数添加到链接末尾，例如：<br>
+							<strong>5.</strong> 快速更换 SOCKS5 至：user:password@127.0.0.1:1080，您可将"?socks5=user:password@127.0.0.1:1080"参数添加到链接末尾，例如：<br>
 							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?socks5=user:password@127.0.0.1:1080</strong><br><br>
-					<strong>6.</strong> 如需指定多个参数则需要使用'&'做间隔，例如：<br>
+							<strong>6.</strong> 如需指定多个参数则需要使用'&'做间隔，例如：<br>
 							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}?sub=sub.google.com<strong>&</strong>proxyip=proxyip.fxxk.dedyn.io
-				</div>
+						</div>
 					</div>
 
 					<div class="section">
@@ -1469,42 +1469,42 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					${cmad}
 				</div>
 
-			<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
-			<script>
-			function copyToClipboard(text, qrcode) {
-				navigator.clipboard.writeText(text).then(() => {
-					alert('已复制到剪贴板');
-				}).catch(err => {
-					console.error('复制失败:', err);
-				});
-				const qrcodeDiv = document.getElementById(qrcode);
-				qrcodeDiv.innerHTML = '';
-				new QRCode(qrcodeDiv, {
-					text: text,
+				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
+				<script>
+					function copyToClipboard(text, qrcode) {
+						navigator.clipboard.writeText(text).then(() => {
+							alert('已复制到剪贴板');
+						}).catch(err => {
+							console.error('复制失败:', err);
+						});
+						const qrcodeDiv = document.getElementById(qrcode);
+						qrcodeDiv.innerHTML = '';
+						new QRCode(qrcodeDiv, {
+							text: text,
 							width: 220,
 							height: 220,
 							colorDark: "#000000",
 							colorLight: "#ffffff",
 							correctLevel: QRCode.CorrectLevel.Q,
 							scale: 1
-				});
-			}
+						});
+					}
 
-			function toggleNotice() {
-				const noticeContent = document.getElementById('noticeContent');
-				const noticeToggle = document.getElementById('noticeToggle');
-				if (noticeContent.style.display === 'none') {
-					noticeContent.style.display = 'block';
+					function toggleNotice() {
+						const noticeContent = document.getElementById('noticeContent');
+						const noticeToggle = document.getElementById('noticeToggle');
+						if (noticeContent.style.display === 'none') {
+							noticeContent.style.display = 'block';
 							noticeToggle.textContent = '实用订阅技巧 ∧';
-				} else {
-					noticeContent.style.display = 'none'; 
+						} else {
+							noticeContent.style.display = 'none';
 							noticeToggle.textContent = '实用订阅技巧 ∨';
-				}
-			}
-			</script>
+						}
+					}
+				</script>
 			</body>
 			</html>
-			`;
+		`;
 		return 节点配置页;
 	} else {
 		if (typeof fetch != 'function') {
@@ -2033,8 +2033,8 @@ async function handleGetRequest(env, txt) {
                     --background-color: #f5f5f5;
                 }
                 
-				body {
-					margin: 0;
+                body {
+                    margin: 0;
                     padding: 20px;
                     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                     line-height: 1.6;
@@ -2059,24 +2059,24 @@ async function handleGetRequest(env, txt) {
                     border-bottom: 2px solid var(--border-color);
                 }
 
-				.editor-container {
-					width: 100%;
+                .editor-container {
+                    width: 100%;
                     margin: 20px 0;
-				}
+                }
 
-				.editor {
-					width: 100%;
+                .editor {
+                    width: 100%;
                     height: 520px;
                     padding: 15px;
-					box-sizing: border-box;
+                    box-sizing: border-box;
                     border: 1px solid var(--border-color);
                     border-radius: 8px;
                     font-family: Monaco, Consolas, "Courier New", monospace;
                     font-size: 14px;
-					line-height: 1.5;
+                    line-height: 1.5;
                     resize: vertical;
                     transition: border-color 0.3s ease;
-				}
+                }
 
                 .editor:focus {
                     outline: none;
@@ -2085,18 +2085,18 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .button-group {
-					display: flex;
+                    display: flex;
                     gap: 12px;
                     margin-top: 15px;
-				}
+                }
 
                 .btn {
                     padding: 8px 20px;
-					border: none;
+                    border: none;
                     border-radius: 6px;
                     font-size: 14px;
                     font-weight: 500;
-					cursor: pointer;
+                    cursor: pointer;
                     transition: all 0.3s ease;
                 }
 
@@ -2108,26 +2108,26 @@ async function handleGetRequest(env, txt) {
                 .btn-primary {
                     background: var(--primary-color);
                     color: white;
-				}
+                }
 
                 .btn-primary:hover:not(:disabled) {
                     background: var(--secondary-color);
-				}
+                }
 
                 .btn-secondary {
-					background: #666;
+                    background: #666;
                     color: white;
-				}
+                }
 
                 .btn-secondary:hover:not(:disabled) {
-					background: #555;
-				}
+                    background: #555;
+                }
 
-				.save-status {
+                .save-status {
                     margin-left: 10px;
                     font-size: 14px;
-					color: #666;
-				}
+                    color: #666;
+                }
 
                 .notice-toggle {
                     color: var(--primary-color);
@@ -2138,7 +2138,7 @@ async function handleGetRequest(env, txt) {
                     font-weight: 500;
                 }
 
-				.notice-content {
+                .notice-content {
                     background: #f8f9fa;
                     border-left: 4px solid var(--primary-color);
                     padding: 15px;
@@ -2164,7 +2164,7 @@ async function handleGetRequest(env, txt) {
                     .editor {
                         height: 400px;
                     }
-				}
+                }
 
                 .settings-panel {
                     background: #f8f9fa;
@@ -2175,11 +2175,7 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .settings-group {
-                    margin-bottom: 15px;
-                }
-
-                .settings-group:last-child {
-                    margin-bottom: 0;
+                    margin-bottom: 20px;
                 }
 
                 .settings-title {
@@ -2193,8 +2189,8 @@ async function handleGetRequest(env, txt) {
                     padding: 8px 12px;
                     border: 1px solid var(--border-color);
                     border-radius: 4px;
-                    font-size: 14px;
-                    margin-bottom: 5px;
+                    margin-bottom: 8px;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
                 }
 
                 .settings-input:focus {
@@ -2208,139 +2204,177 @@ async function handleGetRequest(env, txt) {
                     color: #666;
                     margin-top: 4px;
                 }
-			</style>
-		</head>
-		<body>
+
+                .settings-toggle {
+                    color: var(--primary-color);
+                    cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                    margin: 10px 0;
+                    font-weight: 500;
+                }
+            </style>
+        </head>
+        <body>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
+
+                <!-- 添加设置面板 -->
+                <a href="javascript:void(0);" id="settingsToggle" class="settings-toggle" onclick="toggleSettings()">
+                    ⚙️ 高级设置 ∨
+                </a>
                 
+                <div id="settingsContent" class="settings-panel" style="display: none">
+                    <div class="settings-group">
+                        <div class="settings-title">DNS 设置</div>
+                        <input type="text" class="settings-input" id="remoteDns" placeholder="远程 DNS (例如: 8.8.8.8:53)" />
+                        <div class="settings-description">设置远程 DNS 服务器地址和端口</div>
+                        
+                        <input type="text" class="settings-input" id="localDns" placeholder="本地 DNS (例如: 223.5.5.5:53)" />
+                        <div class="settings-description">设置本地 DNS 服务器地址和端口</div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-title">Proxy IP 设置</div>
+                        <input type="text" class="settings-input" id="proxyIp" placeholder="Proxy IP (例如: 1.1.1.1:443)" />
+                        <div class="settings-description">设置代理服务器 IP 地址和端口</div>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                    <span class="save-status" id="settingsSaveStatus"></span>
+                </div>
+
+                <!-- 原有的注意事项部分 -->
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                     ℹ️ 注意事项 ∨
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCiUyMCUyMDEyNy4wLjAuMSUzQTIwNTMlMjMlRTQlQkMlOTglRTklODAlODklRTUlQUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
-			</div>
+                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                </div>
 
-			<div class="settings-panel">
-				<div class="settings-group">
-					<div class="settings-title">🌐 DNS 设置</div>
-					<input type="text" class="settings-input" id="remoteDNS" placeholder="远程 DNS (例如: 8.8.8.8,8.8.4.4)" />
-					<div class="settings-description">多个DNS服务器使用逗号分隔</div>
-					
-					<input type="text" class="settings-input" id="localDNS" placeholder="本地 DNS (例如: 223.5.5.5,223.6.6.6)" />
-					<div class="settings-description">用于本地网络解析的DNS服务器</div>
-				</div>
+                <div class="editor-container">
+                    ${hasKV ? `
+                        <textarea class="editor" 
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+                            id="content">${content}</textarea>
+                        <div class="button-group">
+                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <span class="save-status" id="saveStatus"></span>
+                        </div>
+                        <div class="divider"></div>
+                        ${cmad}
+                    ` : '<p>未绑定KV空间</p>'}
+                </div>
+            </div>
 
-				<div class="settings-group">
-					<div class="settings-title">🔄 Proxy IP 设置</div>
-					<input type="text" class="settings-input" id="proxyIP" placeholder="Proxy IP (例如: proxyip.fxxk.dedyn.io:443)" />
-					<div class="settings-description">用于代理连接的IP地址和端口</div>
-				</div>
-			</div>
+            <script>
+            function goBack() {
+                const pathParts = window.location.pathname.split('/');
+                pathParts.pop(); // 移除 "edit"
+                const newPath = pathParts.join('/');
+                window.location.href = newPath;
+            }
 
-			<div class="editor-container">
-				${hasKV ? `
-				<textarea class="editor" 
-					placeholder="..."
-					id="content">${content}</textarea>
-				<div class="button-group">
-					<button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-					<button class="btn btn-primary" onclick="saveContent(this)">保存全部设置</button>
-					<span class="save-status" id="saveStatus"></span>
-				</div>
-				<div class="divider"></div>
-				${cmad}
-				` : '<p>未绑定KV空间</p>'}
-			</div>
-		</div>
-	
-		<script>
-			function goBack() {
-				const pathParts = window.location.pathname.split('/');
-				pathParts.pop(); // 移除 "edit"
-				const newPath = pathParts.join('/');
-				window.location.href = newPath;
-			}
-	
-			async function saveContent(button) {
-				try {
-					button.disabled = true;
-					const content = document.getElementById('content').value;
-					const remoteDNS = document.getElementById('remoteDNS').value;
-					const localDNS = document.getElementById('localDNS').value;
-					const proxyIP = document.getElementById('proxyIP').value;
-					
-					const saveStatus = document.getElementById('saveStatus');
-					saveStatus.textContent = '保存中...';
-					
-					// 构建要保存的配置
-					let configContent = content;
-					if (remoteDNS) {
-						configContent = "# Remote DNS\nDNS=" + remoteDNS + "\n\n" + configContent;
-					}
-					if (localDNS) {
-						configContent = "# Local DNS\nLOCALDNS=" + localDNS + "\n\n" + configContent;
-					}
-					if (proxyIP) {
-						configContent = "# Proxy IP\nPROXYIP=" + proxyIP + "\n\n" + configContent;
-					}
-					
-					const response = await fetch(window.location.href, {
-						method: 'POST',
-						body: configContent
-					});
+            async function saveContent(button) {
+                try {
+                    button.disabled = true;
+                    const content = document.getElementById('content').value;
+                    const saveStatus = document.getElementById('saveStatus');
+                    
+                    saveStatus.textContent = '保存中...';
+                    
+                    const response = await fetch(window.location.href, {
+                        method: 'POST',
+                        body: content
+                    });
 
-					if (response.ok) {
-						saveStatus.textContent = '✅ 保存成功';
-						setTimeout(() => {
-							saveStatus.textContent = '';
-						}, 3000);
-					} else {
-						throw new Error('保存失败');
-					}
-				} catch (error) {
-					const saveStatus = document.getElementById('saveStatus');
-					saveStatus.textContent = '❌ ' + error.message;
-					console.error('保存时发生错误:', error);
-				} finally {
-					button.disabled = false;
-				}
-			}
-	
-			// 页面加载时从内容中提取现有设置
-			window.onload = function() {
-				const content = document.getElementById('content').value;
-				const lines = content.split('\\n');
-				
-				for (const line of lines) {
-					if (line.startsWith('DNS=')) {
-						document.getElementById('remoteDNS').value = line.substring(4);
-					} else if (line.startsWith('LOCALDNS=')) {
-						document.getElementById('localDNS').value = line.substring(9);
-					} else if (line.startsWith('PROXYIP=')) {
-						document.getElementById('proxyIP').value = line.substring(8);
-					}
-				}
-			}
-	
-			function toggleNotice() {
-				const noticeContent = document.getElementById('noticeContent');
-				const noticeToggle = document.getElementById('noticeToggle');
-				if (noticeContent.style.display === 'none') {
-					noticeContent.style.display = 'block';
-					noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
-				} else {
-					noticeContent.style.display = 'none';
-					noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
-				}
-			}
-		</script>
-	</body>
-	</html>
-	`;
+                    if (response.ok) {
+                        saveStatus.textContent = '✅ 保存成功';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败');
+                    }
+                } catch (error) {
+                    const saveStatus = document.getElementById('saveStatus');
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存时发生错误:', error);
+                } finally {
+                    button.disabled = false;
+                }
+            }
 
-	return new Response(html, {
-		headers: { "Content-Type": "text/html;charset=utf-8" }
-	});
+            function toggleNotice() {
+                const noticeContent = document.getElementById('noticeContent');
+                const noticeToggle = document.getElementById('noticeToggle');
+                if (noticeContent.style.display === 'none') {
+                    noticeContent.style.display = 'block';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                } else {
+                    noticeContent.style.display = 'none';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                }
+            }
+
+            function toggleSettings() {
+                const settingsContent = document.getElementById('settingsContent');
+                const settingsToggle = document.getElementById('settingsToggle');
+                if (settingsContent.style.display === 'none') {
+                    settingsContent.style.display = 'block';
+                    settingsToggle.textContent = '⚙️ 高级设置 ∧';
+                } else {
+                    settingsContent.style.display = 'none';
+                    settingsToggle.textContent = '⚙️ 高级设置 ∨';
+                }
+            }
+
+            async function saveSettings() {
+                try {
+                    const remoteDns = document.getElementById('remoteDns').value;
+                    const localDns = document.getElementById('localDns').value;
+                    const proxyIp = document.getElementById('proxyIp').value;
+                    
+                    const settingsSaveStatus = document.getElementById('settingsSaveStatus');
+                    settingsSaveStatus.textContent = '保存中...';
+
+                    // 这里可以添加设置验证逻辑
+                    const settings = {
+                        remoteDns,
+                        localDns,
+                        proxyIp
+                    };
+
+                    // 将设置保存到KV存储
+                    const response = await fetch(window.location.href + '?type=settings', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(settings)
+                    });
+
+                    if (response.ok) {
+                        settingsSaveStatus.textContent = '✅ 设置已保存';
+                        setTimeout(() => {
+                            settingsSaveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存设置失败');
+                    }
+                } catch (error) {
+                    console.error('保存设置时发生错误:', error);
+                    settingsSaveStatus.textContent = '❌ ' + error.message;
+                }
+            }
+            </script>
+        </body>
+        </html>
+    `;
+
+    return new Response(html, {
+        headers: { "Content-Type": "text/html;charset=utf-8" }
+    });
 }
