@@ -139,10 +139,117 @@ export default {
 			}
 
 			if (!userID) {
-				return new Response('请设置你的UUID变量，或尝试重试部署，检查变量是否生效？', {
-					status: 404,
+				const errorHtml = `
+				<!DOCTYPE html>
+				<html>
+				<head>
+					<meta charset="utf-8">
+					<meta name="viewport" content="width=device-width, initial-scale=1">
+					<title>访问受限</title>
+					<style>
+						:root {
+							--primary-color: #dc3545;
+							--background-color: #f8f9fa;
+							--text-color: #343a40;
+						}
+						
+						body {
+							margin: 0;
+							padding: 20px;
+							font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+							line-height: 1.6;
+							color: var(--text-color);
+							background-color: var(--background-color);
+							display: flex;
+							justify-content: center;
+							align-items: center;
+							min-height: 100vh;
+						}
+
+						.error-container {
+							max-width: 600px;
+							background: white;
+							padding: 30px;
+							border-radius: 10px;
+							box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+							text-align: center;
+						}
+
+						.error-code {
+							font-size: 72px;
+							font-weight: bold;
+							color: var(--primary-color);
+							margin: 0;
+							line-height: 1;
+						}
+
+						.error-title {
+							font-size: 24px;
+							color: var(--text-color);
+							margin: 20px 0;
+						}
+
+						.error-message {
+							color: #666;
+							margin-bottom: 30px;
+						}
+
+						.error-icon {
+							font-size: 64px;
+							margin-bottom: 20px;
+						}
+
+						.help-text {
+							font-size: 14px;
+							color: #666;
+							margin-top: 20px;
+							padding-top: 20px;
+							border-top: 1px solid #eee;
+						}
+
+						@media (max-width: 768px) {
+							body {
+								padding: 15px;
+							}
+							
+							.error-container {
+								padding: 20px;
+							}
+							
+							.error-code {
+								font-size: 48px;
+							}
+							
+							.error-title {
+								font-size: 20px;
+							}
+						}
+					</style>
+				</head>
+				<body>
+					<div class="error-container">
+						<div class="error-icon">🔒</div>
+						<h1 class="error-code">401</h1>
+						<h2 class="error-title">访问受限</h2>
+						<p class="error-message">
+							请检查您的 UUID 配置是否正确。如果您是管理员，请确保已正确设置环境变量。
+						</p>
+						<div class="help-text">
+							<p>可能的解决方案：</p>
+							<ul style="text-align: left;">
+								<li>检查环境变量中的 UUID 设置</li>
+								<li>确保访问路径包含正确的 UUID</li>
+								<li>尝试重新部署应用</li>
+							</ul>
+						</div>
+					</div>
+				</body>
+				</html>`;
+
+				return new Response(errorHtml, {
+					status: 401,
 					headers: {
-						"Content-Type": "text/plain;charset=utf-8",
+						"Content-Type": "text/html;charset=utf-8"
 					}
 				});
 			}
@@ -229,160 +336,55 @@ export default {
 				if (路径 == '/') {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
-					else return new Response(`
-						<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1">
-							<title>系统信息</title>
-							<style>
-								:root {
-									--primary-color: #4CAF50;
-									--border-color: #e0e0e0;
-									--text-color: #333;
-									--background-color: #f5f5f5;
-									--card-background: #ffffff;
-								}
-								
-								body {
-									margin: 0;
-									padding: 20px;
-									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-									line-height: 1.6;
-									color: var(--text-color);
-									background-color: var(--background-color);
-								}
-
-								.container {
-									max-width: 800px;
-									margin: 0 auto;
-									background: var(--card-background);
-									padding: 25px;
-									border-radius: 10px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-								}
-
-								.title {
-									font-size: 1.5em;
-									color: var(--primary-color);
-									margin-bottom: 20px;
-									padding-bottom: 10px;
-									border-bottom: 2px solid var(--border-color);
-								}
-
-								.info-section {
-									margin: 20px 0;
-									padding: 15px;
-									background: #f8f9fa;
-									border-radius: 6px;
-									border-left: 4px solid var(--primary-color);
-								}
-
-								.info-item {
-									display: flex;
-									margin: 10px 0;
-									padding: 8px 0;
-									border-bottom: 1px dashed var(--border-color);
-								}
-
-								.info-label {
-									font-weight: 500;
-									width: 180px;
-									color: #666;
-								}
-
-								.info-value {
-									flex: 1;
-									word-break: break-all;
-								}
-
-								.notice {
-									margin-top: 20px;
-									padding: 15px;
-									background: #fff3cd;
-									border: 1px solid #ffeeba;
-									border-radius: 6px;
-									color: #856404;
-								}
-
-								@media (max-width: 768px) {
-									body {
-										padding: 10px;
-									}
-									
-									.container {
-										padding: 15px;
-									}
-									
-									.info-item {
-										flex-direction: column;
-									}
-									
-									.info-label {
-										width: 100%;
-										margin-bottom: 5px;
-									}
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="title">🔍 系统信息</div>
-								
-								<div class="info-section">
-									<div class="info-item">
-										<div class="info-label">客户端 TCP RTT:</div>
-										<div class="info-value">${request.cf?.clientTcpRtt || 'N/A'} ms</div>
-									</div>
-									
-									<div class="info-item">
-										<div class="info-label">HTTP 协议版本:</div>
-										<div class="info-value">${request.cf?.httpProtocol || 'N/A'}</div>
-									</div>
-									
-									<div class="info-item">
-										<div class="info-label">TLS 版本:</div>
-										<div class="info-value">${request.cf?.tlsVersion || 'N/A'}</div>
-									</div>
-									
-									<div class="info-item">
-										<div class="info-label">TLS 加密套件:</div>
-										<div class="info-value">${request.cf?.tlsCipher || 'N/A'}</div>
-									</div>
-									
-									<div class="info-item">
-										<div class="info-label">地理位置:</div>
-										<div class="info-value">${request.cf?.continent || 'N/A'}</div>
-									</div>
-									
-									<div class="info-item">
-										<div class="info-label">时区:</div>
-										<div class="info-value">${request.cf?.timezone || 'N/A'}</div>
-									</div>
-									
-									<div class="info-item">
-										<div class="info-label">ASN:</div>
-										<div class="info-value">${request.cf?.asn || 'N/A'}</div>
-									</div>
-									
-									<div class="info-item">
-										<div class="info-label">ASN 组织:</div>
-										<div class="info-value">${request.cf?.asOrganization || 'N/A'}</div>
-									</div>
-								</div>
-
-								<div class="notice">
-									⚠️ 请注意：此页面显示系统连接信息。如需访问服务，请确保使用正确的 UUID。
-								</div>
-							</div>
-						</body>
-						</html>
-					`, {
+					else return new Response(JSON.stringify(request.cf, null, 4), {
+						status: 200,
 						headers: {
-							'content-type': 'text/html;charset=utf-8',
+							'content-type': 'application/json',
 						},
 					});
+				} else if (路径 == `/${fakeUserID}`) {
+					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
+					return new Response(`${fakeConfig}`, { status: 200 });
+				} else if (url.pathname == `/${动态UUID}/edit` || 路径 == `/${userID}/edit`) {
+					const html = await KV(request, env);
+					return html;
+				} else if (url.pathname == `/${动态UUID}` || 路径 == `/${userID}`) {
+					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
+					const 维列斯Config = await 生成配置信息(userID, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
+					const now = Date.now();
+					//const timestamp = Math.floor(now / 1000);
+					const today = new Date(now);
+					today.setHours(0, 0, 0, 0);
+					const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
+					let pagesSum = UD;
+					let workersSum = UD;
+					let total = 24 * 1099511627776;
+
+					if (userAgent && userAgent.includes('mozilla')) {
+						return new Response(`<div style="font-size:13px;">${维列斯Config}</div>`, {
+							status: 200,
+							headers: {
+								"Content-Type": "text/html;charset=utf-8",
+								"Profile-Update-Interval": "6",
+								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+								"Cache-Control": "no-store",
+							}
+						});
+					} else {
+						return new Response(`${维列斯Config}`, {
+							status: 200,
+							headers: {
+								"Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
+								"Content-Type": "text/plain;charset=utf-8",
+								"Profile-Update-Interval": "6",
+								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+							}
+						});
+					}
+				} else {
+					if (env.URL302) return Response.redirect(env.URL302, 302);
+					else if (env.URL) return await 代理URL(env.URL, url);
+					else return new Response('不用怀疑！你UUID就是错的！！！', { status: 404 });
 				}
 			} else {
 				socks5Address = url.searchParams.get('socks5') || socks5Address;
