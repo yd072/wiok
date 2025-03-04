@@ -45,15 +45,6 @@ let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 
-// 添加全局变量
-let fragmentConfig = {
-    lengthMin: 100,
-    lengthMax: 200,
-    intervalMin: 1,
-    intervalMax: 1,
-    packetType: 'random'
-};
-
 // 添加工具函数
 const utils = {
 	// UUID校验
@@ -97,14 +88,14 @@ class WebSocketManager {
 						return;
 					}
 					if (earlyData) {
-						this.processAndEnqueue(earlyData, controller);
+						controller.enqueue(earlyData);
 					}
 				}
 
 				// 处理 WebSocket 消息
-				this.webSocket.addEventListener('message', async (event) => {
+				this.webSocket.addEventListener('message', (event) => {
 					if (this.readableStreamCancel) return;
-					await this.processAndEnqueue(event.data, controller);
+					controller.enqueue(event.data);
 				});
 
 				// 处理关闭事件
@@ -129,93 +120,6 @@ class WebSocketManager {
 				安全关闭WebSocket(this.webSocket);
 			}
 		});
-	}
-
-	async processAndEnqueue(data, controller) {
-		if (fragmentConfig.packetType === 'none') {
-			controller.enqueue(data);
-			return;
-		}
-
-		const chunks = this.splitIntoChunks(data);
-		for (const chunk of chunks) {
-			controller.enqueue(chunk);
-			if (fragmentConfig.intervalMin > 0) {
-				const delay = Math.floor(Math.random() * 
-					(fragmentConfig.intervalMax - fragmentConfig.intervalMin + 1)) + 
-					fragmentConfig.intervalMin;
-				await new Promise(resolve => setTimeout(resolve, delay));
-			}
-		}
-	}
-
-	splitIntoChunks(data) {
-		const chunks = [];
-		const buffer = data instanceof ArrayBuffer ? data : data.buffer;
-		const view = new Uint8Array(buffer);
-		let offset = 0;
-		let chunkIndex = 1; // 从1开始计数
-
-		while (offset < view.length) {
-			const chunkSize = Math.floor(Math.random() * 
-				(fragmentConfig.lengthMax - fragmentConfig.lengthMin + 1)) + 
-				fragmentConfig.lengthMin;
-				
-			const chunk = new Uint8Array(chunkSize);
-			const remainingBytes = view.length - offset;
-			const bytesToCopy = Math.min(chunkSize, remainingBytes);
-
-			// 复制实际数据
-			chunk.set(view.slice(offset, offset + bytesToCopy));
-
-			// 填充剩余空间
-			if (bytesToCopy < chunkSize) {
-				if (fragmentConfig.packetType === 'random') {
-					// 使用随机数据填充,并在开头添加序号
-					const chunkWithIndex = new Uint8Array(chunk.length + 4);
-					chunkWithIndex[0] = (chunkIndex >> 24) & 0xFF;
-					chunkWithIndex[1] = (chunkIndex >> 16) & 0xFF;
-					chunkWithIndex[2] = (chunkIndex >> 8) & 0xFF;
-					chunkWithIndex[3] = chunkIndex & 0xFF;
-					chunkWithIndex.set(chunk, 4);
-					for (let i = bytesToCopy + 4; i < chunkWithIndex.length; i++) {
-						chunkWithIndex[i] = Math.floor(Math.random() * 256);
-					}
-					chunks.push(chunkWithIndex.buffer);
-				} else if (fragmentConfig.packetType === 'fixed') {
-					// 使用固定数据填充,并在开头添加序号
-					const chunkWithIndex = new Uint8Array(chunk.length + 4);
-					chunkWithIndex[0] = (chunkIndex >> 24) & 0xFF;
-					chunkWithIndex[1] = (chunkIndex >> 16) & 0xFF;
-					chunkWithIndex[2] = (chunkIndex >> 8) & 0xFF;
-					chunkWithIndex[3] = chunkIndex & 0xFF;
-					chunkWithIndex.set(chunk, 4);
-					chunkWithIndex.fill(0, bytesToCopy + 4);
-					chunks.push(chunkWithIndex.buffer);
-				} else {
-					// 不分片模式
-					chunks.push(chunk.buffer);
-				}
-			} else {
-				// 数据刚好填满或未填满时的处理
-				if (fragmentConfig.packetType !== 'none') {
-					const chunkWithIndex = new Uint8Array(chunk.length + 4);
-					chunkWithIndex[0] = (chunkIndex >> 24) & 0xFF;
-					chunkWithIndex[1] = (chunkIndex >> 16) & 0xFF;
-					chunkWithIndex[2] = (chunkIndex >> 8) & 0xFF;
-					chunkWithIndex[3] = chunkIndex & 0xFF;
-					chunkWithIndex.set(chunk, 4);
-					chunks.push(chunkWithIndex.buffer);
-				} else {
-					chunks.push(chunk.buffer);
-				}
-			}
-
-			offset += bytesToCopy;
-			chunkIndex++; // 增加序号
-		}
-
-		return chunks;
 	}
 }
 
@@ -293,37 +197,8 @@ export default {
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 
-			// 读取片段设置
-			if (env.KV) {
-				try {
-					const savedFragmentSettings = await env.KV.get('FRAGMENT_SETTINGS');
-					if (savedFragmentSettings) {
-						fragmentConfig = JSON.parse(savedFragmentSettings);
-					}
-				} catch (error) {
-					console.error('读取片段设置时发生错误:', error);
-				}
-			}
-
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
-			
-			// 从URL参数读取片段设置
-			if (url.searchParams.has('fragment')) {
-				try {
-					const fragmentParams = JSON.parse(url.searchParams.get('fragment'));
-					fragmentConfig = {
-						lengthMin: parseInt(fragmentParams.lengthMin) || 100,
-						lengthMax: parseInt(fragmentParams.lengthMax) || 200,
-						intervalMin: parseInt(fragmentParams.intervalMin) || 1,
-						intervalMax: parseInt(fragmentParams.intervalMax) || 1,
-						packetType: fragmentParams.packetType || 'random'
-					};
-				} catch (error) {
-					console.error('解析URL片段参数时发生错误:', error);
-				}
-			}
-
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
 				if (env.ADD) addresses = await 整理(env.ADD);
 				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
@@ -2155,15 +2030,11 @@ async function handlePostRequest(request, env, txt) {
 		const url = new URL(request.url);
 		const type = url.searchParams.get('type');
 
-		switch (type) {
-			case 'proxyip':
-				await env.KV.put('PROXYIP.txt', content);
-				break;
-			case 'fragment':
-				await env.KV.put('FRAGMENT_SETTINGS', content);
-				break;
-			default:
-				await env.KV.put(txt, content);
+		// 根据类型保存到不同的KV
+		if (type === 'proxyip') {
+			await env.KV.put('PROXYIP.txt', content);
+		} else {
+			await env.KV.put(txt, content);
 		}
 		
 		return new Response("保存成功");
@@ -2177,22 +2048,11 @@ async function handleGetRequest(env, txt) {
     let content = '';
     let hasKV = !!env.KV;
     let proxyIPContent = '';
-    let fragmentSettings = {
-        lengthMin: '100',
-        lengthMax: '200',
-        intervalMin: '1',
-        intervalMax: '1',
-        packetType: 'random'
-    };
 
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
-            const savedFragmentSettings = await env.KV.get('FRAGMENT_SETTINGS');
-            if (savedFragmentSettings) {
-                fragmentSettings = JSON.parse(savedFragmentSettings);
-            }
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -2379,51 +2239,6 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     resize: vertical;
                 }
-
-                .settings-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                    gap: 15px;
-                    margin-top: 15px;
-                }
-
-                .setting-item {
-                    display: flex;
-                    flex-direction: column;
-                }
-
-                .setting-item label {
-                    font-weight: 500;
-                    margin-bottom: 5px;
-                    color: #666;
-                }
-
-                .setting-item input {
-                    padding: 8px;
-                    border: 1px solid var(--border-color);
-                    border-radius: 4px;
-                    font-size: 14px;
-                }
-
-                .setting-item select {
-                    padding: 8px;
-                    border: 1px solid var(--border-color);
-                    border-radius: 4px;
-                    font-size: 14px;
-                    background-color: white;
-                }
-
-                .settings-group {
-                    margin-top: 20px;
-                    padding-top: 15px;
-                    border-top: 1px solid var(--border-color);
-                }
-
-                .settings-group-title {
-                    font-weight: 500;
-                    margin-bottom: 10px;
-                    color: #333;
-                }
             </style>
         </head>
         <body>
@@ -2437,10 +2252,9 @@ async function handleGetRequest(env, txt) {
                         <span id="advanced-settings-toggle">∨</span>
                     </div>
                     <div id="advanced-settings-content" class="advanced-settings-content">
-                        <!-- PROXYIP设置 -->
                         <div>
                             <label for="proxyip"><strong>PROXYIP 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">每行一个代理IP，格式：IP:端口</p>
+                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口</p>
                             <textarea 
                                 id="proxyip" 
                                 class="proxyip-editor" 
@@ -2450,39 +2264,6 @@ proxy.example.com:8443"
                             >${proxyIPContent}</textarea>
                             <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveProxyIP()">保存PROXYIP设置</button>
                             <span id="proxyip-save-status" class="save-status"></span>
-                        </div>
-
-                        <!-- 片段设置 -->
-                        <div class="settings-group">
-                            <div class="settings-group-title">片段设置</div>
-                            <div class="settings-grid">
-                                <div class="setting-item">
-                                    <label for="lengthMin">长度范围 (最小值)</label>
-                                    <input type="number" id="lengthMin" value="${fragmentSettings.lengthMin}" min="1">
-                                </div>
-                                <div class="setting-item">
-                                    <label for="lengthMax">长度范围 (最大值)</label>
-                                    <input type="number" id="lengthMax" value="${fragmentSettings.lengthMax}" min="1">
-                                </div>
-                                <div class="setting-item">
-                                    <label for="intervalMin">间隔范围 (最小值)</label>
-                                    <input type="number" id="intervalMin" value="${fragmentSettings.intervalMin}" min="1">
-                                </div>
-                                <div class="setting-item">
-                                    <label for="intervalMax">间隔范围 (最大值)</label>
-                                    <input type="number" id="intervalMax" value="${fragmentSettings.intervalMax}" min="1">
-                                </div>
-                                <div class="setting-item">
-                                    <label for="packetType">数据包类型</label>
-                                    <select id="packetType">
-                                        <option value="random" ${fragmentSettings.packetType === 'random' ? 'selected' : ''}>随机数据</option>
-                                        <option value="fixed" ${fragmentSettings.packetType === 'fixed' ? 'selected' : ''}>固定数据</option>
-                                        <option value="none" ${fragmentSettings.packetType === 'none' ? 'selected' : ''}>不分片</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <button class="btn btn-primary" style="margin-top: 15px;" onclick="saveFragmentSettings()">保存片段设置</button>
-                            <span id="fragment-save-status" class="save-status"></span>
                         </div>
                     </div>
                 </div>
@@ -2598,39 +2379,6 @@ proxy.example.com:8443"
                     const saveStatus = document.getElementById('proxyip-save-status');
                     saveStatus.textContent = '❌ ' + error.message;
                     console.error('保存PROXYIP时发生错误:', error);
-                }
-            }
-
-            async function saveFragmentSettings() {
-                try {
-                    const settings = {
-                        lengthMin: document.getElementById('lengthMin').value,
-                        lengthMax: document.getElementById('lengthMax').value,
-                        intervalMin: document.getElementById('intervalMin').value,
-                        intervalMax: document.getElementById('intervalMax').value,
-                        packetType: document.getElementById('packetType').value
-                    };
-                    
-                    const saveStatus = document.getElementById('fragment-save-status');
-                    saveStatus.textContent = '保存中...';
-                    
-                    const response = await fetch(window.location.href + '?type=fragment', {
-                        method: 'POST',
-                        body: JSON.stringify(settings)
-                    });
-
-                    if (response.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => {
-                            saveStatus.textContent = '';
-                        }, 3000);
-                    } else {
-                        throw new Error('保存失败');
-                    }
-                } catch (error) {
-                    const saveStatus = document.getElementById('fragment-save-status');
-                    saveStatus.textContent = '❌ ' + error.message;
-                    console.error('保存片段设置时发生错误:', error);
                 }
             }
             </script>
