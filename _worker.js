@@ -1863,7 +1863,7 @@ async function handleGetRequest(env, txt) {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>优选订阅列表</title>
+            <title>${FileName} 配置编辑器</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
@@ -1873,6 +1873,9 @@ async function handleGetRequest(env, txt) {
                     --border-color: #e0e0e0;
                     --text-color: #333;
                     --background-color: #f5f5f5;
+                    --section-bg: #ffffff;
+                    --error-color: #dc3545;
+                    --success-color: #28a745;
                 }
                 
                 body {
@@ -1887,28 +1890,39 @@ async function handleGetRequest(env, txt) {
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: white;
+                    background: var(--section-bg);
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                 }
 
-                .title {
-                    font-size: 1.5em;
-                    color: var(--text-color);
-                    margin-bottom: 20px;
-                    padding-bottom: 10px;
+                .header {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 30px;
+                    padding-bottom: 15px;
                     border-bottom: 2px solid var(--border-color);
                 }
 
+                .header-icon {
+                    font-size: 24px;
+                    margin-right: 12px;
+                }
+
+                .header-title {
+                    font-size: 1.5em;
+                    color: var(--text-color);
+                    margin: 0;
+                    font-weight: 500;
+                }
+
                 .editor-container {
-                    width: 100%;
                     margin: 20px 0;
                 }
 
                 .editor {
                     width: 100%;
-                    height: 520px;
+                    min-height: 400px;
                     padding: 15px;
                     box-sizing: border-box;
                     border: 1px solid var(--border-color);
@@ -1917,7 +1931,8 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     line-height: 1.5;
                     resize: vertical;
-                    transition: border-color 0.3s ease;
+                    transition: all 0.3s ease;
+                    background: #f8f9fa;
                 }
 
                 .editor:focus {
@@ -1929,17 +1944,22 @@ async function handleGetRequest(env, txt) {
                 .button-group {
                     display: flex;
                     gap: 12px;
-                    margin-top: 15px;
+                    margin-top: 20px;
+                    align-items: center;
                 }
 
                 .btn {
-                    padding: 8px 20px;
+                    padding: 10px 20px;
                     border: none;
                     border-radius: 6px;
                     font-size: 14px;
                     font-weight: 500;
                     cursor: pointer;
                     transition: all 0.3s ease;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-width: 100px;
                 }
 
                 .btn:disabled {
@@ -1966,32 +1986,27 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .save-status {
-                    margin-left: 10px;
+                    margin-left: 12px;
                     font-size: 14px;
-                    color: #666;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
                 }
 
-                .notice-toggle {
-                    color: var(--primary-color);
-                    cursor: pointer;
-                    text-decoration: none;
-                    display: inline-block;
-                    margin: 10px 0;
-                    font-weight: 500;
+                .save-status.success {
+                    color: var(--success-color);
                 }
 
-                .notice-content {
-                    background: #f8f9fa;
-                    border-left: 4px solid var(--primary-color);
+                .save-status.error {
+                    color: var(--error-color);
+                }
+
+                .notice {
                     padding: 15px;
-                    margin: 10px 0;
-                    border-radius: 0 8px 8px 0;
-                }
-
-                .divider {
-                    height: 1px;
-                    background: var(--border-color);
+                    background: #fff3cd;
+                    border-left: 4px solid #ffc107;
                     margin: 20px 0;
+                    border-radius: 0 8px 8px 0;
                 }
 
                 @media (max-width: 768px) {
@@ -2004,43 +2019,62 @@ async function handleGetRequest(env, txt) {
                     }
                     
                     .editor {
-                        height: 400px;
+                        min-height: 300px;
+                    }
+                    
+                    .button-group {
+                        flex-direction: column;
+                        gap: 10px;
+                    }
+                    
+                    .btn {
+                        width: 100%;
+                    }
+                    
+                    .save-status {
+                        text-align: center;
+                        margin-top: 10px;
+                        margin-left: 0;
                     }
                 }
             </style>
         </head>
         <body>
             <div class="container">
-                <div class="title">📝 ${FileName} 优选订阅列表</div>
-                
-                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
-                    ℹ️ 注意事项 ∨
-                </a>
-                
-                <div id="noticeContent" class="notice-content" style="display: none">
-                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                <div class="header">
+                    <span class="header-icon">📝</span>
+                    <h1 class="header-title">${FileName} 配置编辑器</h1>
                 </div>
 
-                <div class="editor-container">
-                    ${hasKV ? `
-                        <textarea class="editor" 
-                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
-                            id="content">${content}</textarea>
+                ${hasKV ? `
+                    <div class="editor-container">
+                        <textarea 
+                            class="editor" 
+                            id="content" 
+                            placeholder="在此输入配置内容..."
+                        >${content}</textarea>
+                        
                         <div class="button-group">
-                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <button class="btn btn-secondary" onclick="goBack()">
+                                ← 返回配置页
+                            </button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">
+                                💾 保存配置
+                            </button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
-                        <div class="divider"></div>
-                        ${cmad}
-                    ` : '<p>未绑定KV空间</p>'}
-                </div>
+                    </div>
+                ` : `
+                    <div class="notice">
+                        ⚠️ 未绑定 KV 空间，请先绑定 KV 空间后再进行配置编辑。
+                    </div>
+                `}
             </div>
 
             <script>
             function goBack() {
                 const pathParts = window.location.pathname.split('/');
-                pathParts.pop(); // 移除 "edit"
+                pathParts.pop();
                 const newPath = pathParts.join('/');
                 window.location.href = newPath;
             }
@@ -2051,7 +2085,8 @@ async function handleGetRequest(env, txt) {
                     const content = document.getElementById('content').value;
                     const saveStatus = document.getElementById('saveStatus');
                     
-                    saveStatus.textContent = '保存中...';
+                    saveStatus.className = 'save-status';
+                    saveStatus.innerHTML = '<span>⏳ 保存中...</span>';
                     
                     const response = await fetch(window.location.href, {
                         method: 'POST',
@@ -2059,31 +2094,21 @@ async function handleGetRequest(env, txt) {
                     });
 
                     if (response.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
+                        saveStatus.className = 'save-status success';
+                        saveStatus.innerHTML = '<span>✅ 保存成功</span>';
                         setTimeout(() => {
-                            saveStatus.textContent = '';
+                            saveStatus.innerHTML = '';
                         }, 3000);
                     } else {
                         throw new Error('保存失败');
                     }
                 } catch (error) {
                     const saveStatus = document.getElementById('saveStatus');
-                    saveStatus.textContent = '❌ ' + error.message;
+                    saveStatus.className = 'save-status error';
+                    saveStatus.innerHTML = '<span>❌ ' + error.message + '</span>';
                     console.error('保存时发生错误:', error);
                 } finally {
                     button.disabled = false;
-                }
-            }
-
-            function toggleNotice() {
-                const noticeContent = document.getElementById('noticeContent');
-                const noticeToggle = document.getElementById('noticeToggle');
-                if (noticeContent.style.display === 'none') {
-                    noticeContent.style.display = 'block';
-                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
-                } else {
-                    noticeContent.style.display = 'none';
-                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
                 }
             }
             </script>
