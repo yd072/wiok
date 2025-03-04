@@ -1076,644 +1076,655 @@ let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-	if (sub) {
-		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
-		sub = match ? match[1] : sub;
-		const subs = await 整理(sub);
-		sub = subs.length > 1 ? subs[0] : sub;
-	} else if (env.KV) {
-		await 迁移地址列表(env);
-		const 优选地址列表 = await env.KV.get('ADD.txt');
-		if (优选地址列表) {
-				const 优选地址数组 = await 整理(优选地址列表);
-				const 分类地址 = {
-					接口地址: new Set(),
-					链接地址: new Set(),
-					优选地址: new Set()
-				};
+    // 检查 URL 中是否有 proxyip 参数
+    const pageProxyIP = _url.searchParams.get('proxyip');
+    if (pageProxyIP) {
+        proxyIP = pageProxyIP;  // 使用页面设置的 proxyIP
+        RproxyIP = 'false';     // 禁用自动获取
+        path = `/?ed=2560&proxyip=${proxyIP}`; // 更新路径
+    }
 
-				for (const 元素 of 优选地址数组) {
-					if (元素.startsWith('https://')) {
-						分类地址.接口地址.add(元素);
-					} else if (元素.includes('://')) {
-						分类地址.链接地址.add(元素);
-					} else {
-						分类地址.优选地址.add(元素);
-					}
-				}
+    const userAgent = UA.toLowerCase();
+    if (userAgent.includes('mozilla') && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
+        const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
+        sub = match ? match[1] : sub;
+        const subs = await 整理(sub);
+        sub = subs.length > 1 ? subs[0] : sub;
 
-			addressesapi = [...分类地址.接口地址];
-			link = [...分类地址.链接地址];
-			addresses = [...分类地址.优选地址];
-		}
-	}
+        const 优选地址列表 = await env.KV.get('ADD.txt');
+        if (优选地址列表) {
+            const 优选地址数组 = await 整理(优选地址列表);
+            const 分类地址 = {
+                接口地址: new Set(),
+                链接地址: new Set(),
+                优选地址: new Set()
+            };
 
-	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-		let cfips = [
-			        '103.21.244.0/24',
-				'104.16.0.0/13',
-				'104.24.0.0/14',
-				'172.64.0.0/14',
-				'104.16.0.0/14',
-				'104.24.0.0/15',
-				'141.101.64.0/19',
-				'172.64.0.0/14',
-				'188.114.96.0/21',
-				'190.93.240.0/21',
-				'162.159.152.0/23',
-				'104.16.0.0/13',
-				'104.24.0.0/14',
-				'172.64.0.0/14',
-				'104.16.0.0/14',
-				'104.24.0.0/15',
-				'141.101.64.0/19',
-				'172.64.0.0/14',
-				'188.114.96.0/21',
-				'190.93.240.0/21',
-		];
+            for (const 元素 of 优选地址数组) {
+                if (元素.startsWith('https://')) {
+                    分类地址.接口地址.add(元素);
+                } else if (元素.includes('://')) {
+                    分类地址.链接地址.add(元素);
+                } else {
+                    分类地址.优选地址.add(元素);
+                }
+            }
 
-		function generateRandomIPFromCIDR(cidr) {
-			const [base, mask] = cidr.split('/');
-			const baseIP = base.split('.').map(Number);
-			const subnetMask = 32 - parseInt(mask, 10);
-			const maxHosts = Math.pow(2, subnetMask) - 1;
-			const randomHost = Math.floor(Math.random() * maxHosts);
+            addressesapi = [...分类地址.接口地址];
+            link = [...分类地址.链接地址];
+            addresses = [...分类地址.优选地址];
+        }
 
-			return baseIP.map((octet, index) => {
-				if (index < 2) return octet;
-				if (index === 2) return (octet & (255 << (subnetMask - 8))) + ((randomHost >> 8) & 255);
-				return (octet & (255 << subnetMask)) + (randomHost & 255);
-			}).join('.');
-		}
+        if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
+            let cfips = [
+                    '103.21.244.0/24',
+                    '104.16.0.0/13',
+                    '104.24.0.0/14',
+                    '172.64.0.0/14',
+                    '104.16.0.0/14',
+                    '104.24.0.0/15',
+                    '141.101.64.0/19',
+                    '172.64.0.0/14',
+                    '188.114.96.0/21',
+                    '190.93.240.0/21',
+                    '162.159.152.0/23',
+                    '104.16.0.0/13',
+                    '104.24.0.0/14',
+                    '172.64.0.0/14',
+                    '104.16.0.0/14',
+                    '104.24.0.0/15',
+                    '141.101.64.0/19',
+                    '172.64.0.0/14',
+                    '188.114.96.0/21',
+                    '190.93.240.0/21',
+            ];
 
-		let counter = 1; // 添加计数器
-		const randomPorts = httpsPorts.concat('443'); // 合并所有可用端口
+            function generateRandomIPFromCIDR(cidr) {
+                const [base, mask] = cidr.split('/');
+                const baseIP = base.split('.').map(Number);
+                const subnetMask = 32 - parseInt(mask, 10);
+                const maxHosts = Math.pow(2, subnetMask) - 1;
+                const randomHost = Math.floor(Math.random() * maxHosts);
 
-		if (hostName.includes(".workers.dev")) {
-			addressesnotls = addressesnotls.concat(
-				cfips.map(cidr => {
-					const ip = generateRandomIPFromCIDR(cidr);
-					const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-					return `${ip}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`;
-				})
-			);
-		} else {
-			addresses = addresses.concat(
-				cfips.map(cidr => {
-					const ip = generateRandomIPFromCIDR(cidr);
-					const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-					return `${ip}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`;
-				})
-			);
-		}
-	}
+                return baseIP.map((octet, index) => {
+                    if (index < 2) return octet;
+                    if (index === 2) return (octet & (255 << (subnetMask - 8))) + ((randomHost >> 8) & 255);
+                    return (octet & (255 << subnetMask)) + (randomHost & 255);
+                }).join('.');
+            }
 
-	const uuid = (_url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
-	const userAgent = UA.toLowerCase();
-	const Config = 配置信息(userID, hostName);
-	const proxyConfig = Config[0];
-	const clash = Config[1];
-	let proxyhost = "";
-	if (hostName.includes(".workers.dev")) {
-		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
-			try {
-				const response = await fetch(proxyhostsURL);
+            let counter = 1; // 添加计数器
+            const randomPorts = httpsPorts.concat('443'); // 合并所有可用端口
 
-				if (!response.ok) {
-					console.error('获取地址时出错:', response.status, response.statusText);
-					return; 
-				}
+            if (hostName.includes(".workers.dev")) {
+                addressesnotls = addressesnotls.concat(
+                    cfips.map(cidr => {
+                        const ip = generateRandomIPFromCIDR(cidr);
+                        const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
+                        return `${ip}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`;
+                    })
+                );
+            } else {
+                addresses = addresses.concat(
+                    cfips.map(cidr => {
+                        const ip = generateRandomIPFromCIDR(cidr);
+                        const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
+                        return `${ip}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`;
+                    })
+                );
+            }
+        }
 
-				const text = await response.text();
-				const lines = text.split('\n');
-				const nonEmptyLines = lines.filter(line => line.trim() !== '');
+        const uuid = (_url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
+        const Config = 配置信息(userID, hostName);
+        const proxyConfig = Config[0];
+        const clash = Config[1];
+        let proxyhost = "";
+        if (hostName.includes(".workers.dev")) {
+            if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
+                try {
+                    const response = await fetch(proxyhostsURL);
 
-				proxyhosts = proxyhosts.concat(nonEmptyLines);
-			} catch (error) {
-				//console.error('获取地址时出错:', error);
-			}
-		}
-		if (proxyhosts.length != 0) proxyhost = proxyhosts[Math.floor(Math.random() * proxyhosts.length)] + "/";
-	}
+                    if (!response.ok) {
+                        console.error('获取地址时出错:', response.status, response.statusText);
+                        return; 
+                    }
 
-	const isUserAgentMozilla = userAgent.includes('mozilla');
-	if (isUserAgentMozilla && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
-		const newSocks5s = socks5s.map(socks5Address => {
-			if (socks5Address.includes('@')) return socks5Address.split('@')[1];
-			else if (socks5Address.includes('//')) return socks5Address.split('//')[1];
-			else return socks5Address;
-		});
+                    const text = await response.text();
+                    const lines = text.split('\n');
+                    const nonEmptyLines = lines.filter(line => line.trim() !== '');
 
-		let socks5List = '';
-		if (go2Socks5s.length > 0 && enableSocks) {
-			socks5List = `${decodeURIComponent('SOCKS5%EF%BC%88%E7%99%BD%E5%90%8D%E5%8D%95%EF%BC%89%3A%20')}`;
-			if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) socks5List += `${decodeURIComponent('%E6%89%80%E6%9C%89%E6%B5%81%E9%87%8F')}<br>`;
-			else socks5List += `<br>&nbsp;&nbsp;${go2Socks5s.join('<br>&nbsp;&nbsp;')}<br>`;
-		}
+                    proxyhosts = proxyhosts.concat(nonEmptyLines);
+                } catch (error) {
+                    //console.error('获取地址时出错:', error);
+                }
+            }
+            if (proxyhosts.length != 0) proxyhost = proxyhosts[Math.floor(Math.random() * proxyhosts.length)] + "/";
+        }
 
-		let 订阅器 = '<br>';
-		if (sub) {
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
-			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
-			else if (RproxyIP == 'true') 订阅器 += `CFCDN（访问方式）: 自动获取ProxyIP<br>`;
-			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`
-			订阅器 += `<br>SUB（优选订阅生成器）: ${sub}`;
-		} else {
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
-			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
-			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
-			let 判断是否绑定KV空间 = '';
-			if (env.KV) 判断是否绑定KV空间 = ` <a href='${_url.pathname}/edit'>编辑优选列表</a>`;
-			订阅器 += `<br>您的订阅内容由 内置 addresses/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
-			if (addresses.length > 0) 订阅器 += `ADD（TLS优选域名&IP）: <br>&nbsp;&nbsp;${addresses.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesnotls.length > 0) 订阅器 += `ADDNOTLS（noTLS优选域名&IP）: <br>&nbsp;&nbsp;${addressesnotls.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesapi.length > 0) 订阅器 += `ADDAPI（TLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesapi.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLSAPI（noTLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesnotlsapi.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressescsv.length > 0) 订阅器 += `ADDCSV（IPTest测速csv文件 限速 ${DLS} ）: <br>&nbsp;&nbsp;${addressescsv.join('<br>&nbsp;&nbsp;')}<br>`;
-		}
+        const isUserAgentMozilla = userAgent.includes('mozilla');
+        if (isUserAgentMozilla && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
+            const newSocks5s = socks5s.map(socks5Address => {
+                if (socks5Address.includes('@')) return socks5Address.split('@')[1];
+                else if (socks5Address.includes('//')) return socks5Address.split('//')[1];
+                else return socks5Address;
+            });
 
-		if (动态UUID && _url.pathname !== `/${动态UUID}`) 订阅器 = '';
-		else 订阅器 += `<br>SUBAPI（订阅转换后端）: ${subProtocol}://${subConverter}<br>SUBCONFIG（订阅转换配置文件）: ${subConfig}`;
-		const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${有效时间} 天<br>UPTIME（动态UUID更新时间）: ${更新时间} 时（北京时间）<br><br>` : `${userIDTime}`;
-		const 节点配置页 = `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<meta charset="utf-8">
-				<meta name="viewport" content="width=device-width, initial-scale=1">
-				<title>${FileName} 配置信息</title>
-				<style>
-					:root {
-						--primary-color: #4CAF50;
-						--secondary-color: #45a049;
-						--border-color: #e0e0e0;
-						--text-color: #333;
-						--background-color: #f5f5f5;
-						--section-bg: #ffffff;
-					}
-					
-					body {
-						margin: 0;
-						padding: 20px;
-						font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-						line-height: 1.6;
-						color: var(--text-color);
-						background-color: var(--background-color);
-					}
+            let socks5List = '';
+            if (go2Socks5s.length > 0 && enableSocks) {
+                socks5List = `${decodeURIComponent('SOCKS5%EF%BC%88%E7%99%BD%E5%90%8D%E5%8D%95%EF%BC%89%3A%20')}`;
+                if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) socks5List += `${decodeURIComponent('%E6%89%80%E6%9C%89%E6%B5%81%E9%87%8F')}<br>`;
+                else socks5List += `<br>&nbsp;&nbsp;${go2Socks5s.join('<br>&nbsp;&nbsp;')}<br>`;
+            }
 
-					.container {
-						max-width: 1000px;
-						margin: 0 auto;
-						background: var(--section-bg);
-						padding: 25px;
-						border-radius: 10px;
-						box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-					}
+            let 订阅器 = '<br>';
+            if (sub) {
+                if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+                else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
+                else if (RproxyIP == 'true') 订阅器 += `CFCDN（访问方式）: 自动获取ProxyIP<br>`;
+                else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`
+                订阅器 += `<br>SUB（优选订阅生成器）: ${sub}`;
+            } else {
+                if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+                else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
+                else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
+                let 判断是否绑定KV空间 = '';
+                if (env.KV) 判断是否绑定KV空间 = ` <a href='${_url.pathname}/edit'>编辑优选列表</a>`;
+                订阅器 += `<br>您的订阅内容由 内置 addresses/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
+                if (addresses.length > 0) 订阅器 += `ADD（TLS优选域名&IP）: <br>&nbsp;&nbsp;${addresses.join('<br>&nbsp;&nbsp;')}<br>`;
+                if (addressesnotls.length > 0) 订阅器 += `ADDNOTLS（noTLS优选域名&IP）: <br>&nbsp;&nbsp;${addressesnotls.join('<br>&nbsp;&nbsp;')}<br>`;
+                if (addressesapi.length > 0) 订阅器 += `ADDAPI（TLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesapi.join('<br>&nbsp;&nbsp;')}<br>`;
+                if (addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLSAPI（noTLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesnotlsapi.join('<br>&nbsp;&nbsp;')}<br>`;
+                if (addressescsv.length > 0) 订阅器 += `ADDCSV（IPTest测速csv文件 限速 ${DLS} ）: <br>&nbsp;&nbsp;${addressescsv.join('<br>&nbsp;&nbsp;')}<br>`;
+            }
 
-					.section {
-						margin: 20px 0;
-						padding: 20px;
-						background: var(--section-bg);
-						border-radius: 8px;
-						border: 1px solid var(--border-color);
-					}
+            if (动态UUID && _url.pathname !== `/${动态UUID}`) 订阅器 = '';
+            else 订阅器 += `<br>SUBAPI（订阅转换后端）: ${subProtocol}://${subConverter}<br>SUBCONFIG（订阅转换配置文件）: ${subConfig}`;
+            const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${有效时间} 天<br>UPTIME（动态UUID更新时间）: ${更新时间} 时（北京时间）<br><br>` : `${userIDTime}`;
+            const 节点配置页 = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <title>${FileName} 配置信息</title>
+                    <style>
+                        :root {
+                            --primary-color: #4CAF50;
+                            --secondary-color: #45a049;
+                            --border-color: #e0e0e0;
+                            --text-color: #333;
+                            --background-color: #f5f5f5;
+                            --section-bg: #ffffff;
+                        }
+                        
+                        body {
+                            margin: 0;
+                            padding: 20px;
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                            line-height: 1.6;
+                            color: var(--text-color);
+                            background-color: var(--background-color);
+                        }
 
-					.section-title {
-						font-size: 1.2em;
-						color: var(--primary-color);
-						margin-bottom: 15px;
-						padding-bottom: 10px;
-						border-bottom: 2px solid var(--border-color);
-					}
+                        .container {
+                            max-width: 1000px;
+                            margin: 0 auto;
+                            background: var(--section-bg);
+                            padding: 25px;
+                            border-radius: 10px;
+                            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        }
 
-					.divider {
-						height: 1px;
-						background: var(--border-color);
-						margin: 15px 0;
-					}
+                        .section {
+                            margin: 20px 0;
+                            padding: 20px;
+                            background: var(--section-bg);
+                            border-radius: 8px;
+                            border: 1px solid var(--border-color);
+                        }
 
-					.subscription-link {
-						display: block;
-						margin: 10px 0;
-						padding: 12px;
-						background: #f8f9fa;
-						border-radius: 6px;
-						border: 1px solid var(--border-color);
-						word-break: break-all;
-					}
+                        .section-title {
+                            font-size: 1.2em;
+                            color: var(--primary-color);
+                            margin-bottom: 15px;
+                            padding-bottom: 10px;
+                            border-bottom: 2px solid var(--border-color);
+                        }
 
-					.subscription-link a {
-						color: #0066cc;
-						text-decoration: none;
-					}
+                        .divider {
+                            height: 1px;
+                            background: var(--border-color);
+                            margin: 15px 0;
+                        }
 
-					.subscription-link a:hover {
-						text-decoration: underline;
-					}
+                        .subscription-link {
+                            display: block;
+                            margin: 10px 0;
+                            padding: 12px;
+                            background: #f8f9fa;
+                            border-radius: 6px;
+                            border: 1px solid var(--border-color);
+                            word-break: break-all;
+                        }
 
-					.qrcode-container {
-						margin: 10px 0;
-						text-align: center;
-					}
+                        .subscription-link a {
+                            color: #0066cc;
+                            text-decoration: none;
+                        }
 
-					.notice-toggle {
-						color: var(--primary-color);
-						cursor: pointer;
-						text-decoration: none;
-						display: inline-block;
-						margin: 10px 0;
-						font-weight: 500;
-					}
+                        .subscription-link a:hover {
+                            text-decoration: underline;
+                        }
 
-					.notice-content {
-						background: #f8f9fa;
-						border-left: 4px solid var(--primary-color);
-						padding: 15px;
-						margin: 10px 0;
-						border-radius: 0 8px 8px 0;
-					}
+                        .qrcode-container {
+                            margin: 10px 0;
+                            text-align: center;
+                        }
 
-					.config-info {
-						background: #f8f9fa;
-						padding: 15px;
-						border-radius: 6px;
-						font-family: Monaco, Consolas, "Courier New", monospace;
-						font-size: 13px;
-						overflow-x: auto;
-					}
+                        .notice-toggle {
+                            color: var(--primary-color);
+                            cursor: pointer;
+                            text-decoration: none;
+                            display: inline-block;
+                            margin: 10px 0;
+                            font-weight: 500;
+                        }
 
-					.copy-button {
-						display: inline-block;
-						padding: 6px 12px;
-						background: var(--primary-color);
-						color: white;
-						border: none;
-						border-radius: 4px;
-						cursor: pointer;
-						font-size: 14px;
-						margin: 5px 0;
-					}
+                        .notice-content {
+                            background: #f8f9fa;
+                            border-left: 4px solid var(--primary-color);
+                            padding: 15px;
+                            margin: 10px 0;
+                            border-radius: 0 8px 8px 0;
+                        }
 
-					.copy-button:hover {
-						background: var(--secondary-color);
-					}
+                        .config-info {
+                            background: #f8f9fa;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-family: Monaco, Consolas, "Courier New", monospace;
+                            font-size: 13px;
+                            overflow-x: auto;
+                        }
 
-					@media (max-width: 768px) {
-						body {
-							padding: 10px;
-						}
-						
-						.container {
-							padding: 15px;
-						}
-						
-						.section {
-							padding: 15px;
-						}
-					}
-					
-					/* 添加 Proxy IP 设置样式 */
-					.proxy-settings {
-						margin: 20px 0;
-						padding: 20px;
-						background: #f8f9fa;
-						border: 1px solid var(--border-color);
-						border-radius: 8px;
-					}
-					
-					.proxy-input {
-						width: 100%;
-						padding: 8px 12px;
-						margin: 8px 0;
-						border: 1px solid var(--border-color);
-						border-radius: 4px;
-						font-size: 14px;
-					}
-					
-					.proxy-input:focus {
-						outline: none;
-						border-color: var(--primary-color);
-						box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
-					}
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<div class="section">
-						<div class="section-title">📋 订阅信息</div>
-						<div class="subscription-link">
-							自适应订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
-								https://${proxyhost}${hostName}/${uuid}
-							</a>
-							<div id="qrcode_0" class="qrcode-container"></div>
-						</div>
+                        .copy-button {
+                            display: inline-block;
+                            padding: 6px 12px;
+                            background: var(--primary-color);
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-size: 14px;
+                            margin: 5px 0;
+                        }
 
-						<div class="subscription-link">
-							Base64订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
-								https://${proxyhost}${hostName}/${uuid}?b64
-							</a>
-							<div id="qrcode_1" class="qrcode-container"></div>
-						</div>
+                        .copy-button:hover {
+                            background: var(--secondary-color);
+                        }
 
-						<div class="subscription-link">
-							clash订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;">
-								https://${proxyhost}${hostName}/${uuid}?clash
-							</a>
-							<div id="qrcode_2" class="qrcode-container"></div>
-						</div>
+                        @media (max-width: 768px) {
+                            body {
+                                padding: 10px;
+                            }
+                            
+                            .container {
+                                padding: 15px;
+                            }
+                            
+                            .section {
+                                padding: 15px;
+                            }
+                        }
+                        
+                        /* 添加 Proxy IP 设置样式 */
+                        .proxy-settings {
+                            margin: 20px 0;
+                            padding: 20px;
+                            background: #f8f9fa;
+                            border: 1px solid var(--border-color);
+                            border-radius: 8px;
+                        }
+                        
+                        .proxy-input {
+                            width: 100%;
+                            padding: 8px 12px;
+                            margin: 8px 0;
+                            border: 1px solid var(--border-color);
+                            border-radius: 4px;
+                            font-size: 14px;
+                        }
+                        
+                        .proxy-input:focus {
+                            outline: none;
+                            border-color: var(--primary-color);
+                            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="section">
+                            <div class="section-title">📋 订阅信息</div>
+                            <div class="subscription-link">
+                                自适应订阅地址:<br>
+                                <a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
+                                    https://${proxyhost}${hostName}/${uuid}
+                                </a>
+                                <div id="qrcode_0" class="qrcode-container"></div>
+                            </div>
 
-						<div class="subscription-link">
-							singbox订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;">
-								https://${proxyhost}${hostName}/${uuid}?sb
-							</a>
-							<div id="qrcode_3" class="qrcode-container"></div>
-						</div>
+                            <div class="subscription-link">
+                                Base64订阅地址:<br>
+                                <a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
+                                    https://${proxyhost}${hostName}/${uuid}?b64
+                                </a>
+                                <div id="qrcode_1" class="qrcode-container"></div>
+                            </div>
 
-						<div class="subscription-link">
-							Loon订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;">
-								https://${proxyhost}${hostName}/${uuid}?loon
-							</a>
-							<div id="qrcode_4" class="qrcode-container"></div>
-						</div>
-					</div>
+                            <div class="subscription-link">
+                                clash订阅地址:<br>
+                                <a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;">
+                                    https://${proxyhost}${hostName}/${uuid}?clash
+                                </a>
+                                <div id="qrcode_2" class="qrcode-container"></div>
+                            </div>
 
-					<div class="section">
-						<div class="section-title">ℹ️ 使用说明</div>
-						<a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
-							实用订阅技巧 ∨
-						</a>
-						<div id="noticeContent" class="notice-content" style="display: none">
-							<strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br><br>
-							<strong>2.</strong> 如您使用的是 SSR+ 等路由插件，推荐使用 <strong>Base64订阅地址</strong> 进行订阅；<br><br>
-							<strong>3.</strong> 快速切换 <a href='${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}'>优选订阅生成器</a> 至：sub.google.com，您可将"?sub=sub.google.com"参数添加到链接末尾，例如：<br>
-							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br><br>
-							<strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
-							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?proxyip=proxyip.fxxk.dedyn.io:443</strong><br><br>
-							<strong>5.</strong> 快速更换 SOCKS5 至：user:password@127.0.0.1:1080，您可将"?socks5=user:password@127.0.0.1:1080"参数添加到链接末尾，例如：<br>
-							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?socks5=user:password@127.0.0.1:1080</strong><br><br>
-							<strong>6.</strong> 如需指定多个参数则需要使用'&'做间隔，例如：<br>
-							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}?sub=sub.google.com<strong>&</strong>proxyip=proxyip.fxxk.dedyn.io
-						</div>
-					</div>
+                            <div class="subscription-link">
+                                singbox订阅地址:<br>
+                                <a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;">
+                                    https://${proxyhost}${hostName}/${uuid}?sb
+                                </a>
+                                <div id="qrcode_3" class="qrcode-container"></div>
+                            </div>
 
-					<div class="section">
-						<div class="section-title">🔧 配置信息</div>
-						<div class="config-info">
-							${动态UUID信息.replace(/\n/g, '<br>')}
-							HOST: ${hostName}<br>
-							UUID: ${userID}<br>
-							FKID: ${fakeUserID}<br>
-							UA: ${UA}<br>
-							${订阅器.replace(/\n/g, '<br>')}
-						</div>
-					</div>
+                            <div class="subscription-link">
+                                Loon订阅地址:<br>
+                                <a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;">
+                                    https://${proxyhost}${hostName}/${uuid}?loon
+                                </a>
+                                <div id="qrcode_4" class="qrcode-container"></div>
+                            </div>
+                        </div>
 
-					<div class="section">
-						<div class="section-title">📝 proxyConfig</div>
-						<div class="config-info">
-							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
-							<div>${proxyConfig}</div>
-							<div id="qrcode_proxyConfig" class="qrcode-container"></div>
-						</div>
-					</div>
+                        <div class="section">
+                            <div class="section-title">ℹ️ 使用说明</div>
+                            <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                                实用订阅技巧 ∨
+                            </a>
+                            <div id="noticeContent" class="notice-content" style="display: none">
+                                <strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br><br>
+                                <strong>2.</strong> 如您使用的是 SSR+ 等路由插件，推荐使用 <strong>Base64订阅地址</strong> 进行订阅；<br><br>
+                                <strong>3.</strong> 快速切换 <a href='${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}'>优选订阅生成器</a> 至：sub.google.com，您可将"?sub=sub.google.com"参数添加到链接末尾，例如：<br>
+                                &nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br><br>
+                                <strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
+                                &nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?proxyip=proxyip.fxxk.dedyn.io:443</strong><br><br>
+                                <strong>5.</strong> 快速更换 SOCKS5 至：user:password@127.0.0.1:1080，您可将"?socks5=user:password@127.0.0.1:1080"参数添加到链接末尾，例如：<br>
+                                &nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?socks5=user:password@127.0.0.1:1080</strong><br><br>
+                                <strong>6.</strong> 如需指定多个参数则需要使用'&'做间隔，例如：<br>
+                                &nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}?sub=sub.google.com<strong>&</strong>proxyip=proxyip.fxxk.dedyn.io
+                            </div>
+                        </div>
 
-					<div class="section">
-						<div class="section-title">⚙️ Clash Meta 配置</div>
-						<div class="config-info">
-							${clash}
-						</div>
-					</div>
+                        <div class="section">
+                            <div class="section-title">🔧 配置信息</div>
+                            <div class="config-info">
+                                ${动态UUID信息.replace(/\n/g, '<br>')}
+                                HOST: ${hostName}<br>
+                                UUID: ${userID}<br>
+                                FKID: ${fakeUserID}<br>
+                                UA: ${UA}<br>
+                                ${订阅器.replace(/\n/g, '<br>')}
+                            </div>
+                        </div>
 
-					<div class="divider"></div>
-					${cmad}
+                        <div class="section">
+                            <div class="section-title">📝 proxyConfig</div>
+                            <div class="config-info">
+                                <button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
+                                <div>${proxyConfig}</div>
+                                <div id="qrcode_proxyConfig" class="qrcode-container"></div>
+                            </div>
+                        </div>
 
-					<!-- 添加 Proxy IP 设置部分 -->
-					<div class="section">
-						<div class="section-title">🔧 Proxy IP 设置</div>
-						<div class="proxy-settings">
-							<input type="text" id="proxyIp" class="proxy-input" 
-								   placeholder="输入 Proxy IP，例如: proxyip.fxxk.dedyn.io:443" 
-								   value="${proxyIP || ''}">
-							<button class="copy-button" onclick="applyProxyIP()">应用 Proxy IP</button>
-							<p style="margin-top: 10px; color: #666; font-size: 14px;">
-								提示: 设置 Proxy IP 后，所有订阅链接将自动添加 proxyip 参数
-							</p>
-						</div>
-					</div>
-				</div>
+                        <div class="section">
+                            <div class="section-title">⚙️ Clash Meta 配置</div>
+                            <div class="config-info">
+                                ${clash}
+                            </div>
+                        </div>
 
-				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
-				<script>
-					function copyToClipboard(text, qrcode) {
-						navigator.clipboard.writeText(text).then(() => {
-							alert('已复制到剪贴板');
-						}).catch(err => {
-							console.error('复制失败:', err);
-						});
-						const qrcodeDiv = document.getElementById(qrcode);
-						qrcodeDiv.innerHTML = '';
-						new QRCode(qrcodeDiv, {
-							text: text,
-							width: 220,
-							height: 220,
-							colorDark: "#000000",
-							colorLight: "#ffffff",
-							correctLevel: QRCode.CorrectLevel.Q,
-							scale: 1
-						});
-					}
+                        <div class="divider"></div>
+                        ${cmad}
 
-					function toggleNotice() {
-						const noticeContent = document.getElementById('noticeContent');
-						const noticeToggle = document.getElementById('noticeToggle');
-						if (noticeContent.style.display === 'none') {
-							noticeContent.style.display = 'block';
-							noticeToggle.textContent = '实用订阅技巧 ∧';
-						} else {
-							noticeContent.style.display = 'none';
-							noticeToggle.textContent = '实用订阅技巧 ∨';
-						}
-					}
+                        <!-- 添加 Proxy IP 设置部分 -->
+                        <div class="section">
+                            <div class="section-title">🔧 Proxy IP 设置</div>
+                            <div class="proxy-settings">
+                                <input type="text" id="proxyIp" class="proxy-input" 
+                                       placeholder="输入 Proxy IP，例如: proxyip.fxxk.dedyn.io:443" 
+                                       value="${proxyIP || ''}">
+                                <button class="copy-button" onclick="applyProxyIP()">应用 Proxy IP</button>
+                                <p style="margin-top: 10px; color: #666; font-size: 14px;">
+                                    提示: 设置 Proxy IP 后，所有订阅链接将自动添加 proxyip 参数
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
-					// 添加 Proxy IP 相关函数
-					function applyProxyIP() {
-						try {
-							const proxyIp = document.getElementById('proxyIp').value.trim();
-							
-							// 更新所有订阅链接
-							const subscriptionLinks = document.querySelectorAll('.subscription-link a');
-							subscriptionLinks.forEach(link => {
-								const url = new URL(link.href);
-								if (proxyIp) {
-									url.searchParams.set('proxyip', proxyIp);
-								} else {
-									url.searchParams.delete('proxyip');
-								}
-								link.href = url.toString();
-								
-								// 更新显示的链接文本
-								const linkText = link.parentElement.querySelector('a');
-								if (linkText) {
-									linkText.textContent = url.toString();
-								}
-								
-								// 更新二维码
-								const qrcodeId = link.onclick.toString().match(/qrcode_\\d+/)[0];
-								const qrcodeDiv = document.getElementById(qrcodeId);
-								if (qrcodeDiv) {
-									qrcodeDiv.innerHTML = '';
-									new QRCode(qrcodeDiv, {
-										text: url.toString(),
-										width: 220,
-										height: 220,
-										colorDark: "#000000",
-										colorLight: "#ffffff",
-										correctLevel: QRCode.CorrectLevel.Q
-									});
-								}
-							});
-							
-							// 保存到 localStorage
-							if (proxyIp) {
-								localStorage.setItem('proxyIp', proxyIp);
-							} else {
-								localStorage.removeItem('proxyIp');
-							}
-							
-							alert('Proxy IP 设置已更新');
-						} catch (error) {
-							console.error('更新 Proxy IP 时发生错误:', error);
-							alert('更新失败: ' + error.message);
-						}
-					}
-					
-					// 页面加载时恢复保存的 Proxy IP
-					window.addEventListener('load', () => {
-						// 从 URL 参数中获取 proxyip
-						const urlParams = new URLSearchParams(window.location.search);
-						const urlProxyIp = urlParams.get('proxyip');
-						
-						// 从 localStorage 获取保存的值
-						const savedProxyIp = localStorage.getItem('proxyIp');
-						
-						// 设置输入框的值，优先使用 URL 参数中的值
-						const proxyInput = document.getElementById('proxyIp');
-						if (urlProxyIp) {
-							proxyInput.value = urlProxyIp;
-						} else if (savedProxyIp) {
-							proxyInput.value = savedProxyIp;
-							// 自动应用保存的设置
-							applyProxyIP();
-						}
-					});
-				</script>
-			</body>
-			</html>
-		`;
-		return 节点配置页;
-	} else {
-		if (typeof fetch != 'function') {
-			return 'Error: fetch is not available in this environment.';
-		}
+                    <script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
+                    <script>
+                        function copyToClipboard(text, qrcode) {
+                            navigator.clipboard.writeText(text).then(() => {
+                                alert('已复制到剪贴板');
+                            }).catch(err => {
+                                console.error('复制失败:', err);
+                            });
+                            const qrcodeDiv = document.getElementById(qrcode);
+                            qrcodeDiv.innerHTML = '';
+                            new QRCode(qrcodeDiv, {
+                                text: text,
+                                width: 220,
+                                height: 220,
+                                colorDark: "#000000",
+                                colorLight: "#ffffff",
+                                correctLevel: QRCode.CorrectLevel.Q,
+                                scale: 1
+                            });
+                        }
 
-		let newAddressesapi = [];
-		let newAddressescsv = [];
-		let newAddressesnotlsapi = [];
-		let newAddressesnotlscsv = [];
+                        function toggleNotice() {
+                            const noticeContent = document.getElementById('noticeContent');
+                            const noticeToggle = document.getElementById('noticeToggle');
+                            if (noticeContent.style.display === 'none') {
+                                noticeContent.style.display = 'block';
+                                noticeToggle.textContent = '实用订阅技巧 ∧';
+                            } else {
+                                noticeContent.style.display = 'none';
+                                noticeToggle.textContent = '实用订阅技巧 ∨';
+                            }
+                        }
 
-		if (hostName.includes(".workers.dev")) {
-			noTLS = 'true';
-			fakeHostName = `${fakeHostName}.workers.dev`;
-			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-			newAddressesnotlscsv = await 整理测速结果('FALSE');
-		} else if (hostName.includes(".pages.dev")) {
-			fakeHostName = `${fakeHostName}.pages.dev`;
-		} else if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
-			noTLS = 'true';
-			fakeHostName = `notls${fakeHostName}.net`;
-			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-			newAddressesnotlscsv = await 整理测速结果('FALSE');
-		} else {
-			fakeHostName = `${fakeHostName}.xyz`
-		}
-		console.log(`虚假HOST: ${fakeHostName}`);
-		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}`;
-		let isBase64 = true;
+                        // 添加 Proxy IP 相关函数
+                        function applyProxyIP() {
+                            try {
+                                const proxyIp = document.getElementById('proxyIp').value.trim();
+                                
+                                // 更新所有订阅链接
+                                const links = document.querySelectorAll('a[href*="/${fakeUserID}"]');
+                                links.forEach(link => {
+                                    const url = new URL(link.href);
+                                    if (proxyIp) {
+                                        url.searchParams.set('proxyip', proxyIp);
+                                    } else {
+                                        url.searchParams.delete('proxyip');
+                                    }
+                                    link.href = url.toString();
+                                    link.textContent = url.toString();
+                                    
+                                    // 更新二维码
+                                    const onclick = link.getAttribute('onclick');
+                                    if (onclick) {
+                                        const match = onclick.match(/qrcode_[0-9]+/);
+                                        if (match) {
+                                            const qrcodeDiv = document.getElementById(match[0]);
+                                            if (qrcodeDiv) {
+                                                qrcodeDiv.innerHTML = '';
+                                                new QRCode(qrcodeDiv, {
+                                                    text: url.toString(),
+                                                    width: 220,
+                                                    height: 220,
+                                                    colorDark: "#000000",
+                                                    colorLight: "#ffffff",
+                                                    correctLevel: QRCode.CorrectLevel.Q
+                                                });
+                                            }
+                                        }
+                                    }
+                                });
+                                
+                                // 保存到 localStorage
+                                if (proxyIp) {
+                                    localStorage.setItem('proxyIp', proxyIp);
+                                    // 刷新页面以应用新的 proxyIP
+                                    const currentUrl = new URL(window.location.href);
+                                    currentUrl.searchParams.set('proxyip', proxyIp);
+                                    window.location.href = currentUrl.toString();
+                                } else {
+                                    localStorage.removeItem('proxyIp');
+                                    // 移除 proxyIP 参数并刷新页面
+                                    const currentUrl = new URL(window.location.href);
+                                    currentUrl.searchParams.delete('proxyip');
+                                    window.location.href = currentUrl.toString();
+                                }
+                            } catch (error) {
+                                console.error('更新 Proxy IP 时发生错误:', error);
+                                alert('更新失败: ' + error.message);
+                            }
+                        }
 
-		if (!sub || sub == "") {
-			if (hostName.includes('workers.dev')) {
-				if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
-					try {
-						const response = await fetch(proxyhostsURL);
+                        // 页面加载时恢复保存的 Proxy IP
+                        window.addEventListener('load', () => {
+                            const urlParams = new URLSearchParams(window.location.search);
+                            const urlProxyIp = urlParams.get('proxyip');
+                            const savedProxyIp = localStorage.getItem('proxyIp');
+                            
+                            const proxyInput = document.getElementById('proxyIp');
+                            if (urlProxyIp) {
+                                proxyInput.value = urlProxyIp;
+                            } else if (savedProxyIp) {
+                                // 如果有保存的设置但 URL 中没有，则更新 URL
+                                const currentUrl = new URL(window.location.href);
+                                currentUrl.searchParams.set('proxyip', savedProxyIp);
+                                window.location.href = currentUrl.toString();
+                            }
+                        });
+                    </script>
+                </body>
+                </html>
+            `;
+            
+            return 节点配置页;
+        } else {
+            if (typeof fetch != 'function') {
+                return 'Error: fetch is not available in this environment.';
+            }
 
-						if (!response.ok) {
-							console.error('获取地址时出错:', response.status, response.statusText);
-							return; 
-						}
+            let newAddressesapi = [];
+            let newAddressescsv = [];
+            let newAddressesnotlsapi = [];
+            let newAddressesnotlscsv = [];
 
-						const text = await response.text();
-						const lines = text.split('\n');
-						const nonEmptyLines = lines.filter(line => line.trim() !== '');
+            if (hostName.includes(".workers.dev")) {
+                noTLS = 'true';
+                fakeHostName = `${fakeHostName}.workers.dev`;
+                newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+                newAddressesnotlscsv = await 整理测速结果('FALSE');
+            } else if (hostName.includes(".pages.dev")) {
+                fakeHostName = `${fakeHostName}.pages.dev`;
+            } else if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
+                noTLS = 'true';
+                fakeHostName = `notls${fakeHostName}.net`;
+                newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+                newAddressesnotlscsv = await 整理测速结果('FALSE');
+            } else {
+                fakeHostName = `${fakeHostName}.xyz`
+            }
+            console.log(`虚假HOST: ${fakeHostName}`);
+            let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}`;
+            let isBase64 = true;
 
-						proxyhosts = proxyhosts.concat(nonEmptyLines);
-					} catch (error) {
-						console.error('获取地址时出错:', error);
-					}
-				}
-				proxyhosts = [...new Set(proxyhosts)];
-			}
+            if (!sub || sub == "") {
+                if (hostName.includes('workers.dev')) {
+                    if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
+                        try {
+                            const response = await fetch(proxyhostsURL);
 
-			newAddressesapi = await 整理优选列表(addressesapi);
-			newAddressescsv = await 整理测速结果('TRUE');
-			url = `https://${hostName}/${fakeUserID + _url.search}`;
-			if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
-				if (_url.search) url += '&notls';
-				else url += '?notls';
-			}
-			console.log(`虚假订阅: ${url}`);
-		}
+                            if (!response.ok) {
+                                console.error('获取地址时出错:', response.status, response.statusText);
+                                return; 
+                            }
 
-		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
-			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
-				url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
-				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			} else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
-				// 添加Loon支持
-				url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			}
-		}
+                            const text = await response.text();
+                            const lines = text.split('\n');
+                            const nonEmptyLines = lines.filter(line => line.trim() !== '');
 
-		try {
-			let content;
-			if ((!sub || sub == "") && isBase64 == true) {
-				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
-			} else {
-				const response = await fetch(url, {
-					headers: {
-						'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
-					}
-				});
-				content = await response.text();
-			}
+                            proxyhosts = proxyhosts.concat(nonEmptyLines);
+                        } catch (error) {
+                            console.error('获取地址时出错:', error);
+                        }
+                    }
+                    proxyhosts = [...new Set(proxyhosts)];
+                }
 
-			if (_url.pathname == `/${fakeUserID}`) return content;
+                newAddressesapi = await 整理优选列表(addressesapi);
+                newAddressescsv = await 整理测速结果('TRUE');
+                url = `https://${hostName}/${fakeUserID + _url.search}`;
+                if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
+                    if (_url.search) url += '&notls';
+                    else url += '?notls';
+                }
+                console.log(`虚假订阅: ${url}`);
+            }
 
-			return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
+            if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
+                if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
+                    url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                    isBase64 = false;
+                } else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
+                    url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                    isBase64 = false;
+                } else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
+                    // 添加Loon支持
+                    url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                    isBase64 = false;
+                }
+            }
 
-		} catch (error) {
-			console.error('Error fetching content:', error);
-			return `Error fetching content: ${error.message}`;
-		}
-	}
+            try {
+                let content;
+                if ((!sub || sub == "") && isBase64 == true) {
+                    content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
+                } else {
+                    const response = await fetch(url, {
+                        headers: {
+                            'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
+                        }
+                    });
+                    content = await response.text();
+                }
+
+                if (_url.pathname == `/${fakeUserID}`) return content;
+
+                return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
+
+            } catch (error) {
+                console.error('Error fetching content:', error);
+                return `Error fetching content: ${error.message}`;
+            }
+        }
+    }
 }
 
 async function 整理优选列表(api) {
