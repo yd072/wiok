@@ -1371,6 +1371,30 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							padding: 15px;
 						}
 					}
+					
+					/* 添加 Proxy IP 设置样式 */
+					.proxy-settings {
+						margin: 20px 0;
+						padding: 20px;
+						background: #f8f9fa;
+						border: 1px solid var(--border-color);
+						border-radius: 8px;
+					}
+					
+					.proxy-input {
+						width: 100%;
+						padding: 8px 12px;
+						margin: 8px 0;
+						border: 1px solid var(--border-color);
+						border-radius: 4px;
+						font-size: 14px;
+					}
+					
+					.proxy-input:focus {
+						outline: none;
+						border-color: var(--primary-color);
+						box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+					}
 				</style>
 			</head>
 			<body>
@@ -1467,6 +1491,20 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 					<div class="divider"></div>
 					${cmad}
+
+					<!-- 添加 Proxy IP 设置部分 -->
+					<div class="section">
+						<div class="section-title">🔧 Proxy IP 设置</div>
+						<div class="proxy-settings">
+							<input type="text" id="proxyIp" class="proxy-input" 
+								   placeholder="输入 Proxy IP，例如: proxyip.fxxk.dedyn.io:443" 
+								   value="${proxyIP || ''}">
+							<button class="copy-button" onclick="applyProxyIP()">应用 Proxy IP</button>
+							<p style="margin-top: 10px; color: #666; font-size: 14px;">
+								提示: 设置 Proxy IP 后，所有订阅链接将自动添加 proxyip 参数
+							</p>
+						</div>
+					</div>
 				</div>
 
 				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
@@ -1501,6 +1539,61 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							noticeToggle.textContent = '实用订阅技巧 ∨';
 						}
 					}
+
+					// 添加 Proxy IP 相关函数
+					function applyProxyIP() {
+						try {
+							const proxyIp = document.getElementById('proxyIp').value.trim();
+							
+							// 保存到 localStorage
+							if (proxyIp) {
+								localStorage.setItem('proxyIp', proxyIp);
+							} else {
+								localStorage.removeItem('proxyIp');
+							}
+							
+							// 更新所有订阅链接
+							const subscriptionLinks = document.querySelectorAll('.subscription-link a');
+							subscriptionLinks.forEach(link => {
+								const url = new URL(link.href);
+								if (proxyIp) {
+									url.searchParams.set('proxyip', proxyIp);
+								} else {
+									url.searchParams.delete('proxyip');
+								}
+								link.href = url.toString();
+								link.textContent = url.toString();
+							});
+							
+							// 更新二维码
+							subscriptionLinks.forEach(link => {
+								const qrcodeId = link.onclick.toString().match(/qrcode_\d+/)[0];
+								const qrcodeDiv = document.getElementById(qrcodeId);
+								qrcodeDiv.innerHTML = '';
+								new QRCode(qrcodeDiv, {
+									text: link.href,
+									width: 220,
+									height: 220,
+									colorDark: "#000000",
+									colorLight: "#ffffff",
+									correctLevel: QRCode.CorrectLevel.Q
+								});
+							});
+							
+							alert('Proxy IP 设置已更新');
+						} catch (error) {
+							console.error('更新 Proxy IP 时发生错误:', error);
+							alert('更新失败: ' + error.message);
+						}
+					}
+					
+					// 页面加载时恢复保存的 Proxy IP
+					window.addEventListener('load', () => {
+						const savedProxyIp = localStorage.getItem('proxyIp');
+						if (savedProxyIp) {
+							document.getElementById('proxyIp').value = savedProxyIp;
+						}
+					});
 				</script>
 			</body>
 			</html>
