@@ -138,22 +138,14 @@ class WebSocketManager {
 		}
 
 		const chunks = this.splitIntoChunks(data);
-		let chunkIndex = 0;  // 添加计数器
 		for (const chunk of chunks) {
-			// 如果是最后一个分片,不需要延迟
-			if (chunkIndex < chunks.length - 1) {
-				controller.enqueue(chunk);
-				if (fragmentConfig.intervalMin > 0) {
-					const delay = Math.floor(Math.random() * 
-						(fragmentConfig.intervalMax - fragmentConfig.intervalMin + 1)) + 
-						fragmentConfig.intervalMin;
-					await new Promise(resolve => setTimeout(resolve, delay));
-				}
-			} else {
-				// 最后一个分片直接发送
-				controller.enqueue(chunk);
+			controller.enqueue(chunk);
+			if (fragmentConfig.intervalMin > 0) {
+				const delay = Math.floor(Math.random() * 
+					(fragmentConfig.intervalMax - fragmentConfig.intervalMin + 1)) + 
+					fragmentConfig.intervalMin;
+				await new Promise(resolve => setTimeout(resolve, delay));
 			}
-			chunkIndex++;
 		}
 	}
 
@@ -162,16 +154,13 @@ class WebSocketManager {
 		const buffer = data instanceof ArrayBuffer ? data : data.buffer;
 		const view = new Uint8Array(buffer);
 		let offset = 0;
+		let chunkIndex = 1; // 从1开始计数
 
 		while (offset < view.length) {
-			// 对于最后一个分片,不添加额外数据
-			const isLastChunk = (offset + fragmentConfig.lengthMax) >= view.length;
-			const chunkSize = isLastChunk ? 
-				(view.length - offset) : // 最后一个分片使用剩余数据的实际大小
-				(Math.floor(Math.random() * 
-					(fragmentConfig.lengthMax - fragmentConfig.lengthMin + 1)) + 
-					fragmentConfig.lengthMin);
-			
+			const chunkSize = Math.floor(Math.random() * 
+				(fragmentConfig.lengthMax - fragmentConfig.lengthMin + 1)) + 
+				fragmentConfig.lengthMin;
+				
 			const chunk = new Uint8Array(chunkSize);
 			const remainingBytes = view.length - offset;
 			const bytesToCopy = Math.min(chunkSize, remainingBytes);
@@ -179,21 +168,51 @@ class WebSocketManager {
 			// 复制实际数据
 			chunk.set(view.slice(offset, offset + bytesToCopy));
 
-			// 只对非最后一个分片填充额外数据
-			if (!isLastChunk && bytesToCopy < chunkSize) {
+			// 填充剩余空间
+			if (bytesToCopy < chunkSize) {
 				if (fragmentConfig.packetType === 'random') {
-					// 使用随机数据填充
-					for (let i = bytesToCopy; i < chunkSize; i++) {
-						chunk[i] = Math.floor(Math.random() * 256);
+					// 使用随机数据填充,并在开头添加序号
+					const chunkWithIndex = new Uint8Array(chunk.length + 4);
+					chunkWithIndex[0] = (chunkIndex >> 24) & 0xFF;
+					chunkWithIndex[1] = (chunkIndex >> 16) & 0xFF;
+					chunkWithIndex[2] = (chunkIndex >> 8) & 0xFF;
+					chunkWithIndex[3] = chunkIndex & 0xFF;
+					chunkWithIndex.set(chunk, 4);
+					for (let i = bytesToCopy + 4; i < chunkWithIndex.length; i++) {
+						chunkWithIndex[i] = Math.floor(Math.random() * 256);
 					}
+					chunks.push(chunkWithIndex.buffer);
+				} else if (fragmentConfig.packetType === 'fixed') {
+					// 使用固定数据填充,并在开头添加序号
+					const chunkWithIndex = new Uint8Array(chunk.length + 4);
+					chunkWithIndex[0] = (chunkIndex >> 24) & 0xFF;
+					chunkWithIndex[1] = (chunkIndex >> 16) & 0xFF;
+					chunkWithIndex[2] = (chunkIndex >> 8) & 0xFF;
+					chunkWithIndex[3] = chunkIndex & 0xFF;
+					chunkWithIndex.set(chunk, 4);
+					chunkWithIndex.fill(0, bytesToCopy + 4);
+					chunks.push(chunkWithIndex.buffer);
 				} else {
-					// 使用固定数据填充
-					chunk.fill(0, bytesToCopy);
+					// 不分片模式
+					chunks.push(chunk.buffer);
+				}
+			} else {
+				// 数据刚好填满或未填满时的处理
+				if (fragmentConfig.packetType !== 'none') {
+					const chunkWithIndex = new Uint8Array(chunk.length + 4);
+					chunkWithIndex[0] = (chunkIndex >> 24) & 0xFF;
+					chunkWithIndex[1] = (chunkIndex >> 16) & 0xFF;
+					chunkWithIndex[2] = (chunkIndex >> 8) & 0xFF;
+					chunkWithIndex[3] = chunkIndex & 0xFF;
+					chunkWithIndex.set(chunk, 4);
+					chunks.push(chunkWithIndex.buffer);
+				} else {
+					chunks.push(chunk.buffer);
 				}
 			}
 
-			chunks.push(chunk.buffer);
 			offset += bytesToCopy;
+			chunkIndex++; // 增加序号
 		}
 
 		return chunks;
