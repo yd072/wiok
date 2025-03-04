@@ -592,92 +592,58 @@ export default {
 };
 
 async function 维列斯OverWSHandler(request) {
-    const webSocketPair = new WebSocketPair();
-    const [client, webSocket] = Object.values(webSocketPair);
+    // ... 现有代码 ...
 
-    webSocket.accept();
+    // 在建立 WebSocket 连接之前，先检查是否有片段参数
+    const url = new URL(request.url);
+    if (url.searchParams.has('fragment')) {
+        try {
+            const fragmentParams = JSON.parse(url.searchParams.get('fragment'));
+            fragmentConfig = {
+                lengthMin: parseInt(fragmentParams.lengthMin) || 100,
+                lengthMax: parseInt(fragmentParams.lengthMax) || 200,
+                intervalMin: parseInt(fragmentParams.intervalMin) || 1,
+                intervalMax: parseInt(fragmentParams.intervalMax) || 1,
+                packetType: fragmentParams.packetType || 'random'
+            };
+        } catch (error) {
+            console.error('解析WebSocket片段参数时发生错误:', error);
+        }
+    }
 
-    let address = '';
-    let portWithRandomLog = '';
-    const log = (info, event = '') => {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
+    const webSocket = new WebSocketPair();
+    const [client, webSocketForServer] = Object.values(webSocket);
+    const log = (msg) => {
+        console.log(msg);
     };
 
-    const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
-    const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
-
-    let remoteSocketWrapper = { value: null };
-    let isDns = false;
-    const banHostsSet = new Set(banHosts);
-
-    readableWebSocketStream.pipeTo(new WritableStream({
-        async write(chunk, controller) {
-            try {
-                if (isDns) {
-                    return handleDNSQuery(chunk, webSocket, null, log);
-                }
-                if (remoteSocketWrapper.value) {
-                    const writer = remoteSocketWrapper.value.writable.getWriter();
-                    await writer.write(chunk);
-                    writer.releaseLock();
-                    return;
-                }
-
-                const {
-                    hasError,
-                    message,
-                    addressType,
-                    portRemote = 443,
-                    addressRemote = '',
-                    rawDataIndex,
-                    维列斯Version = new Uint8Array([0, 0]),
-                    isUDP,
-                } = process维列斯Header(chunk, userID);
-
-                address = addressRemote;
-                portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
-                if (hasError) {
-                    throw new Error(message);
-                }
-                if (isUDP) {
-                    if (portRemote === 53) {
-                        isDns = true;
-                    } else {
-                        throw new Error('UDP 代理仅对 DNS（53 端口）启用');
-                    }
-                }
-                const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
-                const rawClientData = chunk.slice(rawDataIndex);
-
-                if (isDns) {
-                    return handleDNSQuery(rawClientData, webSocket, 维列斯ResponseHeader, log);
-                }
-                if (!banHostsSet.has(addressRemote)) {
-                    log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
-                    handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log);
-                } else {
-                    throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
-                }
-            } catch (error) {
-                log('处理数据时发生错误', error.message);
-                webSocket.close(1011, '内部错误');
+    const manager = new WebSocketManager(webSocketForServer, log);
+    const readableStream = manager.makeReadableStream(earlyDataHeader);
+    const writableStream = new WritableStream({
+        write(chunk) {
+            if (webSocketForServer.readyState === WS_READY_STATE_OPEN) {
+                webSocketForServer.send(chunk);
             }
         },
         close() {
-            log(`readableWebSocketStream 已关闭`);
+            安全关闭WebSocket(webSocketForServer);
         },
         abort(reason) {
-            log(`readableWebSocketStream 已中止`, JSON.stringify(reason));
+            console.error('Writable stream aborted:', reason);
+            安全关闭WebSocket(webSocketForServer);
         },
-    })).catch((err) => {
-        log('readableWebSocketStream 管道错误', err);
-        webSocket.close(1011, '管道错误');
+    });
+
+    webSocketForServer.accept();
+
+    // 创建双向管道
+    await readableStream.pipeTo(writableStream, { preventCancel: true }).catch((error) => {
+        console.error('Error in pipe:', error);
+        安全关闭WebSocket(webSocketForServer);
     });
 
     return new Response(null, {
         status: 101,
-        // @ts-ignore
         webSocket: client,
     });
 }
