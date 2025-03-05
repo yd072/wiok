@@ -1729,6 +1729,25 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 					<div class="divider"></div>
 					${cmad}
+
+					<!-- 在 container div 中添加批量检查部分 -->
+					<div class="section">
+						<div class="section-title">🔍 批量检查</div>
+						<div class="batch-check-container">
+							<div class="check-options">
+								<label>
+									<input type="checkbox" id="checkDuplicates" checked>
+									检查重复
+								</label>
+								<label>
+									<input type="checkbox" id="checkFormat" checked>
+									检查格式
+								</label>
+							</div>
+							<button class="btn btn-primary" onclick="startBatchCheck()">开始检查</button>
+							<div id="checkResults" class="check-results"></div>
+						</div>
+					</div>
 				</div>
 
 				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
@@ -1761,6 +1780,45 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						} else {
 							noticeContent.style.display = 'none';
 							noticeToggle.textContent = '实用订阅技巧 ∨';
+						}
+					}
+
+					// 添加检查相关的 JavaScript 函数
+					function startBatchCheck() {
+						const content = document.getElementById('content').value;
+						const checkDuplicates = document.getElementById('checkDuplicates').checked;
+						const checkFormat = document.getElementById('checkFormat').checked;
+						const results = document.getElementById('checkResults');
+						
+						results.style.display = 'block';
+						results.innerHTML = '';
+						
+						const lines = content.split('\\n').filter(line => line.trim());
+						const issues = [];
+						const seen = new Set();
+						
+						for (let i = 0; i < lines.length; i++) {
+							const line = lines[i];
+							
+							if (checkDuplicates && seen.has(line)) {
+								issues.push(\`行 \${i + 1}: 重复的条目 "\${line}"\`);
+							}
+							seen.add(line);
+							
+							if (checkFormat) {
+								if (!line.includes('#')) {
+									issues.push(\`行 \${i + 1}: 缺少备注标识符 "#"\`);
+								}
+								if (line.includes(':') && !line.match(/:\\d+/)) {
+									issues.push(\`行 \${i + 1}: 端口格式错误\`);
+								}
+							}
+						}
+						
+						if (issues.length > 0) {
+							results.innerHTML = '<div style="color: #d32f2f;">' + issues.join('<br>') + '</div>';
+						} else {
+							results.innerHTML = '<div style="color: #4caf50;">检查完成，未发现问题</div>';
 						}
 					}
 				</script>
