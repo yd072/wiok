@@ -71,7 +71,6 @@ const utils = {
 
 // WebSocket连接管理类
 class WebSocketManager {
-class WebSocketManager {
     constructor(webSocket, log) {
         this.webSocket = webSocket;
         this.log = log;
