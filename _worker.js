@@ -945,64 +945,96 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let hasIncomingData = false;
     let header = responseHeader;
     let isSocketClosed = false;
+    const controller = new AbortController();
+    const signal = controller.signal;
 
     try {
-        await remoteSocket.readable
-            .pipeTo(
-                new WritableStream({
-                    async write(chunk, controller) {
-                        try {
-                            hasIncomingData = true;
-                            
-                            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                                controller.error('WebSocket未连接');
-                                return;
-                            }
+        // 设置全局超时
+        const timeout = setTimeout(() => {
+            if (!hasIncomingData) {
+                controller.abort('数据传输超时');
+            }
+        }, 6000);
 
-                            // 优化数据传输
-                            if (header) {
-                                // 使用 Uint8Array 合并数据,提高效率
-                                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-                                combinedData.set(new Uint8Array(header), 0);
-                                combinedData.set(new Uint8Array(chunk), header.byteLength);
-                                webSocket.send(combinedData);
-                                header = null;
-                            } else {
-                                webSocket.send(chunk);
-                            }
-                        } catch (error) {
-                            log(`数据写入错误: ${error.message}`);
-                            controller.error(error);
-                        }
-                    },
-                    close() {
-                        isSocketClosed = true;
-                        log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
-                    },
-                    abort(reason) {
-                        isSocketClosed = true;
-                        log(`远程连接中断: ${reason}`);
-                    }
-                })
-            )
-            .catch((error) => {
-                log(`数据传输异常: ${error.message}`);
-                if (!isSocketClosed) {
-                    safeCloseWebSocket(webSocket);
+        // 监听WebSocket关闭事件
+        webSocket.addEventListener('close', () => {
+            controller.abort('WebSocket已关闭');
+            clearTimeout(timeout);
+        });
+
+        // 使用更高效的数据传输
+        const reader = remoteSocket.readable.getReader();
+        const writer = new WritableStream({
+            async write(chunk) {
+                if (signal.aborted) throw new Error('连接已中断');
+                
+                if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                    throw new Error('WebSocket未连接');
                 }
-            });
 
-        // 如果没有收到数据且提供了重试函数,则进行重试
-        if (!hasIncomingData && retry) {
-            log(`未收到数据,正在重试连接...`);
-            retry();
+                try {
+                    hasIncomingData = true;
+                    
+                    if (header) {
+                        // 预分配内存并一次性合并数据
+                        const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                        combinedData.set(new Uint8Array(header), 0);
+                        combinedData.set(new Uint8Array(chunk), header.byteLength);
+                        await webSocket.send(combinedData);
+                        header = null;
+                    } else {
+                        await webSocket.send(chunk);
+                    }
+                } catch (error) {
+                    log(`数据写入错误: ${error.message}`);
+                    throw error;
+                }
+            },
+            close() {
+                isSocketClosed = true;
+                log(`远程连接已关闭${hasIncomingData ? ' (已接收数据)' : ' (未接收数据)'}`);
+                clearTimeout(timeout);
+            },
+            abort(reason) {
+                isSocketClosed = true;
+                log(`远程连接中断: ${reason}`);
+                clearTimeout(timeout);
+            }
+        });
+
+        try {
+            while (!signal.aborted) {
+                const {done, value} = await reader.read();
+                if (done) break;
+                await writer.getWriter().write(value);
+            }
+        } catch (error) {
+            log(`数据读取错误: ${error.message}`);
+            throw error;
+        } finally {
+            reader.releaseLock();
+            if (!isSocketClosed) {
+                writer.abort('数据流已关闭');
+            }
         }
+
+        // 处理未收到数据的情况
+        if (!hasIncomingData && retry && !signal.aborted) {
+            log('未收到数据,尝试重试连接');
+            await retry();
+        }
+
     } catch (error) {
-        log(`连接处理异常: ${error.message}`);
+        log(`连接处理错误: ${error.message}`);
         if (!isSocketClosed) {
             safeCloseWebSocket(webSocket);
         }
-        throw error;
+    } finally {
+        clearTimeout(timeout);
+        if (signal.aborted && retry && !hasIncomingData) {
+            log('连接超时,尝试重试');
+            await retry();
+        }
     }
 }
 
