@@ -664,48 +664,104 @@ function mergeData(header, chunk) {
 }
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
+    // 使用Google DNS服务器
+    const DNS_SERVER = {
+        hostname: '8.8.4.4',
+        port: 53
+    };
+    
+    let tcpSocket;
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     try {
-        // 只使用Google的备用DNS服务器,更快更稳定
-        const dnsServer = '8.8.4.4';
-        const dnsPort = 53;
-        
-        let 维列斯Header = 维列斯ResponseHeader;
-        
-        // 使用Promise.race设置2秒超时
-        const tcpSocket = await Promise.race([
-            connect({ hostname: dnsServer, port: dnsPort }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('DNS连接超时')), 2000))
-        ]);
+        // 设置全局超时
+        const timeout = setTimeout(() => {
+            controller.abort('DNS query timeout');
+            if (tcpSocket) {
+                try {
+                    tcpSocket.close();
+                } catch (e) {
+                    log(`关闭TCP连接出错: ${e.message}`);
+                }
+            }
+        }, 3000);
 
-        log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
+        try {
+            tcpSocket = await Promise.race([
+                connect({
+                    hostname: DNS_SERVER.hostname,
+                    port: DNS_SERVER.port,
+                    signal,
+                }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('DNS连接超时')), 2000)
+                )
+            ]);
 
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(udpChunk);
-        writer.releaseLock();
+            log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
+            
+            // 发送DNS查询
+            const writer = tcpSocket.writable.getWriter();
+            try {
+                await writer.write(udpChunk);
+            } finally {
+                writer.releaseLock();
+            }
 
-        await tcpSocket.readable.pipeTo(new WritableStream({
-            async write(chunk) {
-                if (webSocket.readyState === WS_READY_STATE_OPEN) {
+            // 简化的数据流处理
+            let 维列斯Header = 维列斯ResponseHeader;
+            const reader = tcpSocket.readable.getReader();
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) {
+                        log('DNS数据流处理完成');
+                        break;
+                    }
+
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        break;
+                    }
+
                     try {
-                        const combinedData = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
-                        webSocket.send(combinedData);
-                        if (维列斯Header) 维列斯Header = null;
+                        // 处理数据包
+                        const data = 维列斯Header ? mergeData(维列斯Header, value) : value;
+                        webSocket.send(data);
+                        维列斯Header = null; // 清除header,只在第一个包使用
                     } catch (error) {
-                        console.error(`发送数据时发生错误: ${error.message}`);
-                        safeCloseWebSocket(webSocket);
+                        log(`数据处理错误: ${error.message}`);
+                        throw error;
                     }
                 }
-            },
-            close() {
-                log(`DNS连接已关闭`);
-            },
-            abort(reason) {
-                console.error(`DNS连接异常中断`, reason);
+            } catch (error) {
+                log(`数据读取错误: ${error.message}`);
+                throw error;
+            } finally {
+                reader.releaseLock();
             }
-        }));
+
+            clearTimeout(timeout);
+
+        } catch (error) {
+            log(`DNS查询失败: ${error.message}`);
+            throw error;
+        }
+
     } catch (error) {
-        console.error(`DNS查询异常: ${error.message}`, error.stack);
+        log(`DNS查询失败: ${error.message}`);
         safeCloseWebSocket(webSocket);
+    } finally {
+        clearTimeout(timeout);
+        if (tcpSocket) {
+            try {
+                tcpSocket.close();
+            } catch (e) {
+                log(`关闭TCP连接出错: ${e.message}`);
+            }
+        }
     }
 }
 
@@ -2463,4 +2519,5 @@ proxy.example.com:8443"
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
+}
 }
