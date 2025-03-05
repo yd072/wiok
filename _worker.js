@@ -1729,25 +1729,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 					<div class="divider"></div>
 					${cmad}
-
-					<!-- 在 container div 中添加批量检查部分 -->
-					<div class="section">
-						<div class="section-title">🔍 批量检查</div>
-						<div class="batch-check-container">
-							<div class="check-options">
-								<label>
-									<input type="checkbox" id="checkDuplicates" checked>
-									检查重复
-								</label>
-								<label>
-									<input type="checkbox" id="checkFormat" checked>
-									检查格式
-								</label>
-							</div>
-							<button class="btn btn-primary" onclick="startBatchCheck()">开始检查</button>
-							<div id="checkResults" class="check-results"></div>
-						</div>
-					</div>
 				</div>
 
 				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
@@ -1780,45 +1761,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						} else {
 							noticeContent.style.display = 'none';
 							noticeToggle.textContent = '实用订阅技巧 ∨';
-						}
-					}
-
-					// 添加检查相关的 JavaScript 函数
-					function startBatchCheck() {
-						const content = document.getElementById('content').value;
-						const checkDuplicates = document.getElementById('checkDuplicates').checked;
-						const checkFormat = document.getElementById('checkFormat').checked;
-						const results = document.getElementById('checkResults');
-						
-						results.style.display = 'block';
-						results.innerHTML = '';
-						
-						const lines = content.split('\\n').filter(line => line.trim());
-						const issues = [];
-						const seen = new Set();
-						
-						for (let i = 0; i < lines.length; i++) {
-							const line = lines[i];
-							
-							if (checkDuplicates && seen.has(line)) {
-								issues.push(\`行 \${i + 1}: 重复的条目 "\${line}"\`);
-							}
-							seen.add(line);
-							
-							if (checkFormat) {
-								if (!line.includes('#')) {
-									issues.push(\`行 \${i + 1}: 缺少备注标识符 "#"\`);
-								}
-								if (line.includes(':') && !line.match(/:\\d+/)) {
-									issues.push(\`行 \${i + 1}: 端口格式错误\`);
-								}
-							}
-						}
-						
-						if (issues.length > 0) {
-							results.innerHTML = '<div style="color: #d32f2f;">' + issues.join('<br>') + '</div>';
-						} else {
-							results.innerHTML = '<div style="color: #4caf50;">检查完成，未发现问题</div>';
 						}
 					}
 				</script>
@@ -2311,26 +2253,40 @@ async function KV(request, env, txt = 'ADD.txt') {
 }
 
 async function handlePostRequest(request, env, txt) {
-	if (!env.KV) {
-		return new Response("未绑定KV空间", { status: 400 });
-	}
-	try {
-		const content = await request.text();
-		const url = new URL(request.url);
-		const type = url.searchParams.get('type');
-
-		// 根据类型保存到不同的KV
-		if (type === 'proxyip') {
-			await env.KV.put('PROXYIP.txt', content);
-		} else {
-			await env.KV.put(txt, content);
-		}
-		
-		return new Response("保存成功");
-	} catch (error) {
-		console.error('保存KV时发生错误:', error);
-		return new Response("保存失败: " + error.message, { status: 500 });
-	}
+    if (!env.KV) {
+        return new Response("未绑定KV空间", { status: 400 });
+    }
+    
+    try {
+        const url = new URL(request.url);
+        const type = url.searchParams.get('type');
+        
+        switch (type) {
+            case 'proxyip':
+                const proxyipContent = await request.text();
+                await env.KV.put('PROXYIP.txt', proxyipContent);
+                break;
+                
+            case 'subscription':
+                const subscriptionSettings = await request.json();
+                await env.KV.put('SUBSCRIPTION_SETTINGS', JSON.stringify(subscriptionSettings));
+                break;
+                
+            case 'filter':
+                const filterSettings = await request.json();
+                await env.KV.put('FILTER_SETTINGS', JSON.stringify(filterSettings));
+                break;
+                
+            default:
+                const content = await request.text();
+                await env.KV.put(txt, content);
+        }
+        
+        return new Response("保存成功");
+    } catch (error) {
+        console.error('保存KV时发生错误:', error);
+        return new Response("保存失败: " + error.message, { status: 500 });
+    }
 }
 
 async function handleGetRequest(env, txt) {
