@@ -2519,12 +2519,10 @@ async function handleGetRequest(env, txt) {
 1.2.3.4:443
 proxy.example.com:8443"
                             >${proxyIPContent}</textarea>
-                            <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveProxyIP()">保存PROXYIP设置</button>
-                            <span id="proxyip-save-status" class="save-status"></span>
                         </div>
 
-                        <!-- 添加SOCKS5设置 -->
-                        <div>
+                        <!-- SOCKS5设置 -->
+                        <div style="margin-bottom: 20px;">
                             <label for="socks5"><strong>SOCKS5 设置</strong></label>
                             <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
                             <textarea 
@@ -2534,8 +2532,12 @@ proxy.example.com:8443"
 user:pass@127.0.0.1:1080
 127.0.0.1:1080"
                             >${socks5Content}</textarea>
-                            <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveSocks5()">保存SOCKS5设置</button>
-                            <span id="socks5-save-status" class="save-status"></span>
+                        </div>
+
+                        <!-- 统一的保存按钮 -->
+                        <div style="text-align: center;">
+                            <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                            <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
                 </div>
@@ -2627,19 +2629,27 @@ user:pass@127.0.0.1:1080
                 }
             }
 
-            async function saveProxyIP() {
+            // 替换原有的保存函数，改为统一的保存设置函数
+            async function saveSettings() {
+                const saveStatus = document.getElementById('settings-save-status');
+                saveStatus.textContent = '保存中...';
+                
                 try {
-                    const content = document.getElementById('proxyip').value;
-                    const saveStatus = document.getElementById('proxyip-save-status');
-                    
-                    saveStatus.textContent = '保存中...';
-                    
-                    const response = await fetch(window.location.href + '?type=proxyip', {
+                    // 保存PROXYIP设置
+                    const proxyipContent = document.getElementById('proxyip').value;
+                    const proxyipResponse = await fetch(window.location.href + '?type=proxyip', {
                         method: 'POST',
-                        body: content
+                        body: proxyipContent
                     });
 
-                    if (response.ok) {
+                    // 保存SOCKS5设置
+                    const socks5Content = document.getElementById('socks5').value;
+                    const socks5Response = await fetch(window.location.href + '?type=socks5', {
+                        method: 'POST',
+                        body: socks5Content
+                    });
+
+                    if (proxyipResponse.ok && socks5Response.ok) {
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
@@ -2648,36 +2658,8 @@ user:pass@127.0.0.1:1080
                         throw new Error('保存失败');
                     }
                 } catch (error) {
-                    const saveStatus = document.getElementById('proxyip-save-status');
                     saveStatus.textContent = '❌ ' + error.message;
-                    console.error('保存PROXYIP时发生错误:', error);
-                }
-            }
-
-            async function saveSocks5() {
-                try {
-                    const content = document.getElementById('socks5').value;
-                    const saveStatus = document.getElementById('socks5-save-status');
-                    
-                    saveStatus.textContent = '保存中...';
-                    
-                    const response = await fetch(window.location.href + '?type=socks5', {
-                        method: 'POST',
-                        body: content
-                    });
-
-                    if (response.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => {
-                            saveStatus.textContent = '';
-                        }, 3000);
-                    } else {
-                        throw new Error('保存失败');
-                    }
-                } catch (error) {
-                    const saveStatus = document.getElementById('socks5-save-status');
-                    saveStatus.textContent = '❌ ' + error.message;
-                    console.error('保存SOCKS5时发生错误:', error);
+                    console.error('保存设置时发生错误:', error);
                 }
             }
             </script>
