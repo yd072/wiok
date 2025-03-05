@@ -1315,43 +1315,24 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-	// 加载保存的设置
+	// 在获取其他配置前,先尝试读取自定义的PROXYIP
 	if (env.KV) {
 		try {
-			// 加载订阅设置
-			const subSettingsStr = await env.KV.get('SUBSCRIPTION_SETTINGS');
-			if (subSettingsStr) {
-				const settings = JSON.parse(subSettingsStr);
-				// 应用设置
-				if (settings.subname) FileName = settings.subname;
-				if (settings.subapi) subConverter = settings.subapi;
-				if (settings.subconfig) subConfig = settings.subconfig;
-				if (settings.subemoji) subEmoji = settings.subemoji;
-			}
-
-			// 加载过滤设置
-			const filterSettingsStr = await env.KV.get('FILTER_SETTINGS');
-			if (filterSettingsStr) {
-				const settings = JSON.parse(filterSettingsStr);
-				// 应用设置
-				if (settings.banHosts) banHosts = settings.banHosts;
-				if (settings.go2socks5) go2Socks5s = settings.go2socks5;
-			}
-
-			// 继续加载自定义PROXYIP
 			const customProxyIP = await env.KV.get('PROXYIP.txt');
 			if (customProxyIP && customProxyIP.trim()) {
+				// 使用自定义PROXYIP覆盖环境变量中的值
 				proxyIP = customProxyIP;
 				proxyIPs = await 整理(proxyIP);
 				proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
 				console.log('使用自定义PROXYIP:', proxyIP);
+				// 强制使用自定义PROXYIP
 				RproxyIP = 'false';
 			}
 		} catch (error) {
-			console.error('加载设置时发生错误:', error);
+			console.error('读取自定义PROXYIP时发生错误:', error);
 		}
 	}
 
@@ -2272,81 +2253,40 @@ async function KV(request, env, txt = 'ADD.txt') {
 }
 
 async function handlePostRequest(request, env, txt) {
-    if (!env.KV) {
-        return new Response("未绑定KV空间", { status: 400 });
-    }
-    
-    try {
-        const url = new URL(request.url);
-        const type = url.searchParams.get('type');
-        
-        switch (type) {
-            case 'proxyip':
-                const proxyipContent = await request.text();
-                await env.KV.put('PROXYIP.txt', proxyipContent);
-                break;
-                
-            case 'subscription':
-                const subscriptionSettings = await request.json();
-                await env.KV.put('SUBSCRIPTION_SETTINGS', JSON.stringify(subscriptionSettings));
-                break;
-                
-            case 'filter':
-                const filterSettings = await request.json();
-                await env.KV.put('FILTER_SETTINGS', JSON.stringify(filterSettings));
-                break;
-                
-            default:
-                const content = await request.text();
-                await env.KV.put(txt, content);
-        }
-        
-        return new Response("保存成功");
-    } catch (error) {
-        console.error('保存KV时发生错误:', error);
-        return new Response("保存失败: " + error.message, { status: 500 });
-    }
+	if (!env.KV) {
+		return new Response("未绑定KV空间", { status: 400 });
+	}
+	try {
+		const content = await request.text();
+		const url = new URL(request.url);
+		const type = url.searchParams.get('type');
+
+		// 根据类型保存到不同的KV
+		if (type === 'proxyip') {
+			await env.KV.put('PROXYIP.txt', content);
+		} else {
+			await env.KV.put(txt, content);
+		}
+		
+		return new Response("保存成功");
+	} catch (error) {
+		console.error('保存KV时发生错误:', error);
+		return new Response("保存失败: " + error.message, { status: 500 });
+	}
 }
 
 async function handleGetRequest(env, txt) {
     let content = '';
     let hasKV = !!env.KV;
     let proxyIPContent = '';
-    let subscriptionSettings = {};
-    let filterSettings = {};
 
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
-            
-            // 获取并解析订阅设置
-            const subSettingsStr = await env.KV.get('SUBSCRIPTION_SETTINGS');
-            if (subSettingsStr) {
-                subscriptionSettings = JSON.parse(subSettingsStr);
-            } else {
-                // 使用当前全局变量的值作为默认值
-                subscriptionSettings = {
-                    subname: FileName,
-                    subapi: subConverter,
-                    subconfig: subConfig,
-                    subemoji: subEmoji
-                };
-            }
-            
-            // 获取并解析过滤设置
-            const filterSettingsStr = await env.KV.get('FILTER_SETTINGS');
-            if (filterSettingsStr) {
-                filterSettings = JSON.parse(filterSettingsStr);
-            } else {
-                // 使用当前全局变量的值作为默认值
-                filterSettings = {
-                    banHosts: banHosts,
-                    go2socks5: go2Socks5s
-                };
-            }
         } catch (error) {
             console.error('读取KV时发生错误:', error);
+            content = '读取数据时发生错误: ' + error.message;
         }
     }
 
@@ -2530,181 +2470,42 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     resize: vertical;
                 }
-
-                .settings-panel {
-                    margin: 20px 0;
-                    padding: 15px;
-                    background: #f8f9fa;
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                }
-                
-                .settings-title {
-                    font-size: 16px;
-                    font-weight: 500;
-                    margin-bottom: 15px;
-                    color: var(--primary-color);
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    cursor: pointer;
-                }
-                
-                .settings-content {
-                    display: none;
-                }
-                
-                .settings-group {
-                    margin: 10px 0;
-                }
-                
-                .settings-input {
-                    width: 100%;
-                    padding: 8px;
-                    margin: 5px 0;
-                    border: 1px solid var(--border-color);
-                    border-radius: 4px;
-                }
-                
-                .settings-label {
-                    display: block;
-                    margin: 10px 0 5px;
-                    color: #666;
-                }
-
-                .notice-group {
-                    padding: 15px;
-                    background: #fff;
-                    border-radius: 6px;
-                    margin-bottom: 10px;
-                }
-
-                .notice-group strong {
-                    display: block;
-                    margin: 15px 0 10px;
-                    color: var(--primary-color);
-                }
-
-                .notice-group p {
-                    margin: 10px 0;
-                    color: #666;
-                    line-height: 1.6;
-                }
-
-                .notice-group pre {
-                    background: #f8f9fa;
-                    padding: 10px;
-                    border-radius: 4px;
-                    border: 1px solid var(--border-color);
-                    margin: 10px 0;
-                    overflow-x: auto;
-                    font-family: Monaco, Consolas, "Courier New", monospace;
-                }
-
-                .notice-group a {
-                    color: var(--primary-color);
-                    text-decoration: none;
-                }
-
-                .notice-group a:hover {
-                    text-decoration: underline;
-                }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
-                <!-- 注意事项面板 -->
-                <div class="settings-panel">
-                    <div class="settings-title" onclick="togglePanel('notice')">
-                        ℹ️ 注意事项
-                        <span id="notice-toggle">∨</span>
+                <!-- 添加高级设置部分 -->
+                <div class="advanced-settings">
+                    <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
+                        <h3 style="margin: 0;">⚙️ 高级设置</h3>
+                        <span id="advanced-settings-toggle">∨</span>
                     </div>
-                    <div id="notice-content" class="settings-content">
-                        <div class="notice-group">
-                            <strong>1. ADD格式说明</strong>
-                            <p>每行一个地址，格式：地址:端口#备注。IPv6地址需要用方括号括起来，例如：</p>
-                            <pre>
-visa.cn#示例域名
-127.0.0.1:2053#CFnat
-[2606:4700::]:2053#IPv6
-                            </pre>
-
-                            <strong>2. ADDAPI 说明</strong>
-                            <p>可以添加API地址，支持PROXYIP的替换，例如：</p>
-                            <pre>
-https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt?proxyip=true
-                            </pre>
-
-                            <strong>3. CSV格式说明</strong>
-                            <p>支持 <a href='https://github.com/XIU2/CloudflareSpeedTest'>CloudflareSpeedTest</a> 的 csv 测速结果文件，例如：</p>
-                            <pre>
-https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/CloudflareSpeedTest.csv
-                            </pre>
+                    <div id="advanced-settings-content" class="advanced-settings-content">
+                        <div>
+                            <label for="proxyip"><strong>PROXYIP 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口</p>
+                            <textarea 
+                                id="proxyip" 
+                                class="proxyip-editor" 
+                                placeholder="例如:
+1.2.3.4:443
+proxy.example.com:8443"
+                            >${proxyIPContent}</textarea>
+                            <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveProxyIP()">保存PROXYIP设置</button>
+                            <span id="proxyip-save-status" class="save-status"></span>
                         </div>
                     </div>
                 </div>
 
-                <!-- 订阅设置面板 -->
-                <div class="settings-panel">
-                    <div class="settings-title" onclick="togglePanel('subscription')">
-                        📝 订阅设置
-                        <span id="subscription-toggle">∨</span>
-                    </div>
-                    <div id="subscription-content" class="settings-content">
-                        <div class="settings-group">
-                            <label class="settings-label">订阅名称</label>
-                            <input type="text" id="subname" class="settings-input" 
-                                value="${subscriptionSettings.subname || ''}" 
-                                placeholder="输入订阅名称">
-                                
-                            <label class="settings-label">订阅转换API</label>
-                            <input type="text" id="subapi" class="settings-input" 
-                                value="${subscriptionSettings.subapi || ''}" 
-                                placeholder="输入订阅转换API">
-                                
-                            <label class="settings-label">订阅配置文件</label>
-                            <input type="text" id="subconfig" class="settings-input" 
-                                value="${subscriptionSettings.subconfig || ''}" 
-                                placeholder="输入配置文件URL">
-                                
-                            <label class="settings-label">Emoji 显示</label>
-                            <select id="subemoji" class="settings-input">
-                                <option value="true" ${subscriptionSettings.subemoji === 'true' ? 'selected' : ''}>启用</option>
-                                <option value="false" ${subscriptionSettings.subemoji === 'false' ? 'selected' : ''}>禁用</option>
-                            </select>
-                            
-                            <button class="btn btn-primary" onclick="saveSettings('subscription')">
-                                保存订阅设置
-                            </button>
-                            <span id="subscription-status" class="save-status"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 节点过滤面板 -->
-                <div class="settings-panel">
-                    <div class="settings-title" onclick="togglePanel('filter')">
-                        🔍 节点过滤
-                        <span id="filter-toggle">∨</span>
-                    </div>
-                    <div id="filter-content" class="settings-content">
-                        <div class="settings-group">
-                            <label class="settings-label">黑名单域名</label>
-                            <textarea id="ban-hosts" class="settings-input" style="height: 100px"
-                                placeholder="每行一个域名，支持通配符 *">${Array.isArray(filterSettings.banHosts) ? filterSettings.banHosts.join('\n') : ''}</textarea>
-                                
-                            <label class="settings-label">SOCKS5 白名单</label>
-                            <textarea id="go2socks5" class="settings-input" style="height: 100px"
-                                placeholder="每行一个域名，支持通配符 *">${Array.isArray(filterSettings.go2socks5) ? filterSettings.go2socks5.join('\n') : ''}</textarea>
-                                
-                            <button class="btn btn-primary" onclick="saveSettings('filter')">
-                                保存过滤设置
-                            </button>
-                            <span id="filter-status" class="save-status"></span>
-                        </div>
-                    </div>
+                <!-- 保持现有内容 -->
+                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                    ℹ️ 注意事项 ∨
+                </a>
+                
+                <div id="noticeContent" class="notice-content" style="display: none">
+				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
@@ -2761,10 +2562,21 @@ https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/CloudflareSpeedTest
                 }
             }
 
-            function togglePanel(type) {
-                const content = document.getElementById(type + '-content');
-                const toggle = document.getElementById(type + '-toggle');
-                
+            function toggleNotice() {
+                const noticeContent = document.getElementById('noticeContent');
+                const noticeToggle = document.getElementById('noticeToggle');
+                if (noticeContent.style.display === 'none') {
+                    noticeContent.style.display = 'block';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                } else {
+                    noticeContent.style.display = 'none';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                }
+            }
+
+            function toggleAdvancedSettings() {
+                const content = document.getElementById('advanced-settings-content');
+                const toggle = document.getElementById('advanced-settings-toggle');
                 if (content.style.display === 'none' || !content.style.display) {
                     content.style.display = 'block';
                     toggle.textContent = '∧';
@@ -2774,46 +2586,30 @@ https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/CloudflareSpeedTest
                 }
             }
 
-            async function saveSettings(type) {
+            async function saveProxyIP() {
                 try {
-                    const status = document.getElementById(type + '-status');
-                    status.textContent = '保存中...';
+                    const content = document.getElementById('proxyip').value;
+                    const saveStatus = document.getElementById('proxyip-save-status');
                     
-                    let data;
-                    if (type === 'subscription') {
-                        data = {
-                            subname: document.getElementById('subname').value,
-                            subapi: document.getElementById('subapi').value,
-                            subconfig: document.getElementById('subconfig').value,
-                            subemoji: document.getElementById('subemoji').value
-                        };
-                    } else if (type === 'filter') {
-                        data = {
-                            banHosts: document.getElementById('ban-hosts').value.split('\n').filter(line => line.trim()),
-                            go2socks5: document.getElementById('go2socks5').value.split('\n').filter(line => line.trim())
-                        };
-                    }
+                    saveStatus.textContent = '保存中...';
                     
-                    const response = await fetch(window.location.href + '?type=' + type, {
+                    const response = await fetch(window.location.href + '?type=proxyip', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(data)
+                        body: content
                     });
 
                     if (response.ok) {
-                        status.textContent = '✅ 保存成功';
+                        saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
-                            status.textContent = '';
+                            saveStatus.textContent = '';
                         }, 3000);
                     } else {
                         throw new Error('保存失败');
                     }
                 } catch (error) {
-                    const status = document.getElementById(type + '-status');
-                    status.textContent = '❌ ' + error.message;
-                    console.error('保存设置时发生错误:', error);
+                    const saveStatus = document.getElementById('proxyip-save-status');
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存PROXYIP时发生错误:', error);
                 }
             }
             </script>
