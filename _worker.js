@@ -2262,10 +2262,15 @@ async function handlePostRequest(request, env, txt) {
 		const type = url.searchParams.get('type');
 
 		// 根据类型保存到不同的KV
-		if (type === 'proxyip') {
-			await env.KV.put('PROXYIP.txt', content);
-		} else {
-			await env.KV.put(txt, content);
+		switch(type) {
+			case 'proxyip':
+				await env.KV.put('PROXYIP.txt', content);
+				break;
+			case 'socks5':
+				await env.KV.put('SOCKS5.txt', content);
+				break;
+			default:
+				await env.KV.put(txt, content);
 		}
 		
 		return new Response("保存成功");
@@ -2279,11 +2284,13 @@ async function handleGetRequest(env, txt) {
     let content = '';
     let hasKV = !!env.KV;
     let proxyIPContent = '';
+    let socks5Content = ''; // 添加SOCKS5内容变量
 
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
+            socks5Content = await env.KV.get('SOCKS5.txt') || ''; // 获取SOCKS5设置
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -2476,14 +2483,15 @@ async function handleGetRequest(env, txt) {
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
-                <!-- 添加高级设置部分 -->
+                <!-- 修改高级设置部分 -->
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
                         <h3 style="margin: 0;">⚙️ 高级设置</h3>
                         <span id="advanced-settings-toggle">∨</span>
                     </div>
                     <div id="advanced-settings-content" class="advanced-settings-content">
-                        <div>
+                        <!-- PROXYIP设置 -->
+                        <div style="margin-bottom: 20px;">
                             <label for="proxyip"><strong>PROXYIP 设置</strong></label>
                             <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口</p>
                             <textarea 
@@ -2495,6 +2503,21 @@ proxy.example.com:8443"
                             >${proxyIPContent}</textarea>
                             <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveProxyIP()">保存PROXYIP设置</button>
                             <span id="proxyip-save-status" class="save-status"></span>
+                        </div>
+
+                        <!-- 添加SOCKS5设置 -->
+                        <div>
+                            <label for="socks5"><strong>SOCKS5 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                            <textarea 
+                                id="socks5" 
+                                class="proxyip-editor" 
+                                placeholder="例如:
+user:pass@127.0.0.1:1080
+127.0.0.1:1080"
+                            >${socks5Content}</textarea>
+                            <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveSocks5()">保存SOCKS5设置</button>
+                            <span id="socks5-save-status" class="save-status"></span>
                         </div>
                     </div>
                 </div>
@@ -2610,6 +2633,33 @@ proxy.example.com:8443"
                     const saveStatus = document.getElementById('proxyip-save-status');
                     saveStatus.textContent = '❌ ' + error.message;
                     console.error('保存PROXYIP时发生错误:', error);
+                }
+            }
+
+            async function saveSocks5() {
+                try {
+                    const content = document.getElementById('socks5').value;
+                    const saveStatus = document.getElementById('socks5-save-status');
+                    
+                    saveStatus.textContent = '保存中...';
+                    
+                    const response = await fetch(window.location.href + '?type=socks5', {
+                        method: 'POST',
+                        body: content
+                    });
+
+                    if (response.ok) {
+                        saveStatus.textContent = '✅ 保存成功';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败');
+                    }
+                } catch (error) {
+                    const saveStatus = document.getElementById('socks5-save-status');
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存SOCKS5时发生错误:', error);
                 }
             }
             </script>
