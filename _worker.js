@@ -135,28 +135,70 @@ class WebSocketManager {
             controller.error(err);
         });
 
-        // 处理早期数据
-        const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-        if (error) {
-            controller.error(error);
-        } else if (earlyData) {
-            controller.enqueue(earlyData);
-        }
-    }
+// WebSocket连接管理类
+class WebSocketManager {
+	constructor(webSocket, log) {
+		this.webSocket = webSocket;
+		this.log = log;
+		this.readableStreamCancel = false;
+		this.backpressure = false;
+	}
 
-    handleStreamPull(controller) {
-        if (controller.desiredSize > 0) {
-            this.backpressure = false;
-        }
-    }
+	makeReadableStream(earlyDataHeader) {
+		return new ReadableStream({
+			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+			pull: (controller) => this.handleStreamPull(controller),
+			cancel: (reason) => this.handleStreamCancel(reason)
+		});
+				}
 
-    handleStreamCancel(reason) {
-        if (this.readableStreamCancel) return;
-        this.log(`Readable stream canceled, reason: ${reason}`);
-        this.readableStreamCancel = true;
-        safeCloseWebSocket(this.webSocket);
-    }
-}
+	handleStreamStart(controller, earlyDataHeader) {
+		// 处理消息事件
+				this.webSocket.addEventListener('message', (event) => {
+					if (this.readableStreamCancel) return;
+			if (!this.backpressure) {
+					controller.enqueue(event.data);
+			} else {
+				this.log('Backpressure, message discarded');
+			}
+				});
+
+				// 处理关闭事件
+				this.webSocket.addEventListener('close', () => {
+			safeCloseWebSocket(this.webSocket); 
+					if (!this.readableStreamCancel) {
+						controller.close();
+					}
+				});
+
+				// 处理错误事件
+				this.webSocket.addEventListener('error', (err) => {
+					this.log('WebSocket server error');
+					controller.error(err);
+				});
+
+		// 处理早期数据
+		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+		if (error) {
+			controller.error(error);
+		} else if (earlyData) {
+			controller.enqueue(earlyData);
+		}
+	}
+
+	handleStreamPull(controller) {
+		if (controller.desiredSize > 0) {
+			this.backpressure = false;
+		}
+	}
+
+	handleStreamCancel(reason) {
+		if (this.readableStreamCancel) return;
+		this.log(`Readable stream canceled, reason: ${reason}`);
+				this.readableStreamCancel = true;
+				safeCloseWebSocket(this.webSocket); 
+			}
+		};
 
 export default {
 	async fetch(request, env, ctx) {
