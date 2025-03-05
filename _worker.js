@@ -198,7 +198,7 @@ class WebSocketManager {
 				this.readableStreamCancel = true;
 				safeCloseWebSocket(this.webSocket); 
 			}
-		}
+		};
 
 export default {
 	async fetch(request, env, ctx) {
