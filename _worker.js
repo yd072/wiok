@@ -84,7 +84,7 @@ class WebSocketManager {
 			pull: (controller) => this.handleStreamPull(controller),
 			cancel: (reason) => this.handleStreamCancel(reason)
 		});
-				}
+					}
 
 	handleStreamStart(controller, earlyDataHeader) {
 		// 处理消息事件
@@ -128,7 +128,7 @@ class WebSocketManager {
 
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
-		this.log(`Readable stream canceled, reason: ${reason}`);
+				this.log(`Readable stream canceled, reason: ${reason}`);
 				this.readableStreamCancel = true;
 				safeCloseWebSocket(this.webSocket); 
 			}
@@ -172,17 +172,6 @@ export default {
 			const fakeHostName = `${fakeUserIDMD5.slice(6, 9)}.${fakeUserIDMD5.slice(13, 19)}`;
 
 			proxyIP = env.PROXYIP || env.proxyip || proxyIP;
-			// 如果有KV存储,尝试读取自定义PROXYIP
-			if (env.KV) {
-				try {
-					const customProxyIP = await env.KV.get('PROXYIP.txt');
-					if (customProxyIP && customProxyIP.trim()) {
-						proxyIP = customProxyIP;
-					}
-				} catch (error) {
-					console.error('读取自定义PROXYIP时发生错误:', error);
-				}
-			}
 			proxyIPs = await 整理(proxyIP);
 			proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
 
@@ -614,11 +603,10 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         
         let 维列斯Header = 维列斯ResponseHeader;
         
-        // 使用Promise.race设置2秒超时
-        const tcpSocket = await Promise.race([
-            connect({ hostname: dnsServer, port: dnsPort }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('DNS连接超时')), 2000))
-        ]);
+        const tcpSocket = await connect({
+            hostname: dnsServer,
+            port: dnsPort
+        });
 
         log(`成功连接到DNS服务器 ${dnsServer}:${dnsPort}`);
 
@@ -665,29 +653,26 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     async function connectAndWrite(address, port, socks = false) {
         log(`正在连接 ${address}:${port}`);
         
-        // 添加连接超时处理
-        const tcpSocket = await Promise.race([
-            socks ? 
+        const tcpSocket = await (socks ? 
             await socks5Connect(addressType, address, port, log) :
             connect({ 
                 hostname: address,
                 port: port,
-                    // 添加 TCP 连接优化选项
                 allowHalfOpen: false,
-                    keepAlive: true,
-                    keepAliveInitialDelay: 60000
-                }),
-            new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('连接超时')), 3000)
-            )
-        ]);
+                keepAlive: true
+            })
+        );
 
         remoteSocket.value = tcpSocket;
         
-       
+        try {
             const writer = tcpSocket.writable.getWriter();
             await writer.write(rawClientData);
             writer.releaseLock();
+        } catch (error) {
+            console.error('Error writing initial data:', error);
+            throw error;
+        }
         
         return tcpSocket;
     }
@@ -814,34 +799,34 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 new WritableStream({
                     async write(chunk, controller) {
                         try {
-                            hasIncomingData = true;
-                            
-                            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+            hasIncomingData = true;
+            
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                                 controller.error('WebSocket未连接');
-                                return;
-                            }
-
+                return;
+            }
+            
                             // 优化数据传输
-                            if (header) {
+            if (header) {
                                 // 使用 Uint8Array 合并数据,提高效率
                                 const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
                                 combinedData.set(new Uint8Array(header), 0);
                                 combinedData.set(new Uint8Array(chunk), header.byteLength);
                                 webSocket.send(combinedData);
-                                header = null;
-                            } else {
-                                webSocket.send(chunk);
-                            }
+                header = null;
+            } else {
+                webSocket.send(chunk);
+            }
                         } catch (error) {
                             log(`数据写入错误: ${error.message}`);
                             controller.error(error);
                         }
-                    },
-                    close() {
+                },
+                close() {
                         isSocketClosed = true;
                         log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
-                    },
-                    abort(reason) {
+                },
+                abort(reason) {
                         isSocketClosed = true;
                         log(`远程连接中断: ${reason}`);
                     }
@@ -853,7 +838,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     safeCloseWebSocket(webSocket);
                 }
             });
-
+        
         // 如果没有收到数据且提供了重试函数,则进行重试
         if (!hasIncomingData && retry) {
             log(`未收到数据,正在重试连接...`);
@@ -1104,32 +1089,12 @@ let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-	// 在获取其他配置前,先尝试读取自定义的PROXYIP
-	if (env.KV) {
-		try {
-			const customProxyIP = await env.KV.get('PROXYIP.txt');
-			if (customProxyIP && customProxyIP.trim()) {
-				// 使用自定义PROXYIP覆盖环境变量中的值
-				proxyIP = customProxyIP;
-				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
-				console.log('使用自定义PROXYIP:', proxyIP);
-				// 强制使用自定义PROXYIP
-				RproxyIP = 'false';
-			}
-		} catch (error) {
-			console.error('读取自定义PROXYIP时发生错误:', error);
-		}
-	}
-
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
 		const subs = await 整理(sub);
 		sub = subs.length > 1 ? subs[0] : sub;
-	}
-	
-	if (env.KV) {
+	} else if (env.KV) {
 		await 迁移地址列表(env);
 		const 优选地址列表 = await env.KV.get('ADD.txt');
 		if (优选地址列表) {
@@ -2044,16 +2009,7 @@ async function handlePostRequest(request, env, txt) {
 	}
 	try {
 		const content = await request.text();
-		const url = new URL(request.url);
-		const type = url.searchParams.get('type');
-
-		// 根据类型保存到不同的KV
-		if (type === 'proxyip') {
-			await env.KV.put('PROXYIP.txt', content);
-		} else {
-			await env.KV.put(txt, content);
-		}
-		
+		await env.KV.put(txt, content);
 		return new Response("保存成功");
 	} catch (error) {
 		console.error('保存KV时发生错误:', error);
@@ -2064,12 +2020,10 @@ async function handlePostRequest(request, env, txt) {
 async function handleGetRequest(env, txt) {
     let content = '';
     let hasKV = !!env.KV;
-    let proxyIPContent = '';
 
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
-            proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -2224,74 +2178,18 @@ async function handleGetRequest(env, txt) {
                         height: 400px;
                     }
                 }
-
-                .advanced-settings {
-                    margin: 20px 0;
-                    padding: 20px;
-                    background: #f8f9fa;
-                    border-radius: 8px;
-                    border: 1px solid var(--border-color);
-                }
-
-                .advanced-settings-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 15px;
-                    cursor: pointer;
-                }
-
-                .advanced-settings-content {
-                    display: none;
-                }
-
-                .proxyip-editor {
-                    width: 100%;
-                    height: 100px;
-                    margin-top: 10px;
-                    padding: 10px;
-                    border: 1px solid var(--border-color);
-                    border-radius: 4px;
-                    font-family: Monaco, Consolas, "Courier New", monospace;
-                    font-size: 14px;
-                    resize: vertical;
-                }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
-                <!-- 添加高级设置部分 -->
-                <div class="advanced-settings">
-                    <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
-                        <h3 style="margin: 0;">⚙️ 高级设置</h3>
-                        <span id="advanced-settings-toggle">∨</span>
-                    </div>
-                    <div id="advanced-settings-content" class="advanced-settings-content">
-                        <div>
-                            <label for="proxyip"><strong>PROXYIP 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口</p>
-                            <textarea 
-                                id="proxyip" 
-                                class="proxyip-editor" 
-                                placeholder="例如:
-1.2.3.4:443
-proxy.example.com:8443"
-                            >${proxyIPContent}</textarea>
-                            <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveProxyIP()">保存PROXYIP设置</button>
-                            <span id="proxyip-save-status" class="save-status"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 保持现有内容 -->
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                     ℹ️ 注意事项 ∨
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
@@ -2357,45 +2255,6 @@ proxy.example.com:8443"
                 } else {
                     noticeContent.style.display = 'none';
                     noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
-                }
-            }
-
-            function toggleAdvancedSettings() {
-                const content = document.getElementById('advanced-settings-content');
-                const toggle = document.getElementById('advanced-settings-toggle');
-                if (content.style.display === 'none' || !content.style.display) {
-                    content.style.display = 'block';
-                    toggle.textContent = '∧';
-                } else {
-                    content.style.display = 'none';
-                    toggle.textContent = '∨';
-                }
-            }
-
-            async function saveProxyIP() {
-                try {
-                    const content = document.getElementById('proxyip').value;
-                    const saveStatus = document.getElementById('proxyip-save-status');
-                    
-                    saveStatus.textContent = '保存中...';
-                    
-                    const response = await fetch(window.location.href + '?type=proxyip', {
-                        method: 'POST',
-                        body: content
-                    });
-
-                    if (response.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => {
-                            saveStatus.textContent = '';
-                        }, 3000);
-                    } else {
-                        throw new Error('保存失败');
-                    }
-                } catch (error) {
-                    const saveStatus = document.getElementById('proxyip-save-status');
-                    saveStatus.textContent = '❌ ' + error.message;
-                    console.error('保存PROXYIP时发生错误:', error);
                 }
             }
             </script>
