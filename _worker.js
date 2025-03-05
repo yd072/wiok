@@ -1318,21 +1318,40 @@ let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-	// 在获取其他配置前,先尝试读取自定义的PROXYIP
+	// 加载保存的设置
 	if (env.KV) {
 		try {
+			// 加载订阅设置
+			const subSettingsStr = await env.KV.get('SUBSCRIPTION_SETTINGS');
+			if (subSettingsStr) {
+				const settings = JSON.parse(subSettingsStr);
+				// 应用设置
+				if (settings.subname) FileName = settings.subname;
+				if (settings.subapi) subConverter = settings.subapi;
+				if (settings.subconfig) subConfig = settings.subconfig;
+				if (settings.subemoji) subEmoji = settings.subemoji;
+			}
+
+			// 加载过滤设置
+			const filterSettingsStr = await env.KV.get('FILTER_SETTINGS');
+			if (filterSettingsStr) {
+				const settings = JSON.parse(filterSettingsStr);
+				// 应用设置
+				if (settings.banHosts) banHosts = settings.banHosts;
+				if (settings.go2socks5) go2Socks5s = settings.go2socks5;
+			}
+
+			// 继续加载自定义PROXYIP
 			const customProxyIP = await env.KV.get('PROXYIP.txt');
 			if (customProxyIP && customProxyIP.trim()) {
-				// 使用自定义PROXYIP覆盖环境变量中的值
 				proxyIP = customProxyIP;
 				proxyIPs = await 整理(proxyIP);
 				proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
 				console.log('使用自定义PROXYIP:', proxyIP);
-				// 强制使用自定义PROXYIP
 				RproxyIP = 'false';
 			}
 		} catch (error) {
-			console.error('读取自定义PROXYIP时发生错误:', error);
+			console.error('加载设置时发生错误:', error);
 		}
 	}
 
@@ -2298,24 +2317,36 @@ async function handleGetRequest(env, txt) {
 
     if (hasKV) {
         try {
-            // 获取所有保存的设置
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
             
-            // 获取订阅设置
+            // 获取并解析订阅设置
             const subSettingsStr = await env.KV.get('SUBSCRIPTION_SETTINGS');
             if (subSettingsStr) {
                 subscriptionSettings = JSON.parse(subSettingsStr);
+            } else {
+                // 使用当前全局变量的值作为默认值
+                subscriptionSettings = {
+                    subname: FileName,
+                    subapi: subConverter,
+                    subconfig: subConfig,
+                    subemoji: subEmoji
+                };
             }
             
-            // 获取过滤设置
+            // 获取并解析过滤设置
             const filterSettingsStr = await env.KV.get('FILTER_SETTINGS');
             if (filterSettingsStr) {
                 filterSettings = JSON.parse(filterSettingsStr);
+            } else {
+                // 使用当前全局变量的值作为默认值
+                filterSettings = {
+                    banHosts: banHosts,
+                    go2socks5: go2Socks5s
+                };
             }
         } catch (error) {
             console.error('读取KV时发生错误:', error);
-            content = '读取数据时发生错误: ' + error.message;
         }
     }
 
@@ -2593,11 +2624,11 @@ async function handleGetRequest(env, txt) {
                         <div class="settings-group">
                             <label class="settings-label">黑名单域名</label>
                             <textarea id="ban-hosts" class="settings-input" style="height: 100px"
-                                placeholder="每行一个域名，支持通配符 *">${filterSettings.banHosts || ''}</textarea>
+                                placeholder="每行一个域名，支持通配符 *">${Array.isArray(filterSettings.banHosts) ? filterSettings.banHosts.join('\n') : ''}</textarea>
                                 
                             <label class="settings-label">SOCKS5 白名单</label>
                             <textarea id="go2socks5" class="settings-input" style="height: 100px"
-                                placeholder="每行一个域名，支持通配符 *">${filterSettings.go2socks5 || ''}</textarea>
+                                placeholder="每行一个域名，支持通配符 *">${Array.isArray(filterSettings.go2socks5) ? filterSettings.go2socks5.join('\n') : ''}</textarea>
                                 
                             <button class="btn btn-primary" onclick="saveSettings('filter')">
                                 保存过滤设置
