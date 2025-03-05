@@ -945,29 +945,30 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let hasIncomingData = false;
     let header = responseHeader;
     let isSocketClosed = false;
-    const controller = new AbortController();
-    const signal = controller.signal;
 
     try {
-        // 设置全局超时
+        // 设置超时检查
         const timeout = setTimeout(() => {
             if (!hasIncomingData) {
-                controller.abort('数据传输超时');
+                isSocketClosed = true;
+                safeCloseWebSocket(webSocket);
+                if (retry) retry();
             }
         }, 6000);
 
-        // 监听WebSocket关闭事件
-        webSocket.addEventListener('close', () => {
-            controller.abort('WebSocket已关闭');
-            clearTimeout(timeout);
-        });
-
-        // 使用更高效的数据传输
+        // 获取数据流读取器
         const reader = remoteSocket.readable.getReader();
-        const writer = new WritableStream({
-            async write(chunk) {
-                if (signal.aborted) throw new Error('连接已中断');
+
+        try {
+            while (true) {
+                const {done, value} = await reader.read();
                 
+                if (done) {
+                    log('数据传输完成');
+                    break;
+                }
+
+                // 检查WebSocket状态
                 if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                     throw new Error('WebSocket未连接');
                 }
@@ -975,51 +976,32 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 try {
                     hasIncomingData = true;
                     
+                    // 处理数据
                     if (header) {
-                        // 预分配内存并一次性合并数据
-                        const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                        const combinedData = new Uint8Array(header.byteLength + value.byteLength);
                         combinedData.set(new Uint8Array(header), 0);
-                        combinedData.set(new Uint8Array(chunk), header.byteLength);
-                        await webSocket.send(combinedData);
+                        combinedData.set(new Uint8Array(value), header.byteLength);
+                        webSocket.send(combinedData);
                         header = null;
                     } else {
-                        await webSocket.send(chunk);
+                        webSocket.send(value);
                     }
                 } catch (error) {
-                    log(`数据写入错误: ${error.message}`);
+                    log(`数据发送错误: ${error.message}`);
                     throw error;
                 }
-            },
-            close() {
-                isSocketClosed = true;
-                log(`远程连接已关闭${hasIncomingData ? ' (已接收数据)' : ' (未接收数据)'}`);
-                clearTimeout(timeout);
-            },
-            abort(reason) {
-                isSocketClosed = true;
-                log(`远程连接中断: ${reason}`);
-                clearTimeout(timeout);
-            }
-        });
-
-        try {
-            while (!signal.aborted) {
-                const {done, value} = await reader.read();
-                if (done) break;
-                await writer.getWriter().write(value);
             }
         } catch (error) {
             log(`数据读取错误: ${error.message}`);
             throw error;
         } finally {
             reader.releaseLock();
-            if (!isSocketClosed) {
-                writer.abort('数据流已关闭');
-            }
         }
 
+        clearTimeout(timeout);
+
         // 处理未收到数据的情况
-        if (!hasIncomingData && retry && !signal.aborted) {
+        if (!hasIncomingData && retry) {
             log('未收到数据,尝试重试连接');
             await retry();
         }
@@ -1028,12 +1010,6 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         log(`连接处理错误: ${error.message}`);
         if (!isSocketClosed) {
             safeCloseWebSocket(webSocket);
-        }
-    } finally {
-        clearTimeout(timeout);
-        if (signal.aborted && retry && !hasIncomingData) {
-            log('连接超时,尝试重试');
-            await retry();
         }
     }
 }
