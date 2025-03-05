@@ -1315,7 +1315,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的PROXYIP
@@ -2293,11 +2293,26 @@ async function handleGetRequest(env, txt) {
     let content = '';
     let hasKV = !!env.KV;
     let proxyIPContent = '';
+    let subscriptionSettings = {};
+    let filterSettings = {};
 
     if (hasKV) {
         try {
+            // 获取所有保存的设置
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
+            
+            // 获取订阅设置
+            const subSettingsStr = await env.KV.get('SUBSCRIPTION_SETTINGS');
+            if (subSettingsStr) {
+                subscriptionSettings = JSON.parse(subSettingsStr);
+            }
+            
+            // 获取过滤设置
+            const filterSettingsStr = await env.KV.get('FILTER_SETTINGS');
+            if (filterSettingsStr) {
+                filterSettings = JSON.parse(filterSettingsStr);
+            }
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -2484,31 +2499,110 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     resize: vertical;
                 }
+
+                .settings-panel {
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #f8f9fa;
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                }
+                
+                .settings-title {
+                    font-size: 16px;
+                    font-weight: 500;
+                    margin-bottom: 15px;
+                    color: var(--primary-color);
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    cursor: pointer;
+                }
+                
+                .settings-content {
+                    display: none;
+                }
+                
+                .settings-group {
+                    margin: 10px 0;
+                }
+                
+                .settings-input {
+                    width: 100%;
+                    padding: 8px;
+                    margin: 5px 0;
+                    border: 1px solid var(--border-color);
+                    border-radius: 4px;
+                }
+                
+                .settings-label {
+                    display: block;
+                    margin: 10px 0 5px;
+                    color: #666;
+                }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
-                <!-- 添加高级设置部分 -->
-                <div class="advanced-settings">
-                    <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
-                        <h3 style="margin: 0;">⚙️ 高级设置</h3>
-                        <span id="advanced-settings-toggle">∨</span>
+                <!-- 订阅设置面板 -->
+                <div class="settings-panel">
+                    <div class="settings-title" onclick="togglePanel('subscription')">
+                        📝 订阅设置
+                        <span id="subscription-toggle">∨</span>
                     </div>
-                    <div id="advanced-settings-content" class="advanced-settings-content">
-                        <div>
-                            <label for="proxyip"><strong>PROXYIP 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口</p>
-                            <textarea 
-                                id="proxyip" 
-                                class="proxyip-editor" 
-                                placeholder="例如:
-1.2.3.4:443
-proxy.example.com:8443"
-                            >${proxyIPContent}</textarea>
-                            <button class="btn btn-primary" style="margin-top: 10px;" onclick="saveProxyIP()">保存PROXYIP设置</button>
-                            <span id="proxyip-save-status" class="save-status"></span>
+                    <div id="subscription-content" class="settings-content">
+                        <div class="settings-group">
+                            <label class="settings-label">订阅名称</label>
+                            <input type="text" id="subname" class="settings-input" 
+                                value="${subscriptionSettings.subname || ''}" 
+                                placeholder="输入订阅名称">
+                                
+                            <label class="settings-label">订阅转换API</label>
+                            <input type="text" id="subapi" class="settings-input" 
+                                value="${subscriptionSettings.subapi || ''}" 
+                                placeholder="输入订阅转换API">
+                                
+                            <label class="settings-label">订阅配置文件</label>
+                            <input type="text" id="subconfig" class="settings-input" 
+                                value="${subscriptionSettings.subconfig || ''}" 
+                                placeholder="输入配置文件URL">
+                                
+                            <label class="settings-label">Emoji 显示</label>
+                            <select id="subemoji" class="settings-input">
+                                <option value="true" ${subscriptionSettings.subemoji === 'true' ? 'selected' : ''}>启用</option>
+                                <option value="false" ${subscriptionSettings.subemoji === 'false' ? 'selected' : ''}>禁用</option>
+                            </select>
+                            
+                            <button class="btn btn-primary" onclick="saveSettings('subscription')">
+                                保存订阅设置
+                            </button>
+                            <span id="subscription-status" class="save-status"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 节点过滤面板 -->
+                <div class="settings-panel">
+                    <div class="settings-title" onclick="togglePanel('filter')">
+                        🔍 节点过滤
+                        <span id="filter-toggle">∨</span>
+                    </div>
+                    <div id="filter-content" class="settings-content">
+                        <div class="settings-group">
+                            <label class="settings-label">黑名单域名</label>
+                            <textarea id="ban-hosts" class="settings-input" style="height: 100px"
+                                placeholder="每行一个域名，支持通配符 *">${filterSettings.banHosts || ''}</textarea>
+                                
+                            <label class="settings-label">SOCKS5 白名单</label>
+                            <textarea id="go2socks5" class="settings-input" style="height: 100px"
+                                placeholder="每行一个域名，支持通配符 *">${filterSettings.go2socks5 || ''}</textarea>
+                                
+                            <button class="btn btn-primary" onclick="saveSettings('filter')">
+                                保存过滤设置
+                            </button>
+                            <span id="filter-status" class="save-status"></span>
                         </div>
                     </div>
                 </div>
@@ -2519,7 +2613,7 @@ proxy.example.com:8443"
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
@@ -2588,9 +2682,10 @@ proxy.example.com:8443"
                 }
             }
 
-            function toggleAdvancedSettings() {
-                const content = document.getElementById('advanced-settings-content');
-                const toggle = document.getElementById('advanced-settings-toggle');
+            function togglePanel(type) {
+                const content = document.getElementById(type + '-content');
+                const toggle = document.getElementById(type + '-toggle');
+                
                 if (content.style.display === 'none' || !content.style.display) {
                     content.style.display = 'block';
                     toggle.textContent = '∧';
@@ -2600,30 +2695,46 @@ proxy.example.com:8443"
                 }
             }
 
-            async function saveProxyIP() {
+            async function saveSettings(type) {
                 try {
-                    const content = document.getElementById('proxyip').value;
-                    const saveStatus = document.getElementById('proxyip-save-status');
+                    const status = document.getElementById(type + '-status');
+                    status.textContent = '保存中...';
                     
-                    saveStatus.textContent = '保存中...';
+                    let data;
+                    if (type === 'subscription') {
+                        data = {
+                            subname: document.getElementById('subname').value,
+                            subapi: document.getElementById('subapi').value,
+                            subconfig: document.getElementById('subconfig').value,
+                            subemoji: document.getElementById('subemoji').value
+                        };
+                    } else if (type === 'filter') {
+                        data = {
+                            banHosts: document.getElementById('ban-hosts').value.split('\n').filter(line => line.trim()),
+                            go2socks5: document.getElementById('go2socks5').value.split('\n').filter(line => line.trim())
+                        };
+                    }
                     
-                    const response = await fetch(window.location.href + '?type=proxyip', {
+                    const response = await fetch(window.location.href + '?type=' + type, {
                         method: 'POST',
-                        body: content
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data)
                     });
 
                     if (response.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
+                        status.textContent = '✅ 保存成功';
                         setTimeout(() => {
-                            saveStatus.textContent = '';
+                            status.textContent = '';
                         }, 3000);
                     } else {
                         throw new Error('保存失败');
                     }
                 } catch (error) {
-                    const saveStatus = document.getElementById('proxyip-save-status');
-                    saveStatus.textContent = '❌ ' + error.message;
-                    console.error('保存PROXYIP时发生错误:', error);
+                    const status = document.getElementById(type + '-status');
+                    status.textContent = '❌ ' + error.message;
+                    console.error('保存设置时发生错误:', error);
                 }
             }
             </script>
