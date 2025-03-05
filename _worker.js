@@ -228,11 +228,11 @@ export default {
 
 			const fakeHostName = `${fakeUserIDMD5.slice(6, 9)}.${fakeUserIDMD5.slice(13, 19)}`;
 
-			proxyIP = env.PROXYIP || env.proxyip || proxyIP;
-			// 如果有KV存储,尝试读取自定义PROXYIP
+			// 修改PROXYIP初始化逻辑
 			if (env.KV) {
 				try {
 					const customProxyIP = await env.KV.get('PROXYIP.txt');
+					// 只有当KV中有非空值时才覆盖默认设置
 					if (customProxyIP && customProxyIP.trim()) {
 						proxyIP = customProxyIP;
 					}
@@ -240,31 +240,29 @@ export default {
 					console.error('读取自定义PROXYIP时发生错误:', error);
 				}
 			}
+			// 如果proxyIP为空，则使用环境变量或默认值
+			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
 			proxyIPs = await 整理(proxyIP);
-			proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 
 			// 修改SOCKS5地址初始化逻辑
 			if (env.KV) {
 				try {
-					// 优先从KV存储读取SOCKS5设置
 					const kvSocks5 = await env.KV.get('SOCKS5.txt');
+					// 只有当KV中有非空值时才覆盖默认设置
 					if (kvSocks5 && kvSocks5.trim()) {
-						socks5Address = kvSocks5.split('\n')[0].trim(); // 使用第一个有效地址
-					} else {
-						// 如果KV中没有设置，则使用环境变量
-						socks5Address = env.SOCKS5 || socks5Address;
+						socks5Address = kvSocks5.split('\n')[0].trim();
 					}
 				} catch (error) {
 					console.error('读取SOCKS5设置时发生错误:', error);
-					socks5Address = env.SOCKS5 || socks5Address;
 				}
-			} else {
-				socks5Address = env.SOCKS5 || socks5Address;
 			}
-
+			// 如果socks5Address为空，则使用环境变量或默认值
+			socks5Address = socks5Address || env.SOCKS5 || '';
 			socks5s = await 整理(socks5Address);
-			socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
+			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 			socks5Address = socks5Address.split('//')[1] || socks5Address;
+
 			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
 			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
 			if (env.BAN) banHosts = await 整理(env.BAN);
