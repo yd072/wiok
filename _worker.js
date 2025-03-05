@@ -2535,7 +2535,7 @@ user:pass@127.0.0.1:1080
                         </div>
 
                         <!-- 统一的保存按钮 -->
-                        <div style="text-align: center;">
+                        <div>
                             <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
