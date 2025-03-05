@@ -2571,12 +2571,81 @@ async function handleGetRequest(env, txt) {
                     margin: 10px 0 5px;
                     color: #666;
                 }
+
+                .notice-group {
+                    padding: 15px;
+                    background: #fff;
+                    border-radius: 6px;
+                    margin-bottom: 10px;
+                }
+
+                .notice-group strong {
+                    display: block;
+                    margin: 15px 0 10px;
+                    color: var(--primary-color);
+                }
+
+                .notice-group p {
+                    margin: 10px 0;
+                    color: #666;
+                    line-height: 1.6;
+                }
+
+                .notice-group pre {
+                    background: #f8f9fa;
+                    padding: 10px;
+                    border-radius: 4px;
+                    border: 1px solid var(--border-color);
+                    margin: 10px 0;
+                    overflow-x: auto;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
+                }
+
+                .notice-group a {
+                    color: var(--primary-color);
+                    text-decoration: none;
+                }
+
+                .notice-group a:hover {
+                    text-decoration: underline;
+                }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
+                <!-- 注意事项面板 -->
+                <div class="settings-panel">
+                    <div class="settings-title" onclick="togglePanel('notice')">
+                        ℹ️ 注意事项
+                        <span id="notice-toggle">∨</span>
+                    </div>
+                    <div id="notice-content" class="settings-content">
+                        <div class="notice-group">
+                            <strong>1. ADD格式说明</strong>
+                            <p>每行一个地址，格式：地址:端口#备注。IPv6地址需要用方括号括起来，例如：</p>
+                            <pre>
+visa.cn#示例域名
+127.0.0.1:2053#CFnat
+[2606:4700::]:2053#IPv6
+                            </pre>
+
+                            <strong>2. ADDAPI 说明</strong>
+                            <p>可以添加API地址，支持PROXYIP的替换，例如：</p>
+                            <pre>
+https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt?proxyip=true
+                            </pre>
+
+                            <strong>3. CSV格式说明</strong>
+                            <p>支持 <a href='https://github.com/XIU2/CloudflareSpeedTest'>CloudflareSpeedTest</a> 的 csv 测速结果文件，例如：</p>
+                            <pre>
+https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/CloudflareSpeedTest.csv
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 订阅设置面板 -->
                 <div class="settings-panel">
                     <div class="settings-title" onclick="togglePanel('subscription')">
@@ -2638,15 +2707,6 @@ async function handleGetRequest(env, txt) {
                     </div>
                 </div>
 
-                <!-- 保持现有内容 -->
-                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
-                    ℹ️ 注意事项 ∨
-                </a>
-                
-                <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
-                </div>
-
                 <div class="editor-container">
                     ${hasKV ? `
                         <textarea class="editor" 
@@ -2698,18 +2758,6 @@ async function handleGetRequest(env, txt) {
                     console.error('保存时发生错误:', error);
                 } finally {
                     button.disabled = false;
-                }
-            }
-
-            function toggleNotice() {
-                const noticeContent = document.getElementById('noticeContent');
-                const noticeToggle = document.getElementById('noticeToggle');
-                if (noticeContent.style.display === 'none') {
-                    noticeContent.style.display = 'block';
-                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
-                } else {
-                    noticeContent.style.display = 'none';
-                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
                 }
             }
 
