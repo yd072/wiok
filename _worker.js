@@ -1520,10 +1520,14 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				socks5Address = '';
 			}
 
-			// 读取自定义SUB设置
+			// 修改SUB设置的处理
 			const customSub = await env.KV.get('SUB.txt');
 			if (customSub && customSub.trim() && !sub) {
-				sub = customSub.trim().split('\n')[0];
+				// 使用所有非空行作为SUB设置
+				sub = customSub.trim().split('\n')
+					.map(line => line.trim())
+					.filter(line => line)
+					.join('|');
 				console.log('使用自定义SUB:', sub);
 			}
 		} catch (error) {
@@ -1537,12 +1541,21 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 
 	if (sub) {
-		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
-		sub = match ? match[1] : sub;
-		const subs = await 整理(sub);
-		sub = subs.length > 1 ? subs[0] : sub;
+		// 处理多个SUB地址
+		const subList = sub.split('|').map(s => s.trim()).filter(s => s);
+		const processedSubs = [];
+		
+		for (const s of subList) {
+			const match = s.match(/^(?:https?:\/\/)?([^\/]+)/);
+			const processed = match ? match[1] : s;
+			const subs = await 整理(processed);
+			processedSubs.push(subs.length > 1 ? subs[0] : processed);
+		}
+		
+		// 将处理后的SUB合并回单个字符串
+		sub = processedSubs.join('|');
 	}
-	
+
 	if (env.KV) {
 		await 迁移地址列表(env);
 		const 优选地址列表 = await env.KV.get('ADD.txt');
