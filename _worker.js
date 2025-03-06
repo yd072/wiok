@@ -2457,6 +2457,9 @@ async function handlePostRequest(request, env, txt) {
 			case 'socks5':
 				await env.KV.put('SOCKS5.txt', content);
 				break;
+			case 'sub':
+				await env.KV.put('SUB.txt', content);
+				break;
 			default:
 				await env.KV.put(txt, content);
 		}
@@ -2472,13 +2475,15 @@ async function handleGetRequest(env, txt) {
     let content = '';
     let hasKV = !!env.KV;
     let proxyIPContent = '';
-    let socks5Content = ''; // 添加SOCKS5内容变量
+    let socks5Content = '';
+    let subContent = ''; // 添加SUB内容变量
 
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
-            socks5Content = await env.KV.get('SOCKS5.txt') || ''; // 获取SOCKS5设置
+            socks5Content = await env.KV.get('SOCKS5.txt') || '';
+            subContent = await env.KV.get('SUB.txt') || ''; // 获取SUB设置
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -2704,6 +2709,19 @@ user:pass@127.0.0.1:1080
                             >${socks5Content}</textarea>
                         </div>
 
+                        <!-- SUB设置 -->
+                        <div style="margin-bottom: 20px;">
+                            <label for="sub"><strong>SUB 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">每行一个订阅地址</p>
+                            <textarea 
+                                id="sub" 
+                                class="proxyip-editor" 
+                                placeholder="例如:
+sub.google.com
+sub.example.com"
+                            >${subContent}</textarea>
+                        </div>
+
                         <!-- 统一的保存按钮 -->
                         <div>
                             <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
@@ -2819,7 +2837,14 @@ user:pass@127.0.0.1:1080
                         body: socks5Content
                     });
 
-                    if (proxyipResponse.ok && socks5Response.ok) {
+                    // 保存SUB设置
+                    const subContent = document.getElementById('sub').value;
+                    const subResponse = await fetch(window.location.href + '?type=sub', {
+                        method: 'POST',
+                        body: subContent
+                    });
+
+                    if (proxyipResponse.ok && socks5Response.ok && subResponse.ok) {
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
