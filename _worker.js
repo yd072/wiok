@@ -987,16 +987,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                         hostname: address,
                         port: port,
                         allowHalfOpen: false,
-                        keepAlive: true,
-                        keepAliveInitialDelay: 60000
-                    })
-                ,
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('连接超时')), 3000)
-                )
-            );
+                keepAlive: true
+            })
+        );
 
-            clearTimeout(timeoutId);
             remoteSocket.value = tcpSocket;
 
             const writer = tcpSocket.writable.getWriter();
