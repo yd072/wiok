@@ -67,6 +67,20 @@ const utils = {
 			}
 		}
 	},
+
+	// WebSocket相关
+	ws: {
+		safeClose(socket) {
+			try {
+				if (socket.readyState === WS_READY_STATE_OPEN || 
+					socket.readyState === WS_READY_STATE_CLOSING) {
+					socket.close();
+				}
+			} catch (error) {
+				console.error('safeCloseWebSocket error', error);
+			}
+		}
+	},
 };
 
 // WebSocket连接管理类
@@ -79,47 +93,46 @@ class WebSocketManager {
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: (controller) => {
-				// 处理早期数据
-				if (earlyDataHeader) {
-					const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-					if (error) {
-						controller.error(error);
-						return;
-					}
-					if (earlyData) {
-						controller.enqueue(earlyData);
-					}
-				}
+			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+			cancel: (reason) => this.handleStreamCancel(reason)
+		});
+	}
 
-				// 处理 WebSocket 消息
-				this.webSocket.addEventListener('message', (event) => {
-					if (this.readableStreamCancel) return;
-					controller.enqueue(event.data);
-				});
+	handleStreamStart(controller, earlyDataHeader) {
+		// 处理消息事件
+		this.webSocket.addEventListener('message', (event) => {
+			if (this.readableStreamCancel) return;
+			controller.enqueue(event.data);
+		});
 
-				// 处理关闭事件
-				this.webSocket.addEventListener('close', () => {
-					if (!this.readableStreamCancel) {
-						controller.close();
-					}
-				});
-
-				// 处理错误事件
-				this.webSocket.addEventListener('error', (err) => {
-					this.log('WebSocket server error');
-					controller.error(err);
-				});
-			},
-			pull: (controller) => {
-				// 按需拉取数据
-			},
-			cancel: (reason) => {
-				this.readableStreamCancel = true;
-				this.log(`Readable stream canceled, reason: ${reason}`);
-				安全关闭WebSocket(this.webSocket);
+		// 处理关闭事件
+		this.webSocket.addEventListener('close', () => {
+			utils.ws.safeClose(this.webSocket);
+			if (!this.readableStreamCancel) {
+				controller.close();
 			}
 		});
+
+		// 处理错误事件
+		this.webSocket.addEventListener('error', (err) => {
+			this.log('WebSocket server error');
+			controller.error(err);
+		});
+
+		// 处理早期数据
+		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+		if (error) {
+			controller.error(error);
+		} else if (earlyData) {
+			controller.enqueue(earlyData);
+		}
+	}
+
+	handleStreamCancel(reason) {
+		if (this.readableStreamCancel) return;
+		this.log(`Readable stream canceled, reason: ${reason}`);
+		this.readableStreamCancel = true;
+		utils.ws.safeClose(this.webSocket);
 	}
 }
 
@@ -454,7 +467,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                         if (维列斯Header) 维列斯Header = null;
                     } catch (error) {
                         console.error(`发送数据时发生错误: ${error.message}`);
-                        safeCloseWebSocket(webSocket);
+                        utils.ws.safeClose(webSocket);
                     }
                 }
             },
@@ -467,7 +480,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         }));
     } catch (error) {
         console.error(`DNS查询异常: ${error.message}`, error.stack);
-        safeCloseWebSocket(webSocket);
+        utils.ws.safeClose(webSocket);
     }
 }
 
@@ -496,14 +509,9 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
         remoteSocket.value = tcpSocket;
         
-        try {
-            const writer = tcpSocket.writable.getWriter();
-            await writer.write(rawClientData);
-            writer.releaseLock();
-        } catch (error) {
-            console.error('Error writing initial data:', error);
-            throw error;
-        }
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(rawClientData);
+        writer.releaseLock();
         
         return tcpSocket;
     }
@@ -531,7 +539,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             tcpSocket.closed.catch(error => {
                 console.log('Retry tcpSocket closed error', error);
             }).finally(() => {
-                safeCloseWebSocket(webSocket);
+                utils.ws.safeClose(webSocket);
             });
             remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
@@ -622,78 +630,45 @@ function process维列斯Header(维列斯Buffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    
-    // 使用TransformStream进行高效的数据处理
-    const transformStream = new TransformStream({
-        start(controller) {
-            // 初始化时不做任何操作
-        },
-        async transform(chunk, controller) {
-            hasIncomingData = true;
-            
-            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                controller.error('WebSocket not open');
-                return;
-            }
-            
-            // 如果有头部数据，与第一个块合并后发送
-            if (header) {
-                webSocket.send(await new Blob([header, chunk]).arrayBuffer());
-                header = null;
-            } else {
-                // 直接发送二进制数据，避免不必要的转换
-                webSocket.send(chunk);
-            }
-        },
-        flush(controller) {
-            log(`Transform stream flush, data received: ${hasIncomingData}`);
-        }
-    });
-    
-    try {
-        // 使用管道直接连接数据流，减少中间环节
-        await remoteSocket.readable
-            .pipeThrough(transformStream)
-            .pipeTo(new WritableStream({
-                write() {
-                    // 数据已在transform中处理，这里不需要额外操作
+
+    await remoteSocket.readable
+        .pipeTo(
+            new WritableStream({
+                async write(chunk, controller) {
+                    hasIncomingData = true;
+
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        controller.error('WebSocket not open');
+                    }
+
+                    if (header) {
+                        webSocket.send(await new Blob([header, chunk]).arrayBuffer());
+                        header = null;
+                    } else {
+                        webSocket.send(chunk);
+                    }
                 },
                 close() {
                     log(`Remote connection closed, data received: ${hasIncomingData}`);
-                    if (!hasIncomingData && retry) {
-                        log(`No data received, retrying connection`);
-                        retry();
-                    }
                 },
                 abort(reason) {
-                    console.error(`Remote connection aborted`, reason);
-                    safeCloseWebSocket(webSocket);
-                }
-            }));
-    } catch (error) {
-        console.error(`remoteSocketToWS exception`, error);
-        safeCloseWebSocket(webSocket);
-        
-        // 如果没有收到数据且提供了重试函数，则尝试重试
-        if (!hasIncomingData && retry) {
-            log(`Connection failed, retrying`);
-            retry();
-        }
+                    console.error(`Remote connection aborted`);
+                },
+            })
+        )
+        .catch((error) => {
+            console.error(`remoteSocketToWS exception`);
+            utils.ws.safeClose(webSocket);
+        });
+
+    if (!hasIncomingData && retry) {
+        log(`Retrying connection`);
+        retry();
     }
 }
 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
-
-function safeCloseWebSocket(socket) {
-    try {
-        if (socket.readyState === WS_READY_STATE_OPEN || socket.readyState === WS_READY_STATE_CLOSING) {
-            socket.close();
-        }
-    } catch (error) {
-        console.error('safeCloseWebSocket error', error);
-    }
-}
 
 const byteToHexArray = Array.from({ length: 256 }, (_, i) => (i + 256).toString(16).slice(1));
 
@@ -915,7 +890,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
@@ -952,26 +927,17 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
 		let cfips = [
-			        '103.21.244.0/24',
-				'104.16.0.0/13',
-				'104.24.0.0/14',
-				'172.64.0.0/14',
-				'104.16.0.0/14',
-				'104.24.0.0/15',
-				'141.101.64.0/19',
-				'172.64.0.0/14',
-				'188.114.96.0/21',
-				'190.93.240.0/21',
-				'162.159.152.0/23',
-				'104.16.0.0/13',
-				'104.24.0.0/14',
-				'172.64.0.0/14',
-				'104.16.0.0/14',
-				'104.24.0.0/15',
-				'141.101.64.0/19',
-				'172.64.0.0/14',
-				'188.114.96.0/21',
-				'190.93.240.0/21',
+			'103.21.244.0/23',
+			'104.16.0.0/13',
+			'104.24.0.0/14',
+			'172.64.0.0/14',
+			'103.21.244.0/23',
+			'104.16.0.0/14',
+			'104.24.0.0/15',
+			'141.101.64.0/19',
+			'172.64.0.0/14',
+			'188.114.96.0/21',
+			'190.93.240.0/21',
 		];
 
 		function generateRandomIPFromCIDR(cidr) {
@@ -988,25 +954,10 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			}).join('.');
 		}
 
-		let counter = 1; // 添加计数器
-		const randomPorts = httpsPorts.concat('443'); // 合并所有可用端口
-
 		if (hostName.includes(".workers.dev")) {
-			addressesnotls = addressesnotls.concat(
-				cfips.map(cidr => {
-					const ip = generateRandomIPFromCIDR(cidr);
-					const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-					return `${ip}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`;
-				})
-			);
+			addressesnotls = addressesnotls.concat(cfips.map(cidr => generateRandomIPFromCIDR(cidr) + '#CF随机节点'));
 		} else {
-			addresses = addresses.concat(
-				cfips.map(cidr => {
-					const ip = generateRandomIPFromCIDR(cidr);
-					const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-					return `${ip}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`;
-				})
-			);
+			addresses = addresses.concat(cfips.map(cidr => generateRandomIPFromCIDR(cidr) + '#CF随机节点'));
 		}
 	}
 
@@ -1093,9 +1044,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			singbox订阅地址:<br>
 			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}?sb</a><br>
 			<div id="qrcode_3" style="margin: 10px 10px 10px 10px;"></div>
-			Loon订阅地址:<br>
-			<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${proxyhost}${hostName}/${uuid}?loon</a><br>
-			<div id="qrcode_4" style="margin: 10px 10px 10px 10px;"></div>
 			<strong><a href="javascript:void(0);" id="noticeToggle" onclick="toggleNotice()">实用订阅技巧∨</a></strong><br>
 				<div id="noticeContent" class="notice-content" style="display: none;">
                     <strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br>
@@ -1240,10 +1188,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				isBase64 = false;
 			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
 				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			} else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
-				// 添加Loon支持
-				url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			}
 		}
