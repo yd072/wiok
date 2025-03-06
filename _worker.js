@@ -601,8 +601,8 @@ export default {
 								</div>
 
 								<div class="warning-box">
-								<!--	<span class="icon">⚠️</span>
-									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效 -->
+									<span class="icon">⚠️</span>
+									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
 								</div>
 
 								<div class="info-grid">
