@@ -1491,7 +1491,7 @@ let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-	// 在获取其他配置前,先尝试读取自定义的PROXYIP
+	// 在获取其他配置前,先尝试读取自定义的设置
 	if (env.KV) {
 		try {
 			const customProxyIP = await env.KV.get('PROXYIP.txt');
@@ -1523,21 +1523,21 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			// 读取自定义SUB设置
 			const customSub = await env.KV.get('SUB.txt');
 			if (customSub && customSub.trim()) {
-				sub = customSub.split('\n')[0].trim();
-				console.log('使用自定义SUB:', sub);
+				// 如果URL参数中没有指定sub，则使用自定义设置
+				if (!sub || sub === '') {
+					const subs = await 整理(customSub);
+					sub = subs.length > 0 ? subs[0] : '';
+				}
 			}
 		} catch (error) {
-			console.error('读取自定义配置时发生错误:', error);
+			console.error('读取自定义设置时发生错误:', error);
 		}
 	}
 
-	// 如果URL参数中有sub,则优先使用URL参数中的值
-	if (_url.searchParams.has('sub') && _url.searchParams.get('sub') !== '') {
-		sub = _url.searchParams.get('sub');
+	// 如果没有任何自定义设置或URL参数，使用默认值
+	if (!sub || sub === '') {
+		sub = env.SUB || '';  // 使用环境变量中的设置
 	}
-	
-	// 如果以上都没有设置,则使用代码中的默认值
-	sub = sub || env.SUB || '';
 
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
@@ -1545,7 +1545,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		const subs = await 整理(sub);
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
-
+	
 	if (env.KV) {
 		await 迁移地址列表(env);
 		const 优选地址列表 = await env.KV.get('ADD.txt');
@@ -2727,7 +2727,7 @@ user:pass@127.0.0.1:1080
                         <!-- SUB设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="sub"><strong>SUB 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
+                            <p style="margin: 5px 0; color: #666;">优选订阅生成器地址，例如：sub.google.com</p>
                             <textarea 
                                 id="sub" 
                                 class="proxyip-editor" 
