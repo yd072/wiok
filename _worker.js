@@ -1713,9 +1713,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
 					}
-
-					/* 添加暗色主题变量 */
-					[data-theme="dark"] {
+					
+					:root[data-theme="dark"] {
 						--primary-color: #66bb6a;
 						--secondary-color: #4caf50;
 						--border-color: #424242;
@@ -1723,7 +1722,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						--background-color: #121212;
 						--section-bg: #1e1e1e;
 					}
-
+					
 					body {
 						margin: 0;
 						padding: 20px;
@@ -1731,7 +1730,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
-						transition: background-color 0.3s ease;
 					}
 
 					.container {
@@ -1844,44 +1842,15 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							padding: 15px;
 						}
 					}
-
-					/* 添加主题切换按钮样式 */
-					.theme-toggle {
-						position: fixed;
-						top: 20px;
-						right: 20px;
-						padding: 10px 15px;
-						border-radius: 25px;
-						background: var(--section-bg);
-						color: var(--text-color);
-						border: 1px solid var(--border-color);
-						cursor: pointer;
-						display: flex;
-						align-items: center;
-						gap: 8px;
-						z-index: 1000;
-						transition: all 0.3s ease;
-						font-size: 14px;
-						box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-					}
-
-					.theme-toggle:hover {
-						transform: translateY(-1px);
-						box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-					}
-
-					.theme-toggle .icon {
-						font-size: 16px;
-					}
 				</style>
 			</head>
 			<body>
-				<!-- 添加主题切换按钮 -->
-				<button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">
-					<span class="icon">⌨️</span> 切换主题
-				</button>
-
 				<div class="container">
+					<div class="theme-switch">
+						<button class="btn btn-secondary" onclick="toggleTheme()">
+							<span id="theme-icon">🌙</span>
+						</button>
+					</div>
 					<div class="section">
 						<div class="section-title">📋 订阅信息</div>
 						<div class="subscription-link">
@@ -2009,31 +1978,29 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						}
 					}
 
-					// 添加主题切换功能
 					function toggleTheme() {
-						const html = document.documentElement;
-						const themeToggle = document.getElementById('themeToggle');
-						const currentTheme = html.getAttribute('data-theme');
+						const root = document.documentElement;
+						const themeIcon = document.getElementById('theme-icon');
+						const currentTheme = root.getAttribute('data-theme');
 						
 						if (currentTheme === 'dark') {
-							html.removeAttribute('data-theme');
-							themeToggle.innerHTML = '<span class="icon">⌨️</span> 切换主题';
+							root.removeAttribute('data-theme');
+							themeIcon.textContent = '🌙';
 							localStorage.setItem('theme', 'light');
 						} else {
-							html.setAttribute('data-theme', 'dark');
-							themeToggle.innerHTML = '<span class="icon">🍺</span> 切换主题';
+							root.setAttribute('data-theme', 'dark');
+							themeIcon.textContent = '☀️';
 							localStorage.setItem('theme', 'dark');
 						}
 					}
 
-					// 页面加载时检查主题
 					document.addEventListener('DOMContentLoaded', () => {
 						const savedTheme = localStorage.getItem('theme');
-						const themeToggle = document.getElementById('themeToggle');
+						const themeIcon = document.getElementById('theme-icon');
 						
 						if (savedTheme === 'dark') {
 							document.documentElement.setAttribute('data-theme', 'dark');
-							themeToggle.innerHTML = '<span class="icon">🍺</span> 切换主题';
+							themeIcon.textContent = '☀️';
 						}
 					});
 				</script>
@@ -2591,6 +2558,15 @@ async function handleGetRequest(env, txt) {
                     --background-color: #f5f5f5;
                 }
                 
+                :root[data-theme="dark"] {
+                    --primary-color: #66bb6a;
+                    --secondary-color: #4caf50;
+                    --border-color: #424242;
+                    --text-color: #e0e0e0;
+                    --background-color: #121212;
+                    --section-bg: #1e1e1e;
+                }
+                
                 body {
                     margin: 0;
                     padding: 20px;
@@ -2603,7 +2579,7 @@ async function handleGetRequest(env, txt) {
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: white;
+                    background: var(--section-bg);
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
