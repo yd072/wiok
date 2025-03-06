@@ -1713,7 +1713,17 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
 					}
-					
+
+					/* 添加暗色主题变量 */
+					[data-theme="dark"] {
+						--primary-color: #66bb6a;
+						--secondary-color: #4caf50;
+						--border-color: #424242;
+						--text-color: #e0e0e0;
+						--background-color: #121212;
+						--section-bg: #1e1e1e;
+					}
+
 					body {
 						margin: 0;
 						padding: 20px;
@@ -1721,6 +1731,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
+						transition: background-color 0.3s ease;
 					}
 
 					.container {
@@ -1833,9 +1844,112 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							padding: 15px;
 						}
 					}
+
+					/* 添加主题切换按钮样式 */
+					.theme-toggle {
+						position: fixed;
+						top: 20px;
+						right: 20px;
+						padding: 10px 15px;
+						border-radius: 25px;
+						background: var(--section-bg);
+						color: var(--text-color);
+						border: 1px solid var(--border-color);
+						cursor: pointer;
+						display: flex;
+						align-items: center;
+						gap: 8px;
+						z-index: 1000;
+						font-size: 14px;
+						box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+						transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+					}
+
+					.theme-toggle:hover {
+						transform: translateY(-2px) rotate(5deg);
+						box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+					}
+
+					.theme-toggle .icon {
+						font-size: 16px;
+						display: inline-block;
+						transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+					}
+
+					/* 添加图标旋转动画 */
+					.theme-toggle .icon {
+						animation: iconFloat 2s ease-in-out infinite;
+					}
+
+					@keyframes iconFloat {
+						0%, 100% {
+							transform: translateY(0);
+						}
+						50% {
+							transform: translateY(-3px);
+						}
+					}
+
+					/* 添加主题切换时的过渡效果 */
+					body * {
+						transition: background-color 0.3s ease, 
+									color 0.3s ease, 
+									border-color 0.3s ease,
+									box-shadow 0.3s ease;
+					}
+
+					/* 添加点击效果 */
+					.theme-toggle:active {
+						transform: scale(0.95);
+					}
+
+					/* 添加图标切换动画 */
+					.theme-toggle .icon {
+						animation: iconSwitch 0.5s ease;
+					}
+
+					@keyframes iconSwitch {
+						0% {
+							transform: scale(0) rotate(180deg);
+							opacity: 0;
+						}
+						100% {
+							transform: scale(1) rotate(0deg);
+							opacity: 1;
+						}
+					}
+
+					/* 修改JavaScript部分，添加动画类 */
+					function toggleTheme() {
+						const html = document.documentElement;
+						const themeToggle = document.getElementById('themeToggle');
+						const currentTheme = html.getAttribute('data-theme');
+						
+						// 添加动画效果
+						const icon = themeToggle.querySelector('.icon');
+						icon.style.animation = 'none';
+						// 触发重绘
+						void icon.offsetWidth;
+						icon.style.animation = 'iconSwitch 0.5s ease';
+						
+						if (currentTheme === 'dark') {
+							html.removeAttribute('data-theme');
+							themeToggle.innerHTML = '<span class="icon">⌨️</span> 切换主题';
+							localStorage.setItem('theme', 'light');
+						} else {
+							html.setAttribute('data-theme', 'dark');
+							themeToggle.innerHTML = '<span class="icon">🍺</span> 切换主题';
+							localStorage.setItem('theme', 'dark');
+						}
+					}
 				</style>
 			</head>
 			<body>
+				<!-- 添加主题切换按钮 -->
+				<button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">
+					<span class="icon">⌨️</span> 切换主题
+				</button>
+
 				<div class="container">
 					<div class="section">
 						<div class="section-title">📋 订阅信息</div>
@@ -1963,6 +2077,41 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							noticeToggle.textContent = '实用订阅技巧 ∨';
 						}
 					}
+
+					// 添加主题切换功能
+					function toggleTheme() {
+						const html = document.documentElement;
+						const themeToggle = document.getElementById('themeToggle');
+						const currentTheme = html.getAttribute('data-theme');
+						
+						// 添加动画效果
+						const icon = themeToggle.querySelector('.icon');
+						icon.style.animation = 'none';
+						// 触发重绘
+						void icon.offsetWidth;
+						icon.style.animation = 'iconSwitch 0.5s ease';
+						
+						if (currentTheme === 'dark') {
+							html.removeAttribute('data-theme');
+							themeToggle.innerHTML = '<span class="icon">⌨️</span> 切换主题';
+							localStorage.setItem('theme', 'light');
+						} else {
+							html.setAttribute('data-theme', 'dark');
+							themeToggle.innerHTML = '<span class="icon">🍺</span> 切换主题';
+							localStorage.setItem('theme', 'dark');
+						}
+					}
+
+					// 页面加载时检查主题
+					document.addEventListener('DOMContentLoaded', () => {
+						const savedTheme = localStorage.getItem('theme');
+						const themeToggle = document.getElementById('themeToggle');
+						
+						if (savedTheme === 'dark') {
+							document.documentElement.setAttribute('data-theme', 'dark');
+							themeToggle.innerHTML = '<span class="icon">🍺</span> 切换主题';
+						}
+					});
 				</script>
 			</body>
 			</html>
@@ -2724,7 +2873,7 @@ user:pass@127.0.0.1:1080
                         <!-- SUB设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="sub"><strong>SUB 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
+                            <p style="margin: 5px 0; color: #666;">优选订阅生成器地址</p>
                             <textarea 
                                 id="sub" 
                                 class="proxyip-editor" 
