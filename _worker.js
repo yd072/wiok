@@ -1497,6 +1497,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			// 读取自定义PROXYIP
 			const customProxyIP = await env.KV.get('PROXYIP.txt');
 			if (customProxyIP && customProxyIP.trim()) {
+				// 使用自定义PROXYIP覆盖环境变量中的值
 				proxyIP = customProxyIP;
 				proxyIPs = await 整理(proxyIP);
 				proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
