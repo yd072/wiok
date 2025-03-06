@@ -1512,14 +1512,44 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				socks5Address = customSocks5.split('\n')[0].trim();
 			}
 
-			// 读取自定义SUB
-			const customSub = await env.KV.get('SUB.txt');
+			// 读取自定义SUB和ADD
+			const [customSub, customAdd] = await Promise.all([
+				env.KV.get('SUB.txt'),
+				env.KV.get('ADD.txt')
+			]);
+
+			// 处理SUB设置
 			if (customSub && customSub.trim()) {
 				// 只有当URL中没有sub参数时才使用自定义SUB
 				if (!_url.searchParams.has('sub')) {
 					sub = customSub.split('\n')[0].trim();
 				}
 			}
+
+			// 处理ADD设置
+			if (customAdd && customAdd.trim()) {
+				const 优选地址数组 = await 整理(customAdd);
+				const 分类地址 = {
+					接口地址: new Set(),
+					链接地址: new Set(),
+					优选地址: new Set()
+				};
+
+				for (const 元素 of 优选地址数组) {
+					if (元素.startsWith('https://')) {
+						分类地址.接口地址.add(元素);
+					} else if (元素.includes('://')) {
+						分类地址.链接地址.add(元素);
+					} else {
+						分类地址.优选地址.add(元素);
+					}
+				}
+
+				addressesapi = [...分类地址.接口地址];
+				link = [...分类地址.链接地址];
+				addresses = [...分类地址.优选地址];
+			}
+
 		} catch (error) {
 			console.error('读取自定义设置时发生错误:', error);
 		}
@@ -1536,7 +1566,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		const subs = await 整理(sub);
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
-	
+
 	if (env.KV) {
 		await 迁移地址列表(env);
 		const 优选地址列表 = await env.KV.get('ADD.txt');
