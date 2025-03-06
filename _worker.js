@@ -220,9 +220,6 @@ export default {
 							--primary-color: #4CAF50;
 							--border-color: #e0e0e0;
 							--background-color: #f5f5f5;
-							--warning-bg: #fff3f3;
-							--warning-border: #ffcdd2;
-							--warning-text: #d32f2f;
 						}
 						
 						body {
@@ -255,6 +252,10 @@ export default {
 							font-size: 1.2em;
 						}
 
+						.info-grid {
+							display: grid;
+							grid-template-columns: auto 1fr;
+							gap: 12px;
 						.warning-box {
 							background-color: var(--warning-bg);
 							border: 1px solid var(--warning-border);
@@ -599,10 +600,10 @@ export default {
 									系统信息
 								</div>
 
-								<div class="warning-box">
-									<span class="icon">⚠️</span>
-									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
-								</div>
+								//<div class="warning-box">
+								//	<span class="icon">⚠️</span>
+								//	请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
+								//</div>
 
 								<div class="info-grid">
 									<div class="info-row">
