@@ -1047,28 +1047,24 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 }
                 tcpSocket = await createConnection(proxyIP || addressRemote, portRemote);
             }
-            tcpSocket.closed.catch(error => {
-                console.log('Retry tcpSocket closed error', error);
-            }).finally(() => {
-                safeCloseWebSocket(webSocket);
-            });
-            remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
+
+            // 监听连接关闭
+            tcpSocket.closed
+                .catch(error => log('重试连接关闭:', error))
+                .finally(() => safeCloseWebSocket(webSocket));
+
+            return remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
-            log('Retry error:', error);
+            log('重试失败:', error);
         }
-    };
-
-    try {
-        // 主连接逻辑
-        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
-            await checkSocks5Mode(addressRemote) : false;
-
-        const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
-        return remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retryConnection, log);
-    } catch (error) {
-        log('主连接失败，尝试重试:', error);
-        return retryConnection();
     }
+
+    let shouldUseSocks = false;
+    if (go2Socks5s.length > 0 && enableSocks) {
+        shouldUseSocks = await useSocks5Pattern(addressRemote);
+    }
+    let tcpSocket = await connectAndWrite(addressRemote, portRemote, shouldUseSocks);
+    remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retry, log);
 }
 
 function process维列斯Header(维列斯Buffer, userID) {
