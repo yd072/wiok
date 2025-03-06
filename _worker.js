@@ -1514,11 +1514,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 			// 读取自定义SUB
 			const customSub = await env.KV.get('SUB.txt');
-			if (customSub && customSub.trim()) {
-				// 只有当URL中没有sub参数时才使用自定义SUB
-				if (!_url.searchParams.has('sub')) {
-					sub = customSub.split('\n')[0].trim();
-				}
+			if (customSub && customSub.trim() && !_url.searchParams.has('sub')) {
+				sub = customSub.split('\n')[0].trim();
 			}
 
 			// 读取并处理ADD.txt内容
@@ -1542,6 +1539,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					}
 				}
 
+				// 更新全局变量
 				addressesapi = [...分类地址.接口地址];
 				link = [...分类地址.链接地址];
 				addresses = [...分类地址.优选地址];
@@ -1556,21 +1554,15 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	socks5Address = socks5Address || env.SOCKS5 || '';
 	sub = sub || env.SUB || '';
 
+	// 处理订阅源
 	if (sub) {
-		// 处理可能包含多个订阅源的情况
-		const subList = sub.split(',').map(s => s.trim());
-		const processedSubs = [];
-		
-		for (const subItem of subList) {
-			const match = subItem.match(/^(?:https?:\/\/)?([^\/]+)/);
-			const processedSub = match ? match[1] : subItem;
-			const subs = await 整理(processedSub);
-			processedSubs.push(subs.length > 1 ? subs[0] : processedSub);
-		}
-		
-		sub = processedSubs.join(',');
+		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
+		sub = match ? match[1] : sub;
+		const subs = await 整理(sub);
+		sub = subs.length > 1 ? subs[0] : sub;
 	}
 
+	// 如果没有任何地址，生成随机CF节点
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
 		let cfips = [
 			        '103.21.244.0/24',
