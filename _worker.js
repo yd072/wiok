@@ -1517,12 +1517,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			if (customSub && customSub.trim()) {
 				// 只有当URL中没有sub参数时才使用自定义SUB
 				if (!_url.searchParams.has('sub')) {
-					// 如果已经有sub值,则添加到现有值后面,否则直接赋值
-					if (sub) {
-						sub += ',' + customSub.trim();
-					} else {
-						sub = customSub.trim();
-					}
+					sub = customSub.split('\n')[0].trim();
 				}
 			}
 		} catch (error) {
@@ -1536,45 +1531,35 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	sub = sub || env.SUB || '';
 
 	if (sub) {
-		// 处理多个订阅生成器地址
-		const subList = sub.split(',').map(s => s.trim());
-		const processedSubs = [];
-		
-		for (const subItem of subList) {
-			const match = subItem.match(/^(?:https?:\/\/)?([^\/]+)/);
-			if (match) {
-				processedSubs.push(match[1]);
-			} else {
-				processedSubs.push(subItem);
-			}
-		}
-		
-		const subs = await 整理(processedSubs.join(','));
-		// 使用第一个有效的订阅生成器地址
-		sub = subs.length > 0 ? subs[0] : processedSubs[0];
+		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
+		sub = match ? match[1] : sub;
+		const subs = await 整理(sub);
+		sub = subs.length > 1 ? subs[0] : sub;
 	}
 	
+	// 无论是否有sub,都读取ADD.txt的内容
 	if (env.KV) {
 		await 迁移地址列表(env);
 		const 优选地址列表 = await env.KV.get('ADD.txt');
 		if (优选地址列表) {
-				const 优选地址数组 = await 整理(优选地址列表);
-				const 分类地址 = {
-					接口地址: new Set(),
-					链接地址: new Set(),
-					优选地址: new Set()
-				};
+			const 优选地址数组 = await 整理(优选地址列表);
+			const 分类地址 = {
+				接口地址: new Set(),
+				链接地址: new Set(),
+				优选地址: new Set()
+			};
 
-				for (const 元素 of 优选地址数组) {
-					if (元素.startsWith('https://')) {
-						分类地址.接口地址.add(元素);
-					} else if (元素.includes('://')) {
-						分类地址.链接地址.add(元素);
-					} else {
-						分类地址.优选地址.add(元素);
-					}
+			for (const 元素 of 优选地址数组) {
+				if (元素.startsWith('https://')) {
+					分类地址.接口地址.add(元素);
+				} else if (元素.includes('://')) {
+					分类地址.链接地址.add(元素);
+				} else {
+					分类地址.优选地址.add(元素);
 				}
+			}
 
+			// 将分类后的地址添加到对应数组
 			addressesapi = [...分类地址.接口地址];
 			link = [...分类地址.链接地址];
 			addresses = [...分类地址.优选地址];
