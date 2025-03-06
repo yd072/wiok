@@ -1529,27 +1529,11 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					sub = subs.length > 0 ? subs[0] : '';
 				}
 			}
-		} catch (error) {
-			console.error('读取自定义设置时发生错误:', error);
-		}
-	}
 
-	// 如果没有任何自定义设置或URL参数，使用默认值
-	if (!sub || sub === '') {
-		sub = env.SUB || '';  // 使用环境变量中的设置
-	}
-
-	if (sub) {
-		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
-		sub = match ? match[1] : sub;
-		const subs = await 整理(sub);
-		sub = subs.length > 1 ? subs[0] : sub;
-	}
-	
-	if (env.KV) {
-		await 迁移地址列表(env);
-		const 优选地址列表 = await env.KV.get('ADD.txt');
-		if (优选地址列表) {
+			// 读取优选地址列表
+			await 迁移地址列表(env);
+			const 优选地址列表 = await env.KV.get('ADD.txt');
+			if (优选地址列表) {
 				const 优选地址数组 = await 整理(优选地址列表);
 				const 分类地址 = {
 					接口地址: new Set(),
@@ -1567,10 +1551,25 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					}
 				}
 
-			addressesapi = [...分类地址.接口地址];
-			link = [...分类地址.链接地址];
-			addresses = [...分类地址.优选地址];
+				addressesapi = [...分类地址.接口地址];
+				link = [...分类地址.链接地址];
+				addresses = [...分类地址.优选地址];
+			}
+		} catch (error) {
+			console.error('读取自定义设置时发生错误:', error);
 		}
+	}
+
+	// 如果没有任何自定义设置或URL参数，使用默认值
+	if (!sub || sub === '') {
+		sub = env.SUB || '';  // 使用环境变量中的设置
+	}
+
+	if (sub) {
+		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
+		sub = match ? match[1] : sub;
+		const subs = await 整理(sub);
+		sub = subs.length > 1 ? subs[0] : sub;
 	}
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
