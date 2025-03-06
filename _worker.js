@@ -1860,87 +1860,18 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						align-items: center;
 						gap: 8px;
 						z-index: 1000;
+						transition: all 0.3s ease;
 						font-size: 14px;
 						box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-						transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 					}
 
 					.theme-toggle:hover {
-						transform: translateY(-2px) rotate(5deg);
+						transform: translateY(-1px);
 						box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 					}
 
 					.theme-toggle .icon {
 						font-size: 16px;
-						display: inline-block;
-						transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-					}
-
-					/* 添加图标旋转动画 */
-					.theme-toggle .icon {
-						animation: iconFloat 2s ease-in-out infinite;
-					}
-
-					@keyframes iconFloat {
-						0%, 100% {
-							transform: translateY(0);
-						}
-						50% {
-							transform: translateY(-3px);
-						}
-					}
-
-					/* 添加主题切换时的过渡效果 */
-					body * {
-						transition: background-color 0.3s ease, 
-									color 0.3s ease, 
-									border-color 0.3s ease,
-									box-shadow 0.3s ease;
-					}
-
-					/* 添加点击效果 */
-					.theme-toggle:active {
-						transform: scale(0.95);
-					}
-
-					/* 添加图标切换动画 */
-					.theme-toggle .icon {
-						animation: iconSwitch 0.5s ease;
-					}
-
-					@keyframes iconSwitch {
-						0% {
-							transform: scale(0) rotate(180deg);
-							opacity: 0;
-						}
-						100% {
-							transform: scale(1) rotate(0deg);
-							opacity: 1;
-						}
-					}
-
-					/* 修改JavaScript部分，添加动画类 */
-					function toggleTheme() {
-						const html = document.documentElement;
-						const themeToggle = document.getElementById('themeToggle');
-						const currentTheme = html.getAttribute('data-theme');
-						
-						// 添加动画效果
-						const icon = themeToggle.querySelector('.icon');
-						icon.style.animation = 'none';
-						// 触发重绘
-						void icon.offsetWidth;
-						icon.style.animation = 'iconSwitch 0.5s ease';
-						
-						if (currentTheme === 'dark') {
-							html.removeAttribute('data-theme');
-							themeToggle.innerHTML = '<span class="icon">⌨️</span> 切换主题';
-							localStorage.setItem('theme', 'light');
-						} else {
-							html.setAttribute('data-theme', 'dark');
-							themeToggle.innerHTML = '<span class="icon">🍺</span> 切换主题';
-							localStorage.setItem('theme', 'dark');
-						}
 					}
 				</style>
 			</head>
@@ -2083,13 +2014,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						const html = document.documentElement;
 						const themeToggle = document.getElementById('themeToggle');
 						const currentTheme = html.getAttribute('data-theme');
-						
-						// 添加动画效果
-						const icon = themeToggle.querySelector('.icon');
-						icon.style.animation = 'none';
-						// 触发重绘
-						void icon.offsetWidth;
-						icon.style.animation = 'iconSwitch 0.5s ease';
 						
 						if (currentTheme === 'dark') {
 							html.removeAttribute('data-theme');
