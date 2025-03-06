@@ -981,15 +981,22 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     async function connectAndWrite(address, port, socks = false) {
         log(`正在连接 ${address}:${port}`);
         
-        const tcpSocket = await (socks ? 
+        // 添加连接超时处理
+        const tcpSocket = await Promise.race([
+            socks ? 
             await socks5Connect(addressType, address, port, log) :
                     connect({ 
                         hostname: address,
                         port: port,
+                    // 添加 TCP 连接优化选项
                         allowHalfOpen: false,
-                keepAlive: true
-            })
-        );
+                    keepAlive: true,
+                    keepAliveInitialDelay: 60000
+                }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('连接超时')), 3000)
+            )
+        ]);
 
             remoteSocket.value = tcpSocket;
 
