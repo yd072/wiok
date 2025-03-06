@@ -1517,13 +1517,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			if (customSub && customSub.trim()) {
 				// 只有当URL中没有sub参数时才使用自定义SUB
 				if (!_url.searchParams.has('sub')) {
-					// 保留原有的ADD.txt内容
-					const originalSub = sub;
 					sub = customSub.split('\n')[0].trim();
-					// 如果原来有订阅内容,则添加到自定义SUB后面
-					if (originalSub) {
-						sub = `${sub},${originalSub}`;
-					}
 				}
 			}
 		} catch (error) {
@@ -1536,40 +1530,46 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	socks5Address = socks5Address || env.SOCKS5 || '';
 	sub = sub || env.SUB || '';
 
+	// 处理订阅地址
+	let 使用订阅生成器 = false;
 	if (sub) {
-		// 处理可能包含多个订阅源的情况
-		const subList = await 整理(sub);
-		// 如果有多个订阅源,使用第一个作为主订阅源
-		sub = subList.length > 0 ? subList[0] : sub;
-		
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
-		sub = match ? match[1] : sub;
+		if (match) {
+			sub = match[1];
+			使用订阅生成器 = true;
+		}
+		const subs = await 整理(sub);
+		sub = subs.length > 1 ? subs[0] : sub;
 	}
 	
+	// 读取并处理ADD.txt中的地址
 	if (env.KV) {
 		await 迁移地址列表(env);
 		const 优选地址列表 = await env.KV.get('ADD.txt');
 		if (优选地址列表) {
-				const 优选地址数组 = await 整理(优选地址列表);
-				const 分类地址 = {
-					接口地址: new Set(),
-					链接地址: new Set(),
-					优选地址: new Set()
-				};
+			const 优选地址数组 = await 整理(优选地址列表);
+			const 分类地址 = {
+				接口地址: new Set(),
+				链接地址: new Set(),
+				优选地址: new Set()
+			};
 
-				for (const 元素 of 优选地址数组) {
-					if (元素.startsWith('https://')) {
-						分类地址.接口地址.add(元素);
-					} else if (元素.includes('://')) {
-						分类地址.链接地址.add(元素);
-					} else {
-						分类地址.优选地址.add(元素);
-					}
+			for (const 元素 of 优选地址数组) {
+				if (元素.startsWith('https://')) {
+					分类地址.接口地址.add(元素);
+				} else if (元素.includes('://')) {
+					分类地址.链接地址.add(元素);
+				} else {
+					分类地址.优选地址.add(元素);
 				}
+			}
 
-			addressesapi = [...分类地址.接口地址];
-			link = [...分类地址.链接地址];
-			addresses = [...分类地址.优选地址];
+			// 只有在使用订阅生成器时才清空现有地址
+			if (!使用订阅生成器) {
+				addressesapi = [...分类地址.接口地址];
+				link = [...分类地址.链接地址];
+				addresses = [...分类地址.优选地址];
+			}
 		}
 	}
 
