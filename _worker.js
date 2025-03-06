@@ -1714,15 +1714,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						--section-bg: #ffffff;
 					}
 					
-					:root[data-theme="dark"] {
-						--primary-color: #66bb6a;
-						--secondary-color: #4caf50;
-						--border-color: #424242;
-						--text-color: #e0e0e0;
-						--background-color: #121212;
-						--section-bg: #1e1e1e;
-					}
-					
 					body {
 						margin: 0;
 						padding: 20px;
@@ -1846,11 +1837,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			</head>
 			<body>
 				<div class="container">
-					<div class="theme-switch">
-						<button class="btn btn-secondary" onclick="toggleTheme()">
-							<span id="theme-icon">🌙</span>
-						</button>
-					</div>
 					<div class="section">
 						<div class="section-title">📋 订阅信息</div>
 						<div class="subscription-link">
@@ -1977,32 +1963,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							noticeToggle.textContent = '实用订阅技巧 ∨';
 						}
 					}
-
-					function toggleTheme() {
-						const root = document.documentElement;
-						const themeIcon = document.getElementById('theme-icon');
-						const currentTheme = root.getAttribute('data-theme');
-						
-						if (currentTheme === 'dark') {
-							root.removeAttribute('data-theme');
-							themeIcon.textContent = '🌙';
-							localStorage.setItem('theme', 'light');
-						} else {
-							root.setAttribute('data-theme', 'dark');
-							themeIcon.textContent = '☀️';
-							localStorage.setItem('theme', 'dark');
-						}
-					}
-
-					document.addEventListener('DOMContentLoaded', () => {
-						const savedTheme = localStorage.getItem('theme');
-						const themeIcon = document.getElementById('theme-icon');
-						
-						if (savedTheme === 'dark') {
-							document.documentElement.setAttribute('data-theme', 'dark');
-							themeIcon.textContent = '☀️';
-						}
-					});
 				</script>
 			</body>
 			</html>
@@ -2558,15 +2518,6 @@ async function handleGetRequest(env, txt) {
                     --background-color: #f5f5f5;
                 }
                 
-                :root[data-theme="dark"] {
-                    --primary-color: #66bb6a;
-                    --secondary-color: #4caf50;
-                    --border-color: #424242;
-                    --text-color: #e0e0e0;
-                    --background-color: #121212;
-                    --section-bg: #1e1e1e;
-                }
-                
                 body {
                     margin: 0;
                     padding: 20px;
@@ -2579,7 +2530,7 @@ async function handleGetRequest(env, txt) {
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: var(--section-bg);
+                    background: white;
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
@@ -2773,7 +2724,7 @@ user:pass@127.0.0.1:1080
                         <!-- SUB设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="sub"><strong>SUB 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">优选订阅生成器地址</p>
+                            <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
                             <textarea 
                                 id="sub" 
                                 class="proxyip-editor" 
