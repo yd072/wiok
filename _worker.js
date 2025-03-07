@@ -2883,7 +2883,6 @@ sub.example.com"
                         method: 'POST',
                         body: proxyipContent
                     });
-                    const proxyipResult = await proxyipResponse.json();
 
                     // 保存SOCKS5设置
                     const socks5Content = document.getElementById('socks5').value;
@@ -2891,7 +2890,6 @@ sub.example.com"
                         method: 'POST',
                         body: socks5Content
                     });
-                    const socks5Result = await socks5Response.json();
 
                     // 保存SUB设置
                     const subContent = document.getElementById('sub').value;
@@ -2899,45 +2897,66 @@ sub.example.com"
                         method: 'POST',
                         body: subContent
                     });
-                    const subResult = await subResponse.json();
 
+                    // 检查所有响应是否成功
                     if (proxyipResponse.ok && socks5Response.ok && subResponse.ok) {
-                        // 更新页面配置
-                        updatePageWithNewConfig({
-                            ...proxyipResult.config,
-                            ...socks5Result.config,
-                            ...subResult.config
-                        });
-                        
+                        try {
+                            // 尝试解析响应JSON，但不强制要求
+                            const proxyipResult = await proxyipResponse.json().catch(() => ({}));
+                            const socks5Result = await socks5Response.json().catch(() => ({}));
+                            const subResult = await subResponse.json().catch(() => ({}));
+
+                            // 更新页面配置（如果有返回配置的话）
+                            if (proxyipResult.config || socks5Result.config || subResult.config) {
+                                updatePageWithNewConfig({
+                                    ...proxyipResult.config,
+                                    ...socks5Result.config,
+                                    ...subResult.config
+                                });
+                            }
+                        } catch (e) {
+                            console.log('解析响应JSON时出错，但保存已成功:', e);
+                        }
+
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
-                        }, 3000);
-                        
-                        // 刷新页面以应用新配置
-                        location.reload();
+                            // 刷新页面以应用新配置
+                            location.reload();
+                        }, 1000);
                     } else {
-                        throw new Error('保存失败');
+                        throw new Error('保存失败：服务器返回错误');
                     }
                 } catch (error) {
-                    saveStatus.textContent = '❌ ' + error.message;
+                    saveStatus.textContent = '❌ ' + (error.message || '保存失败');
                     console.error('保存设置时发生错误:', error);
+                    
+                    // 如果实际上已经保存成功，3秒后刷新页面
+                    setTimeout(() => {
+                        if (document.getElementById('proxyip').value || 
+                            document.getElementById('socks5').value || 
+                            document.getElementById('sub').value) {
+                            location.reload();
+                        }
+                    }, 3000);
                 }
             }
 
-            // 修改页面中的JavaScript部分
             function updatePageWithNewConfig(config) {
-                // 更新页面上的配置显示
-                if (config.proxyIP !== undefined) {
-                    document.getElementById('proxyip').value = config.proxyIP;
+                try {
+                    // 更新页面上的配置显示
+                    if (config.proxyIP !== undefined) {
+                        document.getElementById('proxyip').value = config.proxyIP;
+                    }
+                    if (config.socks5Address !== undefined) {
+                        document.getElementById('socks5').value = config.socks5Address;
+                    }
+                    if (config.sub !== undefined) {
+                        document.getElementById('sub').value = config.sub;
+                    }
+                } catch (e) {
+                    console.log('更新页面配置时出错:', e);
                 }
-                if (config.socks5Address !== undefined) {
-                    document.getElementById('socks5').value = config.socks5Address;
-                }
-                if (config.sub !== undefined) {
-                    document.getElementById('sub').value = config.sub;
-                }
-                // 如果需要，可以添加其他配置的更新
             }
             </script>
         </body>
