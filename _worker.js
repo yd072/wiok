@@ -1500,7 +1500,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				// 使用自定义PROXYIP覆盖环境变量中的值
 				proxyIP = customProxyIP;
 				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+				proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
 				console.log('使用自定义PROXYIP:', proxyIP);
 				RproxyIP = 'false';
 			}
@@ -1510,17 +1510,12 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			if (customSocks5 && customSocks5.trim()) {
 				socks5Address = customSocks5.trim().split('\n')[0];
 				socks5s = await 整理(socks5Address);
-				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+				socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
 				console.log('使用自定义SOCKS5:', socks5Address);
-				try {
-					parsedSocks5Address = socks5AddressParser(socks5Address);
-					enableSocks = true;
-				} catch (err) {
-					console.log(err.toString());
-					enableSocks = false;
-				}
+				enableSocks = true;
 			} else {
+				// 如果KV中没有SOCKS5设置，禁用SOCKS5
 				enableSocks = false;
 				socks5Address = '';
 			}
@@ -2466,19 +2461,17 @@ async function handlePostRequest(request, env, txt) {
         const url = new URL(request.url);
         const type = url.searchParams.get('type');
 
-        // 根据类型保存到不同的KV
+        // 根据类型保存到不同的KV并更新全局变量
         switch(type) {
             case 'proxyip':
                 await env.KV.put('PROXYIP.txt', content);
-                // 立即更新全局变量
-                proxyIP = content;
-                proxyIPs = await 整理(proxyIP);
+                proxyIP = content; // 更新全局变量
+                proxyIPs = await 整理(proxyIP); // 重新处理proxyIP
                 break;
             case 'socks5':
                 await env.KV.put('SOCKS5.txt', content);
-                // 立即更新全局变量
-                socks5Address = content.split('\n')[0].trim();
-                socks5s = await 整理(socks5Address);
+                socks5Address = content.split('\n')[0].trim(); // 更新全局变量
+                socks5s = await 整理(socks5Address); // 重新处理socks5地址
                 if (socks5Address) {
                     try {
                         parsedSocks5Address = socks5AddressParser(socks5Address);
@@ -2487,48 +2480,48 @@ async function handlePostRequest(request, env, txt) {
                         console.log(err.toString());
                         enableSocks = false;
                     }
-                } else {
-                    enableSocks = false;
                 }
                 break;
             case 'sub':
                 await env.KV.put('SUB.txt', content);
-                // 立即更新全局变量
-                const subContent = content.trim();
-                if (subContent) {
-                    const match = subContent.match(/^(?:https?:\/\/)?([^\/]+)/);
-                    sub = match ? match[1] : subContent;
+                // 更新全局sub变量
+                if (content && content.trim()) {
+                    const subs = await 整理(content);
+                    sub = subs.length > 0 ? subs[0] : '';
                 }
                 break;
             default:
                 await env.KV.put(txt, content);
-                // 立即更新地址列表
-                const 优选地址数组 = await 整理(content);
-                const 分类地址 = {
-                    接口地址: new Set(),
-                    链接地址: new Set(),
-                    优选地址: new Set()
-                };
-
-                for (const 元素 of 优选地址数组) {
-                    if (元素.startsWith('https://')) {
-                        分类地址.接口地址.add(元素);
-                    } else if (元素.includes('://')) {
-                        分类地址.链接地址.add(元素);
-                    } else {
-                        分类地址.优选地址.add(元素);
-                    }
-                }
-
-                addressesapi = [...分类地址.接口地址];
-                link = [...分类地址.链接地址];
-                addresses = [...分类地址.优选地址];
+                // 更新地址列表
+                addresses = await 整理(content);
         }
         
-        return new Response("保存成功");
+        // 返回成功响应和更新后的配置
+        return new Response(JSON.stringify({
+            status: 'success',
+            message: '保存成功',
+            config: {
+                proxyIP,
+                socks5Address,
+                sub,
+                addresses
+            }
+        }), {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
     } catch (error) {
         console.error('保存KV时发生错误:', error);
-        return new Response("保存失败: " + error.message, { status: 500 });
+        return new Response(JSON.stringify({
+            status: 'error',
+            message: "保存失败: " + error.message
+        }), { 
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
     }
 }
 
@@ -2890,6 +2883,7 @@ sub.example.com"
                         method: 'POST',
                         body: proxyipContent
                     });
+                    const proxyipResult = await proxyipResponse.json();
 
                     // 保存SOCKS5设置
                     const socks5Content = document.getElementById('socks5').value;
@@ -2897,6 +2891,7 @@ sub.example.com"
                         method: 'POST',
                         body: socks5Content
                     });
+                    const socks5Result = await socks5Response.json();
 
                     // 保存SUB设置
                     const subContent = document.getElementById('sub').value;
@@ -2904,12 +2899,23 @@ sub.example.com"
                         method: 'POST',
                         body: subContent
                     });
+                    const subResult = await subResponse.json();
 
                     if (proxyipResponse.ok && socks5Response.ok && subResponse.ok) {
+                        // 更新页面配置
+                        updatePageWithNewConfig({
+                            ...proxyipResult.config,
+                            ...socks5Result.config,
+                            ...subResult.config
+                        });
+                        
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
                         }, 3000);
+                        
+                        // 刷新页面以应用新配置
+                        location.reload();
                     } else {
                         throw new Error('保存失败');
                     }
@@ -2917,6 +2923,21 @@ sub.example.com"
                     saveStatus.textContent = '❌ ' + error.message;
                     console.error('保存设置时发生错误:', error);
                 }
+            }
+
+            // 修改页面中的JavaScript部分
+            function updatePageWithNewConfig(config) {
+                // 更新页面上的配置显示
+                if (config.proxyIP !== undefined) {
+                    document.getElementById('proxyip').value = config.proxyIP;
+                }
+                if (config.socks5Address !== undefined) {
+                    document.getElementById('socks5').value = config.socks5Address;
+                }
+                if (config.sub !== undefined) {
+                    document.getElementById('sub').value = config.sub;
+                }
+                // 如果需要，可以添加其他配置的更新
             }
             </script>
         </body>
