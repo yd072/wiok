@@ -2461,67 +2461,25 @@ async function handlePostRequest(request, env, txt) {
         const url = new URL(request.url);
         const type = url.searchParams.get('type');
 
-        // 根据类型保存到不同的KV并更新全局变量
+        // 根据类型保存到不同的KV
         switch(type) {
             case 'proxyip':
                 await env.KV.put('PROXYIP.txt', content);
-                proxyIP = content; // 更新全局变量
-                proxyIPs = await 整理(proxyIP); // 重新处理proxyIP
                 break;
             case 'socks5':
                 await env.KV.put('SOCKS5.txt', content);
-                socks5Address = content.split('\n')[0].trim(); // 更新全局变量
-                socks5s = await 整理(socks5Address); // 重新处理socks5地址
-                if (socks5Address) {
-                    try {
-                        parsedSocks5Address = socks5AddressParser(socks5Address);
-                        enableSocks = true;
-                    } catch (err) {
-                        console.log(err.toString());
-                        enableSocks = false;
-                    }
-                }
                 break;
             case 'sub':
                 await env.KV.put('SUB.txt', content);
-                // 更新全局sub变量
-                if (content && content.trim()) {
-                    const subs = await 整理(content);
-                    sub = subs.length > 0 ? subs[0] : '';
-                }
                 break;
             default:
                 await env.KV.put(txt, content);
-                // 更新地址列表
-                addresses = await 整理(content);
         }
         
-        // 返回成功响应和更新后的配置
-        return new Response(JSON.stringify({
-            status: 'success',
-            message: '保存成功',
-            config: {
-                proxyIP,
-                socks5Address,
-                sub,
-                addresses
-            }
-        }), {
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
+        return new Response("保存成功");
     } catch (error) {
         console.error('保存KV时发生错误:', error);
-        return new Response(JSON.stringify({
-            status: 'error',
-            message: "保存失败: " + error.message
-        }), { 
-            status: 500,
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
+        return new Response("保存失败: " + error.message, { status: 500 });
     }
 }
 
@@ -2898,64 +2856,17 @@ sub.example.com"
                         body: subContent
                     });
 
-                    // 检查所有响应是否成功
                     if (proxyipResponse.ok && socks5Response.ok && subResponse.ok) {
-                        try {
-                            // 尝试解析响应JSON，但不强制要求
-                            const proxyipResult = await proxyipResponse.json().catch(() => ({}));
-                            const socks5Result = await socks5Response.json().catch(() => ({}));
-                            const subResult = await subResponse.json().catch(() => ({}));
-
-                            // 更新页面配置（如果有返回配置的话）
-                            if (proxyipResult.config || socks5Result.config || subResult.config) {
-                                updatePageWithNewConfig({
-                                    ...proxyipResult.config,
-                                    ...socks5Result.config,
-                                    ...subResult.config
-                                });
-                            }
-                        } catch (e) {
-                            console.log('解析响应JSON时出错，但保存已成功:', e);
-                        }
-
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
-                            // 刷新页面以应用新配置
-                            location.reload();
-                        }, 1000);
+                        }, 3000);
                     } else {
-                        throw new Error('保存失败：服务器返回错误');
+                        throw new Error('保存失败');
                     }
                 } catch (error) {
-                    saveStatus.textContent = '❌ ' + (error.message || '保存失败');
+                    saveStatus.textContent = '❌ ' + error.message;
                     console.error('保存设置时发生错误:', error);
-                    
-                    // 如果实际上已经保存成功，3秒后刷新页面
-                    setTimeout(() => {
-                        if (document.getElementById('proxyip').value || 
-                            document.getElementById('socks5').value || 
-                            document.getElementById('sub').value) {
-                            location.reload();
-                        }
-                    }, 3000);
-                }
-            }
-
-            function updatePageWithNewConfig(config) {
-                try {
-                    // 更新页面上的配置显示
-                    if (config.proxyIP !== undefined) {
-                        document.getElementById('proxyip').value = config.proxyIP;
-                    }
-                    if (config.socks5Address !== undefined) {
-                        document.getElementById('socks5').value = config.socks5Address;
-                    }
-                    if (config.sub !== undefined) {
-                        document.getElementById('sub').value = config.sub;
-                    }
-                } catch (e) {
-                    console.log('更新页面配置时出错:', e);
                 }
             }
             </script>
