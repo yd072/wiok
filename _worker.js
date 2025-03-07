@@ -2461,19 +2461,68 @@ async function handlePostRequest(request, env, txt) {
         const url = new URL(request.url);
         const type = url.searchParams.get('type');
 
-        // 根据类型保存到不同的KV
+        // 根据类型保存到不同的KV并更新相应的全局变量
         switch(type) {
             case 'proxyip':
                 await env.KV.put('PROXYIP.txt', content);
+                // 更新proxyIP相关变量
+                proxyIP = content;
+                proxyIPs = await 整理(proxyIP);
+                proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
                 break;
             case 'socks5':
                 await env.KV.put('SOCKS5.txt', content);
+                // 更新socks5相关变量
+                socks5Address = content.split('\n')[0].trim();
+                socks5s = await 整理(socks5Address);
+                socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+                socks5Address = socks5Address.split('//')[1] || socks5Address;
+                if (socks5Address) {
+                    try {
+                        parsedSocks5Address = socks5AddressParser(socks5Address);
+                        enableSocks = true;
+                    } catch (err) {
+                        console.log(err.toString());
+                        enableSocks = false;
+                    }
+                } else {
+                    enableSocks = false;
+                }
                 break;
             case 'sub':
                 await env.KV.put('SUB.txt', content);
+                // 更新sub相关变量
+                const subContent = content.trim();
+                if (subContent) {
+                    const match = subContent.match(/^(?:https?:\/\/)?([^\/]+)/);
+                    sub = match ? match[1] : subContent;
+                    const subs = await 整理(sub);
+                    sub = subs.length > 1 ? subs[0] : sub;
+                }
                 break;
             default:
                 await env.KV.put(txt, content);
+                // 更新地址列表相关变量
+                const 优选地址数组 = await 整理(content);
+                const 分类地址 = {
+                    接口地址: new Set(),
+                    链接地址: new Set(),
+                    优选地址: new Set()
+                };
+
+                for (const 元素 of 优选地址数组) {
+                    if (元素.startsWith('https://')) {
+                        分类地址.接口地址.add(元素);
+                    } else if (元素.includes('://')) {
+                        分类地址.链接地址.add(元素);
+                    } else {
+                        分类地址.优选地址.add(元素);
+                    }
+                }
+
+                addressesapi = [...分类地址.接口地址];
+                link = [...分类地址.链接地址];
+                addresses = [...分类地址.优选地址];
         }
         
         return new Response("保存成功");
