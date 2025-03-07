@@ -2858,11 +2858,9 @@ sub.example.com"
 
                     if (proxyipResponse.ok && socks5Response.ok && subResponse.ok) {
                         saveStatus.textContent = '✅ 保存成功';
-                        
-                        // 刷新页面以应用新设置
                         setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
+                            saveStatus.textContent = '';
+                        }, 3000);
                     } else {
                         throw new Error('保存失败');
                     }
