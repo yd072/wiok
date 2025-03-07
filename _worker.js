@@ -409,17 +409,13 @@ export default {
 					// 只有当KV中有非空值时才覆盖默认设置
 					if (kvSocks5 && kvSocks5.trim()) {
 						socks5Address = kvSocks5.split('\n')[0].trim();
-						console.log('从KV获取的SOCKS5地址:', socks5Address); // 添加日志
 					}
 				} catch (error) {
 					console.error('读取SOCKS5设置时发生错误:', error);
 				}
 			}
 			// 如果socks5Address为空，则使用环境变量或默认值
-			if (!socks5Address && env.SOCKS5) {
-				socks5Address = env.SOCKS5.trim();
-				console.log('从环境变量获取的SOCKS5地址:', socks5Address); // 添加日志
-			}
+			socks5Address = socks5Address || env.SOCKS5 || '';
 			socks5s = await 整理(socks5Address);
 			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 			socks5Address = socks5Address.split('//')[1] || socks5Address;
@@ -429,13 +425,12 @@ export default {
 			if (env.BAN) banHosts = await 整理(env.BAN);
 			if (socks5Address) {
 				try {
-					console.log('解析SOCKS5地址:', socks5Address); // 添加日志
 					parsedSocks5Address = socks5AddressParser(socks5Address);
-					console.log('解析结果:', parsedSocks5Address); // 添加日志
 					RproxyIP = env.RPROXYIP || 'false';
 					enableSocks = true;
 				} catch (err) {
-					console.log('SOCKS5地址解析失败:', err.message); // 添加详细错误信息
+					let e = err;
+					console.log(e.toString());
 					RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 					enableSocks = false;
 				}
@@ -1366,39 +1361,37 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
     return socket;
 }
 
-function socks5AddressParser(socks5Address) {
-    // 检查是否包含用户名和密码
-    let username = '';
-    let password = '';
-    let host = '';
-    let port = '';
+function socks5AddressParser(address) {
+    let [latter, former] = address.split("@").reverse();
+    let username, password, hostname, port;
 
-    if (socks5Address.includes('@')) {
-        // 有用户名密码格式
-        const [userInfo, serverInfo] = socks5Address.split('@');
-        [username, password] = userInfo.split(':');
-        [host, port] = serverInfo.split(':');
-    } else {
-        // 无用户名密码格式
-        [host, port] = socks5Address.split(':');
+    if (former) {
+        const formers = former.split(":");
+        if (formers.length !== 2) {
+            throw new Error('Invalid SOCKS address format: "username:password" required');
+        }
+        [username, password] = formers;
     }
 
-    // 验证端口
-    if (!port || isNaN(port) || port < 1 || port > 65535) {
-        throw new Error('Invalid SOCKS5 port');
+    const latters = latter.split(":");
+    port = Number(latters.pop());
+    if (isNaN(port)) {
+        throw new Error('Invalid SOCKS address format: port must be a number');
     }
 
-    // 验证主机
-    if (!host) {
-        throw new Error('Invalid SOCKS5 host');
+    hostname = latters.join(":");
+
+    const regex = /^\[.*\]$/;
+    if (hostname.includes(":") && !regex.test(hostname)) {
+        throw new Error('Invalid SOCKS address format: IPv6 must be in brackets');
     }
 
     return {
         username,
         password,
-        host,
-        port: parseInt(port)
-    };
+        hostname,
+        port,
+    }
 }
 
 function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64) {
@@ -1495,7 +1488,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
@@ -1674,18 +1667,20 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		});
 
 		let socks5List = '';
-		if (go2Socks5s.length > 0 && enableSocks) {
+		if (go2Socks5s.length > 0 && enableSocks) {  // 改回只用enableSocks判断
 			socks5List = `${decodeURIComponent('SOCKS5%EF%BC%88%E7%99%BD%E5%90%8D%E5%8D%95%EF%BC%89%3A%20')}`;
-			if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) socks5List += `${decodeURIComponent('%E6%89%80%E6%9C%89%E6%B5%81%E9%87%8F')}<br>`;
-			else socks5List += `<br>&nbsp;&nbsp;${go2Socks5s.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) {
+				socks5List += `${decodeURIComponent('%E6%89%80%E6%9C%89%E6%B5%81%E9%87%8F')}<br>`;
+			} else {
+				socks5List += `<br>&nbsp;&nbsp;${go2Socks5s.join('<br>&nbsp;&nbsp;')}<br>`;
+			}
 		}
 
 		let 订阅器 = '<br>';
 		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
 		
 		if (sub) {
-			// 使用enableSocks判断是否显示SOCKS5
-			if (enableSocks) {
+			if (enableSocks) {  // 改回只用enableSocks判断
 				订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			} else if (proxyIP && proxyIP != '') {
 				订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
@@ -1696,8 +1691,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			}
 			订阅器 += `<br>SUB（优选订阅生成器）: ${sub}${判断是否绑定KV空间}<br>`;
 		} else {
-			// 这里也使用enableSocks判断
-			if (enableSocks) {
+			if (enableSocks) {  // 改回只用enableSocks判断
 				订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			} else if (proxyIP && proxyIP != '') {
 				订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
