@@ -1496,42 +1496,33 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		try {
 			// 读取自定义PROXYIP
 			const customProxyIP = await env.KV.get('PROXYIP.txt');
-			// 只有当KV中有值时才更新proxyIP
-			if (customProxyIP !== null) {
-				proxyIP = customProxyIP.trim();
+			if (customProxyIP && customProxyIP.trim()) {
+				// 使用自定义PROXYIP覆盖环境变量中的值
+				proxyIP = customProxyIP;
 				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+				proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
 				console.log('使用自定义PROXYIP:', proxyIP);
-				RproxyIP = proxyIP ? 'false' : 'true';
+				RproxyIP = 'false';
 			}
 
 			// 读取自定义SOCKS5设置
 			const customSocks5 = await env.KV.get('SOCKS5.txt');
-			// 根据KV中的值决定是否启用SOCKS5
-			if (customSocks5 !== null) {
-				if (customSocks5.trim()) {
-					socks5Address = customSocks5.trim().split('\n')[0];
-					socks5s = await 整理(socks5Address);
-					socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-					socks5Address = socks5Address.split('//')[1] || socks5Address;
-					try {
-						parsedSocks5Address = socks5AddressParser(socks5Address);
-						enableSocks = true;
-						console.log('使用自定义SOCKS5:', socks5Address);
-					} catch (err) {
-						console.log(err.toString());
-						enableSocks = false;
-						socks5Address = '';
-					}
-				} else {
-					enableSocks = false;
-					socks5Address = '';
-				}
+			if (customSocks5 && customSocks5.trim()) {
+				socks5Address = customSocks5.trim().split('\n')[0];
+				socks5s = await 整理(socks5Address);
+				socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
+				socks5Address = socks5Address.split('//')[1] || socks5Address;
+				console.log('使用自定义SOCKS5:', socks5Address);
+				enableSocks = true;
+			} else {
+				// 如果KV中没有SOCKS5设置，禁用SOCKS5
+				enableSocks = false;
+				socks5Address = '';
 			}
 
 			// 读取自定义SUB设置
 			const customSub = await env.KV.get('SUB.txt');
-			if (customSub !== null && !sub) {
+			if (customSub && customSub.trim() && !sub) {
 				sub = customSub.trim().split('\n')[0];
 				console.log('使用自定义SUB:', sub);
 			}
@@ -2474,35 +2465,12 @@ async function handlePostRequest(request, env, txt) {
         switch(type) {
             case 'proxyip':
                 await env.KV.put('PROXYIP.txt', content);
-                // 立即更新 proxyIP 变量
-                proxyIP = content;
-                proxyIPs = await 整理(proxyIP);
-                proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
                 break;
             case 'socks5':
                 await env.KV.put('SOCKS5.txt', content);
-                // 立即更新 socks5Address 变量
-                socks5Address = content.split('\n')[0] || '';
-                socks5s = await 整理(socks5Address);
-                socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-                socks5Address = socks5Address.split('//')[1] || socks5Address;
-                // 如果 socks5Address 为空，禁用 SOCKS5
-                if (!socks5Address.trim()) {
-                    enableSocks = false;
-                } else {
-                    try {
-                        parsedSocks5Address = socks5AddressParser(socks5Address);
-                        enableSocks = true;
-                    } catch (err) {
-                        console.log(err.toString());
-                        enableSocks = false;
-                    }
-                }
                 break;
             case 'sub':
                 await env.KV.put('SUB.txt', content);
-                // 立即更新 sub 变量
-                sub = content.split('\n')[0] || '';
                 break;
             default:
                 await env.KV.put(txt, content);
