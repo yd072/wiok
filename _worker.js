@@ -2503,7 +2503,26 @@ async function handlePostRequest(request, env, txt) {
             default:
                 await env.KV.put(txt, content);
                 // 立即更新地址列表
-                addresses = await 整理(content);
+                const 优选地址数组 = await 整理(content);
+                const 分类地址 = {
+                    接口地址: new Set(),
+                    链接地址: new Set(),
+                    优选地址: new Set()
+                };
+
+                for (const 元素 of 优选地址数组) {
+                    if (元素.startsWith('https://')) {
+                        分类地址.接口地址.add(元素);
+                    } else if (元素.includes('://')) {
+                        分类地址.链接地址.add(元素);
+                    } else {
+                        分类地址.优选地址.add(元素);
+                    }
+                }
+
+                addressesapi = [...分类地址.接口地址];
+                link = [...分类地址.链接地址];
+                addresses = [...分类地址.优选地址];
         }
         
         return new Response("保存成功");
