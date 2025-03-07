@@ -1494,15 +1494,27 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	// 在获取其他配置前,先尝试读取自定义的设置
 	if (env.KV) {
 		try {
-			// 读取自定义PROXYIP
+			// 修改PROXYIP设置逻辑
 			const customProxyIP = await env.KV.get('PROXYIP.txt');
 			if (customProxyIP && customProxyIP.trim()) {
-				// 使用自定义PROXYIP覆盖环境变量中的值
+				// 如果KV中有PROXYIP设置，使用KV中的设置
 				proxyIP = customProxyIP;
 				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
-				console.log('使用自定义PROXYIP:', proxyIP);
+				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+				console.log('使用KV中的PROXYIP:', proxyIP);
 				RproxyIP = 'false';
+			} else if (env.PROXYIP) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				proxyIP = env.PROXYIP;
+				proxyIPs = await 整理(proxyIP);
+				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+				console.log('使用环境变量中的PROXYIP:', proxyIP);
+				RproxyIP = 'false';
+			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
+				console.log('使用默认PROXYIP设置');
+				proxyIP = '';
+				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 
 			// 修改SOCKS5设置逻辑
@@ -1540,7 +1552,20 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			console.error('读取自定义设置时发生错误:', error);
 		}
 	} else {
-		// 如果没有KV存储，直接使用环境变量中的SOCKS5设置
+		// 如果没有KV存储，直接使用环境变量中的设置
+		if (env.PROXYIP) {
+			proxyIP = env.PROXYIP;
+			proxyIPs = await 整理(proxyIP);
+			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+			console.log('使用环境变量中的PROXYIP:', proxyIP);
+			RproxyIP = 'false';
+		} else {
+			// 使用代码默认值
+			console.log('使用默认PROXYIP设置');
+			proxyIP = '';
+			RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+		}
+
 		if (env.SOCKS5) {
 			socks5Address = env.SOCKS5;
 			socks5s = await 整理(socks5Address);
