@@ -2461,19 +2461,61 @@ async function handlePostRequest(request, env, txt) {
         const url = new URL(request.url);
         const type = url.searchParams.get('type');
 
-        // 根据类型保存到不同的KV
+        // 保存到KV并立即更新相应的全局变量
         switch(type) {
             case 'proxyip':
                 await env.KV.put('PROXYIP.txt', content);
+                proxyIP = content; // 立即更新proxyIP
+                proxyIPs = await 整理(proxyIP); // 更新proxyIPs数组
                 break;
             case 'socks5':
                 await env.KV.put('SOCKS5.txt', content);
+                socks5Address = content.split('\n')[0].trim(); // 更新socks5Address
+                socks5s = await 整理(socks5Address); // 更新socks5s数组
+                if (socks5Address) {
+                    try {
+                        parsedSocks5Address = socks5AddressParser(socks5Address);
+                        enableSocks = true;
+                    } catch (err) {
+                        console.log(err.toString());
+                        enableSocks = false;
+                    }
+                }
                 break;
             case 'sub':
                 await env.KV.put('SUB.txt', content);
+                // 更新sub配置
+                if (content && content.trim()) {
+                    const subs = await 整理(content);
+                    sub = subs.length > 0 ? subs[0] : '';
+                }
                 break;
             default:
                 await env.KV.put(txt, content);
+                // 更新地址列表
+                const addresses = await 整理(content);
+                if (txt === 'ADD.txt') {
+                    // 根据内容类型分类更新相应的地址列表
+                    const 分类地址 = {
+                        接口地址: new Set(),
+                        链接地址: new Set(),
+                        优选地址: new Set()
+                    };
+
+                    for (const 元素 of addresses) {
+                        if (元素.startsWith('https://')) {
+                            分类地址.接口地址.add(元素);
+                        } else if (元素.includes('://')) {
+                            分类地址.链接地址.add(元素);
+                        } else {
+                            分类地址.优选地址.add(元素);
+                        }
+                    }
+
+                    addressesapi = [...分类地址.接口地址];
+                    link = [...分类地址.链接地址];
+                    addresses = [...分类地址.优选地址];
+                }
         }
         
         return new Response("保存成功");
