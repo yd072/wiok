@@ -1679,7 +1679,16 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		if (sub) {
 			// 修改这里的逻辑,优先判断SOCKS5
 			if (env.SOCKS5 || socks5Address) {
-				订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+				订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>`;
+				// 添加白名单显示
+				if (go2Socks5s.length > 0) {
+					订阅器 += `${decodeURIComponent('SOCKS5%EF%BC%88%E7%99%BD%E5%90%8D%E5%8D%95%EF%BC%89%3A%20')}`;
+					if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) {
+						订阅器 += `${decodeURIComponent('%E6%89%80%E6%9C%89%E6%B5%81%E9%87%8F')}<br>`;
+					} else {
+						订阅器 += `<br>&nbsp;&nbsp;${go2Socks5s.join('<br>&nbsp;&nbsp;')}<br>`;
+					}
+				}
 			} else if (proxyIP && proxyIP != '') {
 				订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			} else if (RproxyIP == 'true') {
@@ -1691,7 +1700,16 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		} else {
 			// 这里也修改同样的逻辑
 			if (env.SOCKS5 || socks5Address) {
-				订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+				订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>`;
+				// 添加白名单显示
+				if (go2Socks5s.length > 0) {
+					订阅器 += `${decodeURIComponent('SOCKS5%EF%BC%88%E7%99%BD%E5%90%8D%E5%8D%95%EF%BC%89%3A%20')}`;
+					if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) {
+						订阅器 += `${decodeURIComponent('%E6%89%80%E6%9C%89%E6%B5%81%E9%87%8F')}<br>`;
+					} else {
+						订阅器 += `<br>&nbsp;&nbsp;${go2Socks5s.join('<br>&nbsp;&nbsp;')}<br>`;
+					}
+				}
 			} else if (proxyIP && proxyIP != '') {
 				订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			} else {
