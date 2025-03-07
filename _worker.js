@@ -1500,7 +1500,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				// 使用自定义PROXYIP覆盖环境变量中的值
 				proxyIP = customProxyIP;
 				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 				console.log('使用自定义PROXYIP:', proxyIP);
 				RproxyIP = 'false';
 			}
@@ -1510,12 +1510,17 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			if (customSocks5 && customSocks5.trim()) {
 				socks5Address = customSocks5.trim().split('\n')[0];
 				socks5s = await 整理(socks5Address);
-				socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
+				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
 				console.log('使用自定义SOCKS5:', socks5Address);
-				enableSocks = true;
+				try {
+					parsedSocks5Address = socks5AddressParser(socks5Address);
+					enableSocks = true;
+				} catch (err) {
+					console.log(err.toString());
+					enableSocks = false;
+				}
 			} else {
-				// 如果KV中没有SOCKS5设置，禁用SOCKS5
 				enableSocks = false;
 				socks5Address = '';
 			}
@@ -2465,15 +2470,40 @@ async function handlePostRequest(request, env, txt) {
         switch(type) {
             case 'proxyip':
                 await env.KV.put('PROXYIP.txt', content);
+                // 立即更新全局变量
+                proxyIP = content;
+                proxyIPs = await 整理(proxyIP);
                 break;
             case 'socks5':
                 await env.KV.put('SOCKS5.txt', content);
+                // 立即更新全局变量
+                socks5Address = content.split('\n')[0].trim();
+                socks5s = await 整理(socks5Address);
+                if (socks5Address) {
+                    try {
+                        parsedSocks5Address = socks5AddressParser(socks5Address);
+                        enableSocks = true;
+                    } catch (err) {
+                        console.log(err.toString());
+                        enableSocks = false;
+                    }
+                } else {
+                    enableSocks = false;
+                }
                 break;
             case 'sub':
                 await env.KV.put('SUB.txt', content);
+                // 立即更新全局变量
+                const subContent = content.trim();
+                if (subContent) {
+                    const match = subContent.match(/^(?:https?:\/\/)?([^\/]+)/);
+                    sub = match ? match[1] : subContent;
+                }
                 break;
             default:
                 await env.KV.put(txt, content);
+                // 立即更新地址列表
+                addresses = await 整理(content);
         }
         
         return new Response("保存成功");
