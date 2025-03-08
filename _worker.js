@@ -35,7 +35,7 @@ let proxyhosts = [];
 let proxyhostsURL = '';
 let RproxyIP = 'false';
 let httpsPorts = ["2053", "2083", "2087", "2096", "8443"];
-let httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"]; // 添加 HTTP 端口定义
+let httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"]; 
 let 有效时间 = 7;
 let 更新时间 = 3;
 let userIDLow;
@@ -77,8 +77,8 @@ class WebSocketManager {
 		this.log = log;
 		this.readableStreamCancel = false;
 		this.backpressure = false;
-		this.messageQueue = []; // 添加消息队列
-		this.processingMessage = false; // 添加消息处理状态标志
+		this.messageQueue = [];
+		this.processingMessage = false;
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -91,6 +91,14 @@ class WebSocketManager {
 
 	async handleStreamStart(controller, earlyDataHeader) {
 		try {
+			// 立即检查连接状态
+			if (!this.webSocket || this.webSocket.readyState !== 1) {
+				this.log('Connection failed');
+				this.cleanup();
+				controller.error(new Error('Connection failed'));
+				return;
+			}
+
 			// 优化消息处理
 			this.webSocket.addEventListener('message', async (event) => {
 				if (this.readableStreamCancel) return;
@@ -188,6 +196,10 @@ class WebSocketManager {
 		this.messageQueue = [];
 		this.processingMessage = false;
 		this.backpressure = false;
+		if (this.timeout) {
+			clearTimeout(this.timeout);
+			this.timeout = null;
+		}
 		safeCloseWebSocket(this.webSocket);
 	}
 }
