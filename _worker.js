@@ -35,7 +35,6 @@ let proxyhosts = [];
 let proxyhostsURL = '';
 let RproxyIP = 'false';
 let httpsPorts = ["2053", "2083", "2087", "2096", "8443"];
-let httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"]; 
 let 有效时间 = 7;
 let 更新时间 = 3;
 let userIDLow;
@@ -1660,21 +1659,13 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		}
 
 		let counter = 1;
-		if (hostName.includes("worker") || hostName.includes("notls")) {
-			const randomPorts = httpPorts.concat('80');
-			addressesnotls = addressesnotls.concat(
-				cfips.map(cidr => generateRandomIPFromCIDR(cidr) + ':' + 
-					randomPorts[Math.floor(Math.random() * randomPorts.length)] + 
-					'#CF随机节点' + String(counter++).padStart(2, '0'))
-			);
-		} else {
-			const randomPorts = httpsPorts.concat('443');
-			addresses = addresses.concat(
-				cfips.map(cidr => generateRandomIPFromCIDR(cidr) + ':' + 
-					randomPorts[Math.floor(Math.random() * randomPorts.length)] + 
-					'#CF随机节点' + String(counter++).padStart(2, '0'))
-			);
-		}
+		// 移除 if 分支,只保留 HTTPS 部分
+		const randomPorts = httpsPorts.concat('443');
+		addresses = addresses.concat(
+			cfips.map(cidr => generateRandomIPFromCIDR(cidr) + ':' + 
+				randomPorts[Math.floor(Math.random() * randomPorts.length)] + 
+				'#CF随机节点' + String(counter++).padStart(2, '0'))
+		);
 	}
 
 	const uuid = (_url.pathname == `/${动态UUID}`) ? 动态UUID : userID;
