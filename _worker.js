@@ -91,14 +91,6 @@ class WebSocketManager {
 
 	async handleStreamStart(controller, earlyDataHeader) {
 		try {
-			// 立即检查连接状态
-			if (!this.webSocket || this.webSocket.readyState !== 1) {
-				this.log('Connection failed');
-				this.cleanup();
-				controller.error(new Error('Connection failed'));
-				return;
-			}
-
 			// 优化消息处理
 			this.webSocket.addEventListener('message', async (event) => {
 				if (this.readableStreamCancel) return;
@@ -885,10 +877,11 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
     let tcpSocket;
     const controller = new AbortController();
     const signal = controller.signal;
+    let timeoutId; // 添加timeoutId变量声明
 
     try {
         // 设置全局超时
-        const timeout = setTimeout(() => {
+        timeoutId = setTimeout(() => { // 使用timeoutId而不是timeout
             controller.abort('DNS query timeout');
             if (tcpSocket) {
                 try {
@@ -955,7 +948,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                 reader.releaseLock();
             }
 
-            clearTimeout(timeout);
+            clearTimeout(timeoutId); // 使用timeoutId而不是timeout
 
         } catch (error) {
             log(`DNS查询失败: ${error.message}`);
@@ -966,7 +959,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         log(`DNS查询失败: ${error.message}`);
         safeCloseWebSocket(webSocket);
     } finally {
-        clearTimeout(timeout);
+        clearTimeout(timeoutId); // 使用timeoutId而不是timeout
         if (tcpSocket) {
             try {
                 tcpSocket.close();
@@ -1497,7 +1490,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
@@ -1557,33 +1550,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				sub = customSub.trim().split('\n')[0];
 				console.log('使用自定义SUB:', sub);
 			}
-
-			// 在生成配置信息时添加 SUBAPI 的使用判断
-			const customSubAPI = await env.KV.get('SUBAPI.txt');
-			// 只有当KV中有非空值时才覆盖默认设置
-			if (customSubAPI && customSubAPI.trim()) {
-				subConverter = customSubAPI.trim().split('\n')[0];
-				if (subConverter.includes("http://")) {
-					subConverter = subConverter.split("//")[1];
-					subProtocol = 'http';
-				} else {
-					subConverter = subConverter.split("//")[1] || subConverter;
-				}
-				console.log('使用KV中的SUBAPI:', subConverter);
-			} else if (env.SUBAPI) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				subConverter = env.SUBAPI;
-				if (subConverter.includes("http://")) {
-					subConverter = subConverter.split("//")[1];
-					subProtocol = 'http';
-				} else {
-					subConverter = subConverter.split("//")[1] || subConverter;
-				}
-				console.log('使用环境变量中的SUBAPI:', subConverter);
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				console.log('使用默认SUBAPI设置');
-			}
 		} catch (error) {
 			console.error('读取自定义设置时发生错误:', error);
 		}
@@ -1614,20 +1580,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			console.log('使用默认SOCKS5设置');
 			enableSocks = false;
 			socks5Address = '';
-		}
-
-		if (env.SUBAPI) {
-			subConverter = env.SUBAPI;
-			if (subConverter.includes("http://")) {
-				subConverter = subConverter.split("//")[1];
-				subProtocol = 'http';
-			} else {
-				subConverter = subConverter.split("//")[1] || subConverter;
-			}
-			console.log('使用环境变量中的SUBAPI:', subConverter);
-		} else {
-			// 使用代码默认值
-			console.log('使用默认SUBAPI设置');
 		}
 	}
 
@@ -2568,9 +2520,6 @@ async function handlePostRequest(request, env, txt) {
             case 'sub':
                 await env.KV.put('SUB.txt', content);
                 break;
-            case 'subapi': // 添加SUBAPI的处理
-                await env.KV.put('SUBAPI.txt', content);
-                break;
             default:
                 await env.KV.put(txt, content);
         }
@@ -2587,16 +2536,14 @@ async function handleGetRequest(env, txt) {
     let hasKV = !!env.KV;
     let proxyIPContent = '';
     let socks5Content = '';
-    let subContent = '';
-    let subapiContent = ''; // 添加SUBAPI内容变量
+    let subContent = ''; // 添加SUB内容变量
 
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
             socks5Content = await env.KV.get('SOCKS5.txt') || '';
-            subContent = await env.KV.get('SUB.txt') || '';
-            subapiContent = await env.KV.get('SUBAPI.txt') || ''; // 获取SUBAPI设置
+            subContent = await env.KV.get('SUB.txt') || ''; // 获取SUB设置
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -2835,19 +2782,6 @@ sub.example.com"
                             >${subContent}</textarea>
                         </div>
 
-                        <!-- 添加SUBAPI设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="subapi"><strong>SUBAPI 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
-                            <textarea 
-                                id="subapi" 
-                                class="proxyip-editor" 
-                                placeholder="例如:
-sub.xn--mesv7f.club
-api.v1.mk"
-                            >${subapiContent}</textarea>
-                        </div>
-
                         <!-- 统一的保存按钮 -->
                         <div>
                             <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
@@ -2970,14 +2904,7 @@ api.v1.mk"
                         body: subContent
                     });
 
-                    // 保存SUBAPI设置
-                    const subapiContent = document.getElementById('subapi').value;
-                    const subapiResponse = await fetch(window.location.href + '?type=subapi', {
-                        method: 'POST',
-                        body: subapiContent
-                    });
-
-                    if (proxyipResponse.ok && socks5Response.ok && subResponse.ok && subapiResponse.ok) {
+                    if (proxyipResponse.ok && socks5Response.ok && subResponse.ok) {
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
