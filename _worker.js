@@ -1553,7 +1553,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 			// 读取自定义SUBAPI设置
 			const customSubAPI = await env.KV.get('SUBAPI.txt');
-			if (customSubAPI && customSubAPI.trim()) {
+			// 明确检查是否为null或空字符串
+			if (customSubAPI !== null && customSubAPI.trim() !== '') {
 				// 如果KV中有SUBAPI设置，使用KV中的设置
 				subConverter = customSubAPI.trim().split('\n')[0];
 				console.log('使用KV中的SUBAPI:', subConverter);
@@ -1562,14 +1563,15 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				subConverter = env.SUBAPI;
 				console.log('使用环境变量中的SUBAPI:', subConverter);
 			} else {
-				// 如果KV和环境变量中都没有设置，使用空值
-				subConverter = '';
-				console.log('SUBAPI未设置，使用空值');
+				// 如果KV和环境变量中都没有设置，使用代码默认值
+				subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
+				console.log('使用默认SUBAPI设置:', subConverter);
 			}
 
 			// 读取自定义SUBCONFIG设置
 			const customSubConfig = await env.KV.get('SUBCONFIG.txt');
-			if (customSubConfig && customSubConfig.trim()) {
+			// 明确检查是否为null或空字符串
+			if (customSubConfig !== null && customSubConfig.trim() !== '') {
 				// 如果KV中有SUBCONFIG设置，使用KV中的设置
 				subConfig = customSubConfig.trim().split('\n')[0];
 				console.log('使用KV中的SUBCONFIG:', subConfig);
@@ -1579,9 +1581,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				console.log('使用环境变量中的SUBCONFIG:', subConfig);
 			} else {
 				// 如果KV和环境变量中都没有设置，使用代码默认值
-				// 这里不要直接使用默认值，而是清空subConfig
-				subConfig = '';
-				console.log('SUBCONFIG未设置，使用空值');
+				subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
+				console.log('使用默认SUBCONFIG设置:', subConfig);
 			}
 		} catch (error) {
 			console.error('读取自定义设置时发生错误:', error);
@@ -2946,12 +2947,12 @@ async function handleGetRequest(env, txt) {
                     const subconfigContent = document.getElementById('subconfig').value;
                     const subconfigResponse = await fetch(window.location.href + '?type=subconfig', {
                         method: 'POST',
-                        body: subconfigContent
+                        body: subconfigContent // 即使是空字符串也会被保存
                     });
 
                     if (proxyipResponse.ok && socks5Response.ok && subResponse.ok && 
                         subapiResponse.ok && subconfigResponse.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
+                        saveStatus.textContent = '✅ 保存成功，设置将在下次请求时生效';
                         setTimeout(() => {
                             saveStatus.textContent = '';
                         }, 3000);
