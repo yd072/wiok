@@ -2952,7 +2952,7 @@ async function handleGetRequest(env, txt) {
 
                     if (proxyipResponse.ok && socks5Response.ok && subResponse.ok && 
                         subapiResponse.ok && subconfigResponse.ok) {
-                        saveStatus.textContent = '✅ 保存成功，设置将在下次请求时生效';
+                        saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
                         }, 3000);
