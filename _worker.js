@@ -2553,8 +2553,9 @@ async function handleGetRequest(env, txt) {
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
             socks5Content = await env.KV.get('SOCKS5.txt') || '';
             subContent = await env.KV.get('SUB.txt') || '';
-            subAPIContent = await env.KV.get('SUBAPI.txt') || subConverter || ''; // 获取SUBAPI设置
-            subConfigContent = await env.KV.get('SUBCONFIG.txt') || subConfig || ''; // 获取SUBCONFIG设置
+            // 修改这里：不要使用默认值，只读取KV中的值
+            subAPIContent = await env.KV.get('SUBAPI.txt') || '';
+            subConfigContent = await env.KV.get('SUBCONFIG.txt') || '';
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
