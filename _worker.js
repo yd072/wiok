@@ -2904,14 +2904,40 @@ aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xh
             function toggleAdvancedSettings() {
                 const content = document.getElementById('advanced-settings-content');
                 const toggle = document.getElementById('advanced-settings-toggle');
-                if (content.style.display === 'none' || !content.style.display) {
-                    content.style.display = 'block';
-                    toggle.textContent = '∧';
+                
+                if (content) {
+                    // 检查当前显示状态
+                    const isHidden = content.style.display === 'none' || !content.style.display;
+                    
+                    // 切换显示状态
+                    content.style.display = isHidden ? 'block' : 'none';
+                    
+                    // 更新箭头方向
+                    if (toggle) {
+                        toggle.textContent = isHidden ? '∧' : '∨';
+                    }
+                    
+                    // 添加调试信息
+                    console.log('高级设置切换状态:', isHidden ? '显示' : '隐藏');
                 } else {
-                    content.style.display = 'none';
-                    toggle.textContent = '∨';
+                    console.error('找不到高级设置内容元素');
                 }
             }
+
+            // 在页面加载完成后初始化高级设置
+            document.addEventListener('DOMContentLoaded', function() {
+                // 确保高级设置初始状态为隐藏
+                const content = document.getElementById('advanced-settings-content');
+                if (content) {
+                    content.style.display = 'none';
+                }
+                
+                // 为高级设置标题添加点击事件
+                const header = document.querySelector('.advanced-settings-header');
+                if (header) {
+                    header.addEventListener('click', toggleAdvancedSettings);
+                }
+            });
 
             // 修改保存设置函数
             async function saveSettings() {
