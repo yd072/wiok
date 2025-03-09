@@ -2968,6 +2968,39 @@ aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xh
                     console.error('保存设置时发生错误:', error);
                 }
             }
+            
+            // 添加解码函数到HTML页面的script标签中
+            function decodeBase64Examples() {
+                // 获取所有示例文本区域
+                const textareas = document.querySelectorAll('.proxyip-editor');
+                
+                // 遍历每个文本区域
+                textareas.forEach(textarea => {
+                    // 获取placeholder内容
+                    const placeholder = textarea.getAttribute('placeholder');
+                    if (placeholder && placeholder.includes('例如:')) {
+                        // 分割出示例部分
+                        const parts = placeholder.split('例如:');
+                        const examples = parts[1].trim().split('\n');
+                        
+                        // 尝试解码每个示例
+                        const decodedExamples = examples.map(example => {
+                            try {
+                                return atob(example.trim());
+                            } catch (e) {
+                                // 如果解码失败，返回原始值
+                                return example.trim();
+                            }
+                        });
+                        
+                        // 重新组合placeholder
+                        textarea.setAttribute('placeholder', \`例如:\n\${decodedExamples.join('\n')}\`);
+                    }
+                });
+            }
+
+            // 在页面加载完成后执行解码
+            document.addEventListener('DOMContentLoaded', decodeBase64Examples);
             </script>
         </body>
         </html>
@@ -2977,36 +3010,3 @@ aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xh
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
 }
-
-// 在JavaScript部分添加一个解码函数
-function decodeBase64Examples() {
-    // 获取所有示例文本区域
-    const textareas = document.querySelectorAll('.proxyip-editor');
-    
-    // 遍历每个文本区域
-    textareas.forEach(textarea => {
-        // 获取placeholder内容
-        const placeholder = textarea.getAttribute('placeholder');
-        if (placeholder && placeholder.includes('例如:')) {
-            // 分割出示例部分
-            const parts = placeholder.split('例如:');
-            const examples = parts[1].trim().split('\n');
-            
-            // 尝试解码每个示例
-            const decodedExamples = examples.map(example => {
-                try {
-                    return atob(example.trim());
-                } catch (e) {
-                    // 如果解码失败，返回原始值
-                    return example.trim();
-                }
-            });
-            
-            // 重新组合placeholder
-            textarea.setAttribute('placeholder', `例如:\n${decodedExamples.join('\n')}`);
-        }
-    });
-}
-
-// 在页面加载完成后执行解码
-document.addEventListener('DOMContentLoaded', decodeBase64Examples);
