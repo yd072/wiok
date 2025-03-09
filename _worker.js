@@ -2761,7 +2761,9 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="proxyip" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKJUU0JUJEJUJGJUUzJTgwJTgxJUU3JTg5JTg4JUU1JTg4JTg2JUU1JTlCJUJEJUU1JTlEJTgwLmNvbSUzQTg0NDM='))}"
+                                placeholder="例如:
+1.2.3.4:443
+proxy.example.com:8443"
                             >${proxyIPContent}</textarea>
                         </div>
 
@@ -2772,7 +2774,9 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="socks5" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}"
+                                placeholder="例如:
+user:pass@127.0.0.1:1080
+127.0.0.1:1080"
                             >${socks5Content}</textarea>
                         </div>
 
@@ -2783,7 +2787,9 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="sub" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}"
+                                placeholder="例如:
+sub.google.com
+sub.example.com"
                             >${subContent}</textarea>
                         </div>
                         
@@ -2794,7 +2800,7 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="subapi" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}"
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}"
                             >${subAPIContent}</textarea>
                         </div>
                         
