@@ -1490,7 +1490,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
@@ -1549,6 +1549,36 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			if (customSub && customSub.trim() && !sub) {
 				sub = customSub.trim().split('\n')[0];
 				console.log('使用自定义SUB:', sub);
+			}
+
+			// 读取自定义SUBAPI设置
+			const customSubAPI = await env.KV.get('SUBAPI.txt');
+			if (customSubAPI && customSubAPI.trim()) {
+				// 如果KV中有SUBAPI设置，使用KV中的设置
+				subConverter = customSubAPI.trim().split('\n')[0];
+				console.log('使用KV中的SUBAPI:', subConverter);
+			} else if (env.SUBAPI) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				subConverter = env.SUBAPI;
+				console.log('使用环境变量中的SUBAPI:', subConverter);
+			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
+				console.log('使用默认SUBAPI设置:', subConverter);
+			}
+
+			// 读取自定义SUBCONFIG设置
+			const customSubConfig = await env.KV.get('SUBCONFIG.txt');
+			if (customSubConfig && customSubConfig.trim()) {
+				// 如果KV中有SUBCONFIG设置，使用KV中的设置
+				subConfig = customSubConfig.trim().split('\n')[0];
+				console.log('使用KV中的SUBCONFIG:', subConfig);
+			} else if (env.SUBCONFIG) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				subConfig = env.SUBCONFIG;
+				console.log('使用环境变量中的SUBCONFIG:', subConfig);
+			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
+				console.log('使用默认SUBCONFIG设置:', subConfig);
 			}
 		} catch (error) {
 			console.error('读取自定义设置时发生错误:', error);
@@ -2491,6 +2521,12 @@ async function handlePostRequest(request, env, txt) {
             case 'sub':
                 await env.KV.put('SUB.txt', content);
                 break;
+            case 'subapi':
+                await env.KV.put('SUBAPI.txt', content);
+                break;
+            case 'subconfig':
+                await env.KV.put('SUBCONFIG.txt', content);
+                break;
             default:
                 await env.KV.put(txt, content);
         }
@@ -2507,14 +2543,18 @@ async function handleGetRequest(env, txt) {
     let hasKV = !!env.KV;
     let proxyIPContent = '';
     let socks5Content = '';
-    let subContent = ''; // 添加SUB内容变量
+    let subContent = ''; 
+    let subAPIContent = ''; // 添加SUBAPI内容变量
+    let subConfigContent = ''; // 添加SUBCONFIG内容变量
 
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
             socks5Content = await env.KV.get('SOCKS5.txt') || '';
-            subContent = await env.KV.get('SUB.txt') || ''; // 获取SUB设置
+            subContent = await env.KV.get('SUB.txt') || '';
+            subAPIContent = await env.KV.get('SUBAPI.txt') || subConverter || ''; // 获取SUBAPI设置
+            subConfigContent = await env.KV.get('SUBCONFIG.txt') || subConfig || ''; // 获取SUBCONFIG设置
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -2717,13 +2757,13 @@ async function handleGetRequest(env, txt) {
                         <!-- PROXYIP设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="proxyip"><strong>PROXYIP 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口</p>
+                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(Base64编码)</p>
                             <textarea 
                                 id="proxyip" 
                                 class="proxyip-editor" 
                                 placeholder="例如:
-1.2.3.4:443
-proxy.example.com:8443"
+MS4yLjMuNDo0NDM=
+cHJveHkuZXhhbXBsZS5jb206ODQ0Mw=="
                             >${proxyIPContent}</textarea>
                         </div>
 
@@ -2735,8 +2775,8 @@ proxy.example.com:8443"
                                 id="socks5" 
                                 class="proxyip-editor" 
                                 placeholder="例如:
-user:pass@127.0.0.1:1080
-127.0.0.1:1080"
+dXNlcjpwYXNzQDEyNy4wLjAuMToxMDgw
+MTI3LjAuMC4xOjEwODA="
                             >${socks5Content}</textarea>
                         </div>
 
@@ -2748,9 +2788,34 @@ user:pass@127.0.0.1:1080
                                 id="sub" 
                                 class="proxyip-editor" 
                                 placeholder="例如:
-sub.google.com
-sub.example.com"
+c3ViLmdvb2dsZS5jb20=
+c3ViLmV4YW1wbGUuY29t"
                             >${subContent}</textarea>
+                        </div>
+                        
+                        <!-- SUBAPI设置 -->
+                        <div style="margin-bottom: 20px;">
+                            <label for="subapi"><strong>SUBAPI 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
+                            <textarea 
+                                id="subapi" 
+                                class="proxyip-editor" 
+                                placeholder="例如:
+U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=
+YXBpLnYxLm1r"
+                            >${subAPIContent}</textarea>
+                        </div>
+                        
+                        <!-- SUBCONFIG设置 -->
+                        <div style="margin-bottom: 20px;">
+                            <label for="subconfig"><strong>SUBCONFIG 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
+                            <textarea 
+                                id="subconfig" 
+                                class="proxyip-editor" 
+                                placeholder="例如:
+aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=="
+                            >${subConfigContent}</textarea>
                         </div>
 
                         <!-- 统一的保存按钮 -->
@@ -2874,8 +2939,23 @@ sub.example.com"
                         method: 'POST',
                         body: subContent
                     });
+                    
+                    // 保存SUBAPI设置
+                    const subapiContent = document.getElementById('subapi').value;
+                    const subapiResponse = await fetch(window.location.href + '?type=subapi', {
+                        method: 'POST',
+                        body: subapiContent
+                    });
+                    
+                    // 保存SUBCONFIG设置
+                    const subconfigContent = document.getElementById('subconfig').value;
+                    const subconfigResponse = await fetch(window.location.href + '?type=subconfig', {
+                        method: 'POST',
+                        body: subconfigContent
+                    });
 
-                    if (proxyipResponse.ok && socks5Response.ok && subResponse.ok) {
+                    if (proxyipResponse.ok && socks5Response.ok && subResponse.ok && 
+                        subapiResponse.ok && subconfigResponse.ok) {
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
@@ -2897,3 +2977,36 @@ sub.example.com"
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
 }
+
+// 在JavaScript部分添加一个解码函数
+function decodeBase64Examples() {
+    // 获取所有示例文本区域
+    const textareas = document.querySelectorAll('.proxyip-editor');
+    
+    // 遍历每个文本区域
+    textareas.forEach(textarea => {
+        // 获取placeholder内容
+        const placeholder = textarea.getAttribute('placeholder');
+        if (placeholder && placeholder.includes('例如:')) {
+            // 分割出示例部分
+            const parts = placeholder.split('例如:');
+            const examples = parts[1].trim().split('\n');
+            
+            // 尝试解码每个示例
+            const decodedExamples = examples.map(example => {
+                try {
+                    return atob(example.trim());
+                } catch (e) {
+                    // 如果解码失败，返回原始值
+                    return example.trim();
+                }
+            });
+            
+            // 重新组合placeholder
+            textarea.setAttribute('placeholder', `例如:\n${decodedExamples.join('\n')}`);
+        }
+    });
+}
+
+// 在页面加载完成后执行解码
+document.addEventListener('DOMContentLoaded', decodeBase64Examples);
