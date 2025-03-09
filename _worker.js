@@ -1490,7 +1490,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
@@ -1549,36 +1549,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			if (customSub && customSub.trim() && !sub) {
 				sub = customSub.trim().split('\n')[0];
 				console.log('使用自定义SUB:', sub);
-			}
-
-			// 读取自定义SUBAPI设置
-			const customSubAPI = await env.KV.get('SUBAPI.txt');
-			if (customSubAPI && customSubAPI.trim()) {
-				// 如果KV中有SUBAPI设置，使用KV中的设置
-				subConverter = customSubAPI.trim().split('\n')[0];
-				console.log('使用KV中的SUBAPI:', subConverter);
-			} else if (env.SUBAPI) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				subConverter = env.SUBAPI;
-				console.log('使用环境变量中的SUBAPI:', subConverter);
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				console.log('使用默认SUBAPI设置:', subConverter);
-			}
-
-			// 读取自定义SUBCONFIG设置
-			const customSubConfig = await env.KV.get('SUBCONFIG.txt');
-			if (customSubConfig && customSubConfig.trim()) {
-				// 如果KV中有SUBCONFIG设置，使用KV中的设置
-				subConfig = customSubConfig.trim().split('\n')[0];
-				console.log('使用KV中的SUBCONFIG:', subConfig);
-			} else if (env.SUBCONFIG) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				subConfig = env.SUBCONFIG;
-				console.log('使用环境变量中的SUBCONFIG:', subConfig);
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				console.log('使用默认SUBCONFIG设置:', subConfig);
 			}
 		} catch (error) {
 			console.error('读取自定义设置时发生错误:', error);
@@ -2521,12 +2491,6 @@ async function handlePostRequest(request, env, txt) {
             case 'sub':
                 await env.KV.put('SUB.txt', content);
                 break;
-            case 'subapi':
-                await env.KV.put('SUBAPI.txt', content);
-                break;
-            case 'subconfig':
-                await env.KV.put('SUBCONFIG.txt', content);
-                break;
             default:
                 await env.KV.put(txt, content);
         }
@@ -2543,18 +2507,14 @@ async function handleGetRequest(env, txt) {
     let hasKV = !!env.KV;
     let proxyIPContent = '';
     let socks5Content = '';
-    let subContent = ''; 
-    let subAPIContent = ''; // 添加SUBAPI内容变量
-    let subConfigContent = ''; // 添加SUBCONFIG内容变量
+    let subContent = ''; // 添加SUB内容变量
 
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
             socks5Content = await env.KV.get('SOCKS5.txt') || '';
-            subContent = await env.KV.get('SUB.txt') || '';
-            subAPIContent = await env.KV.get('SUBAPI.txt') || subConverter || ''; // 获取SUBAPI设置
-            subConfigContent = await env.KV.get('SUBCONFIG.txt') || subConfig || ''; // 获取SUBCONFIG设置
+            subContent = await env.KV.get('SUB.txt') || ''; // 获取SUB设置
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -2792,31 +2752,6 @@ sub.google.com
 sub.example.com"
                             >${subContent}</textarea>
                         </div>
-                        
-                        <!-- SUBAPI设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="subapi"><strong>SUBAPI 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
-                            <textarea 
-                                id="subapi" 
-                                class="proxyip-editor" 
-                                placeholder="例如:
-api.v1.mk
-sub.xeton.dev"
-                            >${subAPIContent}</textarea>
-                        </div>
-                        
-                        <!-- SUBCONFIG设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="subconfig"><strong>SUBCONFIG 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
-                            <textarea 
-                                id="subconfig" 
-                                class="proxyip-editor" 
-                                placeholder="例如:
-https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Mini_MultiMode.ini"
-                            >${subConfigContent}</textarea>
-                        </div>
 
                         <!-- 统一的保存按钮 -->
                         <div>
@@ -2838,7 +2773,7 @@ https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_On
                 <div class="editor-container">
                     ${hasKV ? `
                         <textarea class="editor" 
-                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNSU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
@@ -2939,23 +2874,8 @@ https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_On
                         method: 'POST',
                         body: subContent
                     });
-                    
-                    // 保存SUBAPI设置
-                    const subapiContent = document.getElementById('subapi').value;
-                    const subapiResponse = await fetch(window.location.href + '?type=subapi', {
-                        method: 'POST',
-                        body: subapiContent
-                    });
-                    
-                    // 保存SUBCONFIG设置
-                    const subconfigContent = document.getElementById('subconfig').value;
-                    const subconfigResponse = await fetch(window.location.href + '?type=subconfig', {
-                        method: 'POST',
-                        body: subconfigContent
-                    });
 
-                    if (proxyipResponse.ok && socks5Response.ok && subResponse.ok && 
-                        subapiResponse.ok && subconfigResponse.ok) {
+                    if (proxyipResponse.ok && socks5Response.ok && subResponse.ok) {
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
