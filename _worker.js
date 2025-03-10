@@ -1096,57 +1096,25 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
-    // 预先解码常用模式
-    const patterns = [atob('YWxsIGlu'), atob('Kg==')];
-    
-    // 优化 SOCKS5 模式检查 - 使用更高效的算法
+    // 优化 SOCKS5 模式检查
     const checkSocks5Mode = async (address) => {
-        // 快速路径：检查通配符模式
+        const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
         
-        // 使用与原代码完全相同的匹配逻辑
-        try {
-            const pattern = go2Socks5s.find(p => 
-                new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address)
-            );
-            return !!pattern;
-        } catch (e) {
-            // 只在正则表达式出错时使用备用逻辑
-            log(`正则表达式匹配出错: ${e.message}, 使用备用匹配`);
-            
-            // 备用匹配逻辑
-            return go2Socks5s.some(p => {
-                // 精确匹配
-                if (p === address) return true;
-                
-                // 通配符 * 匹配所有
-                if (p === '*') return true;
-                
-                // 简单的通配符处理
-                if (p.includes('*')) {
-                    const prefix = p.split('*')[0];
-                    const suffix = p.split('*').pop();
-                    
-                    return (!prefix || address.startsWith(prefix)) && 
-                           (!suffix || address.endsWith(suffix));
-                }
-                
-                return false;
-            });
-        }
+        const pattern = go2Socks5s.find(p => 
+            new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address)
+        );
+        return !!pattern;
     };
 
-    // 优化连接处理 - 减少重复代码
-    const createConnection = async (address, port, options = {}) => {
-        const { socks = false, timeout = 3000 } = options;
-        log(`建立${socks ? 'SOCKS5' : '直接'}连接: ${address}:${port}`);
+    // 优化连接处理
+    const createConnection = async (address, port, socks = false) => {
+        log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
-        // 使用单一的超时控制
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort('连接超时'), timeout);
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
 
         try {
-            // 创建连接
             const tcpSocket = await Promise.race([
                 socks ? 
                     socks5Connect(addressType, address, port, log) :
@@ -1157,107 +1125,76 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                         keepAlive: true,
                         keepAliveInitialDelay: 60000,
                         signal: controller.signal
-                    }),
+                    })
+                ,
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error(`连接超时 (${timeout}ms)`)), timeout)
+                    setTimeout(() => reject(new Error('连接超时')), 3000)
                 )
             ]);
 
-            // 连接成功
-            log(`成功连接到 ${address}:${port}`);
+            clearTimeout(timeoutId);
             remoteSocket.value = tcpSocket;
 
-            // 写入初始数据
-            if (rawClientData && rawClientData.byteLength > 0) {
-                const writer = tcpSocket.writable.getWriter();
-                try {
-                    await writer.write(rawClientData);
-                } finally {
-                    writer.releaseLock();
-                }
+            // 写入数据
+            const writer = tcpSocket.writable.getWriter();
+            try {
+                await writer.write(rawClientData);
+            } finally {
+                writer.releaseLock();
             }
 
             return tcpSocket;
         } catch (error) {
-            log(`连接失败: ${error.message}`);
-            throw error;
-        } finally {
             clearTimeout(timeoutId);
+            throw error;
         }
     };
 
-    // 优化重试逻辑 - 使用更清晰的错误处理
+    // 优化重试逻辑
     const retryConnection = async () => {
         try {
             let tcpSocket;
-            
-            // SOCKS5 模式
             if (enableSocks) {
-                log('使用SOCKS5代理重试连接');
-                tcpSocket = await createConnection(addressRemote, portRemote, { socks: true });
+                tcpSocket = await createConnection(addressRemote, portRemote, true);
             } else {
                 // 处理 proxyIP
-                let targetIP = proxyIP;
-                let targetPort = portRemote;
-                
-                if (!targetIP || targetIP === '') {
-                    targetIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                if (!proxyIP || proxyIP === '') {
+                    proxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
                 } else {
-                    // 解析IP和端口 - 优化字符串处理
-                    if (targetIP.includes(']:')) {
-                        const parts = targetIP.split(']:');
-                        targetIP = parts[0];
-                        if (parts.length > 1) targetPort = parts[1];
-                    } else if (targetIP.includes(':')) {
-                        const parts = targetIP.split(':');
-                        targetIP = parts[0];
-                        if (parts.length > 1) targetPort = parts[1];
+                    let port = portRemote;
+                    if (proxyIP.includes(']:')) {
+                        [proxyIP, port] = proxyIP.split(']:');
+                    } else if (proxyIP.includes(':')) {
+                        [proxyIP, port] = proxyIP.split(':');
                     }
-                    
-                    // 处理特殊格式
-                    if (targetIP.includes('.tp')) {
-                        const tpIndex = targetIP.indexOf('.tp');
-                        const dotIndex = targetIP.indexOf('.', tpIndex + 3);
-                        if (dotIndex > tpIndex) {
-                            const tpPart = targetIP.substring(tpIndex + 3, dotIndex);
-                            if (tpPart) targetPort = tpPart;
-                        }
+                    if (proxyIP.includes('.tp')) {
+                        port = proxyIP.split('.tp')[1].split('.')[0] || port;
                     }
+                    portRemote = port;
                 }
-                
-                log(`使用代理IP重试连接: ${targetIP}:${targetPort}`);
-                tcpSocket = await createConnection(targetIP, targetPort);
+                tcpSocket = await createConnection(proxyIP || addressRemote, portRemote);
             }
 
-            // 设置连接关闭处理
+            // 监听连接关闭
             tcpSocket.closed
-                .catch(error => log('连接关闭:', error.message))
-                .finally(() => {
-                    log('连接已关闭，清理资源');
-                    safeCloseWebSocket(webSocket);
-                });
+                .catch(error => log('重试连接关闭:', error))
+                .finally(() => safeCloseWebSocket(webSocket));
 
-            // 开始数据传输
             return remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, null, log);
         } catch (error) {
-            log('重试连接失败:', error.message);
-            safeCloseWebSocket(webSocket);
+            log('重试失败:', error);
         }
     };
 
-    // 主连接逻辑
     try {
-        // 确定是否使用SOCKS5
+        // 主连接逻辑
         const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
             await checkSocks5Mode(addressRemote) : false;
 
-        log(`连接模式: ${shouldUseSocks ? 'SOCKS5代理' : '直接连接'}`);
-        const tcpSocket = await createConnection(addressRemote, portRemote, { socks: shouldUseSocks });
-        
-        // 开始数据传输
+        const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
         return remoteSocketToWS(tcpSocket, webSocket, 维列斯ResponseHeader, retryConnection, log);
     } catch (error) {
-        log('主连接失败，尝试重试:', error.message);
+        log('主连接失败，尝试重试:', error);
         return retryConnection();
     }
 }
