@@ -77,10 +77,8 @@ class WebSocketManager {
 		this.log = log;
 		this.readableStreamCancel = false;
 		this.backpressure = false;
-		this.messageQueue = []; // 消息队列
-		this.processingMessage = false; // 消息处理状态标志
-		this.maxQueueSize = 100; // 添加队列大小限制
-		this.earlyDataProcessed = false; // 跟踪早期数据处理状态
+		this.messageQueue = []; // 添加消息队列
+		this.processingMessage = false; // 添加消息处理状态标志
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -93,71 +91,48 @@ class WebSocketManager {
 
 	async handleStreamStart(controller, earlyDataHeader) {
 		try {
-			// 使用单一事件监听器处理所有WebSocket事件
-			this.setupEventListeners(controller);
-			
+			// 优化消息处理
+			this.webSocket.addEventListener('message', async (event) => {
+				if (this.readableStreamCancel) return;
+				
+				if (!this.backpressure) {
+					await this.processMessage(event.data, controller);
+				} else {
+					// 当出现背压时,将消息加入队列
+					this.messageQueue.push(event.data);
+					this.log('Backpressure detected, message queued');
+				}
+			});
+
+			// 优化关闭处理
+			this.webSocket.addEventListener('close', () => {
+				this.handleClose(controller);
+			});
+
+			// 优化错误处理
+			this.webSocket.addEventListener('error', (err) => {
+				this.handleError(err, controller);
+			});
+
 			// 处理早期数据
 			await this.handleEarlyData(earlyDataHeader, controller);
-			this.earlyDataProcessed = true;
 		} catch (error) {
 			this.log(`Stream start error: ${error.message}`);
 			controller.error(error);
 		}
 	}
 
-	setupEventListeners(controller) {
-		// 消息处理 - 使用箭头函数避免绑定问题
-		this.webSocket.addEventListener('message', (event) => {
-				if (this.readableStreamCancel) return;
-				
-				if (!this.backpressure) {
-				this.processMessage(event.data, controller);
-			} else if (this.messageQueue.length < this.maxQueueSize) {
-				// 当出现背压且队列未满时，将消息加入队列
-					this.messageQueue.push(event.data);
-					this.log('Backpressure detected, message queued');
-			} else {
-				this.log('Message queue full, dropping message');
-				}
-			});
-
-		// 关闭处理
-			this.webSocket.addEventListener('close', () => {
-				this.handleClose(controller);
-			});
-
-		// 错误处理
-			this.webSocket.addEventListener('error', (err) => {
-				this.handleError(err, controller);
-			});
-	}
-
-	processMessage(data, controller) {
-		// 避免递归调用和异步开销
-		if (this.processingMessage) {
-			this.messageQueue.push(data);
-			return;
-		}
+	async processMessage(data, controller) {
+		if (this.processingMessage) return;
 		
 		try {
 			this.processingMessage = true;
-			
-			// 先处理当前消息
 			controller.enqueue(data);
 			
-			// 批量处理队列中的消息，提高效率
-			let processedCount = 0;
-			const maxBatchSize = 10; // 每批处理的最大消息数
-			
-			while (this.messageQueue.length > 0 && !this.backpressure && processedCount < maxBatchSize) {
+			// 处理队列中的消息
+			while (this.messageQueue.length > 0 && !this.backpressure) {
 				const queuedData = this.messageQueue.shift();
 				controller.enqueue(queuedData);
-				processedCount++;
-			}
-			
-			// 如果队列中还有消息，安排下一次处理
-			if (this.messageQueue.length > 0 && !this.backpressure) {
-				setTimeout(() => this.processBatch(controller), 0);
 			}
 		} catch (error) {
 			this.log(`Message processing error: ${error.message}`);
@@ -166,39 +141,14 @@ class WebSocketManager {
 		}
 	}
 
-	// 批量处理队列中的消息
-	processBatch(controller) {
-		if (this.processingMessage || this.readableStreamCancel) return;
-		
-		this.processingMessage = true;
-		try {
-			let processedCount = 0;
-			const maxBatchSize = 20; // 批处理时的最大消息数
-			
-			while (this.messageQueue.length > 0 && !this.backpressure && processedCount < maxBatchSize) {
-				const queuedData = this.messageQueue.shift();
-				controller.enqueue(queuedData);
-				processedCount++;
-			}
-			
-			// 如果队列中还有消息，安排下一次处理
-			if (this.messageQueue.length > 0 && !this.backpressure) {
-				setTimeout(() => this.processBatch(controller), 0);
-			}
-		} catch (error) {
-			this.log(`Batch processing error: ${error.message}`);
-		} finally {
-			this.processingMessage = false;
-		}
-	}
-
 	handleStreamPull(controller) {
-		const previousBackpressure = this.backpressure;
-		this.backpressure = controller.desiredSize <= 0;
-		
-		// 只有当背压状态从true变为false时才处理队列
-		if (previousBackpressure && !this.backpressure && this.messageQueue.length > 0) {
-			this.processBatch(controller);
+		if (controller.desiredSize > 0) {
+			this.backpressure = false;
+			// 当背压解除时,尝试处理队列中的消息
+			if (this.messageQueue.length > 0) {
+				const data = this.messageQueue.shift();
+				this.processMessage(data, controller);
+			}
 		}
 	}
 
@@ -211,36 +161,25 @@ class WebSocketManager {
 	}
 
 	handleClose(controller) {
-		if (this.readableStreamCancel) return;
-		
-		this.log('WebSocket closed');
 		safeCloseWebSocket(this.webSocket);
+		if (!this.readableStreamCancel) {
 			controller.close();
+		}
 		this.cleanup();
 	}
 
 	handleError(err, controller) {
-		if (this.readableStreamCancel) return;
-		
-		this.log(`WebSocket error: ${err.message || 'Unknown error'}`);
+		this.log('WebSocket server error');
 		controller.error(err);
 		this.cleanup();
 	}
 
 	async handleEarlyData(earlyDataHeader, controller) {
-		if (!earlyDataHeader) return;
-		
-		try {
 		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
 		if (error) {
-				this.log(`Early data error: ${error.message}`);
 			controller.error(error);
 		} else if (earlyData) {
 			controller.enqueue(earlyData);
-		}
-		} catch (error) {
-			this.log(`Early data processing error: ${error.message}`);
-			controller.error(error);
 		}
 	}
 
@@ -249,13 +188,7 @@ class WebSocketManager {
 		this.messageQueue = [];
 		this.processingMessage = false;
 		this.backpressure = false;
-		this.readableStreamCancel = true;
-		
-		try {
 		safeCloseWebSocket(this.webSocket);
-		} catch (error) {
-			this.log(`WebSocket close error during cleanup: ${error.message}`);
-		}
 	}
 }
 
@@ -814,70 +747,31 @@ async function 维列斯OverWSHandler(request) {
 
     let address = '';
     let portWithRandomLog = '';
-    let remoteSocketWrapper = { value: null };
-    let isDns = false;
-    
-    // 创建高效的日志函数
     const log = (info, event = '') => {
-        // 只在需要时才生成时间戳，减少不必要的对象创建
-        if (console.debug) { // 检查是否在调试模式
         const timestamp = new Date().toISOString();
         console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
-        }
     };
 
-    // 预先创建黑名单集合，提高查询效率
-    const banHostsSet = new Set(banHosts);
-    
-    try {
-        // 获取早期数据
     const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
-        
-        // 创建WebSocket管理器和可读流
-        const wsManager = new WebSocketManager(webSocket, log);
-        const readableWebSocketStream = wsManager.makeReadableStream(earlyDataHeader);
+    const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
 
-        // 设置错误处理和清理函数
-        const cleanup = (error) => {
-            if (error) {
-                log('连接错误，正在清理资源', error instanceof Error ? error.message : String(error));
-            }
-            
-            // 关闭远程连接
-            if (remoteSocketWrapper.value) {
-                try {
-                    remoteSocketWrapper.value.close();
-                } catch (e) {
-                    // 忽略关闭错误
-                }
-                remoteSocketWrapper.value = null;
-            }
-            
-            // 安全关闭WebSocket
-            safeCloseWebSocket(webSocket);
-        };
+    let remoteSocketWrapper = { value: null };
+    let isDns = false;
+    const banHostsSet = new Set(banHosts);
 
-        // 使用更高效的管道处理
     readableWebSocketStream.pipeTo(new WritableStream({
         async write(chunk, controller) {
             try {
-                    // DNS处理逻辑
                 if (isDns) {
                     return handleDNSQuery(chunk, webSocket, null, log);
                 }
-                    
-                    // 已建立连接的处理
                 if (remoteSocketWrapper.value) {
                     const writer = remoteSocketWrapper.value.writable.getWriter();
-                        try {
                     await writer.write(chunk);
-                        } finally {
                     writer.releaseLock();
-                        }
                     return;
                 }
 
-                    // 处理新连接请求
                 const {
                     hasError,
                     message,
@@ -889,16 +783,11 @@ async function 维列斯OverWSHandler(request) {
                     isUDP,
                 } = process维列斯Header(chunk, userID);
 
-                    // 设置连接信息
                 address = addressRemote;
-                    portWithRandomLog = `${portRemote}--${Math.random().toString(36).substring(2, 8)} ${isUDP ? 'udp ' : 'tcp '} `;
-                    
-                    // 错误处理
+                portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
                 if (hasError) {
                     throw new Error(message);
                 }
-                    
-                    // UDP处理
                 if (isUDP) {
                     if (portRemote === 53) {
                         isDns = true;
@@ -906,56 +795,39 @@ async function 维列斯OverWSHandler(request) {
                         throw new Error('UDP 代理仅对 DNS（53 端口）启用');
                     }
                 }
-                    
-                    // 准备响应头和客户端数据
                 const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
                 const rawClientData = chunk.slice(rawDataIndex);
 
-                    // DNS查询处理
                 if (isDns) {
                     return handleDNSQuery(rawClientData, webSocket, 维列斯ResponseHeader, log);
                 }
-                    
-                    // 黑名单检查
-                    if (banHostsSet.has(addressRemote)) {
-                        throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
-                    }
-                    
-                    // 处理TCP连接
+                if (!banHostsSet.has(addressRemote)) {
                     log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
                     handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log);
+                } else {
+                    throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
+                }
             } catch (error) {
                 log('处理数据时发生错误', error.message);
-                    controller.error(error); // 通知流控制器发生错误
+                webSocket.close(1011, '内部错误');
             }
         },
         close() {
-                log(`WebSocket流已正常关闭`);
-                cleanup();
+            log(`readableWebSocketStream 已关闭`);
         },
         abort(reason) {
-                log(`WebSocket流已异常中止`, typeof reason === 'object' ? JSON.stringify(reason) : reason);
-                cleanup(reason);
+            log(`readableWebSocketStream 已中止`, JSON.stringify(reason));
         },
     })).catch((err) => {
-            log('WebSocket流处理错误', err instanceof Error ? err.message : String(err));
-            cleanup(err);
+        log('readableWebSocketStream 管道错误', err);
+        webSocket.close(1011, '管道错误');
     });
 
-        // 返回WebSocket响应
     return new Response(null, {
         status: 101,
         // @ts-ignore
         webSocket: client,
     });
-    } catch (error) {
-        // 处理初始化过程中的错误
-        log('连接初始化失败', error instanceof Error ? error.message : String(error));
-        safeCloseWebSocket(webSocket);
-        
-        // 返回错误响应
-        return new Response('WebSocket初始化失败', { status: 500 });
-    }
 }
 
 function mergeData(header, chunk) {
@@ -1014,7 +886,6 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         }, 3000);
 
         try {
-            // 使用Promise.race优化连接逻辑
             tcpSocket = await Promise.race([
                 connect({
                     hostname: DNS_SERVER.hostname,
@@ -1036,12 +907,11 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                 writer.releaseLock();
             }
 
-            // 优化数据流处理
+            // 简化的数据流处理
             let 维列斯Header = 维列斯ResponseHeader;
             const reader = tcpSocket.readable.getReader();
 
             try {
-                // 使用更高效的循环处理数据
                 while (true) {
                     const { done, value } = await reader.read();
                     
@@ -1050,9 +920,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                         break;
                     }
 
-                    // 检查WebSocket状态
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        log('WebSocket已关闭，停止DNS数据处理');
                         break;
                     }
 
@@ -1066,11 +934,13 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                     }
                 }
             } catch (error) {
-                log(`DNS数据读取错误: ${error.message}`);
+                log(`数据读取错误: ${error.message}`);
                 throw error;
             } finally {
                 reader.releaseLock();
             }
+
+            clearTimeout(timeout);
 
         } catch (error) {
             log(`DNS查询失败: ${error.message}`);
@@ -1083,6 +953,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
         log(`DNS查询失败: ${error.message}`);
         safeCloseWebSocket(webSocket);
     } finally {
+        clearTimeout(timeout);
         if (tcpSocket) {
             try {
                 tcpSocket.close();
@@ -1282,7 +1153,6 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     // 设置全局超时 - 使用单一变量管理
     const timeoutId = setTimeout(() => {
         if (!hasIncomingData) {
-            log('连接超时，未收到数据');
             controller.abort('连接超时');
         }
     }, 5000);
@@ -1295,18 +1165,13 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             }
 
             if (header) {
-                // 使用共享缓冲区处理小数据包
-                if (header.byteLength + chunk.byteLength < 16384) { // 16KB阈值
-                    webSocket.send(mergeData(header, chunk));
-                } else {
-                    // 大数据包使用标准方法
+                // 预先计算总长度
                 const totalLength = header.byteLength + chunk.byteLength;
                 // 使用预分配的 buffer
                 const combinedData = new Uint8Array(totalLength);
                 combinedData.set(new Uint8Array(header), 0);
                 combinedData.set(new Uint8Array(chunk), header.byteLength);
                 webSocket.send(combinedData);
-                }
                 header = null; // 清除header引用
             } else {
                 webSocket.send(chunk);
@@ -1376,11 +1241,11 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             log(`发生异常,正在重试...`);
             retry();
         }
+        
+        throw error;
     } finally {
         clearTimeout(timeoutId);
-        
-        // 确保在信号中止时关闭WebSocket
-        if (signal.aborted && !isSocketClosed) {
+        if (signal.aborted) {
             safeCloseWebSocket(webSocket);
         }
     }
