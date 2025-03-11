@@ -129,13 +129,10 @@ class WebSocketManager {
 			this.processingMessage = true;
 			controller.enqueue(data);
 			
-			// 处理队列中的消息
+			// 一次只处理一条消息，确保稳定性
 			if (this.messageQueue.length > 0 && !this.backpressure) {
-				// 批量处理队列中的消息，减少循环开销
-				const messages = this.messageQueue.splice(0, Math.min(10, this.messageQueue.length));
-				for (const queuedData of messages) {
-					controller.enqueue(queuedData);
-				}
+				const queuedData = this.messageQueue.shift();
+				controller.enqueue(queuedData);
 			}
 		} catch (error) {
 			this.log(`Message processing error: ${error.message}`);
@@ -754,13 +751,10 @@ async function 维列斯OverWSHandler(request) {
     let address = '';
     let portWithRandomLog = '';
     
-    // 优化日志函数 - 减少字符串连接操作
+    // 恢复更可靠的日志功能
     const log = (info, event = '') => {
-        // 完全跳过日志处理，除非明确需要
-        if (typeof DEBUG !== 'undefined' && DEBUG) {
-            const timestamp = new Date().toISOString();
-            console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
-        }
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
     };
 
     // 提取早期数据头
@@ -900,39 +894,15 @@ async function 维列斯OverWSHandler(request) {
     }
 }
 
-// 优化mergeData函数，减少内存分配
+// 恢复到更稳定的版本，但保留一些安全优化
 function mergeData(header, chunk) {
-    // 对于小数据包使用预分配缓冲区
-    const totalLength = header.length + chunk.length;
-    
-    // 完全避免复制数据，直接使用视图
-    if (chunk.byteOffset >= header.length) {
-        // 如果chunk在buffer中的位置允许我们在前面放置header
-        const view = new Uint8Array(chunk.buffer, chunk.byteOffset - header.length, totalLength);
-        view.set(header, 0);
-        return view;
-    }
-    
-    // 对于小数据包使用共享缓冲区
-    if (totalLength < 2048) {
-        if (!mergeData.buffer || mergeData.buffer.length < totalLength) {
-            mergeData.buffer = new Uint8Array(Math.max(2048, totalLength * 2));
-        }
-        const view = mergeData.buffer.subarray(0, totalLength);
-        view.set(header, 0);
-        view.set(chunk, header.length);
-        return view;
-    }
-    
-    // 大数据包仍然使用新分配
-    const merged = new Uint8Array(totalLength);
-    merged.set(header, 0);
-    merged.set(chunk, header.length);
-    return merged;
+    // 简单健壮的实现
+    const totalLength = header.byteLength + chunk.byteLength;
+    const combinedData = new Uint8Array(totalLength);
+    combinedData.set(new Uint8Array(header), 0);
+    combinedData.set(new Uint8Array(chunk), header.byteLength);
+    return combinedData;
 }
-
-// 初始化静态缓冲区
-mergeData.smallBuffer = new Uint8Array(1024);
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
     // 使用Google DNS服务器
