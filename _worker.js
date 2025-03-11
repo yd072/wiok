@@ -437,7 +437,7 @@ export default {
 				}
 			} else {
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
-				enableSocks = false;  // 确保当socks5Address为空时，enableSocks为false
+				enableSocks = false;
 			}
 
 			const upgradeHeader = request.headers.get('Upgrade');
@@ -974,9 +974,6 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
     // 优化 SOCKS5 模式检查
     const checkSocks5Mode = async (address) => {
-        // 如果enableSocks为false，直接返回false
-        if (!enableSocks || !socks5Address) return false;
-        
         const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
         
@@ -1033,7 +1030,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     const retryConnection = async () => {
         try {
             let tcpSocket;
-            if (enableSocks && socks5Address) {  // 确保只有当enableSocks为true且socks5Address有值时才使用SOCKS5
+            if (enableSocks) {
                 tcpSocket = await createConnection(addressRemote, portRemote, true);
             } else {
                 // 处理 proxyIP
@@ -1067,7 +1064,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
     try {
         // 主连接逻辑
-        const shouldUseSocks = enableSocks && socks5Address && go2Socks5s.length > 0 ? 
+        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
             await checkSocks5Mode(addressRemote) : false;
 
         const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
@@ -1532,7 +1529,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
 				console.log('使用KV中的SOCKS5:', socks5Address);
-				enableSocks = socks5Address ? true : false;  // 确保只有当socks5Address有值时才启用
+				enableSocks = socks5Address ? true : false;
 			} else if (env.SOCKS5) {
 				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				socks5Address = env.SOCKS5;
@@ -1540,7 +1537,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
 				console.log('使用环境变量中的SOCKS5:', socks5Address);
-				enableSocks = socks5Address ? true : false;  // 确保只有当socks5Address有值时才启用
+				enableSocks = socks5Address ? true : false;
 			} else {
 				// 如果KV和环境变量中都没有设置，使用代码默认值
 				console.log('使用默认SOCKS5设置');
