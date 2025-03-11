@@ -385,12 +385,36 @@ export default {
 			].join('-');
 
 			const fakeHostName = `${fakeUserIDMD5.slice(6, 9)}.${fakeUserIDMD5.slice(13, 19)}`;
-			
+
+			// 修改PROXYIP初始化逻辑
+			if (env.KV) {
+				try {
+					const customProxyIP = await env.KV.get('PROXYIP.txt');
+					// 只有当KV中有非空值时才覆盖默认设置
+					if (customProxyIP && customProxyIP.trim()) {
+						proxyIP = customProxyIP;
+					}
+				} catch (error) {
+					console.error('读取自定义PROXYIP时发生错误:', error);
+				}
+			}
 			// 如果proxyIP为空，则使用环境变量或默认值
 			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
 			proxyIPs = await 整理(proxyIP);
 			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-			
+
+			// 修改SOCKS5地址初始化逻辑
+			if (env.KV) {
+				try {
+					const kvSocks5 = await env.KV.get('SOCKS5.txt');
+					// 只有当KV中有非空值时才覆盖默认设置
+					if (kvSocks5 && kvSocks5.trim()) {
+						socks5Address = kvSocks5.split('\n')[0].trim();
+					}
+				} catch (error) {
+					console.error('读取SOCKS5设置时发生错误:', error);
+				}
+			}
 			// 如果socks5Address为空，则使用环境变量或默认值
 			socks5Address = socks5Address || env.SOCKS5 || '';
 			socks5s = await 整理(socks5Address);
