@@ -1519,24 +1519,24 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 
-			// 修改SOCKS5设置逻辑
+			// 修改SOCKS5设置逻辑 - 这里是关键修改
 			const customSocks5 = await env.KV.get('SOCKS5.txt');
 			if (customSocks5 && customSocks5.trim()) {
 				// 如果KV中有SOCKS5设置，使用KV中的设置
 				socks5Address = customSocks5.trim().split('\n')[0];
 				socks5s = await 整理(socks5Address);
-				socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
+				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
 				console.log('使用KV中的SOCKS5:', socks5Address);
-				enableSocks = true;
+				enableSocks = !!socks5Address; // 明确检查socks5Address是否有值
 			} else if (env.SOCKS5) {
 				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				socks5Address = env.SOCKS5;
 				socks5s = await 整理(socks5Address);
-				socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
+				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
 				console.log('使用环境变量中的SOCKS5:', socks5Address);
-				enableSocks = true;
+				enableSocks = !!socks5Address; // 明确检查socks5Address是否有值
 			} else {
 				// 如果KV和环境变量中都没有设置，使用代码默认值
 				console.log('使用默认SOCKS5设置');
