@@ -437,7 +437,6 @@ export default {
 				}
 			} else {
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
-				enableSocks = false;
 			}
 
 			const upgradeHeader = request.headers.get('Upgrade');
@@ -973,14 +972,19 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
     // 优化 SOCKS5 模式检查
-    const checkSocks5Mode = async (address) => {
-        const patterns = [atob('YWxsIGlu'), atob('Kg==')];
-        if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
+    const shouldUseSocks5 = async (address) => {
+        if (!isSocks5Enabled() || go2Socks5s.length === 0) {
+            return false;
+        }
         
-        const pattern = go2Socks5s.find(p => 
+        const patterns = [atob('YWxsIGlu'), atob('Kg==')];
+        if (go2Socks5s.some(pattern => patterns.includes(pattern))) {
+            return true;
+        }
+        
+        return go2Socks5s.some(p => 
             new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address)
         );
-        return !!pattern;
     };
 
     // 优化连接处理
@@ -1290,103 +1294,142 @@ function stringify(arr, offset = 0) {
     return uuid;
 }
 
+// 优化SOCKS5状态检查函数
+function isSocks5Enabled() {
+    // 检查是否有有效的SOCKS5配置
+    return enableSocks && socks5Address && parsedSocks5Address;
+}
+
+// 优化SOCKS5连接函数
 async function socks5Connect(addressType, addressRemote, portRemote, log) {
+    if (!isSocks5Enabled()) {
+        throw new Error('SOCKS5未配置或配置无效');
+    }
+    
     const { username, password, hostname, port } = parsedSocks5Address;
     const socket = connect({ hostname, port });
 
-    const socksGreeting = new Uint8Array([5, 2, 0, 2]);
-    const writer = socket.writable.getWriter();
-    await writer.write(socksGreeting);
-    log('SOCKS5 greeting sent');
+    // 创建一个超时控制器
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort('SOCKS5连接超时'), 5000);
+    
+    try {
+        // SOCKS5握手
+        const socksGreeting = new Uint8Array([5, 2, 0, 2]);
+        const writer = socket.writable.getWriter();
+        await writer.write(socksGreeting);
+        log('SOCKS5 greeting sent');
 
-    const reader = socket.readable.getReader();
-    const encoder = new TextEncoder();
-    let res = (await reader.read()).value;
+        const reader = socket.readable.getReader();
+        const encoder = new TextEncoder();
+        let res = (await reader.read()).value;
 
-    if (res[0] !== 0x05) {
-        log(`SOCKS5 version error: received ${res[0]}, expected 5`);
-        return;
-    }
-    if (res[1] === 0xff) {
-        log("No acceptable authentication methods");
-        return;
-    }
-
-    if (res[1] === 0x02) {
-        log("SOCKS5 requires authentication");
-        if (!username || !password) {
-            log("Username and password required");
-            return;
+        // 检查SOCKS5版本
+        if (res[0] !== 0x05) {
+            throw new Error(`SOCKS5版本错误: 收到 ${res[0]}, 期望 5`);
         }
-        const authRequest = new Uint8Array([
-            1,
-            username.length,
-            ...encoder.encode(username),
-            password.length,
-            ...encoder.encode(password)
-        ]);
-        await writer.write(authRequest);
+        
+        // 检查认证方法
+        if (res[1] === 0xff) {
+            throw new Error('没有可接受的认证方法');
+        }
+
+        // 处理认证
+        if (res[1] === 0x02) {
+            log("SOCKS5需要认证");
+            if (!username || !password) {
+                throw new Error("需要用户名和密码");
+            }
+            
+            const authRequest = new Uint8Array([
+                1,
+                username.length,
+                ...encoder.encode(username),
+                password.length,
+                ...encoder.encode(password)
+            ]);
+            
+            await writer.write(authRequest);
+            res = (await reader.read()).value;
+            
+            if (res[0] !== 0x01 || res[1] !== 0x00) {
+                throw new Error("SOCKS5认证失败");
+            }
+        }
+
+        // 准备目标地址
+        let DSTADDR;
+        switch (addressType) {
+            case 1: // IPv4
+                DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
+                break;
+            case 2: // 域名
+                DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
+                break;
+            case 3: // IPv6
+                DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
+                break;
+            default:
+                throw new Error(`无效的地址类型: ${addressType}`);
+        }
+        
+        // 发送连接请求
+        const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
+        await writer.write(socksRequest);
+        log('SOCKS5 request sent');
+
+        // 处理响应
         res = (await reader.read()).value;
-        if (res[0] !== 0x01 || res[1] !== 0x00) {
-            log("SOCKS5 authentication failed");
-            return;
+        if (res[1] !== 0x00) {
+            throw new Error(`SOCKS5连接失败，错误代码: ${res[1]}`);
         }
+        
+        log("SOCKS5连接已建立");
+        writer.releaseLock();
+        reader.releaseLock();
+        return socket;
+    } catch (error) {
+        log(`SOCKS5连接错误: ${error.message}`);
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
     }
-
-    let DSTADDR;
-    switch (addressType) {
-        case 1:
-            DSTADDR = new Uint8Array([1, ...addressRemote.split('.').map(Number)]);
-            break;
-        case 2:
-            DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
-            break;
-        case 3:
-            DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
-            break;
-        default:
-            log(`Invalid address type: ${addressType}`);
-            return;
-    }
-    const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
-    await writer.write(socksRequest);
-    log('SOCKS5 request sent');
-
-    res = (await reader.read()).value;
-    if (res[1] === 0x00) {
-        log("SOCKS5 connection established");
-    } else {
-        log("SOCKS5 connection failed");
-        return;
-    }
-    writer.releaseLock();
-    reader.releaseLock();
-    return socket;
 }
 
+// 优化SOCKS5地址解析函数
 function socks5AddressParser(address) {
+    if (!address) {
+        throw new Error('SOCKS5地址为空');
+    }
+    
     let [latter, former] = address.split("@").reverse();
     let username, password, hostname, port;
 
+    // 处理用户名和密码
     if (former) {
         const formers = former.split(":");
         if (formers.length !== 2) {
-            throw new Error('Invalid SOCKS address format: "username:password" required');
+            throw new Error('无效的SOCKS5地址格式: 需要 "用户名:密码"');
         }
         [username, password] = formers;
     }
 
+    // 处理主机名和端口
     const latters = latter.split(":");
     port = Number(latters.pop());
-    if (isNaN(port)) {
-        throw new Error('Invalid SOCKS address format: port must be a number');
+    if (isNaN(port) || port <= 0 || port > 65535) {
+        throw new Error('无效的SOCKS5地址格式: 端口必须是1-65535之间的数字');
     }
 
     hostname = latters.join(":");
+    if (!hostname) {
+        throw new Error('无效的SOCKS5地址格式: 主机名为空');
+    }
 
+    // 检查IPv6格式
     const regex = /^\[.*\]$/;
     if (hostname.includes(":") && !regex.test(hostname)) {
-        throw new Error('Invalid SOCKS address format: IPv6 must be in brackets');
+        throw new Error('无效的SOCKS5地址格式: IPv6必须用方括号括起来');
     }
 
     return {
@@ -1394,7 +1437,7 @@ function socks5AddressParser(address) {
         password,
         hostname,
         port,
-    }
+    };
 }
 
 function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64) {
@@ -1497,29 +1540,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	// 在获取其他配置前,先尝试读取自定义的设置
 	if (env.KV) {
 		try {
-			// 修改PROXYIP设置逻辑
-			const customProxyIP = await env.KV.get('PROXYIP.txt');
-			if (customProxyIP && customProxyIP.trim()) {
-				// 如果KV中有PROXYIP设置，使用KV中的设置
-				proxyIP = customProxyIP;
-				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-				console.log('使用KV中的PROXYIP:', proxyIP);
-				RproxyIP = 'false';
-			} else if (env.PROXYIP) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				proxyIP = env.PROXYIP;
-				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-				console.log('使用环境变量中的PROXYIP:', proxyIP);
-				RproxyIP = 'false';
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				console.log('使用默认PROXYIP设置');
-				proxyIP = '';
-				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
-			}
-
 			// 修改SOCKS5设置逻辑
 			const customSocks5 = await env.KV.get('SOCKS5.txt');
 			if (customSocks5 && customSocks5.trim()) {
@@ -1529,7 +1549,17 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
 				console.log('使用KV中的SOCKS5:', socks5Address);
-				enableSocks = socks5Address ? true : false;
+				
+				try {
+					// 尝试解析SOCKS5地址
+					parsedSocks5Address = socks5AddressParser(socks5Address);
+					enableSocks = true;
+					console.log('SOCKS5配置有效');
+				} catch (error) {
+					console.error('SOCKS5地址解析失败:', error.message);
+					enableSocks = false;
+					socks5Address = '';
+				}
 			} else if (env.SOCKS5) {
 				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				socks5Address = env.SOCKS5;
@@ -1537,14 +1567,25 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
 				console.log('使用环境变量中的SOCKS5:', socks5Address);
-				enableSocks = socks5Address ? true : false;
+				
+				try {
+					// 尝试解析SOCKS5地址
+					parsedSocks5Address = socks5AddressParser(socks5Address);
+					enableSocks = true;
+					console.log('SOCKS5配置有效');
+				} catch (error) {
+					console.error('SOCKS5地址解析失败:', error.message);
+					enableSocks = false;
+					socks5Address = '';
+				}
 			} else {
 				// 如果KV和环境变量中都没有设置，使用代码默认值
 				console.log('使用默认SOCKS5设置');
 				enableSocks = false;
 				socks5Address = '';
+				parsedSocks5Address = null;
 			}
-
+			
 			// 读取自定义SUB设置
 			const customSub = await env.KV.get('SUB.txt');
 			// 明确检查是否为null或空字符串
