@@ -1459,35 +1459,80 @@ async function 双重哈希(文本) {
 }
 
 async function 代理URL(代理网址, 目标网址) {
-    const 网址列表 = await 整理(代理网址);
-    const 完整网址 = 网址列表[Math.floor(Math.random() * 网址列表.length)];
-
-    const 解析后的网址 = new URL(完整网址);
-    console.log(解析后的网址);
-
-    const 协议 = 解析后的网址.protocol.slice(0, -1) || 'https';
-    const 主机名 = 解析后的网址.hostname;
-    let 路径名 = 解析后的网址.pathname;
-    const 查询参数 = 解析后的网址.search;
-
-    if (路径名.endsWith('/')) {
-        路径名 = 路径名.slice(0, -1);
+    try {
+        // 1. 获取网址列表并进行错误处理
+        const 网址列表 = await 整理(代理网址);
+        
+        // 2. 确保有可用的网址
+        if (!网址列表 || 网址列表.length === 0) {
+            throw new Error('没有可用的代理网址');
+        }
+        
+        // 3. 使用位运算优化随机选择
+        const 完整网址 = 网址列表[网址列表.length * Math.random() | 0];
+        
+        // 4. 使用 try-catch 处理 URL 解析错误
+        let 解析后的网址;
+        try {
+            解析后的网址 = new URL(完整网址);
+        } catch (error) {
+            console.error('URL解析错误:', 完整网址);
+            throw new Error(`无效的URL: ${完整网址}`);
+        }
+        
+        // 5. 优化字符串操作
+        const 协议 = 解析后的网址.protocol.replace(':', '') || 'https';
+        const 主机名 = 解析后的网址.hostname;
+        const 路径名 = (解析后的网址.pathname.endsWith('/') 
+            ? 解析后的网址.pathname.slice(0, -1) 
+            : 解析后的网址.pathname) + 目标网址.pathname;
+        const 查询参数 = 解析后的网址.search;
+        
+        // 6. 使用模板字符串一次性构建URL
+        const 新网址 = `${协议}://${主机名}${路径名}${查询参数}`;
+        
+        // 7. 设置超时和错误处理
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+        
+        try {
+            const 响应 = await fetch(新网址, { 
+                signal: controller.signal,
+                cf: {
+                    cacheTtl: 300, // 缓存5分钟
+                    cacheEverything: true
+                }
+            });
+            
+            clearTimeout(timeoutId);
+            
+            // 8. 检查响应状态
+            if (!响应.ok) {
+                throw new Error(`代理请求失败: ${响应.status} ${响应.statusText}`);
+            }
+            
+            // 9. 优化响应处理
+            const 新响应 = new Response(响应.body, 响应);
+            新响应.headers.set('X-New-URL', 新网址);
+            
+            return 新响应;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            
+            // 如果是超时错误，提供更明确的错误信息
+            if (error.name === 'AbortError') {
+                throw new Error('代理请求超时');
+            }
+            throw error;
+        }
+    } catch (error) {
+        console.error('代理URL错误:', error);
+        // 10. 返回友好的错误响应而不是抛出异常
+        return new Response(`代理请求失败: ${error.message}`, {
+            status: 502,
+            headers: { 'Content-Type': 'text/plain;charset=UTF-8' }
+        });
     }
-    路径名 += 目标网址.pathname;
-
-    const 新网址 = `${协议}://${主机名}${路径名}${查询参数}`;
-
-    const 响应 = await fetch(新网址);
-
-    const 新响应 = new Response(响应.body, {
-        status: 响应.status,
-        statusText: 响应.statusText,
-        headers: 响应.headers
-    });
-
-    新响应.headers.set('X-New-URL', 新网址);
-
-    return 新响应;
 }
 
 const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
