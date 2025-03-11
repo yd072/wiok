@@ -386,41 +386,14 @@ export default {
 
 			const fakeHostName = `${fakeUserIDMD5.slice(6, 9)}.${fakeUserIDMD5.slice(13, 19)}`;
 
-			// 修改PROXYIP初始化逻辑
-			if (env.KV) {
-				try {
-					const customProxyIP = await env.KV.get('PROXYIP.txt');
-					// 只有当KV中有非空值时才覆盖默认设置
-					if (customProxyIP && customProxyIP.trim()) {
-						proxyIP = customProxyIP;
-					}
-				} catch (error) {
-					console.error('读取自定义PROXYIP时发生错误:', error);
-				}
-			}
-			// 如果proxyIP为空，则使用环境变量或默认值
-			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
+			proxyIP = env.PROXYIP || env.proxyip || proxyIP;
 			proxyIPs = await 整理(proxyIP);
-			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+			proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
 
-			// 修改SOCKS5地址初始化逻辑
-			if (env.KV) {
-				try {
-					const kvSocks5 = await env.KV.get('SOCKS5.txt');
-					// 只有当KV中有非空值时才覆盖默认设置
-					if (kvSocks5 && kvSocks5.trim()) {
-						socks5Address = kvSocks5.split('\n')[0].trim();
-					}
-				} catch (error) {
-					console.error('读取SOCKS5设置时发生错误:', error);
-				}
-			}
-			// 如果socks5Address为空，则使用环境变量或默认值
-			socks5Address = socks5Address || env.SOCKS5 || '';
+			socks5Address = env.SOCKS5 || socks5Address;
 			socks5s = await 整理(socks5Address);
-			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+			socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
 			socks5Address = socks5Address.split('//')[1] || socks5Address;
-
 			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
 			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
 			if (env.BAN) banHosts = await 整理(env.BAN);
@@ -1496,7 +1469,54 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	// 在获取其他配置前,先尝试读取自定义的设置
 	if (env.KV) {
 		try {
-						
+			// 修改PROXYIP设置逻辑
+			const customProxyIP = await env.KV.get('PROXYIP.txt');
+			if (customProxyIP && customProxyIP.trim()) {
+				// 如果KV中有PROXYIP设置，使用KV中的设置
+				proxyIP = customProxyIP;
+				proxyIPs = await 整理(proxyIP);
+				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+				console.log('使用KV中的PROXYIP:', proxyIP);
+				RproxyIP = 'false';
+			} else if (env.PROXYIP) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				proxyIP = env.PROXYIP;
+				proxyIPs = await 整理(proxyIP);
+				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+				console.log('使用环境变量中的PROXYIP:', proxyIP);
+				RproxyIP = 'false';
+			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
+				console.log('使用默认PROXYIP设置');
+				proxyIP = '';
+				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+			}
+
+			// 修改SOCKS5设置逻辑
+			const customSocks5 = await env.KV.get('SOCKS5.txt');
+			if (customSocks5 && customSocks5.trim()) {
+				// 如果KV中有SOCKS5设置，使用KV中的设置
+				socks5Address = customSocks5.trim().split('\n')[0];
+				socks5s = await 整理(socks5Address);
+				socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
+				socks5Address = socks5Address.split('//')[1] || socks5Address;
+				console.log('使用KV中的SOCKS5:', socks5Address);
+				enableSocks = true;
+			} else if (env.SOCKS5) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				socks5Address = env.SOCKS5;
+				socks5s = await 整理(socks5Address);
+				socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
+				socks5Address = socks5Address.split('//')[1] || socks5Address;
+				console.log('使用环境变量中的SOCKS5:', socks5Address);
+				enableSocks = true;
+			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
+				console.log('使用默认SOCKS5设置');
+				enableSocks = false;
+				socks5Address = '';
+			}
+
 			// 读取自定义SUB设置
 			const customSub = await env.KV.get('SUB.txt');
 			// 明确检查是否为null或空字符串
