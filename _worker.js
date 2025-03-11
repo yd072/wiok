@@ -129,8 +129,8 @@ class WebSocketManager {
 			this.processingMessage = true;
 			controller.enqueue(data);
 			
-			// 一次只处理一条消息，确保稳定性
-			if (this.messageQueue.length > 0 && !this.backpressure) {
+			// 处理队列中的消息
+			while (this.messageQueue.length > 0 && !this.backpressure) {
 				const queuedData = this.messageQueue.shift();
 				controller.enqueue(queuedData);
 			}
@@ -751,16 +751,19 @@ async function 维列斯OverWSHandler(request) {
     let address = '';
     let portWithRandomLog = '';
     
-    // 恢复更可靠的日志功能
+    // 优化日志函数 - 减少字符串连接操作
     const log = (info, event = '') => {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
+        // 只在需要时才生成时间戳
+        if (console.debug) { // 检查是否需要记录日志
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
+        }
     };
 
-    // 提取早期数据头
-    const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
-    
     try {
+        // 提取早期数据头
+        const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
+        
         // 创建WebSocket流
         const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
         
@@ -771,8 +774,8 @@ async function 维列斯OverWSHandler(request) {
         // 预先将黑名单转换为Set以提高查找效率
         const banHostsSet = new Set(banHosts);
 
-        // 处理WebSocket数据流
-        await readableWebSocketStream.pipeTo(new WritableStream({
+        // 处理WebSocket数据流 - 不使用await，让它异步运行
+        readableWebSocketStream.pipeTo(new WritableStream({
             async write(chunk, controller) {
                 try {
                     // DNS处理逻辑
@@ -881,7 +884,7 @@ async function 维列斯OverWSHandler(request) {
             safeCloseWebSocket(webSocket, 1011, '管道错误');
         });
 
-        // 返回WebSocket响应
+        // 立即返回WebSocket响应，不等待流处理完成
         return new Response(null, {
             status: 101,
             webSocket: client,
@@ -894,15 +897,42 @@ async function 维列斯OverWSHandler(request) {
     }
 }
 
-// 恢复到更稳定的版本，但保留一些安全优化
 function mergeData(header, chunk) {
-    // 简单健壮的实现
-    const totalLength = header.byteLength + chunk.byteLength;
-    const combinedData = new Uint8Array(totalLength);
-    combinedData.set(new Uint8Array(header), 0);
-    combinedData.set(new Uint8Array(chunk), header.byteLength);
-    return combinedData;
+    // 检查输入参数
+    if (!header || !chunk) {
+        throw new Error('Invalid input parameters');
+    }
+
+    // 预先计算总长度
+    const totalLength = header.length + chunk.length;
+    
+    // 优化: 如果数据太小,使用固定大小的共享缓冲区
+    if (totalLength < 1024) { // 1KB阈值
+        // 使用静态缓冲区,避免频繁创建小数组
+        if (!mergeData.smallBuffer || mergeData.smallBuffer.length < totalLength) {
+            mergeData.smallBuffer = new Uint8Array(Math.max(1024, totalLength));
+        }
+        const buffer = mergeData.smallBuffer;
+        buffer.set(header, 0);
+        buffer.set(chunk, header.length);
+        // 返回一个新的视图,只包含实际数据
+        return new Uint8Array(buffer.buffer, 0, totalLength);
+    }
+
+    // 大数据使用标准合并
+    try {
+        const merged = new Uint8Array(totalLength);
+        merged.set(header, 0);
+        merged.set(chunk, header.length);
+        return merged;
+    } catch (error) {
+        console.error('Data merge failed:', error);
+        throw new Error('Failed to merge data: ' + error.message);
+    }
 }
+
+// 初始化静态缓冲区
+mergeData.smallBuffer = new Uint8Array(1024);
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
     // 使用Google DNS服务器
@@ -3027,65 +3057,4 @@ async function handleGetRequest(env, txt) {
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
-}
-
-// 使用连接池减少创建和销毁连接的开销
-const connectionPool = {
-    connections: new Map(),
-    get(key) {
-        return this.connections.get(key);
-    },
-    add(key, connection) {
-        this.connections.set(key, connection);
-        return connection;
-    },
-    remove(key) {
-        const connection = this.connections.get(key);
-        if (connection) {
-            this.connections.delete(key);
-        }
-        return connection;
-    }
-};
-
-// 使用DNS缓存减少重复查询
-const dnsCache = new Map();
-const DNS_CACHE_TTL = 60000; // 1分钟缓存
-
-async function resolveDNS(hostname) {
-    const now = Date.now();
-    const cachedEntry = dnsCache.get(hostname);
-    
-    if (cachedEntry && now - cachedEntry.timestamp < DNS_CACHE_TTL) {
-        return cachedEntry.address;
-    }
-    
-    // 进行实际DNS查询
-    const address = await realDNSQuery(hostname);
-    dnsCache.set(hostname, { address, timestamp: now });
-    return address;
-}
-
-// 重用对象和数组，减少垃圾回收压力
-const sharedBuffers = {
-    small: new Uint8Array(4096),
-    medium: new Uint8Array(16384),
-    large: new Uint8Array(65536),
-    getBuffer(size) {
-        if (size <= 4096) return { buffer: this.small, size: Math.min(size, 4096) };
-        if (size <= 16384) return { buffer: this.medium, size: Math.min(size, 16384) };
-        if (size <= 65536) return { buffer: this.large, size: Math.min(size, 65536) };
-        return { buffer: new Uint8Array(size), size }; 
-    }
-};
-
-// 使用微任务分解长时间操作
-async function processLargeDataInChunks(data, chunkSize) {
-    for (let i = 0; i < data.length; i += chunkSize) {
-        const chunk = data.subarray(i, i + chunkSize);
-        // 处理一个数据块
-        processChunk(chunk);
-        // 允许其他任务执行
-        await new Promise(resolve => setTimeout(resolve, 0));
-    }
 }
