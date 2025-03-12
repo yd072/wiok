@@ -384,7 +384,7 @@ export default {
                 fakeUserIDSHA256.slice(20, 32) 
             ].join('-');
 
-			const fakeHostName = `${fakeUserIDMD5.slice(6, 9)}.${fakeUserIDMD5.slice(13, 19)}`;
+			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
 			// 修改PROXYIP初始化逻辑
 			if (env.KV) {
