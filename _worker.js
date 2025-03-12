@@ -846,11 +846,7 @@ function mergeData(header, chunk) {
 }
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
-    // 使用Google DNS服务器
-    const DNS_SERVER = {
-        hostname: '8.8.4.4',
-        port: 53
-    };
+    const DNS_SERVER = { hostname: '8.8.4.4', port: 53 };
     
     let tcpSocket;
     const controller = new AbortController();
@@ -868,7 +864,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                     log(`关闭TCP连接出错: ${e.message}`);
                 }
             }
-        }, 3000);
+        }, 2000);
 
         try {
             // 使用Promise.race进行超时控制
@@ -879,7 +875,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                     signal,
                 }),
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('DNS连接超时')), 2000)
+                    setTimeout(() => reject(new Error('DNS连接超时')), 1500)
                 )
             ]);
 
@@ -893,7 +889,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                 writer.releaseLock();
             }
 
-            // 优化的数据流处理
+            // 简化的数据流处理
             let 维列斯Header = 维列斯ResponseHeader;
             const reader = tcpSocket.readable.getReader();
 
@@ -1145,7 +1141,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         if (!hasIncomingData) {
             controller.abort('连接超时');
         }
-    }, 5000);
+    }, 3000);
 
     try {
         // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
@@ -1205,7 +1201,6 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             )
             .catch((error) => {
                 log(`数据传输异常: ${error.message}`);
-
                 if (!isSocketClosed) {
                     safeCloseWebSocket(webSocket);
                 }
@@ -1222,7 +1217,6 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     } catch (error) {
         clearTimeout(timeout);
         log(`连接处理异常: ${error.message}`);
-
         if (!isSocketClosed) {
             safeCloseWebSocket(webSocket);
         }
