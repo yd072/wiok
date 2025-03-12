@@ -98,7 +98,7 @@ class WebSocketManager {
 					this.processMessage(event.data, controller);
 				} else {
 					this.messageQueue.push(event.data);
-					this.log('🔴 Backpressure detected, message queued');
+					this.log('Backpressure detected, message queued');
 				}
 			});
 
@@ -108,7 +108,7 @@ class WebSocketManager {
 			// 处理早期数据
 			await this.handleEarlyData(earlyDataHeader, controller);
 		} catch (error) {
-			this.log(`❌ Stream start error: ${error.message}`);
+			this.log(`Stream start error: ${error.message}`);
 			controller.error(error);
 		}
 	}
@@ -130,7 +130,7 @@ class WebSocketManager {
 				controller.enqueue(queuedData);
 			}
 		} catch (error) {
-			this.log(`❌ Message processing error: ${error.message}`);
+			this.log(`Message processing error: ${error.message}`);
 		} finally {
 			this.isProcessing = false;
 		}
@@ -153,7 +153,7 @@ class WebSocketManager {
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
 
-		this.log(`⚠️ Readable stream canceled, reason: ${reason}`);
+		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
 		this.cleanup();
 	}
@@ -166,7 +166,7 @@ class WebSocketManager {
 	}
 
 	handleError(err, controller) {
-		this.log(`❌ WebSocket error: ${err.message}`);
+		this.log(`WebSocket error: ${err.message}`);
 		if (!this.readableStreamCancel) {
 			controller.error(err);
 		}
@@ -1134,12 +1134,13 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let header = responseHeader;
     let isSocketClosed = false;
     let retryAttempted = false;
+    let retryCount = 0; // 记录重试次数
+    const MAX_RETRIES = 3; // 限制最大重试次数
 
-    // 创建一个 AbortController 用于控制数据流
+    // 控制超时
     const controller = new AbortController();
     const signal = controller.signal;
 
-    // 设置全局超时
     const timeout = setTimeout(() => {
         if (!hasIncomingData) {
             controller.abort('连接超时');
@@ -1147,25 +1148,23 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }, 5000);
 
     try {
-        // 优化的数据写入函数
-    const writeData = async (chunk) => {
-        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-            throw new Error('WebSocket未连接');
-        }
+        // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
+        const writeData = async (chunk) => {
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                throw new Error('WebSocket 未连接');
+            }
 
-        if (header) {
-                // 预先计算总长度
-                const totalLength = header.byteLength + chunk.byteLength;
-                // 使用预分配的 buffer
-                const combinedData = new Uint8Array(totalLength);
+            if (header) {
+                // 预分配足够的 buffer，避免重复分配
+                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
                 combinedData.set(new Uint8Array(header), 0);
                 combinedData.set(new Uint8Array(chunk), header.byteLength);
                 webSocket.send(combinedData);
-                header = null; // 清除header引用
-        } else {
-            webSocket.send(chunk);
-        }
-        
+                header = null; // 清除 header 引用
+            } else {
+                webSocket.send(chunk);
+            }
+
             hasIncomingData = true;
         };
 
@@ -1184,18 +1183,19 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                         isSocketClosed = true;
                         clearTimeout(timeout);
                         log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
-                        
-                        // 如果没有收到数据且未尝试重试,则进行重试
-                        if (!hasIncomingData && retry && !retryAttempted) {
+
+                        // 仅在没有数据时尝试重试，且不超过最大重试次数
+                        if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
                             retryAttempted = true;
-                            log(`未收到数据,正在重试连接...`);
+                            retryCount++;
+                            log(`未收到数据, 正在进行第 ${retryCount} 次重试...`);
                             retry();
                         }
                     },
                     abort(reason) {
                         isSocketClosed = true;
                         clearTimeout(timeout);
-                        log(`远程连接中断: ${reason}`);
+                        log(`远程连接被中断: ${reason}`);
                     }
                 }),
                 {
@@ -1205,14 +1205,16 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             )
             .catch((error) => {
                 log(`数据传输异常: ${error.message}`);
+
                 if (!isSocketClosed) {
                     safeCloseWebSocket(webSocket);
                 }
-                
-                // 在连接失败且未收到数据时尝试重试
-                if (!hasIncomingData && retry && !retryAttempted) {
+
+                // 仅在未收到数据时尝试重试，并限制重试次数
+                if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
                     retryAttempted = true;
-                    log(`连接失败,正在重试...`);
+                    retryCount++;
+                    log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
                     retry();
                 }
             });
@@ -1220,17 +1222,19 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     } catch (error) {
         clearTimeout(timeout);
         log(`连接处理异常: ${error.message}`);
+
         if (!isSocketClosed) {
             safeCloseWebSocket(webSocket);
         }
-        
-        // 在发生异常且未收到数据时尝试重试
-        if (!hasIncomingData && retry && !retryAttempted) {
+
+        // 仅在发生异常且未收到数据时尝试重试，并限制重试次数
+        if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
             retryAttempted = true;
-            log(`发生异常,正在重试...`);
+            retryCount++;
+            log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
             retry();
         }
-        
+
         throw error;
     } finally {
         clearTimeout(timeout);
