@@ -376,13 +376,13 @@ export default {
 			currentDate.setHours(0, 0, 0, 0);
 			const timestamp = Math.ceil(currentDate.getTime() / 1000);
 			const fakeUserIDSHA256 = await 双重哈希(`${userID}${timestamp}`);
-            const fakeUserID = [
+			const fakeUserID = [
                 fakeUserIDSHA256.slice(0, 8),
                 fakeUserIDSHA256.slice(8, 12),
                 fakeUserIDSHA256.slice(12, 16),
                 fakeUserIDSHA256.slice(16, 20),
                 fakeUserIDSHA256.slice(20, 32) 
-            ].join('-');
+			].join('-');
 
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
@@ -868,20 +868,16 @@ function mergeData(header, chunk) {
 mergeData.smallBuffer = new Uint8Array(1024);
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
-    // 使用Google DNS服务器
-    const DNS_SERVER = {
-        hostname: '8.8.4.4',
-        port: 53
-    };
-    
+    const DNS_SERVER = { hostname: '8.8.4.4', port: 53 };
+
     let tcpSocket;
     const controller = new AbortController();
     const signal = controller.signal;
-    let timeoutId; 
+    let timeout; 
 
     try {
         // 设置全局超时
-        timeoutId = setTimeout(() => {
+        timeout = setTimeout(() => {
             controller.abort('DNS query timeout');
             if (tcpSocket) {
                 try {
@@ -892,79 +888,53 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
             }
         }, 3000);
 
+        // 连接 DNS 服务器，超时 2 秒
+        const connectTimeout = setTimeout(() => controller.abort(), 2000);
         try {
-            // 使用Promise.race进行超时控制
-            tcpSocket = await Promise.race([
-                connect({
-                    hostname: DNS_SERVER.hostname,
-                    port: DNS_SERVER.port,
-                    signal,
-                }),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('DNS连接超时')), 2000)
-                )
-            ]);
-
-            log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
-            
-            // 发送DNS查询
-            const writer = tcpSocket.writable.getWriter();
-            try {
-                await writer.write(udpChunk);
-            } finally {
-                writer.releaseLock();
-            }
-
-            // 优化的数据流处理
-            let 维列斯Header = 维列斯ResponseHeader;
-            const reader = tcpSocket.readable.getReader();
-
-            try {
-                // 使用更高效的循环处理数据
-                while (true) {
-                    const { done, value } = await reader.read();
-                    
-                    if (done) {
-                        log('DNS数据流处理完成');
-                        break;
-                    }
-
-                    // 检查WebSocket是否仍然开放
-                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        break;
-                    }
-
-                    try {
-                        // 处理数据包
-                        if (维列斯Header) {
-                            const data = mergeData(维列斯Header, value);
-                            webSocket.send(data);
-                            维列斯Header = null; // 清除header,只在第一个包使用
-                        } else {
-                            webSocket.send(value);
-                        }
-                    } catch (error) {
-                        log(`数据处理错误: ${error.message}`);
-                        throw error;
-                    }
-                }
-            } catch (error) {
-                log(`数据读取错误: ${error.message}`);
-                throw error;
-            } finally {
-                reader.releaseLock();
-            }
-
+            tcpSocket = await connect({
+                hostname: DNS_SERVER.hostname,
+                port: DNS_SERVER.port,
+                signal,
+            });
+            clearTimeout(connectTimeout);
         } catch (error) {
-            log(`DNS查询失败: ${error.message}`);
-            throw error;
+            clearTimeout(connectTimeout);
+            throw new Error('DNS连接超时');
         }
 
+        log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
+
+        // 发送DNS查询
+        const writer = tcpSocket.writable.getWriter();
+        try {
+            await writer.write(udpChunk);
+        } finally {
+            writer.releaseLock();
+        }
+
+        // 读取DNS响应数据流
+        let 维列斯Header = 维列斯ResponseHeader;
+        const reader = tcpSocket.readable.getReader();
+
+        try {
+            for await (const chunk of reader) {
+                if (webSocket.readyState !== WS_READY_STATE_OPEN) break;
+                const data = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
+                webSocket.send(data);
+                维列斯Header = null;
+            }
+        } catch (error) {
+            log(`数据读取错误: ${error.message}`);
+            throw error;
+        } finally {
+            reader.releaseLock();
+        }
+
+        clearTimeout(timeout);
     } catch (error) {
         log(`DNS查询失败: ${error.message}`);
         safeCloseWebSocket(webSocket);
     } finally {
-        clearTimeout(timeoutId);
         if (tcpSocket) {
             try {
                 tcpSocket.close();
@@ -1170,12 +1140,12 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
 
     try {
         // 优化的数据写入函数
-    const writeData = async (chunk) => {
-        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-            throw new Error('WebSocket未连接');
-        }
+        const writeData = async (chunk) => {
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                throw new Error('WebSocket未连接');
+            }
 
-        if (header) {
+            if (header) {
                 // 预先计算总长度
                 const totalLength = header.byteLength + chunk.byteLength;
                 // 使用预分配的 buffer
@@ -1184,10 +1154,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 combinedData.set(new Uint8Array(chunk), header.byteLength);
                 webSocket.send(combinedData);
                 header = null; // 清除header引用
-        } else {
-            webSocket.send(chunk);
-        }
-        
+            } else {
+                webSocket.send(chunk);
+            }
+            
             hasIncomingData = true;
         };
 
@@ -1445,36 +1415,28 @@ async function 代理URL(代理网址, 目标网址) {
     const 主机名 = 解析后的网址.hostname;
     let 路径名 = 解析后的网址.pathname;
     
-    // 确保路径名以单个斜杠结尾
     路径名 = 路径名.endsWith('/') ? 路径名 : 路径名 + '/';
     
-    // 确保目标路径不以斜杠开头，避免双斜杠
     const 目标路径 = 目标网址.pathname.startsWith('/') ? 目标网址.pathname.substring(1) : 目标网址.pathname;
     
-    // 合并路径
     const 完整路径 = 路径名 + 目标路径;
     
-    // 合并查询参数
     const 合并查询参数 = new URLSearchParams(解析后的网址.search);
     const 目标查询参数 = new URLSearchParams(目标网址.search);
     
-    // 将目标URL的查询参数添加到合并查询参数中
     for (const [key, value] of 目标查询参数.entries()) {
         合并查询参数.append(key, value);
     }
     
     const 查询字符串 = 合并查询参数.toString() ? `?${合并查询参数.toString()}` : '';
-    
-    // 构建新的URL
+
     const 新网址 = `${协议}://${主机名}${完整路径}${查询字符串}`;
     
-    // 设置请求超时
     const 控制器 = new AbortController();
     const 超时时间 = 5000; // 改为5秒超时
     const 超时ID = setTimeout(() => 控制器.abort('请求超时'), 超时时间);
     
     try {
-        // 准备请求头
         let 请求头;
         if (目标网址 instanceof Request) {
             请求头 = new Headers(目标网址.headers);
@@ -1484,10 +1446,8 @@ async function 代理URL(代理网址, 目标网址) {
             请求头 = new Headers();
         }
         
-        // 添加一些必要的请求头
         请求头.set('User-Agent', 请求头.get('User-Agent') || 'EdgeTunnel-Proxy');
-        
-        // 发送请求
+
         const 响应 = await fetch(新网址, {
             method: 目标网址 instanceof Request ? 目标网址.method : (目标网址.method || 'GET'),
             headers: 请求头,
@@ -1496,20 +1456,18 @@ async function 代理URL(代理网址, 目标网址) {
             signal: 控制器.signal
         });
         
-        // 创建新的响应对象
         const 响应头 = new Headers(响应.headers);
         响应头.set('X-New-URL', 新网址);
         响应头.set('X-Proxied-By', 'EdgeTunnel');
-        
-        const 新响应 = new Response(响应.body, {
-            status: 响应.status,
-            statusText: 响应.statusText,
+
+    const 新响应 = new Response(响应.body, {
+        status: 响应.status,
+        statusText: 响应.statusText,
             headers: 响应头
-        });
-        
-        return 新响应;
+    });
+
+    return 新响应;
     } catch (错误) {
-        // 区分超时错误和其他错误
         if (错误.name === 'AbortError') {
             return new Response('代理请求超时', { status: 504 });
         }
@@ -1552,7 +1510,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
@@ -1590,7 +1548,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
 				console.log('使用KV中的SOCKS5:', socks5Address);
-				enableSocks = true; 
+				enableSocks = true;
 			} else if (env.SOCKS5) {
 				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				socks5Address = env.SOCKS5;
@@ -1598,7 +1556,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
 				console.log('使用环境变量中的SOCKS5:', socks5Address);
-				enableSocks = true; 
+				enableSocks = true;
 			} else {
 				// 如果KV和环境变量中都没有设置，使用代码默认值
 				console.log('使用默认SOCKS5设置');
@@ -1622,45 +1580,12 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				sub = '';
 				console.log('使用默认SUB设置:', sub);
 			}
-
-			// 读取自定义SUBAPI设置
-			const customSubAPI = await env.KV.get('SUBAPI.txt');
-			// 明确检查是否为null或空字符串
-			if (customSubAPI !== null && customSubAPI.trim() !== '') {
-				// 如果KV中有SUBAPI设置，使用KV中的设置
-				subConverter = customSubAPI.trim().split('\n')[0];
-				console.log('使用KV中的SUBAPI:', subConverter);
-			} else if (env.SUBAPI) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				subConverter = env.SUBAPI;
-				console.log('使用环境变量中的SUBAPI:', subConverter);
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
-				console.log('使用默认SUBAPI设置:', subConverter);
-			}
-
-			// 读取自定义SUBCONFIG设置
-			const customSubConfig = await env.KV.get('SUBCONFIG.txt');
-			// 明确检查是否为null或空字符串
-			if (customSubConfig !== null && customSubConfig.trim() !== '') {
-				// 如果KV中有SUBCONFIG设置，使用KV中的设置
-				subConfig = customSubConfig.trim().split('\n')[0];
-				console.log('使用KV中的SUBCONFIG:', subConfig);
-			} else if (env.SUBCONFIG) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				subConfig = env.SUBCONFIG;
-				console.log('使用环境变量中的SUBCONFIG:', subConfig);
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
-				console.log('使用默认SUBCONFIG设置:', subConfig);
-			}
+			
 		} catch (error) {
 			console.error('读取自定义设置时发生错误:', error);
 		}
 	}
-
+	
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
@@ -2593,12 +2518,6 @@ async function handlePostRequest(request, env, txt) {
             case 'sub':
                 await env.KV.put('SUB.txt', content);
                 break;
-            case 'subapi':
-                await env.KV.put('SUBAPI.txt', content);
-                break;
-            case 'subconfig':
-                await env.KV.put('SUBCONFIG.txt', content);
-                break;
             default:
                 await env.KV.put(txt, content);
         }
@@ -2615,19 +2534,14 @@ async function handleGetRequest(env, txt) {
     let hasKV = !!env.KV;
     let proxyIPContent = '';
     let socks5Content = '';
-    let subContent = ''; 
-    let subAPIContent = ''; // 添加SUBAPI内容变量
-    let subConfigContent = ''; // 添加SUBCONFIG内容变量
+    let subContent = ''; // 添加SUB内容变量
 
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
             socks5Content = await env.KV.get('SOCKS5.txt') || '';
-            subContent = await env.KV.get('SUB.txt') || '';
-            // 修改这里：不要使用默认值，只读取KV中的值
-            subAPIContent = await env.KV.get('SUBAPI.txt') || '';
-            subConfigContent = await env.KV.get('SUBCONFIG.txt') || '';
+            subContent = await env.KV.get('SUB.txt') || ''; // 获取SUB设置
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -2859,28 +2773,6 @@ async function handleGetRequest(env, txt) {
                                 placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}"
                             >${subContent}</textarea>
                         </div>
-                        
-                        <!-- SUBAPI设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="subapi"><strong>SUBAPI 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
-                            <textarea 
-                                id="subapi" 
-                                class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}"
-                            >${subAPIContent}</textarea>
-                        </div>
-                        
-                        <!-- SUBCONFIG设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="subconfig"><strong>SUBCONFIG 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
-                            <textarea 
-                                id="subconfig" 
-                                class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}"
-                            >${subConfigContent}</textarea>
-                        </div>
 
                         <!-- 统一的保存按钮 -->
                         <div>
@@ -3003,23 +2895,8 @@ async function handleGetRequest(env, txt) {
                         method: 'POST',
                         body: subContent
                     });
-                    
-                    // 保存SUBAPI设置
-                    const subapiContent = document.getElementById('subapi').value;
-                    const subapiResponse = await fetch(window.location.href + '?type=subapi', {
-                        method: 'POST',
-                        body: subapiContent
-                    });
-                    
-                    // 保存SUBCONFIG设置
-                    const subconfigContent = document.getElementById('subconfig').value;
-                    const subconfigResponse = await fetch(window.location.href + '?type=subconfig', {
-                        method: 'POST',
-                        body: subconfigContent // 即使是空字符串也会被保存
-                    });
 
-                    if (proxyipResponse.ok && socks5Response.ok && subResponse.ok && 
-                        subapiResponse.ok && subconfigResponse.ok) {
+                    if (proxyipResponse.ok && socks5Response.ok && subResponse.ok) {
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
