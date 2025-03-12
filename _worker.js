@@ -375,14 +375,14 @@ export default {
 			const currentDate = new Date();
 			currentDate.setHours(0, 0, 0, 0);
 			const timestamp = Math.ceil(currentDate.getTime() / 1000);
-			const fakeUserIDMD5 = await 双重哈希(`${userID}${timestamp}`);
-			const fakeUserID = [
-				fakeUserIDMD5.slice(0, 8),
-				fakeUserIDMD5.slice(8, 12),
-				fakeUserIDMD5.slice(12, 16),
-				fakeUserIDMD5.slice(16, 20),
-				fakeUserIDMD5.slice(20)
-			].join('-');
+			const fakeUserIDSHA256 = await 双重哈希(`${userID}${timestamp}`);
+            const fakeUserID = [
+                fakeUserIDSHA256.slice(0, 8),
+                fakeUserIDSHA256.slice(8, 12),
+                fakeUserIDSHA256.slice(12, 16),
+                fakeUserIDSHA256.slice(16, 20),
+                fakeUserIDSHA256.slice(20, 32) 
+            ].join('-');
 
 			const fakeHostName = `${fakeUserIDMD5.slice(6, 9)}.${fakeUserIDMD5.slice(13, 19)}`;
 
@@ -1156,68 +1156,58 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let header = responseHeader;
     let isSocketClosed = false;
     let retryAttempted = false;
-    let timeoutId;
 
     // 创建一个 AbortController 用于控制数据流
     const controller = new AbortController();
     const signal = controller.signal;
 
-    // 优化的数据写入函数 - 提前定义以避免在循环中重复创建
+    // 设置全局超时
+    const timeout = setTimeout(() => {
+        if (!hasIncomingData) {
+            controller.abort('连接超时');
+        }
+    }, 5000);
+
+    try {
+        // 优化的数据写入函数
     const writeData = async (chunk) => {
         if (webSocket.readyState !== WS_READY_STATE_OPEN) {
             throw new Error('WebSocket未连接');
         }
 
         if (header) {
-            // 使用更高效的数据合并方法
-            try {
-                const headerArray = new Uint8Array(header);
-                const chunkArray = new Uint8Array(chunk);
-                const combinedData = new Uint8Array(headerArray.length + chunkArray.length);
-                combinedData.set(headerArray);
-                combinedData.set(chunkArray, headerArray.length);
+                // 预先计算总长度
+                const totalLength = header.byteLength + chunk.byteLength;
+                // 使用预分配的 buffer
+                const combinedData = new Uint8Array(totalLength);
+                combinedData.set(new Uint8Array(header), 0);
+                combinedData.set(new Uint8Array(chunk), header.byteLength);
                 webSocket.send(combinedData);
-            } catch (error) {
-                log(`数据合并错误: ${error.message}`);
-                throw error;
-            }
-            header = null; // 立即释放header引用以节省内存
+                header = null; // 清除header引用
         } else {
             webSocket.send(chunk);
         }
         
-        // 收到数据后取消超时
-        if (!hasIncomingData) {
             hasIncomingData = true;
-            clearTimeout(timeoutId);
-        }
-    };
+        };
 
-    try {
-        // 设置全局超时 - 移到这里以确保在设置后能被清除
-        timeoutId = setTimeout(() => {
-            if (!hasIncomingData) {
-                controller.abort('连接超时');
-            }
-        }, 5000);
-
-        // 使用更简洁的流处理
         await remoteSocket.readable
             .pipeTo(
                 new WritableStream({
-                    async write(chunk) {
+                    async write(chunk, controller) {
                         try {
                             await writeData(chunk);
                         } catch (error) {
                             log(`数据写入错误: ${error.message}`);
-                            throw error; // 直接抛出错误，让pipeTo的catch处理
+                            controller.error(error);
                         }
                     },
                     close() {
                         isSocketClosed = true;
+                        clearTimeout(timeout);
                         log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
                         
-                        // 尝试重试逻辑优化
+                        // 如果没有收到数据且未尝试重试,则进行重试
                         if (!hasIncomingData && retry && !retryAttempted) {
                             retryAttempted = true;
                             log(`未收到数据,正在重试连接...`);
@@ -1226,19 +1216,22 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     },
                     abort(reason) {
                         isSocketClosed = true;
+                        clearTimeout(timeout);
                         log(`远程连接中断: ${reason}`);
                     }
                 }),
-                { signal }
+                {
+                    signal,
+                    preventCancel: false
+                }
             )
             .catch((error) => {
                 log(`数据传输异常: ${error.message}`);
-                
-                // 关闭WebSocket和重试逻辑
                 if (!isSocketClosed) {
                     safeCloseWebSocket(webSocket);
                 }
                 
+                // 在连接失败且未收到数据时尝试重试
                 if (!hasIncomingData && retry && !retryAttempted) {
                     retryAttempted = true;
                     log(`连接失败,正在重试...`);
@@ -1247,23 +1240,23 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             });
 
     } catch (error) {
+        clearTimeout(timeout);
         log(`连接处理异常: ${error.message}`);
-        
         if (!isSocketClosed) {
             safeCloseWebSocket(webSocket);
         }
         
-        // 重试逻辑
+        // 在发生异常且未收到数据时尝试重试
         if (!hasIncomingData && retry && !retryAttempted) {
             retryAttempted = true;
             log(`发生异常,正在重试...`);
             retry();
         }
-    } finally {
-        clearTimeout(timeoutId);
         
-        // 确保在信号中止时关闭WebSocket
-        if (signal.aborted && !isSocketClosed) {
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+        if (signal.aborted) {
             safeCloseWebSocket(webSocket);
         }
     }
@@ -1424,115 +1417,55 @@ function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName,
 }
 
 async function 双重哈希(文本) {
-    // 创建一个可重用的编码器
     const 编码器 = new TextEncoder();
-    
-    // 预先创建字节到十六进制的查找表，避免重复计算
-    const 字节到十六进制 = Array.from({length: 256}, (_, i) => 
-        i.toString(16).padStart(2, '0'));
-    
-    // 第一次哈希
-    const 第一次哈希 = await crypto.subtle.digest('MD5', 编码器.encode(文本));
-    
-    // 使用查找表更高效地转换为十六进制
-    const 第一次哈希字节 = new Uint8Array(第一次哈希);
-    let 第一次十六进制 = '';
-    for (let i = 0; i < 第一次哈希字节.length; i++) {
-        第一次十六进制 += 字节到十六进制[第一次哈希字节[i]];
-    }
-    
-    // 只取需要的部分进行第二次哈希
-    const 第二次哈希 = await crypto.subtle.digest(
-        'MD5', 
-        编码器.encode(第一次十六进制.slice(7, 27))
-    );
-    
-    // 再次使用查找表转换
-    const 第二次哈希字节 = new Uint8Array(第二次哈希);
-    let 第二次十六进制 = '';
-    for (let i = 0; i < 第二次哈希字节.length; i++) {
-        第二次十六进制 += 字节到十六进制[第二次哈希字节[i]];
-    }
-    
-    // 已经是小写，不需要再调用toLowerCase()
-    return 第二次十六进制;
+
+    // 计算第一次哈希 (SHA-256)
+    const 第一次哈希 = await crypto.subtle.digest('SHA-256', 编码器.encode(文本));
+    const 第一次十六进制 = [...new Uint8Array(第一次哈希)]
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+
+    // 截取部分哈希值，并进行二次哈希
+    const 截取部分 = 第一次十六进制.substring(7, 27);
+    const 第二次哈希 = await crypto.subtle.digest('SHA-256', 编码器.encode(截取部分));
+    const 第二次十六进制 = [...new Uint8Array(第二次哈希)]
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+
+    return 第二次十六进制.toLowerCase();
 }
 
+
 async function 代理URL(代理网址, 目标网址) {
-    try {
-        // 1. 获取网址列表并进行错误处理
-        const 网址列表 = await 整理(代理网址);
-        
-        // 2. 确保有可用的网址
-        if (!网址列表 || 网址列表.length === 0) {
-            throw new Error('没有可用的代理网址');
-        }
-        
-        // 3. 使用位运算优化随机选择
-        const 完整网址 = 网址列表[网址列表.length * Math.random() | 0];
-        
-        // 4. 使用 try-catch 处理 URL 解析错误
-        let 解析后的网址;
-        try {
-            解析后的网址 = new URL(完整网址);
-        } catch (error) {
-            console.error('URL解析错误:', 完整网址);
-            throw new Error(`无效的URL: ${完整网址}`);
-        }
-        
-        // 5. 优化字符串操作
-        const 协议 = 解析后的网址.protocol.replace(':', '') || 'https';
-        const 主机名 = 解析后的网址.hostname;
-        const 路径名 = (解析后的网址.pathname.endsWith('/') 
-            ? 解析后的网址.pathname.slice(0, -1) 
-            : 解析后的网址.pathname) + 目标网址.pathname;
-        const 查询参数 = 解析后的网址.search;
-        
-        // 6. 使用模板字符串一次性构建URL
-        const 新网址 = `${协议}://${主机名}${路径名}${查询参数}`;
-        
-        // 7. 设置超时和错误处理
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
-        
-        try {
-            const 响应 = await fetch(新网址, { 
-                signal: controller.signal,
-                cf: {
-                    cacheTtl: 300, // 缓存5分钟
-                    cacheEverything: true
-                }
-            });
-            
-            clearTimeout(timeoutId);
-            
-            // 8. 检查响应状态
-            if (!响应.ok) {
-                throw new Error(`代理请求失败: ${响应.status} ${响应.statusText}`);
-            }
-            
-            // 9. 优化响应处理
-            const 新响应 = new Response(响应.body, 响应);
-            新响应.headers.set('X-New-URL', 新网址);
-            
-            return 新响应;
-        } catch (error) {
-            clearTimeout(timeoutId);
-            
-            // 如果是超时错误，提供更明确的错误信息
-            if (error.name === 'AbortError') {
-                throw new Error('代理请求超时');
-            }
-            throw error;
-        }
-    } catch (error) {
-        console.error('代理URL错误:', error);
-        // 10. 返回友好的错误响应而不是抛出异常
-        return new Response(`代理请求失败: ${error.message}`, {
-            status: 502,
-            headers: { 'Content-Type': 'text/plain;charset=UTF-8' }
-        });
+    const 网址列表 = await 整理(代理网址);
+    const 完整网址 = 网址列表[Math.floor(Math.random() * 网址列表.length)];
+
+    const 解析后的网址 = new URL(完整网址);
+    console.log(解析后的网址);
+
+    const 协议 = 解析后的网址.protocol.slice(0, -1) || 'https';
+    const 主机名 = 解析后的网址.hostname;
+    let 路径名 = 解析后的网址.pathname;
+    const 查询参数 = 解析后的网址.search;
+
+    if (路径名.endsWith('/')) {
+        路径名 = 路径名.slice(0, -1);
     }
+    路径名 += 目标网址.pathname;
+
+    const 新网址 = `${协议}://${主机名}${路径名}${查询参数}`;
+
+    const 响应 = await fetch(新网址);
+
+    const 新响应 = new Response(响应.body, {
+        status: 响应.status,
+        statusText: 响应.statusText,
+        headers: 响应.headers
+    });
+
+    新响应.headers.set('X-New-URL', 新网址);
+
+    return 新响应;
 }
 
 const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
