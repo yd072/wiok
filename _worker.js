@@ -739,95 +739,127 @@ export default {
 	},
 };
 
-async function 维列斯OverWSHandler(request) {
-    const webSocketPair = new WebSocketPair();
-    const [client, webSocket] = Object.values(webSocketPair);
+class WebSocketManager {
+	constructor(webSocket, log) {
+		this.webSocket = webSocket;
+		this.log = log;
+		this.readableStreamCancel = false;
+		this.backpressure = false;
+		this.messageQueue = [];
+		this.isProcessing = false; // 标志：是否正在处理队列
+	}
 
-    webSocket.accept();
+	makeReadableStream(earlyDataHeader) {
+		return new ReadableStream({
+			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+			pull: (controller) => this.handleStreamPull(controller),
+			cancel: (reason) => this.handleStreamCancel(reason),
+		});
+	}
 
-    let address = '';
-    let portWithRandomLog = '';
-    const log = (info, event = '') => {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
-    };
+	async handleStreamStart(controller, earlyDataHeader) {
+		try {
+			this.webSocket.addEventListener('message', (event) => {
+				if (this.readableStreamCancel) return;
 
-    const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
-    const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
+				if (!this.backpressure) {
+					this.processMessage(event.data, controller);
+				} else {
+					this.messageQueue.push(event.data);
+					this.log('🔴 Backpressure detected, message queued');
+				}
+			});
 
-    let remoteSocketWrapper = { value: null };
-    let isDns = false;
-    const banHostsSet = new Set(banHosts);
+			this.webSocket.addEventListener('close', () => this.handleClose(controller));
+			this.webSocket.addEventListener('error', (err) => this.handleError(err, controller));
 
-    readableWebSocketStream.pipeTo(new WritableStream({
-        async write(chunk, controller) {
-            try {
-                if (isDns) {
-                    return handleDNSQuery(chunk, webSocket, null, log);
-                }
-                if (remoteSocketWrapper.value) {
-                    const writer = remoteSocketWrapper.value.writable.getWriter();
-                    await writer.write(chunk);
-                    writer.releaseLock();
-                    return;
-                }
+			// 处理早期数据
+			await this.handleEarlyData(earlyDataHeader, controller);
+		} catch (error) {
+			this.log(`❌ Stream start error: ${error.message}`);
+			controller.error(error);
+		}
+	}
 
-                const {
-                    hasError,
-                    message,
-                    addressType,
-                    portRemote = 443,
-                    addressRemote = '',
-                    rawDataIndex,
-                    维列斯Version = new Uint8Array([0, 0]),
-                    isUDP,
-                } = process维列斯Header(chunk, userID);
+	async processMessage(data, controller) {
+		// 防止并发执行，保证消息按顺序处理
+		if (this.isProcessing) {
+			this.messageQueue.push(data);
+			return;
+		}
 
-                address = addressRemote;
-                portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
-                if (hasError) {
-                    throw new Error(message);
-                }
-                if (isUDP) {
-                    if (portRemote === 53) {
-                        isDns = true;
-                    } else {
-                        throw new Error('UDP 代理仅对 DNS（53 端口）启用');
-                    }
-                }
-                const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
-                const rawClientData = chunk.slice(rawDataIndex);
+		this.isProcessing = true;
+		try {
+			controller.enqueue(data);
 
-                if (isDns) {
-                    return handleDNSQuery(rawClientData, webSocket, 维列斯ResponseHeader, log);
-                }
-                if (!banHostsSet.has(addressRemote)) {
-                    log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
-                    handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log);
-                } else {
-                    throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
-                }
-            } catch (error) {
-                log('处理数据时发生错误', error.message);
-                webSocket.close(1011, '内部错误');
-            }
-        },
-        close() {
-            log(`readableWebSocketStream 已关闭`);
-        },
-        abort(reason) {
-            log(`readableWebSocketStream 已中止`, JSON.stringify(reason));
-        },
-    })).catch((err) => {
-        log('readableWebSocketStream 管道错误', err);
-        webSocket.close(1011, '管道错误');
-    });
+			// 处理消息队列
+			while (this.messageQueue.length > 0 && !this.backpressure) {
+				const queuedData = this.messageQueue.shift();
+				controller.enqueue(queuedData);
+			}
+		} catch (error) {
+			this.log(`❌ Message processing error: ${error.message}`);
+		} finally {
+			this.isProcessing = false;
+		}
+	}
 
-    return new Response(null, {
-        status: 101,
-        // @ts-ignore
-        webSocket: client,
-    });
+	handleStreamPull(controller) {
+		if (controller.desiredSize > 0) {
+			this.backpressure = false;
+
+			// 立即处理排队的消息
+			while (this.messageQueue.length > 0 && controller.desiredSize > 0) {
+				const data = this.messageQueue.shift();
+				this.processMessage(data, controller);
+			}
+		} else {
+			this.backpressure = true;
+		}
+	}
+
+	handleStreamCancel(reason) {
+		if (this.readableStreamCancel) return;
+
+		this.log(`⚠️ Readable stream canceled, reason: ${reason}`);
+		this.readableStreamCancel = true;
+		this.cleanup();
+	}
+
+	handleClose(controller) {
+		this.cleanup();
+		if (!this.readableStreamCancel) {
+			controller.close();
+		}
+	}
+
+	handleError(err, controller) {
+		this.log(`❌ WebSocket error: ${err.message}`);
+		if (!this.readableStreamCancel) {
+			controller.error(err);
+		}
+		this.cleanup();
+	}
+
+	async handleEarlyData(earlyDataHeader, controller) {
+		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+		if (error) {
+			controller.error(error);
+		} else if (earlyData) {
+			controller.enqueue(earlyData);
+		}
+	}
+
+	cleanup() {
+		if (this.readableStreamCancel) return;
+		this.readableStreamCancel = true;
+
+		this.messageQueue = [];
+		this.isProcessing = false;
+		this.backpressure = false;
+
+		safeCloseWebSocket(this.webSocket);
+	}
 }
 
 function mergeData(header, chunk) {
