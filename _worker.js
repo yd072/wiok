@@ -1441,31 +1441,84 @@ async function 代理URL(代理网址, 目标网址) {
     const 完整网址 = 网址列表[Math.floor(Math.random() * 网址列表.length)];
 
     const 解析后的网址 = new URL(完整网址);
-    console.log(解析后的网址);
-
     const 协议 = 解析后的网址.protocol.slice(0, -1) || 'https';
     const 主机名 = 解析后的网址.hostname;
     let 路径名 = 解析后的网址.pathname;
-    const 查询参数 = 解析后的网址.search;
-
-    if (路径名.endsWith('/')) {
-        路径名 = 路径名.slice(0, -1);
+    
+    // 确保路径名以单个斜杠结尾
+    路径名 = 路径名.endsWith('/') ? 路径名 : 路径名 + '/';
+    
+    // 确保目标路径不以斜杠开头，避免双斜杠
+    const 目标路径 = 目标网址.pathname.startsWith('/') ? 目标网址.pathname.substring(1) : 目标网址.pathname;
+    
+    // 合并路径
+    const 完整路径 = 路径名 + 目标路径;
+    
+    // 合并查询参数
+    const 合并查询参数 = new URLSearchParams(解析后的网址.search);
+    const 目标查询参数 = new URLSearchParams(目标网址.search);
+    
+    // 将目标URL的查询参数添加到合并查询参数中
+    for (const [key, value] of 目标查询参数.entries()) {
+        合并查询参数.append(key, value);
     }
-    路径名 += 目标网址.pathname;
-
-    const 新网址 = `${协议}://${主机名}${路径名}${查询参数}`;
-
-    const 响应 = await fetch(新网址);
-
-    const 新响应 = new Response(响应.body, {
-        status: 响应.status,
-        statusText: 响应.statusText,
-        headers: 响应.headers
-    });
-
-    新响应.headers.set('X-New-URL', 新网址);
-
-    return 新响应;
+    
+    const 查询字符串 = 合并查询参数.toString() ? `?${合并查询参数.toString()}` : '';
+    
+    // 构建新的URL
+    const 新网址 = `${协议}://${主机名}${完整路径}${查询字符串}`;
+    
+    // 设置请求超时
+    const 控制器 = new AbortController();
+    const 超时时间 = 5000; // 改为5秒超时
+    const 超时ID = setTimeout(() => 控制器.abort('请求超时'), 超时时间);
+    
+    try {
+        // 准备请求头
+        let 请求头;
+        if (目标网址 instanceof Request) {
+            请求头 = new Headers(目标网址.headers);
+        } else if (目标网址.headers) {
+            请求头 = new Headers(目标网址.headers);
+        } else {
+            请求头 = new Headers();
+        }
+        
+        // 添加一些必要的请求头
+        请求头.set('User-Agent', 请求头.get('User-Agent') || 'EdgeTunnel-Proxy');
+        
+        // 发送请求
+        const 响应 = await fetch(新网址, {
+            method: 目标网址 instanceof Request ? 目标网址.method : (目标网址.method || 'GET'),
+            headers: 请求头,
+            body: 目标网址 instanceof Request ? 目标网址.body : 目标网址.body,
+            redirect: 'follow',
+            signal: 控制器.signal
+        });
+        
+        // 创建新的响应对象
+        const 响应头 = new Headers(响应.headers);
+        响应头.set('X-New-URL', 新网址);
+        响应头.set('X-Proxied-By', 'EdgeTunnel');
+        
+        const 新响应 = new Response(响应.body, {
+            status: 响应.status,
+            statusText: 响应.statusText,
+            headers: 响应头
+        });
+        
+        return 新响应;
+    } catch (错误) {
+        // 区分超时错误和其他错误
+        if (错误.name === 'AbortError') {
+            return new Response('代理请求超时', { status: 504 });
+        }
+        
+        console.error(`代理请求失败: ${错误.message}`);
+        return new Response(`代理请求失败: ${错误.message}`, { status: 502 });
+    } finally {
+        clearTimeout(超时ID); // 清除超时计时器
+    }
 }
 
 const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
