@@ -77,100 +77,99 @@ class WebSocketManager {
 		this.log = log;
 		this.readableStreamCancel = false;
 		this.backpressure = false;
-		this.messageQueue = []; // 添加消息队列
-		this.processingMessage = false; // 添加消息处理状态标志
+		this.messageQueue = [];
+		this.isProcessing = false; // 标志：是否正在处理队列
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
 			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
 			pull: (controller) => this.handleStreamPull(controller),
-			cancel: (reason) => this.handleStreamCancel(reason)
+			cancel: (reason) => this.handleStreamCancel(reason),
 		});
 	}
 
 	async handleStreamStart(controller, earlyDataHeader) {
 		try {
-			// 优化消息处理
-			this.webSocket.addEventListener('message', async (event) => {
+			this.webSocket.addEventListener('message', (event) => {
 				if (this.readableStreamCancel) return;
-				
+
 				if (!this.backpressure) {
-					await this.processMessage(event.data, controller);
+					this.processMessage(event.data, controller);
 				} else {
-					// 当出现背压时,将消息加入队列
 					this.messageQueue.push(event.data);
-					this.log('Backpressure detected, message queued');
+					this.log('🔴 Backpressure detected, message queued');
 				}
 			});
 
-			// 优化关闭处理
-			this.webSocket.addEventListener('close', () => {
-				this.handleClose(controller);
-			});
-
-			// 优化错误处理
-			this.webSocket.addEventListener('error', (err) => {
-				this.handleError(err, controller);
-			});
+			this.webSocket.addEventListener('close', () => this.handleClose(controller));
+			this.webSocket.addEventListener('error', (err) => this.handleError(err, controller));
 
 			// 处理早期数据
 			await this.handleEarlyData(earlyDataHeader, controller);
 		} catch (error) {
-			this.log(`Stream start error: ${error.message}`);
+			this.log(`❌ Stream start error: ${error.message}`);
 			controller.error(error);
 		}
 	}
 
 	async processMessage(data, controller) {
-		if (this.processingMessage) return;
-		
+		// 防止并发执行，保证消息按顺序处理
+		if (this.isProcessing) {
+			this.messageQueue.push(data);
+			return;
+		}
+
+		this.isProcessing = true;
 		try {
-			this.processingMessage = true;
 			controller.enqueue(data);
-			
-			// 处理队列中的消息
+
+			// 处理消息队列
 			while (this.messageQueue.length > 0 && !this.backpressure) {
 				const queuedData = this.messageQueue.shift();
 				controller.enqueue(queuedData);
 			}
 		} catch (error) {
-			this.log(`Message processing error: ${error.message}`);
+			this.log(`❌ Message processing error: ${error.message}`);
 		} finally {
-			this.processingMessage = false;
+			this.isProcessing = false;
 		}
 	}
 
 	handleStreamPull(controller) {
 		if (controller.desiredSize > 0) {
 			this.backpressure = false;
-			// 当背压解除时,尝试处理队列中的消息
-			if (this.messageQueue.length > 0) {
+
+			// 立即处理排队的消息
+			while (this.messageQueue.length > 0 && controller.desiredSize > 0) {
 				const data = this.messageQueue.shift();
 				this.processMessage(data, controller);
 			}
+		} else {
+			this.backpressure = true;
 		}
 	}
 
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
-		
-		this.log(`Readable stream canceled, reason: ${reason}`);
+
+		this.log(`⚠️ Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
 		this.cleanup();
 	}
 
 	handleClose(controller) {
-		safeCloseWebSocket(this.webSocket);
+		this.cleanup();
 		if (!this.readableStreamCancel) {
 			controller.close();
 		}
-		this.cleanup();
 	}
 
 	handleError(err, controller) {
-		this.log('WebSocket server error');
-		controller.error(err);
+		this.log(`❌ WebSocket error: ${err.message}`);
+		if (!this.readableStreamCancel) {
+			controller.error(err);
+		}
 		this.cleanup();
 	}
 
@@ -184,10 +183,13 @@ class WebSocketManager {
 	}
 
 	cleanup() {
-		// 清理资源
+		if (this.readableStreamCancel) return;
+		this.readableStreamCancel = true;
+
 		this.messageQueue = [];
-		this.processingMessage = false;
+		this.isProcessing = false;
 		this.backpressure = false;
+
 		safeCloseWebSocket(this.webSocket);
 	}
 }
@@ -739,127 +741,95 @@ export default {
 	},
 };
 
-class WebSocketManager {
-	constructor(webSocket, log) {
-		this.webSocket = webSocket;
-		this.log = log;
-		this.readableStreamCancel = false;
-		this.backpressure = false;
-		this.messageQueue = [];
-		this.isProcessing = false; // 标志：是否正在处理队列
-	}
+async function 维列斯OverWSHandler(request) {
+    const webSocketPair = new WebSocketPair();
+    const [client, webSocket] = Object.values(webSocketPair);
 
-	makeReadableStream(earlyDataHeader) {
-		return new ReadableStream({
-			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
-			pull: (controller) => this.handleStreamPull(controller),
-			cancel: (reason) => this.handleStreamCancel(reason),
-		});
-	}
+    webSocket.accept();
 
-	async handleStreamStart(controller, earlyDataHeader) {
-		try {
-			this.webSocket.addEventListener('message', (event) => {
-				if (this.readableStreamCancel) return;
+    let address = '';
+    let portWithRandomLog = '';
+    const log = (info, event = '') => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
+    };
 
-				if (!this.backpressure) {
-					this.processMessage(event.data, controller);
-				} else {
-					this.messageQueue.push(event.data);
-					this.log('🔴 Backpressure detected, message queued');
-				}
-			});
+    const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
+    const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
 
-			this.webSocket.addEventListener('close', () => this.handleClose(controller));
-			this.webSocket.addEventListener('error', (err) => this.handleError(err, controller));
+    let remoteSocketWrapper = { value: null };
+    let isDns = false;
+    const banHostsSet = new Set(banHosts);
 
-			// 处理早期数据
-			await this.handleEarlyData(earlyDataHeader, controller);
-		} catch (error) {
-			this.log(`❌ Stream start error: ${error.message}`);
-			controller.error(error);
-		}
-	}
+    readableWebSocketStream.pipeTo(new WritableStream({
+        async write(chunk, controller) {
+            try {
+                if (isDns) {
+                    return handleDNSQuery(chunk, webSocket, null, log);
+                }
+                if (remoteSocketWrapper.value) {
+                    const writer = remoteSocketWrapper.value.writable.getWriter();
+                    await writer.write(chunk);
+                    writer.releaseLock();
+                    return;
+                }
 
-	async processMessage(data, controller) {
-		// 防止并发执行，保证消息按顺序处理
-		if (this.isProcessing) {
-			this.messageQueue.push(data);
-			return;
-		}
+                const {
+                    hasError,
+                    message,
+                    addressType,
+                    portRemote = 443,
+                    addressRemote = '',
+                    rawDataIndex,
+                    维列斯Version = new Uint8Array([0, 0]),
+                    isUDP,
+                } = process维列斯Header(chunk, userID);
 
-		this.isProcessing = true;
-		try {
-			controller.enqueue(data);
+                address = addressRemote;
+                portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
+                if (hasError) {
+                    throw new Error(message);
+                }
+                if (isUDP) {
+                    if (portRemote === 53) {
+                        isDns = true;
+                    } else {
+                        throw new Error('UDP 代理仅对 DNS（53 端口）启用');
+                    }
+                }
+                const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
+                const rawClientData = chunk.slice(rawDataIndex);
 
-			// 处理消息队列
-			while (this.messageQueue.length > 0 && !this.backpressure) {
-				const queuedData = this.messageQueue.shift();
-				controller.enqueue(queuedData);
-			}
-		} catch (error) {
-			this.log(`❌ Message processing error: ${error.message}`);
-		} finally {
-			this.isProcessing = false;
-		}
-	}
+                if (isDns) {
+                    return handleDNSQuery(rawClientData, webSocket, 维列斯ResponseHeader, log);
+                }
+                if (!banHostsSet.has(addressRemote)) {
+                    log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
+                    handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log);
+                } else {
+                    throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
+                }
+            } catch (error) {
+                log('处理数据时发生错误', error.message);
+                webSocket.close(1011, '内部错误');
+            }
+        },
+        close() {
+            log(`readableWebSocketStream 已关闭`);
+        },
+        abort(reason) {
+            log(`readableWebSocketStream 已中止`, JSON.stringify(reason));
+        },
+    })).catch((err) => {
+        log('readableWebSocketStream 管道错误', err);
+        webSocket.close(1011, '管道错误');
+    });
 
-	handleStreamPull(controller) {
-		if (controller.desiredSize > 0) {
-			this.backpressure = false;
-
-			// 立即处理排队的消息
-			while (this.messageQueue.length > 0 && controller.desiredSize > 0) {
-				const data = this.messageQueue.shift();
-				this.processMessage(data, controller);
-			}
-		} else {
-			this.backpressure = true;
-		}
-	}
-
-	handleStreamCancel(reason) {
-		if (this.readableStreamCancel) return;
-
-		this.log(`⚠️ Readable stream canceled, reason: ${reason}`);
-		this.readableStreamCancel = true;
-		this.cleanup();
-	}
-
-	handleClose(controller) {
-		this.cleanup();
-		if (!this.readableStreamCancel) {
-			controller.close();
-		}
-	}
-
-	handleError(err, controller) {
-		this.log(`❌ WebSocket error: ${err.message}`);
-		if (!this.readableStreamCancel) {
-			controller.error(err);
-		}
-		this.cleanup();
-	}
-
-	async handleEarlyData(earlyDataHeader, controller) {
-		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-		if (error) {
-			controller.error(error);
-		} else if (earlyData) {
-			controller.enqueue(earlyData);
-		}
-	}
-
-	cleanup() {
-		if (this.readableStreamCancel) return;
-		this.readableStreamCancel = true;
-
-		this.messageQueue = [];
-		this.isProcessing = false;
-		this.backpressure = false;
-
-		safeCloseWebSocket(this.webSocket);
-	}
+    return new Response(null, {
+        status: 101,
+        // @ts-ignore
+        webSocket: client,
+    });
 }
 
 function mergeData(header, chunk) {
