@@ -845,21 +845,17 @@ function mergeData(header, chunk) {
 }
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
-    // 使用Google DNS服务器
-    const DNS_SERVER = {
-        hostname: '8.8.4.4',
-        port: 53
-    };
-    
+    const DNS_SERVER = { hostname: '8.8.4.4', port: 53 };
+
     let tcpSocket;
     const controller = new AbortController();
     const signal = controller.signal;
-    let timeoutId; 
+    let timeoutId = null; 
 
     try {
         // 设置全局超时
         timeoutId = setTimeout(() => {
-            controller.abort('DNS query timeout');
+            controller.abort();
             if (tcpSocket) {
                 try {
                     tcpSocket.close();
@@ -869,60 +865,48 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
             }
         }, 3000);
 
+        // 连接 DNS 服务器，超时 2 秒
+        const connectTimeout = setTimeout(() => controller.abort(), 2000);
         try {
-            // 使用Promise.race进行超时控制
-            tcpSocket = await Promise.race([
-                connect({
-                    hostname: DNS_SERVER.hostname,
-                    port: DNS_SERVER.port,
-                    signal,
-                }),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('DNS连接超时')), 2000)
-                )
-            ]);
-
-            log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
-            
-            // 简化的数据流处理
-            let 维列斯Header = 维列斯ResponseHeader;
-            const reader = tcpSocket.readable.getReader();
-
-            try {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    
-                    if (done) {
-                        log('DNS数据流处理完成');
-                        break;
-                    }
-
-                    // 检查WebSocket是否仍然开放
-                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        break;
-                    }
-
-                    try {
-                        // 处理数据包
-                        if (维列斯Header) {
-                            const data = mergeData(维列斯Header, value);
-                            webSocket.send(data);
-                            维列斯Header = null; // 清除header,只在第一个包使用
-                        } else {
-                            webSocket.send(value);
-                        }
-                    } catch (error) {
-                        log(`数据处理错误: ${error.message}`);
-                        throw error;
-                    }
-                }
-            } finally {
-                reader.releaseLock();
-            }
-
+            tcpSocket = await connect({ hostname: DNS_SERVER.hostname, port: DNS_SERVER.port, signal });
+            clearTimeout(connectTimeout);
         } catch (error) {
-            log(`DNS查询失败: ${error.message}`);
+            clearTimeout(connectTimeout);
+            throw new Error('DNS连接超时');
+        }
+
+        log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
+
+        // 发送DNS查询
+        const writer = tcpSocket.writable.getWriter();
+        try {
+            await writer.write(udpChunk);
+        } finally {
+            writer.releaseLock();
+        }
+
+        // 读取DNS响应数据流
+        let 维列斯Header = 维列斯ResponseHeader;
+        const reader = tcpSocket.readable.getReader();
+
+        try {
+            for await (const chunk of reader) {
+                if (webSocket.readyState !== WS_READY_STATE_OPEN) break;
+
+                try {
+                    const data = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
+                    webSocket.send(data);
+                    维列斯Header = null;
+                } catch (error) {
+                    log(`数据处理错误: ${error.message}`);
+                    throw error;
+                }
+            }
+        } catch (error) {
+            log(`数据读取错误: ${error.message}`);
             throw error;
+        } finally {
+            reader.releaseLock();
         }
 
     } catch (error) {
