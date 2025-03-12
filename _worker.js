@@ -78,67 +78,117 @@ class WebSocketManager {
 		this.readableStreamCancel = false;
 		this.backpressure = false;
 		this.messageQueue = []; // 添加消息队列
+		this.processingMessage = false; // 添加消息处理状态标志
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: (controller) => {
-				// 直接处理消息，减少中间步骤
-				this.webSocket.addEventListener('message', (event) => {
-					if (this.readableStreamCancel) return;
-					
-					if (!this.backpressure) {
-						controller.enqueue(event.data); // 直接使用event.data，不做额外处理
-					} else {
-						this.messageQueue.push(event.data);
-					}
-				});
-
-				this.webSocket.addEventListener('close', () => {
-					if (!this.readableStreamCancel) {
-						controller.close();
-					}
-					this.cleanup();
-				});
-
-				this.webSocket.addEventListener('error', (err) => {
-					controller.error(err);
-					this.cleanup();
-				});
-
-				// 处理早期数据
-				if (earlyDataHeader) {
-					const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-					if (error) {
-						controller.error(error);
-					} else if (earlyData) {
-						controller.enqueue(earlyData);
-					}
-				}
-			},
-			pull: (controller) => {
-				this.backpressure = false;
-				// 处理队列中的消息
-				if (this.messageQueue.length > 0) {
-					const data = this.messageQueue.shift();
-					controller.enqueue(data);
-				}
-			},
-			cancel: () => {
-				this.readableStreamCancel = true;
-				this.cleanup();
-			}
+			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+			pull: (controller) => this.handleStreamPull(controller),
+			cancel: (reason) => this.handleStreamCancel(reason)
 		});
 	}
 
-	cleanup() {
-		this.messageQueue = [];
-		this.backpressure = false;
+	async handleStreamStart(controller, earlyDataHeader) {
 		try {
-			this.webSocket.close();
-		} catch (e) {
-			// 忽略关闭错误
+			// 优化消息处理
+			this.webSocket.addEventListener('message', async (event) => {
+				if (this.readableStreamCancel) return;
+				
+				if (!this.backpressure) {
+					await this.processMessage(event.data, controller);
+				} else {
+					// 当出现背压时,将消息加入队列
+					this.messageQueue.push(event.data);
+					this.log('Backpressure detected, message queued');
+				}
+			});
+
+			// 优化关闭处理
+			this.webSocket.addEventListener('close', () => {
+				this.handleClose(controller);
+			});
+
+			// 优化错误处理
+			this.webSocket.addEventListener('error', (err) => {
+				this.handleError(err, controller);
+			});
+
+			// 处理早期数据
+			await this.handleEarlyData(earlyDataHeader, controller);
+		} catch (error) {
+			this.log(`Stream start error: ${error.message}`);
+			controller.error(error);
 		}
+	}
+
+	async processMessage(data, controller) {
+		if (this.processingMessage) return;
+		
+		try {
+			this.processingMessage = true;
+			controller.enqueue(data);
+			
+			// 处理队列中的消息
+			while (this.messageQueue.length > 0 && !this.backpressure) {
+				const queuedData = this.messageQueue.shift();
+				controller.enqueue(queuedData);
+			}
+		} catch (error) {
+			this.log(`Message processing error: ${error.message}`);
+		} finally {
+			this.processingMessage = false;
+		}
+	}
+
+	handleStreamPull(controller) {
+		if (controller.desiredSize > 0) {
+			this.backpressure = false;
+			// 当背压解除时,尝试处理队列中的消息
+			if (this.messageQueue.length > 0) {
+				const data = this.messageQueue.shift();
+				this.processMessage(data, controller);
+			}
+		}
+	}
+
+	handleStreamCancel(reason) {
+		if (this.readableStreamCancel) return;
+		
+		this.log(`Readable stream canceled, reason: ${reason}`);
+		this.readableStreamCancel = true;
+		this.cleanup();
+	}
+
+	handleClose(controller) {
+		safeCloseWebSocket(this.webSocket);
+		if (!this.readableStreamCancel) {
+			controller.close();
+		}
+		this.cleanup();
+	}
+
+	handleError(err, controller) {
+		this.log('WebSocket server error');
+		controller.error(err);
+		this.cleanup();
+	}
+
+	async handleEarlyData(earlyDataHeader, controller) {
+		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+		if (error) {
+			controller.error(error);
+		} else if (earlyData) {
+			controller.enqueue(earlyData);
+		}
+	}
+
+	cleanup() {
+		// 清理资源
+		this.messageQueue = [];
+		this.processingMessage = false;
+		this.backpressure = false;
+		safeCloseWebSocket(this.webSocket);
 	}
 }
 
@@ -326,13 +376,13 @@ export default {
 			currentDate.setHours(0, 0, 0, 0);
 			const timestamp = Math.ceil(currentDate.getTime() / 1000);
 			const fakeUserIDSHA256 = await 双重哈希(`${userID}${timestamp}`);
-            const fakeUserID = [
+			const fakeUserID = [
                 fakeUserIDSHA256.slice(0, 8),
                 fakeUserIDSHA256.slice(8, 12),
                 fakeUserIDSHA256.slice(12, 16),
                 fakeUserIDSHA256.slice(16, 20),
                 fakeUserIDSHA256.slice(20, 32) 
-            ].join('-');
+			].join('-');
 
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
@@ -784,62 +834,107 @@ function mergeData(header, chunk) {
     if (!header || !chunk) {
         throw new Error('Invalid input parameters');
     }
-    
+
     const totalLength = header.length + chunk.length;
     
-    // 直接创建一个新的数组，避免复杂的缓冲区管理逻辑
+    // 直接创建一个新的数组,避免复杂的缓冲区管理逻辑
     const merged = new Uint8Array(totalLength);
     merged.set(header, 0);
     merged.set(chunk, header.length);
     return merged;
 }
 
-// 移除静态缓冲区初始化，因为它可能导致数据混乱
-// mergeData.smallBuffer = new Uint8Array(1024);
-
-async function handleDNSQuery(udpChunk, webSocket, responseHeader, log) {
-    const DNS_SERVER = { hostname: '8.8.4.4', port: 53 };
+async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
+    // 使用Google DNS服务器
+    const DNS_SERVER = {
+        hostname: '8.8.4.4',
+        port: 53
+    };
+    
+    let tcpSocket;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort('DNS query timeout'), 3000);
-    
-    let tcpSocket = null;
-    
+    const signal = controller.signal;
+    let timeoutId; 
+
     try {
-        tcpSocket = await connect({
-            hostname: DNS_SERVER.hostname,
-            port: DNS_SERVER.port,
-            signal: controller.signal,
-        });
-        
-        // 发送DNS查询
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(udpChunk);
-        writer.releaseLock();
-        
-        // 读取响应
-        const reader = tcpSocket.readable.getReader();
-        const { value, done } = await reader.read();
-        
-        if (!done && value) {
-            // 直接发送响应，减少数据处理步骤
-            if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                const response = responseHeader ? 
-                    new Uint8Array([...responseHeader, ...value]) : 
-                    value;
-                webSocket.send(response);
+        // 设置全局超时
+        timeoutId = setTimeout(() => {
+            controller.abort('DNS query timeout');
+            if (tcpSocket) {
+                try {
+                    tcpSocket.close();
+                } catch (e) {
+                    log(`关闭TCP连接出错: ${e.message}`);
+                }
             }
+        }, 3000);
+
+        try {
+            // 使用Promise.race进行超时控制
+            tcpSocket = await Promise.race([
+                connect({
+                    hostname: DNS_SERVER.hostname,
+                    port: DNS_SERVER.port,
+                    signal,
+                }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('DNS连接超时')), 2000)
+                )
+            ]);
+
+            log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
+            
+            // 简化的数据流处理
+            let 维列斯Header = 维列斯ResponseHeader;
+            const reader = tcpSocket.readable.getReader();
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) {
+                        log('DNS数据流处理完成');
+                        break;
+                    }
+
+                    // 检查WebSocket是否仍然开放
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        break;
+                    }
+
+                    try {
+                        // 处理数据包
+                        if (维列斯Header) {
+                            const data = mergeData(维列斯Header, value);
+                            webSocket.send(data);
+                            维列斯Header = null; // 清除header,只在第一个包使用
+                        } else {
+                            webSocket.send(value);
+                        }
+                    } catch (error) {
+                        log(`数据处理错误: ${error.message}`);
+                        throw error;
+                    }
+                }
+            } finally {
+                reader.releaseLock();
+            }
+
+        } catch (error) {
+            log(`DNS查询失败: ${error.message}`);
+            throw error;
         }
-        
-        reader.releaseLock();
+
     } catch (error) {
-        log('DNS查询错误:', error);
+        log(`DNS查询失败: ${error.message}`);
+        safeCloseWebSocket(webSocket);
     } finally {
         clearTimeout(timeoutId);
         if (tcpSocket) {
             try {
                 tcpSocket.close();
             } catch (e) {
-                // 忽略关闭错误
+                log(`关闭TCP连接出错: ${e.message}`);
             }
         }
     }
@@ -1135,14 +1230,13 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
 
-// 改进WebSocket连接管理
-function safeCloseWebSocket(webSocket) {
+function safeCloseWebSocket(socket) {
     try {
-        if (webSocket && webSocket.readyState !== WebSocket.CLOSED) {
-            webSocket.close();
+        if (socket.readyState === WS_READY_STATE_OPEN || socket.readyState === WS_READY_STATE_CLOSING) {
+            socket.close();
         }
     } catch (error) {
-        // 忽略关闭错误
+        console.error('safeCloseWebSocket error', error);
     }
 }
 
@@ -1305,7 +1399,6 @@ async function 双重哈希(文本) {
 
     return 第二次十六进制.toLowerCase();
 }
-
 
 async function 代理URL(代理网址, 目标网址) {
     const 网址列表 = await 整理(代理网址);
