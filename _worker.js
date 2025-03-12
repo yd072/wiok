@@ -78,117 +78,67 @@ class WebSocketManager {
 		this.readableStreamCancel = false;
 		this.backpressure = false;
 		this.messageQueue = []; // 添加消息队列
-		this.processingMessage = false; // 添加消息处理状态标志
 	}
 
 	makeReadableStream(earlyDataHeader) {
 		return new ReadableStream({
-			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
-			pull: (controller) => this.handleStreamPull(controller),
-			cancel: (reason) => this.handleStreamCancel(reason)
+			start: (controller) => {
+				// 直接处理消息，减少中间步骤
+				this.webSocket.addEventListener('message', (event) => {
+					if (this.readableStreamCancel) return;
+					
+					if (!this.backpressure) {
+						controller.enqueue(event.data); // 直接使用event.data，不做额外处理
+					} else {
+						this.messageQueue.push(event.data);
+					}
+				});
+
+				this.webSocket.addEventListener('close', () => {
+					if (!this.readableStreamCancel) {
+						controller.close();
+					}
+					this.cleanup();
+				});
+
+				this.webSocket.addEventListener('error', (err) => {
+					controller.error(err);
+					this.cleanup();
+				});
+
+				// 处理早期数据
+				if (earlyDataHeader) {
+					const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+					if (error) {
+						controller.error(error);
+					} else if (earlyData) {
+						controller.enqueue(earlyData);
+					}
+				}
+			},
+			pull: (controller) => {
+				this.backpressure = false;
+				// 处理队列中的消息
+				if (this.messageQueue.length > 0) {
+					const data = this.messageQueue.shift();
+					controller.enqueue(data);
+				}
+			},
+			cancel: () => {
+				this.readableStreamCancel = true;
+				this.cleanup();
+			}
 		});
 	}
 
-	async handleStreamStart(controller, earlyDataHeader) {
-		try {
-			// 优化消息处理
-			this.webSocket.addEventListener('message', async (event) => {
-				if (this.readableStreamCancel) return;
-				
-				if (!this.backpressure) {
-					await this.processMessage(event.data, controller);
-				} else {
-					// 当出现背压时,将消息加入队列
-					this.messageQueue.push(event.data);
-					this.log('Backpressure detected, message queued');
-				}
-			});
-
-			// 优化关闭处理
-			this.webSocket.addEventListener('close', () => {
-				this.handleClose(controller);
-			});
-
-			// 优化错误处理
-			this.webSocket.addEventListener('error', (err) => {
-				this.handleError(err, controller);
-			});
-
-			// 处理早期数据
-			await this.handleEarlyData(earlyDataHeader, controller);
-		} catch (error) {
-			this.log(`Stream start error: ${error.message}`);
-			controller.error(error);
-		}
-	}
-
-	async processMessage(data, controller) {
-		if (this.processingMessage) return;
-		
-		try {
-			this.processingMessage = true;
-			controller.enqueue(data);
-			
-			// 处理队列中的消息
-			while (this.messageQueue.length > 0 && !this.backpressure) {
-				const queuedData = this.messageQueue.shift();
-				controller.enqueue(queuedData);
-			}
-		} catch (error) {
-			this.log(`Message processing error: ${error.message}`);
-		} finally {
-			this.processingMessage = false;
-		}
-	}
-
-	handleStreamPull(controller) {
-		if (controller.desiredSize > 0) {
-			this.backpressure = false;
-			// 当背压解除时,尝试处理队列中的消息
-			if (this.messageQueue.length > 0) {
-				const data = this.messageQueue.shift();
-				this.processMessage(data, controller);
-			}
-		}
-	}
-
-	handleStreamCancel(reason) {
-		if (this.readableStreamCancel) return;
-		
-		this.log(`Readable stream canceled, reason: ${reason}`);
-		this.readableStreamCancel = true;
-		this.cleanup();
-	}
-
-	handleClose(controller) {
-		safeCloseWebSocket(this.webSocket);
-		if (!this.readableStreamCancel) {
-			controller.close();
-		}
-		this.cleanup();
-	}
-
-	handleError(err, controller) {
-		this.log('WebSocket server error');
-		controller.error(err);
-		this.cleanup();
-	}
-
-	async handleEarlyData(earlyDataHeader, controller) {
-		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-		if (error) {
-			controller.error(error);
-		} else if (earlyData) {
-			controller.enqueue(earlyData);
-		}
-	}
-
 	cleanup() {
-		// 清理资源
 		this.messageQueue = [];
-		this.processingMessage = false;
 		this.backpressure = false;
-		safeCloseWebSocket(this.webSocket);
+		try {
+			this.webSocket.close();
+		} catch (e) {
+			// 忽略关闭错误
+		}
 	}
 }
 
@@ -847,109 +797,49 @@ function mergeData(header, chunk) {
 // 移除静态缓冲区初始化，因为它可能导致数据混乱
 // mergeData.smallBuffer = new Uint8Array(1024);
 
-async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
-    // 使用Google DNS服务器
-    const DNS_SERVER = {
-        hostname: '8.8.4.4',
-        port: 53
-    };
-    
-    let tcpSocket;
+async function handleDNSQuery(udpChunk, webSocket, responseHeader, log) {
+    const DNS_SERVER = { hostname: '8.8.4.4', port: 53 };
     const controller = new AbortController();
-    const signal = controller.signal;
-    let timeoutId; 
-
+    const timeoutId = setTimeout(() => controller.abort('DNS query timeout'), 3000);
+    
+    let tcpSocket = null;
+    
     try {
-        // 设置全局超时
-        timeoutId = setTimeout(() => {
-            controller.abort('DNS query timeout');
-            if (tcpSocket) {
-                try {
-                    tcpSocket.close();
-                } catch (e) {
-                    log(`关闭TCP连接出错: ${e.message}`);
-                }
+        tcpSocket = await connect({
+            hostname: DNS_SERVER.hostname,
+            port: DNS_SERVER.port,
+            signal: controller.signal,
+        });
+        
+        // 发送DNS查询
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(udpChunk);
+        writer.releaseLock();
+        
+        // 读取响应
+        const reader = tcpSocket.readable.getReader();
+        const { value, done } = await reader.read();
+        
+        if (!done && value) {
+            // 直接发送响应，减少数据处理步骤
+            if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                const response = responseHeader ? 
+                    new Uint8Array([...responseHeader, ...value]) : 
+                    value;
+                webSocket.send(response);
             }
-        }, 3000);
-
-        try {
-            // 使用Promise.race进行超时控制
-            tcpSocket = await Promise.race([
-                connect({
-                    hostname: DNS_SERVER.hostname,
-                    port: DNS_SERVER.port,
-                    signal,
-                }),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('DNS连接超时')), 2000)
-                )
-            ]);
-
-            log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
-            
-            // 发送DNS查询
-            const writer = tcpSocket.writable.getWriter();
-            try {
-                await writer.write(udpChunk);
-            } finally {
-                writer.releaseLock();
-            }
-
-            // 优化的数据流处理
-            let 维列斯Header = 维列斯ResponseHeader;
-            const reader = tcpSocket.readable.getReader();
-
-            try {
-                // 使用更高效的循环处理数据
-                while (true) {
-                    const { done, value } = await reader.read();
-                    
-                    if (done) {
-                        log('DNS数据流处理完成');
-                        break;
-                    }
-
-                    // 检查WebSocket是否仍然开放
-                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        break;
-                    }
-
-                    try {
-                        // 处理数据包
-                        if (维列斯Header) {
-                            const data = mergeData(维列斯Header, value);
-                            webSocket.send(data);
-                            维列斯Header = null; // 清除header,只在第一个包使用
-                        } else {
-                            webSocket.send(value);
-                        }
-                    } catch (error) {
-                        log(`数据处理错误: ${error.message}`);
-                        throw error;
-                    }
-                }
-            } catch (error) {
-                log(`数据读取错误: ${error.message}`);
-                throw error;
-            } finally {
-                reader.releaseLock();
-            }
-
-        } catch (error) {
-            log(`DNS查询失败: ${error.message}`);
-            throw error;
         }
-
+        
+        reader.releaseLock();
     } catch (error) {
-        log(`DNS查询失败: ${error.message}`);
-        safeCloseWebSocket(webSocket);
+        log('DNS查询错误:', error);
     } finally {
         clearTimeout(timeoutId);
         if (tcpSocket) {
             try {
                 tcpSocket.close();
             } catch (e) {
-                log(`关闭TCP连接出错: ${e.message}`);
+                // 忽略关闭错误
             }
         }
     }
@@ -1245,13 +1135,14 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
 
-function safeCloseWebSocket(socket) {
+// 改进WebSocket连接管理
+function safeCloseWebSocket(webSocket) {
     try {
-        if (socket.readyState === WS_READY_STATE_OPEN || socket.readyState === WS_READY_STATE_CLOSING) {
-            socket.close();
+        if (webSocket && webSocket.readyState !== WebSocket.CLOSED) {
+            webSocket.close();
         }
     } catch (error) {
-        console.error('safeCloseWebSocket error', error);
+        // 忽略关闭错误
     }
 }
 
@@ -2967,4 +2858,107 @@ async function handleGetRequest(env, txt) {
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
+}
+
+// 改进数据流管道处理
+async function handleDataStream(remoteSocket, webSocket) {
+    try {
+        await remoteSocket.readable
+            .pipeTo(new WritableStream({
+                async write(chunk) {
+                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                        // 直接发送数据，不进行额外处理
+                        webSocket.send(chunk);
+                    }
+                },
+                close() {
+                    try {
+                        webSocket.close();
+                    } catch (e) {
+                        // 忽略关闭错误
+                    }
+                },
+                abort(err) {
+                    console.error('远程连接中断:', err);
+                    try {
+                        webSocket.close();
+                    } catch (e) {
+                        // 忽略关闭错误
+                    }
+                }
+            }));
+    } catch (error) {
+        console.error('数据流处理错误:', error);
+        try {
+            webSocket.close();
+        } catch (e) {
+            // 忽略关闭错误
+        }
+    }
+}
+
+// 使用对象池减少内存分配
+const bufferPool = {
+    pool: [],
+    maxSize: 100,
+    
+    get(size) {
+        if (this.pool.length > 0) {
+            const buffer = this.pool.pop();
+            if (buffer.byteLength >= size) {
+                return new Uint8Array(buffer, 0, size);
+            }
+        }
+        return new Uint8Array(size);
+    },
+    
+    release(buffer) {
+        if (this.pool.length < this.maxSize && buffer.buffer.byteLength > 0) {
+            this.pool.push(buffer.buffer);
+        }
+    }
+};
+
+// 优化数据解析
+function parseRequest(data) {
+    // 使用DataView直接读取二进制数据，避免不必要的转换
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    
+    try {
+        const version = view.getUint8(0);
+        const command = view.getUint8(1);
+        const addressType = view.getUint8(3);
+        
+        let offset = 4;
+        let address = '';
+        
+        // 根据地址类型解析地址
+        if (addressType === 1) { // IPv4
+            address = Array.from(new Uint8Array(data.buffer, data.byteOffset + offset, 4))
+                .join('.');
+            offset += 4;
+        } else if (addressType === 3) { // 域名
+            const domainLength = view.getUint8(offset);
+            offset += 1;
+            address = new TextDecoder().decode(
+                new Uint8Array(data.buffer, data.byteOffset + offset, domainLength)
+            );
+            offset += domainLength;
+        } else if (addressType === 4) { // IPv6
+            // 处理IPv6地址
+            const parts = [];
+            for (let i = 0; i < 8; i++) {
+                parts.push(view.getUint16(offset).toString(16));
+                offset += 2;
+            }
+            address = parts.join(':');
+        }
+        
+        const port = view.getUint16(offset);
+        
+        return { version, command, addressType, address, port };
+    } catch (error) {
+        console.error('解析请求失败:', error);
+        return null;
+    }
 }
