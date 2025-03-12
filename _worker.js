@@ -375,16 +375,16 @@ export default {
 			const currentDate = new Date();
 			currentDate.setHours(0, 0, 0, 0);
 			const timestamp = Math.ceil(currentDate.getTime() / 1000);
-			const fakeUserIDSHA256 = await 双重哈希(`${userID}${timestamp}`);
+			const fakeUserIDMD5 = await 双重哈希(`${userID}${timestamp}`);
 			const fakeUserID = [
-                fakeUserIDSHA256.slice(0, 8),
-                fakeUserIDSHA256.slice(8, 12),
-                fakeUserIDSHA256.slice(12, 16),
-                fakeUserIDSHA256.slice(16, 20),
-                fakeUserIDSHA256.slice(20, 32) 
+				fakeUserIDMD5.slice(0, 8),
+				fakeUserIDMD5.slice(8, 12),
+				fakeUserIDMD5.slice(12, 16),
+				fakeUserIDMD5.slice(16, 20),
+				fakeUserIDMD5.slice(20)
 			].join('-');
 
-			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
+			const fakeHostName = `${fakeUserIDMD5.slice(6, 9)}.${fakeUserIDMD5.slice(13, 19)}`;
 
 			// 修改PROXYIP初始化逻辑
 			if (env.KV) {
@@ -837,7 +837,6 @@ function mergeData(header, chunk) {
 
     const totalLength = header.length + chunk.length;
     
-    // 直接创建一个新的数组,避免复杂的缓冲区管理逻辑
     const merged = new Uint8Array(totalLength);
     merged.set(header, 0);
     merged.set(chunk, header.length);
@@ -845,17 +844,21 @@ function mergeData(header, chunk) {
 }
 
 async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log) {
-    const DNS_SERVER = { hostname: '8.8.4.4', port: 53 };
-
+    // 使用Google DNS服务器
+    const DNS_SERVER = {
+        hostname: '8.8.4.4',
+        port: 53
+    };
+    
     let tcpSocket;
     const controller = new AbortController();
     const signal = controller.signal;
-    let timeoutId = null; 
+    let timeoutId; 
 
     try {
         // 设置全局超时
         timeoutId = setTimeout(() => {
-            controller.abort();
+            controller.abort('DNS query timeout');
             if (tcpSocket) {
                 try {
                     tcpSocket.close();
@@ -865,48 +868,72 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
             }
         }, 3000);
 
-        // 连接 DNS 服务器，超时 2 秒
-        const connectTimeout = setTimeout(() => controller.abort(), 2000);
         try {
-            tcpSocket = await connect({ hostname: DNS_SERVER.hostname, port: DNS_SERVER.port, signal });
-            clearTimeout(connectTimeout);
-        } catch (error) {
-            clearTimeout(connectTimeout);
-            throw new Error('DNS连接超时');
-        }
+            // 使用Promise.race进行超时控制
+            tcpSocket = await Promise.race([
+                connect({
+                    hostname: DNS_SERVER.hostname,
+                    port: DNS_SERVER.port,
+                    signal,
+                }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('DNS连接超时')), 2000)
+                )
+            ]);
 
-        log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
-
-        // 发送DNS查询
-        const writer = tcpSocket.writable.getWriter();
-        try {
-            await writer.write(udpChunk);
-        } finally {
-            writer.releaseLock();
-        }
-
-        // 读取DNS响应数据流
-        let 维列斯Header = 维列斯ResponseHeader;
-        const reader = tcpSocket.readable.getReader();
-
-        try {
-            for await (const chunk of reader) {
-                if (webSocket.readyState !== WS_READY_STATE_OPEN) break;
-
-                try {
-                    const data = 维列斯Header ? mergeData(维列斯Header, chunk) : chunk;
-                    webSocket.send(data);
-                    维列斯Header = null;
-                } catch (error) {
-                    log(`数据处理错误: ${error.message}`);
-                    throw error;
-                }
+            log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
+            
+            // 发送DNS查询
+            const writer = tcpSocket.writable.getWriter();
+            try {
+                await writer.write(udpChunk);
+            } finally {
+                writer.releaseLock();
             }
+
+            // 优化的数据流处理
+            let 维列斯Header = 维列斯ResponseHeader;
+            const reader = tcpSocket.readable.getReader();
+
+            try {
+                // 使用更高效的循环处理数据
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) {
+                        log('DNS数据流处理完成');
+                        break;
+                    }
+
+                    // 检查WebSocket是否仍然开放
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        break;
+                    }
+
+                    try {
+                        // 处理数据包
+                        if (维列斯Header) {
+                            const data = mergeData(维列斯Header, value);
+                            webSocket.send(data);
+                            维列斯Header = null; // 清除header,只在第一个包使用
+                        } else {
+                            webSocket.send(value);
+                        }
+                    } catch (error) {
+                        log(`数据处理错误: ${error.message}`);
+                        throw error;
+                    }
+                }
+            } catch (error) {
+                log(`数据读取错误: ${error.message}`);
+                throw error;
+            } finally {
+                reader.releaseLock();
+            }
+
         } catch (error) {
-            log(`数据读取错误: ${error.message}`);
+            log(`DNS查询失败: ${error.message}`);
             throw error;
-        } finally {
-            reader.releaseLock();
         }
 
     } catch (error) {
@@ -1368,17 +1395,14 @@ function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName,
 async function 双重哈希(文本) {
     const 编码器 = new TextEncoder();
 
-    // 计算第一次哈希 (SHA-256)
-    const 第一次哈希 = await crypto.subtle.digest('SHA-256', 编码器.encode(文本));
-    const 第一次十六进制 = [...new Uint8Array(第一次哈希)]
-        .map(byte => byte.toString(16).padStart(2, '0'))
+    const 第一次哈希 = await crypto.subtle.digest('MD5', 编码器.encode(文本));
+    const 第一次十六进制 = Array.from(new Uint8Array(第一次哈希))
+        .map(字节 => 字节.toString(16).padStart(2, '0'))
         .join('');
 
-    // 截取部分哈希值，并进行二次哈希
-    const 截取部分 = 第一次十六进制.substring(7, 27);
-    const 第二次哈希 = await crypto.subtle.digest('SHA-256', 编码器.encode(截取部分));
-    const 第二次十六进制 = [...new Uint8Array(第二次哈希)]
-        .map(byte => byte.toString(16).padStart(2, '0'))
+    const 第二次哈希 = await crypto.subtle.digest('MD5', 编码器.encode(第一次十六进制.slice(7, 27)));
+    const 第二次十六进制 = Array.from(new Uint8Array(第二次哈希))
+        .map(字节 => 字节.toString(16).padStart(2, '0'))
         .join('');
 
     return 第二次十六进制.toLowerCase();
