@@ -830,6 +830,7 @@ async function 维列斯OverWSHandler(request) {
     });
 }
 
+// 添加高效的数据合并函数，使用共享缓冲区优化小数据包处理
 function mergeData(header, chunk) {
     // 检查输入参数
     if (!header || !chunk) {
@@ -1151,6 +1152,7 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 }
 
+// 优化remoteSocketToWS函数中的数据处理部分
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
@@ -1169,28 +1171,24 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }, 5000);
 
     try {
-        // 优化的数据写入函数
-    const writeData = async (chunk) => {
-        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-            throw new Error('WebSocket未连接');
-        }
-
-        if (header) {
-                // 预先计算总长度
-                const totalLength = header.byteLength + chunk.byteLength;
-                // 使用预分配的 buffer
-                const combinedData = new Uint8Array(totalLength);
-                combinedData.set(new Uint8Array(header), 0);
-                combinedData.set(new Uint8Array(chunk), header.byteLength);
-                webSocket.send(combinedData);
-                header = null; // 清除header引用
-        } else {
-            webSocket.send(chunk);
+        // 修改writeData函数，使用优化的数据合并方法
+        async function writeData(chunk) {
+            if (isSocketClosed) return;
+            
+            // 第一个数据包需要与响应头合并
+            if (!hasIncomingData && responseHeader) {
+                hasIncomingData = true;
+                clearTimeout(timeout); // 收到数据后清除超时
+                
+                // 使用优化的数据合并函数
+                const mergedData = mergeData(responseHeader, chunk);
+                webSocket.send(mergedData);
+            } else {
+                hasIncomingData = true;
+                webSocket.send(chunk);
+            }
         }
         
-            hasIncomingData = true;
-        };
-
         await remoteSocket.readable
             .pipeTo(
                 new WritableStream({
@@ -2106,7 +2104,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			} else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
-				// 添加Loon支持
 				url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			}
