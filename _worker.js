@@ -1440,7 +1440,9 @@ async function 代理URL(代理网址, 目标网址) {
     const 网址列表 = await 整理(代理网址);
     const 完整网址 = 网址列表[Math.floor(Math.random() * 网址列表.length)];
 
-    const 解析后的网址 = new URL(完整网址);    
+    const 解析后的网址 = new URL(完整网址);
+    console.log(解析后的网址);
+
     const 协议 = 解析后的网址.protocol.slice(0, -1) || 'https';
     const 主机名 = 解析后的网址.hostname;
     let 路径名 = 解析后的网址.pathname;
@@ -1448,32 +1450,22 @@ async function 代理URL(代理网址, 目标网址) {
 
     if (路径名.endsWith('/')) {
         路径名 = 路径名.slice(0, -1);
-    }   
+    }
     路径名 += 目标网址.pathname;
 
     const 新网址 = `${协议}://${主机名}${路径名}${查询参数}`;
 
-    try {
-        const 响应 = await fetch(新网址, {
-            headers: 目标网址.headers, 
-            method: 目标网址.method,   
-            body: 目标网址.body        
-        });
+    const 响应 = await fetch(新网址);
 
-        const 新响应 = new Response(响应.body, {
-            status: 响应.status,
-            statusText: 响应.statusText,
-            headers: 响应.headers
-        });
+    const 新响应 = new Response(响应.body, {
+        status: 响应.status,
+        statusText: 响应.statusText,
+        headers: 响应.headers
+    });
 
-        新响应.headers.set('X-New-URL', 新网址);
-        新响应.headers.set('X-Proxied-By', 'EdgeTunnel');
+    新响应.headers.set('X-New-URL', 新网址);
 
-        return 新响应;
-    } catch (错误) {
-        console.error(`代理请求失败: ${错误.message}`);
-        return new Response(`代理请求失败: ${错误.message}`, { status: 502 });
-    }
+    return 新响应;
 }
 
 const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
