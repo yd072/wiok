@@ -2068,8 +2068,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 					<div class="section">
 						<div class="section-title">⚙️ Clash Meta 配置</div>
-						<div class="config-info">
-							${clash}
+						<div class="config-info" style="overflow-x: auto; white-space: nowrap; max-width: 100%;">
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${clash}</div>
 						</div>
 					</div>
 
