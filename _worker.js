@@ -1867,6 +1867,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
+						-webkit-overflow-scrolling: touch; /* 改善iOS滚动 */
 					}
 
 					.container {
@@ -1894,53 +1895,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						border-bottom: 2px solid var(--border-color);
 					}
 
-					.divider {
-						height: 1px;
-						background: var(--border-color);
-						margin: 15px 0;
-					}
-
-					.subscription-link {
-						display: block;
-						margin: 10px 0;
-						padding: 12px;
-						background: #f8f9fa;
-						border-radius: 6px;
-						border: 1px solid var(--border-color);
-						word-break: break-all;
-					}
-
-					.subscription-link a {
-						color: #0066cc;
-						text-decoration: none;
-					}
-
-					.subscription-link a:hover {
-						text-decoration: underline;
-					}
-
-					.qrcode-container {
-						margin: 10px 0;
-						text-align: center;
-					}
-
-					.notice-toggle {
-						color: var(--primary-color);
-						cursor: pointer;
-						text-decoration: none;
-						display: inline-block;
-						margin: 10px 0;
-						font-weight: 500;
-					}
-
-					.notice-content {
-						background: #f8f9fa;
-						border-left: 4px solid var(--primary-color);
-						padding: 15px;
-						margin: 10px 0;
-						border-radius: 0 8px 8px 0;
-					}
-
 					.config-info {
 						background: #f8f9fa;
 						padding: 15px;
@@ -1948,24 +1902,17 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						font-family: Monaco, Consolas, "Courier New", monospace;
 						font-size: 13px;
 						overflow-x: auto;
+						word-break: break-word; /* 确保长文本可以换行 */
+						white-space: pre-wrap; /* 保留空格和换行但允许自动换行 */
 					}
 
-					.copy-button {
-						display: inline-block;
-						padding: 6px 12px;
-						background: var(--primary-color);
-						color: white;
-						border: none;
-						border-radius: 4px;
-						cursor: pointer;
-						font-size: 14px;
-						margin: 5px 0;
+					/* 确保代码块可以水平滚动 */
+					.config-info div {
+						overflow-x: auto;
+						max-width: 100%;
 					}
 
-					.copy-button:hover {
-						background: var(--secondary-color);
-					}
-
+					/* 移动端优化 */
 					@media (max-width: 768px) {
 						body {
 							padding: 10px;
@@ -1977,6 +1924,12 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						
 						.section {
 							padding: 15px;
+						}
+						
+						/* 确保在移动设备上可以滚动查看内容 */
+						.config-info {
+							max-height: none;
+							overflow-y: visible;
 						}
 					}
 				</style>
