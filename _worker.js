@@ -1867,7 +1867,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
-						-webkit-overflow-scrolling: touch; /* 改善iOS滚动 */
 					}
 
 					.container {
@@ -1894,52 +1893,53 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						padding-bottom: 10px;
 						border-bottom: 2px solid var(--border-color);
 					}
-						.divider {
-                        height: 1px;
-                        background: var(--border-color);
-                        margin: 15px 0;
-                    }
 
-                    .subscription-link {
-                        display: block;
-                        margin: 10px 0;
-                        padding: 12px;
-                        background: #f8f9fa;
-                        border-radius: 6px;
-                        border: 1px solid var(--border-color);
-                        word-break: break-all;
-                    }
+					.divider {
+						height: 1px;
+						background: var(--border-color);
+						margin: 15px 0;
+					}
 
-                    .subscription-link a {
-                        color: #0066cc;
-                        text-decoration: none;
-                    }
+					.subscription-link {
+						display: block;
+						margin: 10px 0;
+						padding: 12px;
+						background: #f8f9fa;
+						border-radius: 6px;
+						border: 1px solid var(--border-color);
+						word-break: break-all;
+					}
 
-                    .subscription-link a:hover {
-                        text-decoration: underline;
-                    }
+					.subscription-link a {
+						color: #0066cc;
+						text-decoration: none;
+					}
 
-                    .qrcode-container {
-                        margin: 10px 0;
-                        text-align: center;
-                    }
+					.subscription-link a:hover {
+						text-decoration: underline;
+					}
 
-                    .notice-toggle {
-                        color: var(--primary-color);
-                        cursor: pointer;
-                        text-decoration: none;
-                        display: inline-block;
-                        margin: 10px 0;
-                        font-weight: 500;
-                    }
+					.qrcode-container {
+						margin: 10px 0;
+						text-align: center;
+					}
 
-                    .notice-content {
-                        background: #f8f9fa;
-                        border-left: 4px solid var(--primary-color);
-                        padding: 15px;
-                        margin: 10px 0;
-                        border-radius: 0 8px 8px 0;
-                    }
+					.notice-toggle {
+						color: var(--primary-color);
+						cursor: pointer;
+						text-decoration: none;
+						display: inline-block;
+						margin: 10px 0;
+						font-weight: 500;
+					}
+
+					.notice-content {
+						background: #f8f9fa;
+						border-left: 4px solid var(--primary-color);
+						padding: 15px;
+						margin: 10px 0;
+						border-radius: 0 8px 8px 0;
+					}
 
 					.config-info {
 						background: #f8f9fa;
@@ -1951,18 +1951,19 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					}
 
 					.copy-button {
-                        display: inline-block;
-                        padding: 6px 12px;
-                        background: var(--primary-color);
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        font-size: 14px;
-                        margin: 5px 0;
-                    }
-                    .copy-button:hover {
-                        background: var(--secondary-color);					
+						display: inline-block;
+						padding: 6px 12px;
+						background: var(--primary-color);
+						color: white;
+						border: none;
+						border-radius: 4px;
+						cursor: pointer;
+						font-size: 14px;
+						margin: 5px 0;
+					}
+
+					.copy-button:hover {
+						background: var(--secondary-color);
 					}
 
 					@media (max-width: 768px) {
@@ -1976,11 +1977,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						
 						.section {
 							padding: 15px;
-						}
-					
-						.config-info {
-							max-height: none;
-							overflow-y: visible;
 						}
 					}
 				</style>
@@ -2063,9 +2059,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 					<div class="section">
 						<div class="section-title">📝 proxyConfig</div>
-						<div class="config-info">
+						<div class="config-info" style="overflow-x: auto; white-space: nowrap; max-width: 100%;">
 							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
-							<div>${proxyConfig}</div>
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${proxyConfig}</div>
 							<div id="qrcode_proxyConfig" class="qrcode-container"></div>
 						</div>
 					</div>
