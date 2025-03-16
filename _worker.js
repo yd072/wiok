@@ -1618,135 +1618,6 @@ function process维列斯Header(维列斯Buffer, userID) {
     };
 }
 
-async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
-    let hasIncomingData = false;
-    let header = responseHeader;
-    let isSocketClosed = false;
-    let retryAttempted = false;
-    
-    // 获取智能优化设置
-    const optimalSettings = smartOptimizer.getOptimalSettings();
-    let retryCount = 0;
-    const MAX_RETRIES = optimalSettings.maxRetries;
-
-    // 控制超时
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    // 设置全局超时
-    const timeout = setTimeout(() => {
-        if (!hasIncomingData) {
-            controller.abort('连接超时');
-        }
-    }, optimalSettings.timeoutDuration);
-
-    try {
-        // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
-        const writeData = async (chunk) => {
-            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                throw new Error('WebSocket 未连接');
-            }
-
-            if (header) {
-                // 预分配足够的 buffer，避免重复分配
-                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-                combinedData.set(new Uint8Array(header), 0);
-                combinedData.set(new Uint8Array(chunk), header.byteLength);
-                webSocket.send(combinedData);
-                header = null; // 清除 header 引用
-            } else {
-                webSocket.send(chunk);
-            }
-            
-            hasIncomingData = true;
-        };
-
-        await remoteSocket.readable
-            .pipeTo(
-                new WritableStream({
-                    async write(chunk, controller) {
-                        try {
-                            await writeData(chunk);
-                        } catch (error) {
-                            log(`数据写入错误: ${error.message}`);
-                            controller.error(error);
-                        }
-                    },
-                    close() {
-                        isSocketClosed = true;
-                        clearTimeout(timeout);
-                        log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
-                        
-                        // 仅在没有数据时尝试重试，且不超过最大重试次数
-                        if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-                            retryAttempted = true;
-                            retryCount++;
-                            log(`未收到数据, 正在进行第 ${retryCount} 次重试...`);
-                            
-                            // 使用智能优化的延迟重试
-                            setTimeout(() => {
-                                retry();
-                            }, optimalSettings.retryDelay);
-                        }
-                    },
-                    abort(reason) {
-                        isSocketClosed = true;
-                        clearTimeout(timeout);
-                        log(`远程连接被中断: ${reason}`);
-                    }
-                }),
-                {
-                    signal,
-                    preventCancel: false
-                }
-            )
-            .catch((error) => {
-                log(`数据传输异常: ${error.message}`);
-                if (!isSocketClosed) {
-                    safeCloseWebSocket(webSocket);
-                }
-                
-                // 仅在未收到数据时尝试重试，并限制重试次数
-                if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-                    retryAttempted = true;
-                    retryCount++;
-                    log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
-                    
-                    // 使用智能优化的延迟重试
-                    setTimeout(() => {
-                        retry();
-                    }, optimalSettings.retryDelay * retryCount); // 指数退避
-                }
-            });
-
-    } catch (error) {
-        clearTimeout(timeout);
-        log(`连接处理异常: ${error.message}`);
-        if (!isSocketClosed) {
-            safeCloseWebSocket(webSocket);
-        }
-        
-        // 仅在发生异常且未收到数据时尝试重试，并限制重试次数
-        if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-            retryAttempted = true;
-            retryCount++;
-            log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
-            
-            // 使用智能优化的延迟重试
-            setTimeout(() => {
-                retry();
-            }, optimalSettings.retryDelay * retryCount); // 指数退避
-        }
-        
-        throw error;
-    } finally {
-        clearTimeout(timeout);
-        if (signal.aborted) {
-            safeCloseWebSocket(webSocket);
-        }
-    }
-}
-
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
 
@@ -3470,3 +3341,29 @@ async function handleGetRequest(env, txt) {
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
 }
+
+// 智能DNS解析器已经成功添加，但我们需要确保它被正确使用
+// 可以在适当的地方添加以下代码来使用DNS解析器：
+
+// 在处理域名连接前使用智能DNS解析
+async function resolveHostname(hostname) {
+  // 如果是IP地址，直接返回
+  if (isValidIPv4(hostname) || hostname.includes(':')) {
+    return hostname;
+  }
+  
+  try {
+    // 使用智能DNS解析器解析域名
+    const resolvedIP = await smartDNSResolver.resolve(hostname);
+    console.log(`已解析 ${hostname} 为 ${resolvedIP}`);
+    return resolvedIP;
+  } catch (error) {
+    console.error(`DNS解析失败: ${error.message}`);
+    return hostname; // 解析失败时返回原始域名
+  }
+}
+
+// 可以在createConnection函数中使用resolveHostname
+// 例如:
+// const resolvedAddress = await resolveHostname(address);
+// 然后使用resolvedAddress替代address进行连接
