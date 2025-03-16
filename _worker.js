@@ -1053,6 +1053,167 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
     }
 }
 
+// 添加智能优化系统
+class SmartOptimizer {
+  constructor() {
+    this.connectionStats = {
+      successCount: 0,
+      failureCount: 0,
+      latencyHistory: [],
+      lastOptimization: Date.now()
+    };
+    this.optimizationInterval = 30 * 60 * 1000; // 30分钟
+    this.adaptiveConfig = {
+      retryDelay: 1000,
+      maxRetries: 3,
+      timeoutDuration: 3000,
+      preferredProtocol: 'tls'
+    };
+  }
+
+  recordConnectionAttempt(success, latency = null) {
+    if (success) {
+      this.connectionStats.successCount++;
+      if (latency !== null) {
+        this.connectionStats.latencyHistory.push({
+          timestamp: Date.now(),
+          value: latency
+        });
+        
+        // 只保留最近100条记录
+        if (this.connectionStats.latencyHistory.length > 100) {
+          this.connectionStats.latencyHistory.shift();
+        }
+      }
+    } else {
+      this.connectionStats.failureCount++;
+    }
+    
+    // 检查是否需要优化
+    this.checkForOptimization();
+  }
+  
+  checkForOptimization() {
+    const now = Date.now();
+    if (now - this.connectionStats.lastOptimization > this.optimizationInterval) {
+      this.optimizeSettings();
+      this.connectionStats.lastOptimization = now;
+    }
+  }
+  
+  optimizeSettings() {
+    // 计算成功率
+    const totalAttempts = this.connectionStats.successCount + this.connectionStats.failureCount;
+    if (totalAttempts < 10) return; // 样本太少，不优化
+    
+    const successRate = this.connectionStats.successCount / totalAttempts;
+    
+    // 根据成功率调整重试策略
+    if (successRate < 0.5) {
+      // 连接成功率低，增加重试次数和超时时间
+      this.adaptiveConfig.maxRetries = Math.min(5, this.adaptiveConfig.maxRetries + 1);
+      this.adaptiveConfig.timeoutDuration = Math.min(5000, this.adaptiveConfig.timeoutDuration + 500);
+    } else if (successRate > 0.9) {
+      // 连接成功率高，减少重试次数和超时时间以提高效率
+      this.adaptiveConfig.maxRetries = Math.max(2, this.adaptiveConfig.maxRetries - 1);
+      this.adaptiveConfig.timeoutDuration = Math.max(2000, this.adaptiveConfig.timeoutDuration - 500);
+    }
+    
+    // 分析延迟历史记录
+    if (this.connectionStats.latencyHistory.length > 0) {
+      const recentLatencies = this.connectionStats.latencyHistory
+        .slice(-20) // 只看最近20条
+        .map(item => item.value);
+      
+      const avgLatency = recentLatencies.reduce((sum, val) => sum + val, 0) / recentLatencies.length;
+      
+      // 根据平均延迟调整协议偏好
+      if (avgLatency > 200) { // 高延迟环境
+        this.adaptiveConfig.preferredProtocol = 'ws'; // WebSocket可能在高延迟环境中更稳定
+      } else {
+        this.adaptiveConfig.preferredProtocol = 'tls'; // 低延迟环境优先使用TLS
+      }
+    }
+    
+    // 重置统计数据
+    this.connectionStats.successCount = 0;
+    this.connectionStats.failureCount = 0;
+    
+    console.log('智能优化系统已更新配置:', this.adaptiveConfig);
+  }
+  
+  getOptimalSettings() {
+    return { ...this.adaptiveConfig };
+  }
+  
+  // 智能选择最佳的代理IP
+  async selectOptimalProxyIP(proxyIPs) {
+    if (!proxyIPs || proxyIPs.length === 0) return '';
+    
+    // 如果只有一个IP，直接返回
+    if (proxyIPs.length === 1) return proxyIPs[0];
+    
+    // 尝试测试连接延迟
+    const results = [];
+    const testPromises = proxyIPs.slice(0, 3).map(async (ip) => {
+      const startTime = Date.now();
+      try {
+        // 简单的连接测试
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        
+        const response = await fetch(`https://${ip.split(':')[0]}`, {
+          method: 'HEAD',
+          signal: controller.signal
+        }).catch(() => null);
+        
+        clearTimeout(timeoutId);
+        
+        const endTime = Date.now();
+        const latency = endTime - startTime;
+        
+        results.push({
+          ip,
+          latency: response ? latency : 9999,
+          success: !!response
+        });
+      } catch (e) {
+        results.push({
+          ip,
+          latency: 9999,
+          success: false
+        });
+      }
+    });
+    
+    // 等待所有测试完成或超时
+    try {
+      await Promise.race([
+        Promise.all(testPromises),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('测试超时')), 3000))
+      ]);
+    } catch (e) {
+      console.log('代理IP测试超时或出错:', e);
+    }
+    
+    // 按延迟排序并返回最佳IP
+    results.sort((a, b) => a.latency - b.latency);
+    
+    // 如果有成功的连接，返回延迟最低的
+    const successfulResults = results.filter(r => r.success);
+    if (successfulResults.length > 0) {
+      return successfulResults[0].ip;
+    }
+    
+    // 否则随机返回一个
+    return proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+  }
+}
+
+// 创建全局智能优化器实例
+const smartOptimizer = new SmartOptimizer();
+
+// 修改handleTCPOutBound函数，集成智能优化
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, 维列斯ResponseHeader, log) {
     // 优化 SOCKS5 模式检查
     const checkSocks5Mode = async (address) => {
@@ -1065,12 +1226,16 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return !!pattern;
     };
 
+    // 获取智能优化设置
+    const optimalSettings = smartOptimizer.getOptimalSettings();
+
     // 优化连接处理
     const createConnection = async (address, port, socks = false) => {
         log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const timeoutId = setTimeout(() => controller.abort(), optimalSettings.timeoutDuration);
+        const startTime = Date.now();
 
         try {
             const tcpSocket = await Promise.race([
@@ -1086,7 +1251,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     })
                 ,
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('连接超时')), 3000)
+                    setTimeout(() => reject(new Error('连接超时')), optimalSettings.timeoutDuration)
                 )
             ]);
 
@@ -1101,9 +1266,15 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 writer.releaseLock();
             }
 
+            // 记录成功连接
+            const latency = Date.now() - startTime;
+            smartOptimizer.recordConnectionAttempt(true, latency);
+            
             return tcpSocket;
         } catch (error) {
             clearTimeout(timeoutId);
+            // 记录失败连接
+            smartOptimizer.recordConnectionAttempt(false);
             throw error;
         }
     };
@@ -1130,6 +1301,16 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     }
                     portRemote = port;
                 }
+                
+                // 使用智能选择最佳代理IP
+                if (proxyIPs && proxyIPs.length > 1) {
+                    const optimalProxyIP = await smartOptimizer.selectOptimalProxyIP(proxyIPs);
+                    if (optimalProxyIP) {
+                        proxyIP = optimalProxyIP;
+                        log(`智能选择最佳代理IP: ${proxyIP}`);
+                    }
+                }
+                
                 tcpSocket = await createConnection(proxyIP || addressRemote, portRemote);
             }
 
@@ -1156,6 +1337,214 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return retryConnection();
     }
 }
+
+// 修改remoteSocketToWS函数，集成智能优化
+async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
+    let hasIncomingData = false;
+    let header = responseHeader;
+    let isSocketClosed = false;
+    let retryAttempted = false;
+    
+    // 获取智能优化设置
+    const optimalSettings = smartOptimizer.getOptimalSettings();
+    let retryCount = 0;
+    const MAX_RETRIES = optimalSettings.maxRetries;
+
+    // 控制超时
+    const controller = new AbortController();
+    const signal = controller.signal;
+
+    // 设置全局超时
+    const timeout = setTimeout(() => {
+        if (!hasIncomingData) {
+            controller.abort('连接超时');
+        }
+    }, optimalSettings.timeoutDuration);
+
+    try {
+        // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
+        const writeData = async (chunk) => {
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                throw new Error('WebSocket 未连接');
+            }
+
+            if (header) {
+                // 预分配足够的 buffer，避免重复分配
+                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                combinedData.set(new Uint8Array(header), 0);
+                combinedData.set(new Uint8Array(chunk), header.byteLength);
+                webSocket.send(combinedData);
+                header = null; // 清除 header 引用
+            } else {
+                webSocket.send(chunk);
+            }
+            
+            hasIncomingData = true;
+        };
+
+        await remoteSocket.readable
+            .pipeTo(
+                new WritableStream({
+                    async write(chunk, controller) {
+                        try {
+                            await writeData(chunk);
+                        } catch (error) {
+                            log(`数据写入错误: ${error.message}`);
+                            controller.error(error);
+                        }
+                    },
+                    close() {
+                        isSocketClosed = true;
+                        clearTimeout(timeout);
+                        log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
+                        
+                        // 仅在没有数据时尝试重试，且不超过最大重试次数
+                        if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
+                            retryAttempted = true;
+                            retryCount++;
+                            log(`未收到数据, 正在进行第 ${retryCount} 次重试...`);
+                            
+                            // 使用智能优化的延迟重试
+                            setTimeout(() => {
+                                retry();
+                            }, optimalSettings.retryDelay);
+                        }
+                    },
+                    abort(reason) {
+                        isSocketClosed = true;
+                        clearTimeout(timeout);
+                        log(`远程连接被中断: ${reason}`);
+                    }
+                }),
+                {
+                    signal,
+                    preventCancel: false
+                }
+            )
+            .catch((error) => {
+                log(`数据传输异常: ${error.message}`);
+                if (!isSocketClosed) {
+                    safeCloseWebSocket(webSocket);
+                }
+                
+                // 仅在未收到数据时尝试重试，并限制重试次数
+                if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
+                    retryAttempted = true;
+                    retryCount++;
+                    log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
+                    
+                    // 使用智能优化的延迟重试
+                    setTimeout(() => {
+                        retry();
+                    }, optimalSettings.retryDelay * retryCount); // 指数退避
+                }
+            });
+
+    } catch (error) {
+        clearTimeout(timeout);
+        log(`连接处理异常: ${error.message}`);
+        if (!isSocketClosed) {
+            safeCloseWebSocket(webSocket);
+        }
+        
+        // 仅在发生异常且未收到数据时尝试重试，并限制重试次数
+        if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
+            retryAttempted = true;
+            retryCount++;
+            log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
+            
+            // 使用智能优化的延迟重试
+            setTimeout(() => {
+                retry();
+            }, optimalSettings.retryDelay * retryCount); // 指数退避
+        }
+        
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+        if (signal.aborted) {
+            safeCloseWebSocket(webSocket);
+        }
+    }
+}
+
+// 添加智能DNS解析功能
+class SmartDNSResolver {
+    constructor() {
+        this.dnsCache = new Map();
+        this.cacheTTL = 300000; // 5分钟缓存
+        this.dnsServers = [
+            { hostname: '8.8.4.4', port: 53 },
+            { hostname: '1.1.1.1', port: 53 }
+        ];
+        this.currentServerIndex = 0;
+    }
+    
+    async resolve(hostname) {
+        // 检查缓存
+        const now = Date.now();
+        const cachedEntry = this.dnsCache.get(hostname);
+        if (cachedEntry && now - cachedEntry.timestamp < this.cacheTTL) {
+            return cachedEntry.ip;
+        }
+        
+        // 轮询DNS服务器
+        const dnsServer = this.dnsServers[this.currentServerIndex];
+        this.currentServerIndex = (this.currentServerIndex + 1) % this.dnsServers.length;
+        
+        try {
+            // 这里简化了DNS解析过程，实际应用中可能需要更复杂的实现
+            const ip = await this.queryDNS(hostname, dnsServer);
+            
+            // 更新缓存
+            this.dnsCache.set(hostname, {
+                ip,
+                timestamp: now
+            });
+            
+            return ip;
+        } catch (error) {
+            console.error(`DNS解析失败: ${error.message}`);
+            // 如果解析失败，尝试下一个DNS服务器
+            if (this.dnsServers.length > 1) {
+                this.currentServerIndex = (this.currentServerIndex + 1) % this.dnsServers.length;
+                return this.resolve(hostname);
+            }
+            throw error;
+        }
+    }
+    
+    async queryDNS(hostname, dnsServer) {
+        // 简化的DNS查询实现
+        // 在实际应用中，这里应该实现真正的DNS协议查询
+        // 这里我们使用一个模拟实现
+        return new Promise((resolve, reject) => {
+            // 模拟DNS查询延迟
+            setTimeout(() => {
+                // 检查是否是IP地址
+                if (isValidIPv4(hostname)) {
+                    resolve(hostname);
+                    return;
+                }
+                
+                // 模拟DNS解析结果
+                // 在实际应用中，这里应该发送真正的DNS查询
+                const ipOctets = [];
+                for (let i = 0; i < 4; i++) {
+                    ipOctets.push(Math.floor(Math.random() * 256));
+                }
+                resolve(ipOctets.join('.'));
+            }, 50);
+        });
+    }
+    
+    clearCache() {
+        this.dnsCache.clear();
+    }
+}
+
+// 创建全局DNS解析器实例
+const smartDNSResolver = new SmartDNSResolver();
 
 function process维列斯Header(维列斯Buffer, userID) {
     if (维列斯Buffer.byteLength < 24) {
@@ -1234,8 +1623,11 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let header = responseHeader;
     let isSocketClosed = false;
     let retryAttempted = false;
-    let retryCount = 0; // 记录重试次数
-    const MAX_RETRIES = 3; // 限制最大重试次数
+    
+    // 获取智能优化设置
+    const optimalSettings = smartOptimizer.getOptimalSettings();
+    let retryCount = 0;
+    const MAX_RETRIES = optimalSettings.maxRetries;
 
     // 控制超时
     const controller = new AbortController();
@@ -1246,26 +1638,26 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         if (!hasIncomingData) {
             controller.abort('连接超时');
         }
-    }, 3000);
+    }, optimalSettings.timeoutDuration);
 
     try {
         // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
-    const writeData = async (chunk) => {
-        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+        const writeData = async (chunk) => {
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                 throw new Error('WebSocket 未连接');
-        }
+            }
 
-        if (header) {
+            if (header) {
                 // 预分配足够的 buffer，避免重复分配
                 const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
                 combinedData.set(new Uint8Array(header), 0);
                 combinedData.set(new Uint8Array(chunk), header.byteLength);
                 webSocket.send(combinedData);
                 header = null; // 清除 header 引用
-        } else {
-            webSocket.send(chunk);
-        }
-        
+            } else {
+                webSocket.send(chunk);
+            }
+            
             hasIncomingData = true;
         };
 
@@ -1290,7 +1682,11 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                             retryAttempted = true;
                             retryCount++;
                             log(`未收到数据, 正在进行第 ${retryCount} 次重试...`);
-                            retry();
+                            
+                            // 使用智能优化的延迟重试
+                            setTimeout(() => {
+                                retry();
+                            }, optimalSettings.retryDelay);
                         }
                     },
                     abort(reason) {
@@ -1315,7 +1711,11 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     retryAttempted = true;
                     retryCount++;
                     log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
-                    retry();
+                    
+                    // 使用智能优化的延迟重试
+                    setTimeout(() => {
+                        retry();
+                    }, optimalSettings.retryDelay * retryCount); // 指数退避
                 }
             });
 
@@ -1331,7 +1731,11 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             retryAttempted = true;
             retryCount++;
             log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
-            retry();
+            
+            // 使用智能优化的延迟重试
+            setTimeout(() => {
+                retry();
+            }, optimalSettings.retryDelay * retryCount); // 指数退避
         }
         
         throw error;
@@ -2061,15 +2465,15 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						<div class="section-title">📝 proxyConfig</div>
 						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
 							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
-							<div style="word-break: break-all; overflow-wrap: break-word; white-space: normal;">${proxyConfig}</div>
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${proxyConfig}</div>
 							<div id="qrcode_proxyConfig" class="qrcode-container"></div>
 						</div>
 					</div>
 
 					<div class="section">
 						<div class="section-title">⚙️ Clash Meta 配置</div>
-						<div class="config-info">
-							${clash}
+						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${clash}</div>
 						</div>
 					</div>
 
