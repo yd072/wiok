@@ -1130,7 +1130,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     }
                     portRemote = port;
                 }
-                tcpSocket = await createConnection(proxyIP || addressRemote, portRemote);
+                tcpSocket = await createConnection(proxyIP.toLowerCase() || addressRemote, portRemote);
             }
 
             // 监听连接关闭
