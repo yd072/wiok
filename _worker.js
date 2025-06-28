@@ -968,7 +968,7 @@ async function handleDNSQuery(udpChunk, webSocket, 维列斯ResponseHeader, log)
                     log(`关闭TCP连接出错: ${e.message}`);
                 }
             }
-        }, 2000);
+        }, 5000);
 
         try {
             // 使用Promise.race进行超时控制
