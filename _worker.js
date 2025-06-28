@@ -872,9 +872,19 @@ async function 维列斯OverWSHandler(request) {
                     return handleDNSQuery(chunk, webSocket, null, log);
                 }
                 if (remoteSocketWrapper.value) {
-                    const writer = remoteSocketWrapper.value.writable.getWriter();
-                    await writer.write(chunk);
-                    writer.releaseLock();
+                    try {
+                        // 检查远程连接是否已关闭
+                        if (remoteSocketWrapper.value.closed) {
+                            log('远程连接已关闭，忽略数据写入');
+                            return;
+                        }
+                        const writer = remoteSocketWrapper.value.writable.getWriter();
+                        await writer.write(chunk);
+                        writer.releaseLock();
+                    } catch (error) {
+                        log(`向远程写入数据失败: ${error.message}`);
+                        // 不抛出错误，避免中断流程
+                    }
                     return;
                 }
 
@@ -924,9 +934,20 @@ async function 维列斯OverWSHandler(request) {
         abort(reason) {
             log(`readableWebSocketStream 已中止`, JSON.stringify(reason));
         },
-    })).catch((err) => {
+    }), {
+        signal: new AbortController().signal, // 使用新的AbortController，避免与其他信号冲突
+        preventCancel: false,
+        preventClose: false,
+        preventAbort: false
+    }).catch((err) => {
         log('readableWebSocketStream 管道错误', err);
-        webSocket.close(1011, '管道错误');
+        try {
+            if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                webSocket.close(1011, '管道错误');
+            }
+        } catch (closeError) {
+            log(`关闭WebSocket时出错: ${closeError.message}`);
+        }
     });
 
     return new Response(null, {
