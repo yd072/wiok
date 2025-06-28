@@ -466,11 +466,11 @@ export default {
 					subConverter = subConverter.split("//")[1] || subConverter;
 				}
 				subConfig = env.SUBCONFIG || subConfig;
-				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub').toLowerCase();
+				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
 				if (url.searchParams.has('notls')) noTLS = 'true';
 
 				if (url.searchParams.has('proxyip')) {
-					path = `/proxyip=${url.searchParams.get('proxyip')}`;
+					path = `/?proxyip=${url.searchParams.get('proxyip')}`;
 					RproxyIP = 'false';
 				} else if (url.searchParams.has('socks5')) {
 					path = `/?socks5=${url.searchParams.get('socks5')}`;
@@ -1130,7 +1130,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     }
                     portRemote = port;
                 }
-                tcpSocket = await createConnection(proxyIP.toLowerCase() || addressRemote, portRemote);
+                tcpSocket = await createConnection(proxyIP || addressRemote, portRemote);
             }
 
             // 监听连接关闭
@@ -2468,7 +2468,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		let 最终路径 = path;
 		let 节点备注 = '';
 		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-		if (matchingProxyIP) 最终路径 = `/proxyip=${matchingProxyIP}`;
+		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
 
 		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
 			最终路径 = `/${伪装域名}${最终路径}`;
