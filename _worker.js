@@ -1250,23 +1250,28 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
 
     try {
         // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
-    const writeData = async (chunk) => {
-        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+        const writeData = async (chunk) => {
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                 throw new Error('WebSocket 未连接');
-        }
-
-        if (header) {
-                // 预分配足够的 buffer，避免重复分配
-                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-                combinedData.set(new Uint8Array(header), 0);
-                combinedData.set(new Uint8Array(chunk), header.byteLength);
-                webSocket.send(combinedData);
-                header = null; // 清除 header 引用
-        } else {
-            webSocket.send(chunk);
-        }
-        
-            hasIncomingData = true;
+            }
+            
+            try {
+                if (header) {
+                    // 预分配足够的 buffer，避免重复分配
+                    const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                    combinedData.set(new Uint8Array(header), 0);
+                    combinedData.set(new Uint8Array(chunk), header.byteLength);
+                    webSocket.send(combinedData);
+                    header = null; // 清除 header 引用
+                } else {
+                    webSocket.send(chunk);
+                }
+                
+                hasIncomingData = true;
+            } catch (error) {
+                log(`数据发送错误: ${error.message}`);
+                // 不再抛出错误，避免中断流程
+            }
         };
 
         await remoteSocket.readable
@@ -1274,10 +1279,14 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 new WritableStream({
                     async write(chunk, controller) {
                         try {
+                            if (isSocketClosed) {
+                                log(`远程连接已关闭，忽略数据写入`);
+                                return;
+                            }
                             await writeData(chunk);
                         } catch (error) {
                             log(`数据写入错误: ${error.message}`);
-                            controller.error(error);
+                            // 不再向controller传递错误，避免中断流程
                         }
                     },
                     close() {
