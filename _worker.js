@@ -1130,7 +1130,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     }
                     portRemote = port;
                 }
-                tcpSocket = await createConnection(proxyIP.toLowerCase() || addressRemote, portRemote);
+                tcpSocket = await createConnection(proxyIP || addressRemote, portRemote);
             }
 
             // 监听连接关闭
@@ -1234,8 +1234,9 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let header = responseHeader;
     let isSocketClosed = false;
     let retryAttempted = false;
-    let retryCount = 0; // 记录重试次数
-    const MAX_RETRIES = 3; // 限制最大重试次数
+    let retryCount = 0;
+    let isWriting = false; // 添加写入锁
+    const MAX_RETRIES = 3;
 
     // 控制超时
     const controller = new AbortController();
@@ -1246,20 +1247,24 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         if (!hasIncomingData) {
             controller.abort('连接超时');
         }
-    }, 3000);
+    }, 5000); // 增加超时时间
 
     try {
         // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
     const writeData = async (chunk) => {
-        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                throw new Error('WebSocket 未连接');
+            if (isSocketClosed || webSocket.readyState !== WS_READY_STATE_OPEN) {
+                log('连接已关闭，忽略数据写入');
+                return;
         }
         
-        // 添加额外检查，确保连接未关闭
-        if (isSocketClosed) {
-            log('尝试向已关闭的连接写入数据，已忽略');
-            return; // 直接返回而不是抛出错误
+            // 使用互斥锁防止并发写入
+            if (isWriting) {
+                log('写入操作正在进行，等待...');
+                await new Promise(resolve => setTimeout(resolve, 10));
         }
+
+            try {
+                isWriting = true;
 
         if (header) {
                 // 预分配足够的 buffer，避免重复分配
@@ -1267,28 +1272,42 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 combinedData.set(new Uint8Array(header), 0);
                 combinedData.set(new Uint8Array(chunk), header.byteLength);
                 webSocket.send(combinedData);
-                header = null; // 清除 header 引用
+                    header = null;
         } else {
             webSocket.send(chunk);
         }
         
             hasIncomingData = true;
+            } catch (error) {
+                log(`数据写入错误: ${error.message}`);
+                // 不抛出错误，只记录日志
+            } finally {
+                isWriting = false;
+            }
         };
 
-        await remoteSocket.readable
-            .pipeTo(
-                new WritableStream({
-                    async write(chunk, controller) {
-                        try {
-                            await writeData(chunk);
+        // 使用更可靠的管道处理
+        const reader = remoteSocket.readable.getReader();
+        
+        try {
+            while (!isSocketClosed) {
+                const { done, value } = await reader.read();
+                
+                if (done) {
+                    log('读取完成，连接关闭');
+                    isSocketClosed = true;
+                    break;
+                }
+                
+                await writeData(value);
+            }
                         } catch (error) {
-                            log(`数据写入错误: ${error.message}`);
-                            controller.error(error);
-                        }
-                    },
-                    close() {
+            log(`读取错误: ${error.message}`);
                         isSocketClosed = true;
-                        clearTimeout(timeout);
+        } finally {
+            reader.releaseLock();
+        }
+        
                         log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
                         
                         // 仅在没有数据时尝试重试，且不超过最大重试次数
@@ -1298,36 +1317,11 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                             log(`未收到数据, 正在进行第 ${retryCount} 次重试...`);
                             retry();
                         }
-                    },
-                    abort(reason) {
-                        isSocketClosed = true;
-                        clearTimeout(timeout);
-                        log(`远程连接被中断: ${reason}`);
-                    }
-                }),
-                {
-                    signal,
-                    preventCancel: false
-                }
-            )
-            .catch((error) => {
-                log(`数据传输异常: ${error.message}`);
-                if (!isSocketClosed) {
-                    safeCloseWebSocket(webSocket);
-                }
-                
-                // 仅在未收到数据时尝试重试，并限制重试次数
-                if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-                    retryAttempted = true;
-                    retryCount++;
-                    log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
-                    retry();
-                }
-            });
-
     } catch (error) {
         clearTimeout(timeout);
         log(`连接处理异常: ${error.message}`);
+        isSocketClosed = true;
+        
         if (!isSocketClosed) {
             safeCloseWebSocket(webSocket);
         }
@@ -1343,6 +1337,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         throw error;
     } finally {
         clearTimeout(timeout);
+        isSocketClosed = true;
         if (signal.aborted) {
             safeCloseWebSocket(webSocket);
         }
@@ -2474,7 +2469,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		let 最终路径 = path;
 		let 节点备注 = '';
 		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-		if (matchingProxyIP) 最终路径 = `/proxyip=${matchingProxyIP}`;
+		if (matchingProxyIP) 最终路径 += `&proxyip=${matchingProxyIP}`;
 
 		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
 			最终路径 = `/${伪装域名}${最终路径}`;
