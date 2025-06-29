@@ -3294,35 +3294,16 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 获取前N个低延迟的IP
-                const topResults = results
+                const bestIPs = results
                     .sort((a, b) => a.time - b.time)
-                    .slice(0, count);
-                
-                // 检查是否需要测速
-                const needSpeedTest = formData.get('speedtest') === '1';
-                
-                if (needSpeedTest) {
-                    // 添加测速信息
-                    console.log(`对前${topResults.length}个IP进行测速...`);
-                    for (let i = 0; i < topResults.length; i++) {
-                        const item = topResults[i];
-                        try {
-                            const speedResult = await 测试IP速度(item.ip, item.port);
-                            item.speed = speedResult.success ? speedResult.speed : 0;
-                            console.log(`IP ${item.ip}:${item.port} 测速结果: ${item.speed} KB/s`);
-                        } catch (error) {
-                            console.error(`测速出错 ${item.ip}:${item.port}:`, error);
-                            item.speed = 0;
+                    .slice(0, count)
+                    .map(item => {
+                        let speedInfo = '';
+                        if (item.speed && item.unit) {
+                            speedInfo = ` ${item.speed}${item.unit}`;
                         }
-                    }
-                }
-                
-                // 格式化结果，包含延迟和速度信息
-                const bestIPs = topResults.map(item => {
-                    const speedInfo = (needSpeedTest && item.speed > 0) ? ` ${item.speed}KB/s` : '';
-                    return `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms${speedInfo}`;
-                });
+                        return `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms${speedInfo}`;
+                    });
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
@@ -3480,6 +3461,11 @@ async function 在线优选IP(request, env) {
                 white-space: pre-wrap;
                 word-break: break-all;
             }
+            
+            .speed-info {
+                color: #2196F3;
+                font-weight: bold;
+            }
 
             .loading {
                 display: none;
@@ -3548,14 +3534,7 @@ async function 在线优选IP(request, env) {
                 
                                  <div class="form-group">
                      <label for="timeout">超时时间 (毫秒)</label>
-<input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
-
-<div class="form-group" style="margin-top: 10px;">
-    <label>
-        <input type="checkbox" id="speedtest" name="speedtest" value="1" checked> 
-        对优选IP进行测速 (会增加测试时间)
-    </label>
-</div>
+                     <input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
                  </div>
                  
                  <div class="form-group" style="margin-top: 15px;">
@@ -3682,7 +3661,23 @@ async function 在线优选IP(request, env) {
                                  // 保存测试结果到全局变量
                                  testResults = result.bestIPs;
                                  
-                                 resultList.textContent = result.bestIPs.join('\\n');
+                                 // 格式化显示结果，突出显示速度信息
+                                const formattedResults = [];
+                                for (const ip of result.bestIPs) {
+                                    // 检查是否包含速度信息
+                                    if (ip.includes('KB/s') || ip.includes('MB/s')) {
+                                        // 提取速度部分
+                                        const parts = ip.split(/(\d+\.?\d*(?:KB\/s|MB\/s))/);
+                                        if (parts.length >= 3) {
+                                            formattedResults.push(parts[0] + '<span class="speed-info">' + parts[1] + '</span>' + parts[2]);
+                                        } else {
+                                            formattedResults.push(ip);
+                                        }
+                                    } else {
+                                        formattedResults.push(ip);
+                                    }
+                                }
+                                resultList.innerHTML = formattedResults.join('\\n');
                                  resultContainer.style.display = 'block';
                                  // 启用按钮
                                  document.getElementById('appendButton').disabled = false;
@@ -3895,16 +3890,107 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                // 进行带宽测试
+                const speedResult = await testSpeed(ip, port);
+                
                 return {
                     success: true, // 这里标记为成功，因为这是我们想要的结果
                     ip,
                     port,
-                    time: latency
+                    time: latency,
+                    speed: speedResult.speed,
+                    unit: speedResult.unit
                 };
             }
             
             // 其他错误
             return null;
+        }
+    }
+    
+    // 测试带宽速度函数
+    async function testSpeed(ip, port) {
+        try {
+            // 默认速度结果
+            let result = { speed: 0, unit: 'KB/s' };
+            
+            // 创建一个1MB的测试数据
+            const testSize = 500 * 1024; // 500KB
+            const testData = new Uint8Array(testSize);
+            for (let i = 0; i < testSize; i++) {
+                testData[i] = i % 256;
+            }
+            
+            const blob = new Blob([testData]);
+            const formData = new FormData();
+            formData.append('testfile', blob, 'speedtest.bin');
+            
+            // 测试上传速度
+            const startTime = Date.now();
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+                
+                const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                const endTime = Date.now();
+                const duration = (endTime - startTime) / 1000; // 转换为秒
+                
+                if (duration > 0) {
+                    const speedKBps = Math.round((testSize / 1024) / duration);
+                    
+                    if (speedKBps > 1024) {
+                        result = { speed: (speedKBps / 1024).toFixed(2), unit: 'MB/s' };
+                    } else {
+                        result = { speed: speedKBps, unit: 'KB/s' };
+                    }
+                }
+            } catch (error) {
+                // 如果上传失败，尝试下载测试
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 5000);
+                    
+                    const startTime = Date.now();
+                    const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
+                        signal: controller.signal
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.arrayBuffer();
+                        const endTime = Date.now();
+                        const duration = (endTime - startTime) / 1000;
+                        const size = data.byteLength;
+                        
+                        if (duration > 0) {
+                            const speedKBps = Math.round((size / 1024) / duration);
+                            
+                            if (speedKBps > 1024) {
+                                result = { speed: (speedKBps / 1024).toFixed(2), unit: 'MB/s' };
+                            } else {
+                                result = { speed: speedKBps, unit: 'KB/s' };
+                            }
+                        }
+                    }
+                    
+                    clearTimeout(timeoutId);
+                } catch (downloadError) {
+                    // 下载测试也失败，使用默认值
+                    console.log('下载速度测试失败:', downloadError);
+                }
+            }
+            
+            return result;
+        } catch (error) {
+            console.error('速度测试出错:', error);
+            return { speed: 0, unit: 'KB/s' };
         }
     }
     
@@ -3948,13 +4034,23 @@ async function 测试IP连通性(ips, ports, timeout) {
                 // 计算显示延迟 - 类似源码2的方法，显示的延迟是实际延迟的一半
                 const displayTime = Math.floor(result.time / 2);
                 
-                results.push({
+                // 构建结果对象，包含速度信息
+                const resultObj = {
                     ip: result.ip,
                     port: result.port,
                     time: displayTime,
                     originalTime: result.time,
                     status: 'success'
-                });
+                };
+                
+                // 如果有速度信息，添加到结果中
+                if (result.speed !== undefined && result.unit) {
+                    resultObj.speed = result.speed;
+                    resultObj.unit = result.unit;
+                    console.log(`IP ${result.ip} 速度: ${result.speed}${result.unit}`);
+                }
+                
+                results.push(resultObj);
                 
                 // 记录进度
                 if (results.length % 10 === 0) {
@@ -3983,140 +4079,4 @@ async function 测试IP连通性(ips, ports, timeout) {
     }
     
     return results;
-}
-
-// 测速函数 - 测试IP的下载速度
-async function 测试IP速度(ip, port, timeout = 5000) {
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-        
-        // 使用多个不同大小的文件来测试下载速度
-        const testFiles = [
-            { path: '/cdn-cgi/trace', host: 'www.cloudflare.com' },
-            { path: '/favicon.ico', host: 'www.cloudflare.com' }
-        ];
-        
-        // 随机选择一个测试文件
-        const testFile = testFiles[Math.floor(Math.random() * testFiles.length)];
-        const testUrl = `https://${ip}:${port}${testFile.path}`;
-        
-        console.log(`测试 ${ip}:${port} 的下载速度，使用 ${testFile.path}`);
-        
-        const response = await fetch(testUrl, {
-            signal: controller.signal,
-            headers: {
-                'Host': testFile.host,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': '*/*',
-                'Connection': 'keep-alive'
-            }
-        });
-        
-        clearTimeout(timeoutId);
-        
-        // 如果是证书错误，可能无法正常测速
-        if (response.status === 0 || !response.ok) {
-            // 尝试使用证书错误测试方法
-            return await 测试IP速度_证书错误方法(ip, port, timeout);
-        }
-        
-        // 读取响应体
-        const reader = response.body.getReader();
-        let receivedLength = 0;
-        let chunks = [];
-        
-        const speedTestTimeout = 2000; // 测速持续2秒
-        const speedTestStart = Date.now();
-        
-        while (Date.now() - speedTestStart < speedTestTimeout) {
-            const { done, value } = await reader.read();
-            
-            if (done) {
-                break;
-            }
-            
-            chunks.push(value);
-            receivedLength += value.length;
-        }
-        
-        // 计算速度（KB/s）
-        const duration = (Date.now() - speedTestStart) / 1000; // 秒
-        if (duration < 0.1) {
-            // 时间太短，无法准确计算速度
-            return { success: false, speed: 0 };
-        }
-        
-        const speedKBps = Math.round(receivedLength / 1024 / duration);
-        
-        return {
-            success: true,
-            speed: speedKBps
-        };
-    } catch (error) {
-        console.error(`测速失败 ${ip}:${port}:`, error.message);
-        
-        // 如果是证书错误，尝试使用证书错误测试方法
-        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-            return await 测试IP速度_证书错误方法(ip, port, timeout);
-        }
-        
-        return { success: false, speed: 0 };
-    }
-}
-
-// 使用证书错误方法测速
-async function 测试IP速度_证书错误方法(ip, port, timeout = 3000) {
-    try {
-        // 使用多次连接来模拟测速
-        const testCount = 5;
-        let totalTime = 0;
-        let successCount = 0;
-        
-        for (let i = 0; i < testCount; i++) {
-            const startTime = Date.now();
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), timeout);
-                
-                await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
-                    signal: controller.signal,
-                    mode: 'cors'
-                });
-                
-                clearTimeout(timeoutId);
-            } catch (error) {
-                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                    // 证书错误是我们期望的
-                    const latency = Date.now() - startTime;
-                    if (latency < timeout - 50) {
-                        totalTime += latency;
-                        successCount++;
-                    }
-                }
-            }
-            
-            // 短暂延迟
-            await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        
-        if (successCount === 0) {
-            return { success: false, speed: 0 };
-        }
-        
-        // 使用平均响应时间计算一个估算的速度值
-        // 响应越快，估算的速度越高
-        const avgTime = totalTime / successCount;
-        // 将响应时间转换为速度估算值 (KB/s)
-        // 这是一个估算公式: 1000 / avgTime * 100
-        const estimatedSpeed = Math.round(1000 / avgTime * 100);
-        
-        return {
-            success: true,
-            speed: estimatedSpeed
-        };
-    } catch (error) {
-        console.error(`证书错误测速失败 ${ip}:${port}:`, error.message);
-        return { success: false, speed: 0 };
-    }
 }
