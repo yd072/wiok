@@ -3514,7 +3514,6 @@ async function 在线优选IP(request, env) {
                 <div class="form-group">
                     <label for="count">优选IP数量</label>
                     <input type="number" id="count" name="count" value="15" min="1" max="50">
-                    <small style="display: block; margin-top: 5px; color: #666;">注意: 只会返回延迟在10ms以上的IP</small>
                 </div>
                 
                 <div class="form-group">
@@ -3532,7 +3531,6 @@ async function 在线优选IP(request, env) {
                          <strong>说明：</strong><br>
                          • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
                          • 输入多个端口时，系统会为每个IP随机选择一个端口进行测试<br>
-                         • 系统只会返回延迟在10ms以上的IP，低于10ms的IP会被过滤掉<br>
                          • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
                          • 如果您使用VPN，可能会影响测试结果的准确性
                      </div>
@@ -3863,21 +3861,15 @@ async function 测试IP连通性(ips, ports, timeout) {
                 return null; // 真正的超时，认为测试失败
             }
             
-                            // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
-                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                    // 只返回延迟在10ms以上的IP
-                    if (latency >= 10) {
-                        return {
-                            success: true, // 这里标记为成功，因为这是我们想要的结果
-                            ip,
-                            port,
-                            time: latency
-                        };
-                    } else {
-                        console.log(`IP ${ip}:${port} 延迟太低 (${latency}ms)，不符合要求`);
-                        return null;
-                    }
-                }
+            // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
+            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                return {
+                    success: true, // 这里标记为成功，因为这是我们想要的结果
+                    ip,
+                    port,
+                    time: latency
+                };
+            }
             
             // 其他错误
             return null;
