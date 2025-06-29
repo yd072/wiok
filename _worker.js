@@ -3529,10 +3529,8 @@ async function 在线优选IP(request, env) {
                  <div class="form-group" style="margin-top: 15px;">
                      <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
                          <strong>说明：</strong><br>
-                         • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
                          • 输入多个端口时，系统会为每个IP随机选择一个端口进行测试<br>
                          • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
-                         • 如果您使用VPN，可能会影响测试结果的准确性
                      </div>
                  </div>
                  
