@@ -3778,9 +3778,8 @@ async function 测试IP连通性(ips, ports, timeout) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
-            // 尝试多个路径增加成功率
-            const paths = ['/cdn-cgi/trace', '/', '/favicon.ico', '/cdn-cgi/health'];
-            const path = paths[Math.floor(Math.random() * paths.length)];
+            // 使用 Google 的 generate_204 测试地址
+            const path = '/generate_204';
             
             // 添加随机查询参数避免缓存
             const randomParam = `?t=${Date.now()}`;
@@ -3788,7 +3787,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             const response = await fetch(`https://${ip}:${port}${path}${randomParam}`, {
                 signal: controller.signal,
                 headers: {
-                    'Host': 'www.cloudflare.com',
+                    'Host': 'www.google.com',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                     'Accept-Language': 'en-US,en;q=0.9',
@@ -3805,12 +3804,15 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             // 只要能连接上就算成功，不一定要200状态码
             const endTime = Date.now();
-            console.log(`IP ${ip}:${port} 测试成功，响应时间: ${endTime - startTime}ms`);
+            // 检查是否返回204状态码（generate_204 的预期响应）
+            const is204 = response.status === 204;
+            console.log(`IP ${ip}:${port} 测试成功，状态码: ${response.status}，响应时间: ${endTime - startTime}ms`);
             return {
                 success: true,
                 ip,
                 port,
-                time: endTime - startTime
+                time: endTime - startTime,
+                status: response.status
             };
         } catch (error) {
             console.log(`IP ${ip}:${port} 测试失败: ${error.message || '连接超时'}`);
@@ -3859,7 +3861,7 @@ async function 测试IP连通性(ips, ports, timeout) {
                     ip: result.ip,
                     port: result.port,
                     time: result.time,
-                    status: 'success'
+                    status: result.status || 'success'
                 });
                 
                 // 记录进度
@@ -3898,6 +3900,15 @@ async function 测试IP连通性(ips, ports, timeout) {
             console.log('已测试超过100个IP但未找到可用IP，可能是网络连接问题或所有端口被阻止');
         }
     }
+    
+    // 按状态码和响应时间排序
+    results.sort((a, b) => {
+        // 优先考虑返回204状态码的IP（Google generate_204的预期响应）
+        if (a.status === 204 && b.status !== 204) return -1;
+        if (a.status !== 204 && b.status === 204) return 1;
+        // 其次按响应时间排序
+        return a.time - b.time;
+    });
     
     // 即使结果为空也返回，让前端处理
     return results;
