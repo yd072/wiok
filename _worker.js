@@ -3368,27 +3368,11 @@ async function 在线优选IP(request, env) {
                      <input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
                  </div>
                  
-                 <div class="form-group" id="saveModeGroup" style="margin-top: 15px;">
-                     <label style="margin-bottom: 8px; display: block;">保存模式：</label>
-                     <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 10px;">
-                         <label style="display: flex; align-items: center; cursor: pointer;">
-                             <input type="radio" name="saveMode" value="append" checked> 
-                             <span style="margin-left: 5px;">追加</span>
-                         </label>
-                         <label style="display: flex; align-items: center; cursor: pointer;">
-                             <input type="radio" name="saveMode" value="replace"> 
-                             <span style="margin-left: 5px;">替换优选IP</span>
-                         </label>
-                         <label style="display: flex; align-items: center; cursor: pointer;">
-                             <input type="radio" name="saveMode" value="replaceAll"> 
-                             <span style="margin-left: 5px;">完全替换</span>
-                         </label>
-                     </div>
-                     <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px;">
-                         <strong>保存模式说明：</strong><br>
-                         • <strong>追加</strong>：将新的优选IP添加到现有列表末尾<br>
-                         • <strong>替换优选IP</strong>：保留非优选IP条目，替换所有优选IP<br>
-                         • <strong>完全替换</strong>：清空现有列表，只保留新的优选IP
+                 <div class="form-group" style="margin-top: 15px;">
+                     <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                         <strong>说明：</strong><br>
+                         • 点击"开始测试"按钮进行IP优选测试<br>
+                         • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表
                      </div>
                  </div>
                  
@@ -3403,6 +3387,10 @@ async function 在线优选IP(request, env) {
                          <div class="result-container" id="resultContainer" style="display: none;">
                  <div class="result-title">优选IP结果: <span id="saveMessage" style="color: #4CAF50; font-size: 14px; margin-left: 10px;"></span></div>
                  <div class="result-list" id="resultList"></div>
+                 <div style="margin-top: 15px; display: flex; gap: 10px;">
+                     <button type="button" id="appendButton" class="btn" style="background-color: #2196F3;">追加到列表</button>
+                     <button type="button" id="replaceButton" class="btn" style="background-color: #FF9800;">替换列表</button>
+                 </div>
              </div>
             
             <a href="#" class="back-link" id="backLink">返回配置页</a>
@@ -3420,62 +3408,104 @@ async function 在线优选IP(request, env) {
                 // 设置返回链接
                 backLink.href = window.location.pathname.replace('/bestip', '');
                 
-                testForm.addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    
-                    // 显示加载状态
-                    testButton.disabled = true;
-                    loading.style.display = 'block';
-                    resultContainer.style.display = 'none';
-                    
-                    const formData = new FormData(testForm);
-                    formData.append('action', 'test');
-                    
-                    try {
-                        const response = await fetch(window.location.href, {
-                            method: 'POST',
-                            body: formData
-                        });
-                        
-                                                 const result = await response.json();
+                                 // 全局变量存储测试结果
+                 let testResults = [];
+                 
+                 // 保存结果函数
+                 async function saveResults(mode) {
+                     if (!testResults || testResults.length === 0) {
+                         alert('没有可保存的测试结果');
+                         return;
+                     }
+                     
+                     const saveButton = mode === 'append' ? 
+                         document.getElementById('appendButton') : 
+                         document.getElementById('replaceButton');
+                     
+                     try {
+                         saveButton.disabled = true;
+                         saveButton.textContent = '保存中...';
+                         
+                         const formData = new FormData(testForm);
+                         formData.append('action', 'test');
+                         formData.append('saveMode', mode === 'append' ? 'append' : 'replaceAll');
+                         
+                         const response = await fetch(window.location.href, {
+                             method: 'POST',
+                             body: formData
+                         });
+                         
+                         const result = await response.json();
+                         
+                         if (result.success) {
+                             const saveMessage = mode === 'append' ? '已追加到列表' : '已替换列表';
+                             document.getElementById('saveMessage').textContent = saveMessage;
+                             setTimeout(() => {
+                                 document.getElementById('saveMessage').textContent = '';
+                             }, 3000);
+                         } else {
+                             alert('保存失败: ' + (result.message || '未知错误'));
+                         }
+                     } catch (error) {
+                         alert('保存出错: ' + error.message);
+                     } finally {
+                         saveButton.disabled = false;
+                         saveButton.textContent = mode === 'append' ? '追加到列表' : '替换列表';
+                     }
+                 }
+                 
+                 // 测试表单提交
+                 testForm.addEventListener('submit', async function(e) {
+                     e.preventDefault();
+                     
+                     // 显示加载状态
+                     testButton.disabled = true;
+                     loading.style.display = 'block';
+                     resultContainer.style.display = 'none';
+                     document.getElementById('saveMessage').textContent = '';
+                     
+                     const formData = new FormData(testForm);
+                     formData.append('action', 'test');
+                     
+                     try {
+                         const response = await fetch(window.location.href, {
+                             method: 'POST',
+                             body: formData
+                         });
+                         
+                         const result = await response.json();
                          
                          if (result.success) {
                              if (result.bestIPs && result.bestIPs.length > 0) {
-                                 // 获取选择的保存模式
-                                 const saveMode = document.querySelector('input[name="saveMode"]:checked').value;
-                                 let saveMessage = '';
-                                 
-                                 switch(saveMode) {
-                                     case 'append':
-                                         saveMessage = '已追加到现有列表';
-                                         break;
-                                     case 'replace':
-                                         saveMessage = '已替换现有优选IP';
-                                         break;
-                                     case 'replaceAll':
-                                         saveMessage = '已完全替换现有列表';
-                                         break;
-                                 }
+                                 // 保存测试结果到全局变量
+                                 testResults = result.bestIPs;
                                  
                                  resultList.textContent = result.bestIPs.join('\\n');
-                                 document.getElementById('saveMessage').textContent = saveMessage;
                                  resultContainer.style.display = 'block';
                              } else {
                                  resultList.textContent = '未能获取到有效的测试结果，已使用默认IP';
-                                 document.getElementById('saveMessage').textContent = '已保存默认IP';
                                  resultContainer.style.display = 'block';
                              }
                          } else {
                              alert('测试失败: ' + result.message);
                          }
-                    } catch (error) {
-                        alert('请求出错: ' + error.message);
-                    } finally {
-                        // 隐藏加载状态
-                        testButton.disabled = false;
-                        loading.style.display = 'none';
-                    }
-                });
+                     } catch (error) {
+                         alert('请求出错: ' + error.message);
+                     } finally {
+                         // 隐藏加载状态
+                         testButton.disabled = false;
+                         loading.style.display = 'none';
+                     }
+                 });
+                 
+                 // 添加按钮事件监听
+                 document.getElementById('appendButton').addEventListener('click', function() {
+                     saveResults('append');
+                 });
+                 
+                 document.getElementById('replaceButton').addEventListener('click', function() {
+                     saveResults('replace');
+                 });
             });
         </script>
     </body>
