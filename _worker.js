@@ -3222,7 +3222,9 @@ async function 在线优选IP(request, env) {
                     return new Response(JSON.stringify({
                         success: false,
                         message: 'VPN检测调试信息',
-                        vpnStatus: vpnStatus.isVpn ? '检测到VPN/代理' : '未检测到VPN/代理',
+                        vpnStatus: vpnStatus.isVpn ? 
+                            '检测到您当前很可能处于代理/VPN环境中，代理状态下进行的IP优选测试结果将不准确' : 
+                            '未检测到代理/VPN环境，您可以正常进行IP优选测试',
                         vpnDetails: vpnStatus.details
                     }), {
                         headers: { 'Content-Type': 'application/json' }
@@ -3233,7 +3235,7 @@ async function 在线优选IP(request, env) {
                 if (vpnStatus.isVpn && !ignoreVpn) {
                     return new Response(JSON.stringify({
                         success: false,
-                        message: '检测到您正在使用VPN或代理服务，这可能会影响IP优选结果的准确性。请关闭VPN后再进行测试。',
+                        message: '检测到您当前很可能处于代理/VPN环境中，代理状态下进行的IP优选测试结果将不准确。建议关闭VPN后再测试，或点击下方按钮忽略此警告。',
                         vpnDetails: vpnStatus.details
                     }), {
                         headers: { 'Content-Type': 'application/json' }
@@ -3651,14 +3653,14 @@ async function 在线优选IP(request, env) {
                              if (result.message && result.message.includes('VPN')) {
                                  // VPN警告使用更友好的提示
                                  const vpnWarningHTML = 
-                                     '<div style="background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 4px; margin-bottom: 15px;">' +
-                                     '<h4 style="margin-top: 0; margin-bottom: 10px;">⚠️ VPN检测警告</h4>' +
-                                     '<p>' + result.message + '</p>' +
-                                     '<p style="margin-bottom: 0;">' +
-                                     '<button id="ignoreVpnButton" class="btn" style="background-color: #ffc107; color: #212529; border: none;">' +
-                                     '忽略警告并继续测试' +
+                                     '<div style="background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 20px; border-radius: 4px; margin-bottom: 20px;">' +
+                                     '<h4 style="margin-top: 0; margin-bottom: 15px; display: flex; align-items: center;"><span style="font-size: 24px; margin-right: 10px;">⚠️</span> 代理/VPN环境检测警告</h4>' +
+                                     '<p style="font-size: 16px; line-height: 1.6;">' + result.message + '</p>' +
+                                     '<div style="margin-top: 20px; text-align: center;">' +
+                                     '<button id="ignoreVpnButton" class="btn" style="background-color: #dc3545; color: white; border: none; padding: 10px 20px; font-weight: bold;">' +
+                                     '我已了解风险，继续测试' +
                                      '</button>' +
-                                     '</p>' +
+                                     '</div>' +
                                      '</div>';
                                  
                                  resultList.innerHTML = vpnWarningHTML;
@@ -3744,8 +3746,14 @@ async function 在线优选IP(request, env) {
                      .then(result => {
                          // 创建格式化的调试信息
                          let debugInfo = '<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; border-radius: 4px;">';
-                         debugInfo += '<h4 style="margin-top: 0;">VPN检测结果</h4>';
-                         debugInfo += '<p><strong>状态:</strong> ' + result.vpnStatus + '</p>';
+                         debugInfo += '<h4 style="margin-top: 0;">代理/VPN检测结果</h4>';
+                         
+                         // 根据检测结果设置不同的样式
+                         const statusStyle = result.vpnStatus.includes('检测到') ? 
+                             'color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;' : 
+                             'color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;';
+                         
+                         debugInfo += '<div style="' + statusStyle + '">' + result.vpnStatus + '</div>';
                          
                          if (result.vpnDetails) {
                              debugInfo += '<h5>详细信息:</h5>';
