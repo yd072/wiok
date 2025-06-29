@@ -3410,7 +3410,7 @@ async function 在线优选IP页面(request, env) {
 				
 				<div id="initialView" class="optimize-info">
 					<p>点击下方按钮开始优选Cloudflare IP，系统将从Cloudflare IP池中优选出15个最佳IP。</p>
-					<button type="button" class="optimize-btn-large" onclick="startOptimize()">开始优选IP</button>
+					<button type="button" class="optimize-btn-large" id="startOptimizeBtn">开始优选IP</button>
 				</div>
 				
 				<div class="progress-container" id="progressContainer">
@@ -3435,10 +3435,10 @@ async function 在线优选IP页面(request, env) {
 					<input type="hidden" name="action" id="actionType">
 					
 					<div class="button-group action-buttons" id="actionButtons">
-						<button type="button" class="btn btn-secondary" onclick="goBack()">返回</button>
-						<button type="button" class="btn btn-primary" onclick="submitForm('replace')">替换到ADD列表</button>
-						<button type="button" class="btn btn-primary" onclick="submitForm('append')">追加到ADD列表</button>
-						<button type="button" class="btn btn-optimize" onclick="startOptimize()">重新优选IP</button>
+						<button type="button" class="btn btn-secondary" id="backBtn">返回</button>
+						<button type="button" class="btn btn-primary" id="replaceBtn">替换到ADD列表</button>
+						<button type="button" class="btn btn-primary" id="appendBtn">追加到ADD列表</button>
+						<button type="button" class="btn btn-optimize" id="reoptimizeBtn">重新优选IP</button>
 					</div>
 				</form>
 				
@@ -3447,6 +3447,48 @@ async function 在线优选IP页面(request, env) {
 			</div>
 
 			<script>
+				// 页面加载完成后执行
+				document.addEventListener('DOMContentLoaded', function() {
+					console.log('页面加载完成');
+					// 为开始优选IP按钮添加点击事件
+					const startBtn = document.getElementById('startOptimizeBtn');
+					if (startBtn) {
+						console.log('找到开始优选按钮');
+						startBtn.addEventListener('click', startOptimize);
+					} else {
+						console.error('未找到开始优选按钮');
+					}
+					
+					// 为重新优选IP按钮添加点击事件
+					const reoptimizeBtn = document.getElementById('reoptimizeBtn');
+					if (reoptimizeBtn) {
+						console.log('找到重新优选按钮');
+						reoptimizeBtn.addEventListener('click', startOptimize);
+					}
+					
+					// 为返回按钮添加点击事件
+					const backBtn = document.getElementById('backBtn');
+					if (backBtn) {
+						backBtn.addEventListener('click', goBack);
+					}
+					
+					// 为替换到ADD列表按钮添加点击事件
+					const replaceBtn = document.getElementById('replaceBtn');
+					if (replaceBtn) {
+						replaceBtn.addEventListener('click', function() {
+							submitForm('replace');
+						});
+					}
+					
+					// 为追加到ADD列表按钮添加点击事件
+					const appendBtn = document.getElementById('appendBtn');
+					if (appendBtn) {
+						appendBtn.addEventListener('click', function() {
+							submitForm('append');
+						});
+					}
+				});
+				
 				function goBack() {
 					const pathParts = window.location.pathname.split('/');
 					pathParts.pop(); // 移除 "optimize"
@@ -3484,6 +3526,9 @@ async function 在线优选IP页面(request, env) {
 				}
 				
 				function startOptimize() {
+					// 添加调试信息
+					console.log('开始优选IP函数被调用');
+					
 					// 隐藏初始视图
 					const initialView = document.getElementById('initialView');
 					if (initialView) initialView.style.display = 'none';
@@ -3521,10 +3566,12 @@ async function 在线优选IP页面(request, env) {
 					
 					xhr.onload = function() {
 						clearInterval(progressInterval);
+						console.log('收到服务器响应:', xhr.status);
 						
 						if (xhr.status === 200) {
 							try {
 								const response = JSON.parse(xhr.responseText);
+								console.log('解析响应:', response);
 								
 								if (response.error) {
 									progressBar.style.width = '100%';
@@ -3548,6 +3595,7 @@ async function 在线优选IP页面(request, env) {
 									}, 1000);
 								}
 							} catch (error) {
+								console.error('解析响应失败:', error);
 								progressBar.style.width = '100%';
 								progressText.textContent = '解析响应失败: ' + error.message;
 							}
@@ -3560,7 +3608,8 @@ async function 在线优选IP页面(request, env) {
 						buttons.forEach(button => button.disabled = false);
 					};
 					
-					xhr.onerror = function() {
+					xhr.onerror = function(error) {
+						console.error('网络错误:', error);
 						clearInterval(progressInterval);
 						progressBar.style.width = '100%';
 						progressText.textContent = '网络错误，请重试';
@@ -3569,6 +3618,7 @@ async function 在线优选IP页面(request, env) {
 						buttons.forEach(button => button.disabled = false);
 					};
 					
+					console.log('发送优选请求');
 					xhr.send(formData);
 				}
 				
