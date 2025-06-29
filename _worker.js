@@ -3141,17 +3141,30 @@ async function 在线优选IP(request, env) {
                     .slice(0, count)
                     .map(item => `${item.ip}:${item.port}#优选IP ${Math.round(item.time)}ms`);
                 
-                // 如果绑定了KV，保存结果
-                if (env.KV) {
-                    try {
-                        const existingContent = await env.KV.get('ADD.txt') || '';
-                        const existingLines = existingContent.split('\n').filter(line => !line.includes('#优选IP'));
-                        const newContent = [...existingLines, ...bestIPs].join('\n');
-                        await env.KV.put('ADD.txt', newContent);
-                    } catch (error) {
-                        console.error('保存优选IP时出错:', error);
-                    }
-                }
+                                 // 如果绑定了KV，保存结果
+                 if (env.KV) {
+                     try {
+                         const saveMode = formData.get('saveMode') || 'append';
+                         const existingContent = await env.KV.get('ADD.txt') || '';
+                         let newContent = '';
+                         
+                         if (saveMode === 'replace') {
+                             // 替换模式：保留所有非优选IP行，然后添加新的优选IP
+                             const existingLines = existingContent.split('\n').filter(line => !line.includes('#优选IP'));
+                             newContent = [...existingLines, ...bestIPs].join('\n');
+                         } else if (saveMode === 'replaceAll') {
+                             // 完全替换模式：仅保留新的优选IP
+                             newContent = bestIPs.join('\n');
+                         } else {
+                             // 追加模式：保留所有现有内容，添加新的优选IP
+                             newContent = existingContent ? existingContent + '\n' + bestIPs.join('\n') : bestIPs.join('\n');
+                         }
+                         
+                         await env.KV.put('ADD.txt', newContent);
+                     } catch (error) {
+                         console.error('保存优选IP时出错:', error);
+                     }
+                 }
                 
                 return new Response(JSON.stringify({
                     success: true,
@@ -3350,12 +3363,36 @@ async function 在线优选IP(request, env) {
                     <input type="text" id="ports" name="ports" value="${DEFAULT_PORTS.join(',')}">
                 </div>
                 
-                <div class="form-group">
-                    <label for="timeout">超时时间 (毫秒)</label>
-                    <input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
-                </div>
-                
-                <button type="submit" id="testButton" class="btn">开始测试</button>
+                                 <div class="form-group">
+                     <label for="timeout">超时时间 (毫秒)</label>
+                     <input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
+                 </div>
+                 
+                 <div class="form-group" id="saveModeGroup" style="margin-top: 15px;">
+                     <label style="margin-bottom: 8px; display: block;">保存模式：</label>
+                     <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 10px;">
+                         <label style="display: flex; align-items: center; cursor: pointer;">
+                             <input type="radio" name="saveMode" value="append" checked> 
+                             <span style="margin-left: 5px;">追加</span>
+                         </label>
+                         <label style="display: flex; align-items: center; cursor: pointer;">
+                             <input type="radio" name="saveMode" value="replace"> 
+                             <span style="margin-left: 5px;">替换优选IP</span>
+                         </label>
+                         <label style="display: flex; align-items: center; cursor: pointer;">
+                             <input type="radio" name="saveMode" value="replaceAll"> 
+                             <span style="margin-left: 5px;">完全替换</span>
+                         </label>
+                     </div>
+                     <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px;">
+                         <strong>保存模式说明：</strong><br>
+                         • <strong>追加</strong>：将新的优选IP添加到现有列表末尾<br>
+                         • <strong>替换优选IP</strong>：保留非优选IP条目，替换所有优选IP<br>
+                         • <strong>完全替换</strong>：清空现有列表，只保留新的优选IP
+                     </div>
+                 </div>
+                 
+                 <button type="submit" id="testButton" class="btn">开始测试</button>
             </form>
             
             <div class="loading" id="loading">
@@ -3363,10 +3400,10 @@ async function 在线优选IP(request, env) {
                 <p>正在测试IP，请稍候...</p>
             </div>
             
-            <div class="result-container" id="resultContainer" style="display: none;">
-                <div class="result-title">优选IP结果:</div>
-                <div class="result-list" id="resultList"></div>
-            </div>
+                         <div class="result-container" id="resultContainer" style="display: none;">
+                 <div class="result-title">优选IP结果: <span id="saveMessage" style="color: #4CAF50; font-size: 14px; margin-left: 10px;"></span></div>
+                 <div class="result-list" id="resultList"></div>
+             </div>
             
             <a href="#" class="back-link" id="backLink">返回配置页</a>
         </div>
@@ -3404,10 +3441,28 @@ async function 在线优选IP(request, env) {
                          
                          if (result.success) {
                              if (result.bestIPs && result.bestIPs.length > 0) {
+                                 // 获取选择的保存模式
+                                 const saveMode = document.querySelector('input[name="saveMode"]:checked').value;
+                                 let saveMessage = '';
+                                 
+                                 switch(saveMode) {
+                                     case 'append':
+                                         saveMessage = '已追加到现有列表';
+                                         break;
+                                     case 'replace':
+                                         saveMessage = '已替换现有优选IP';
+                                         break;
+                                     case 'replaceAll':
+                                         saveMessage = '已完全替换现有列表';
+                                         break;
+                                 }
+                                 
                                  resultList.textContent = result.bestIPs.join('\\n');
+                                 document.getElementById('saveMessage').textContent = saveMessage;
                                  resultContainer.style.display = 'block';
                              } else {
                                  resultList.textContent = '未能获取到有效的测试结果，已使用默认IP';
+                                 document.getElementById('saveMessage').textContent = '已保存默认IP';
                                  resultContainer.style.display = 'block';
                              }
                          } else {
