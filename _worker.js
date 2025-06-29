@@ -3070,10 +3070,9 @@ async function handleGetRequest(env, txt) {
     });
 }
 
-// 默认端口列表
-const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
-
 async function 在线优选IP(request, env) {
+    // 默认端口列表
+    const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
     
     // 从Cloudflare官方网站获取IP范围列表
     async function 获取Cloudflare_IP范围() {
@@ -3295,13 +3294,7 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 过滤出延迟大于20ms的IP
-                const filteredResults = results.filter(item => item.time >= 20);
-                
-                // 如果过滤后没有结果，使用原始结果
-                const resultsToUse = filteredResults.length > 0 ? filteredResults : results;
-                
-                const bestIPs = resultsToUse
+                const bestIPs = results
                     .sort((a, b) => a.time - b.time)
                     .slice(0, count)
                     .map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms`);
@@ -3309,15 +3302,9 @@ async function 在线优选IP(request, env) {
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
                 
-                // 添加过滤信息
-                const filterInfo = filteredResults.length > 0 
-                    ? `已过滤出${filteredResults.length}个延迟≥20ms的IP` 
-                    : '未找到延迟≥20ms的IP，显示所有结果';
-                
                 return new Response(JSON.stringify({
                     success: true,
                     message: '优选IP测试完成',
-                    filterInfo: filterInfo,
                     bestIPs
                 }), {
                     headers: {
@@ -3527,11 +3514,12 @@ async function 在线优选IP(request, env) {
                 <div class="form-group">
                     <label for="count">优选IP数量</label>
                     <input type="number" id="count" name="count" value="15" min="1" max="50">
+                    <small style="display: block; margin-top: 5px; color: #666;">注意: 只会返回延迟在10ms以上的IP</small>
                 </div>
                 
                 <div class="form-group">
                     <label for="ports">测试端口 (逗号分隔)</label>
-                    <input type="text" id="ports" name="ports" value="443,2053,2083,2087,2096,8443">
+                    <input type="text" id="ports" name="ports" value="${DEFAULT_PORTS.join(',')}">
                 </div>
                 
                                  <div class="form-group">
@@ -3544,6 +3532,7 @@ async function 在线优选IP(request, env) {
                          <strong>说明：</strong><br>
                          • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
                          • 输入多个端口时，系统会为每个IP随机选择一个端口进行测试<br>
+                         • 系统只会返回延迟在10ms以上的IP，低于10ms的IP会被过滤掉<br>
                          • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
                          • 如果您使用VPN，可能会影响测试结果的准确性
                      </div>
@@ -3663,14 +3652,7 @@ async function 在线优选IP(request, env) {
                                  // 保存测试结果到全局变量
                                  testResults = result.bestIPs;
                                  
-                                 // 显示过滤信息
-                                 if (result.filterInfo) {
-                                     // 添加过滤信息到结果顶部
-                                     const filterText = '【' + result.filterInfo + '】';
-                                     resultList.textContent = filterText + '\n' + result.bestIPs.join('\\n');
-                                 } else {
-                                     resultList.textContent = result.bestIPs.join('\\n');
-                                 }
+                                 resultList.textContent = result.bestIPs.join('\\n');
                                  resultContainer.style.display = 'block';
                                  // 启用按钮
                                  document.getElementById('appendButton').disabled = false;
@@ -3881,15 +3863,21 @@ async function 测试IP连通性(ips, ports, timeout) {
                 return null; // 真正的超时，认为测试失败
             }
             
-            // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
-            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                return {
-                    success: true, // 这里标记为成功，因为这是我们想要的结果
-                    ip,
-                    port,
-                    time: latency
-                };
-            }
+                            // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    // 只返回延迟在10ms以上的IP
+                    if (latency >= 10) {
+                        return {
+                            success: true, // 这里标记为成功，因为这是我们想要的结果
+                            ip,
+                            port,
+                            time: latency
+                        };
+                    } else {
+                        console.log(`IP ${ip}:${port} 延迟太低 (${latency}ms)，不符合要求`);
+                        return null;
+                    }
+                }
             
             // 其他错误
             return null;
