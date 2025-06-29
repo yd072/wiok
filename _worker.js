@@ -3070,9 +3070,10 @@ async function handleGetRequest(env, txt) {
     });
 }
 
+// 默认端口列表
+const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
+
 async function 在线优选IP(request, env) {
-    // 默认端口列表
-    const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
     
     // 从Cloudflare官方网站获取IP范围列表
     async function 获取Cloudflare_IP范围() {
@@ -3530,7 +3531,7 @@ async function 在线优选IP(request, env) {
                 
                 <div class="form-group">
                     <label for="ports">测试端口 (逗号分隔)</label>
-                    <input type="text" id="ports" name="ports" value="${DEFAULT_PORTS.join(',')}">
+                    <input type="text" id="ports" name="ports" value="443,2053,2083,2087,2096,8443">
                 </div>
                 
                                  <div class="form-group">
@@ -3670,8 +3671,6 @@ async function 在线优选IP(request, env) {
                                  } else {
                                      resultList.textContent = result.bestIPs.join('\\n');
                                  }
-                                 
-                                 resultList.textContent = result.bestIPs.join('\\n');
                                  resultContainer.style.display = 'block';
                                  // 启用按钮
                                  document.getElementById('appendButton').disabled = false;
