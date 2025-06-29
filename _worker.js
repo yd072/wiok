@@ -3294,25 +3294,7 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 筛选20-200毫秒范围内的IP（注意：显示的延迟是实际延迟的一半）
-                console.log(`筛选前共有 ${results.length} 个IP结果`);
-                const filteredResults = results.filter(item => item.time >= 20 && item.time <= 200);
-                console.log(`筛选后剩余 ${filteredResults.length} 个IP结果（20-200毫秒范围内）`);
-                
-                // 如果筛选后没有结果，返回提示信息
-                if (filteredResults.length === 0) {
-                    return new Response(JSON.stringify({
-                        success: true,
-                        message: '未找到20-200毫秒范围内的IP',
-                        bestIPs: []
-                    }), {
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                }
-                
-                const bestIPs = filteredResults
+                const bestIPs = results
                     .sort((a, b) => a.time - b.time)
                     .slice(0, count)
                     .map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms`);
@@ -3322,7 +3304,7 @@ async function 在线优选IP(request, env) {
                 
                 return new Response(JSON.stringify({
                     success: true,
-                    message: '优选IP测试完成，已筛选20-200毫秒范围内的IP',
+                    message: '优选IP测试完成',
                     bestIPs
                 }), {
                     headers: {
@@ -3549,14 +3531,13 @@ async function 在线优选IP(request, env) {
                          <strong>说明：</strong><br>
                          • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
                          • 输入多个端口时，系统会为每个IP随机选择一个端口进行测试<br>
-                         • 系统将自动筛选延迟在20-200毫秒范围内的IP<br>
                          • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
                          • 如果您使用VPN，可能会影响测试结果的准确性
                      </div>
                  </div>
                  
                  <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                     <button type="button" id="testButton" class="btn">开始测试</button>
+                     <button type="submit" id="testButton" class="btn">开始测试</button>
                      <button type="button" id="appendButton" class="btn" style="background-color: #2196F3;" disabled>追加到列表</button>
                      <button type="button" id="replaceButton" class="btn" style="background-color: #FF9800;" disabled>替换列表</button>
                  </div>
@@ -3640,8 +3621,8 @@ async function 在线优选IP(request, env) {
                      }
                  }
                  
-                 // 测试按钮点击事件
-                 testButton.addEventListener('click', async function(e) {
+                 // 测试表单提交
+                 testForm.addEventListener('submit', async function(e) {
                      e.preventDefault();
                      
                      // 显示加载状态
@@ -3669,17 +3650,13 @@ async function 在线优选IP(request, env) {
                                  // 保存测试结果到全局变量
                                  testResults = result.bestIPs;
                                  
-                                 resultList.textContent = '已筛选20-200毫秒范围内的IP：\n' + result.bestIPs.join('\\n');
+                                 resultList.textContent = result.bestIPs.join('\\n');
                                  resultContainer.style.display = 'block';
                                  // 启用按钮
                                  document.getElementById('appendButton').disabled = false;
                                  document.getElementById('replaceButton').disabled = false;
                              } else {
-                                 if (result.message && result.message.includes('未找到20-200毫秒范围内的IP')) {
-                                     resultList.textContent = '未找到20-200毫秒范围内的IP，请尝试增加超时时间或更改端口后重试';
-                                 } else {
-                                     resultList.textContent = '未能获取到有效的测试结果，请尝试更改端口或增加超时时间后重试';
-                                 }
+                                 resultList.textContent = '未能获取到有效的测试结果，请尝试更改端口或增加超时时间后重试';
                                  resultContainer.style.display = 'block';
                                  document.getElementById('appendButton').disabled = true;
                                  document.getElementById('replaceButton').disabled = true;
@@ -3960,9 +3937,9 @@ async function 测试IP连通性(ips, ports, timeout) {
             }
         }
         
-        // 如果结果太少，但已经测试了很多IP，继续测试
+        // 如果结果太少，但已经测试了很多IP，降低标准
         if (results.length < 5 && taskIndex > testTasks.length / 2) {
-            console.log(`测试进度过半但结果太少(${results.length})，继续测试更多IP`);
+            console.log(`测试进度过半但结果太少(${results.length})，降低标准继续测试`);
         }
     }
     
