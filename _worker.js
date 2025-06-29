@@ -3211,15 +3211,11 @@ async function 在线优选IP(request, env) {
                  }
                 
                 // 按响应时间排序并取前N个
-                // 检查是否有测试结果或者是否有测试失败的标记
-                if (results.length === 0 || (results.length === 1 && results[0].status === 'failed')) {
-                    const errorMessage = results.length === 1 && results[0].status === 'failed' 
-                        ? results[0].message 
-                        : '未找到可用IP，请尝试更改端口或增加超时时间';
-                        
+                // 检查是否有测试结果
+                if (results.length === 0) {
                     return new Response(JSON.stringify({
-                        success: false,
-                        message: errorMessage,
+                        success: true,
+                        message: '未找到可用IP',
                         bestIPs: []
                     }), {
                         headers: {
@@ -3228,9 +3224,7 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 过滤掉任何失败的结果，然后按响应时间排序
-                const validResults = results.filter(item => item.status !== 'failed');
-                const bestIPs = validResults
+                const bestIPs = results
                     .sort((a, b) => a.time - b.time)
                     .slice(0, count)
                     .map(item => `${item.ip}:${item.port}#优选IP ${Math.round(item.time)}ms`);
@@ -3614,18 +3608,15 @@ async function 在线优选IP(request, env) {
                                  document.getElementById('replaceButton').disabled = true;
                              }
                          } else {
-                             // 处理测试失败的情况
-                             resultList.textContent = result.message || '测试失败，未找到可用IP，请尝试以下解决方案：\n\n1. 增加超时时间（建议设置为5000-10000毫秒）\n2. 尝试其他端口（如2053、2083、2087、2096、8443）\n3. 确保您的网络连接稳定\n4. 如果您使用VPN，请关闭后再试';
-                             resultContainer.style.display = 'block';
-                             document.getElementById('appendButton').disabled = true;
-                             document.getElementById('replaceButton').disabled = true;
-                             
-                             // 显示VPN警告（如果适用）
+                             // 显示错误信息
                              if (result.message && result.message.includes('VPN')) {
                                  // 显示VPN警告
                                  vpnWarning.style.display = 'block';
                                  // 滚动到警告区域
                                  vpnWarning.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                             } else {
+                                 // 其他错误使用普通alert
+                                 alert('测试失败: ' + result.message);
                              }
                          }
                      } catch (error) {
@@ -3749,9 +3740,9 @@ async function 生成随机IP(ranges, count) {
 // 测试IP连通性函数
 async function 测试IP连通性(ips, ports, timeout) {
     const results = [];
-    const MAX_CONCURRENT = 30; // 降低最大并发测试数，避免浏览器限制
-    const MAX_TEST_DURATION = 60000; // 增加最长测试时间到60秒
-    const minResults = 10; // 降低最少需要的结果数，更容易获得结果
+    const MAX_CONCURRENT = 16; // 最大并发测试数 - 设置为16个线程
+    const MAX_TEST_DURATION = 30000; // 最长测试时间(毫秒)
+    const minResults = 15; // 最少需要的结果数
     
     console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
     
@@ -3764,42 +3755,33 @@ async function 测试IP连通性(ips, ports, timeout) {
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
             // 尝试多个路径增加成功率
-            const paths = ['/cdn-cgi/trace', '/', '/favicon.ico', '/generate_204'];
+            const paths = ['/cdn-cgi/trace', '/', '/favicon.ico'];
             const path = paths[Math.floor(Math.random() * paths.length)];
             
-            const url = `https://${ip}:${port}${path}`;
-            console.log(`测试连接: ${url}`);
-            
-            const response = await fetch(url, {
+            const response = await fetch(`https://${ip}:${port}${path}`, {
                 signal: controller.signal,
                 headers: {
                     'Host': 'www.cloudflare.com',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                    'Connection': 'keep-alive',
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Connection': 'keep-alive'
                 },
                 redirect: 'follow',
-                cache: 'no-store',
-                mode: 'cors'
+                cache: 'no-cache'
             });
             
             clearTimeout(timeoutId);
             
             // 只要能连接上就算成功，不一定要200状态码
             const endTime = Date.now();
-            console.log(`连接成功: ${ip}:${port}, 响应时间: ${endTime - startTime}ms, 状态码: ${response.status}`);
             return {
                 success: true,
                 ip,
                 port,
-                time: endTime - startTime,
-                status: response.status
+                time: endTime - startTime
             };
         } catch (error) {
             // 连接失败
-            console.log(`连接失败: ${ip}:${port}, 错误: ${error.message || '超时'}`);
             return { success: false, ip, port };
         }
     }
@@ -3811,103 +3793,67 @@ async function 测试IP连通性(ips, ports, timeout) {
         [shuffledIPs[i], shuffledIPs[j]] = [shuffledIPs[j], shuffledIPs[i]];
     }
     
-    // 创建测试任务队列，为每个IP测试所有端口
+    // 创建测试任务队列
     const testTasks = [];
     for (const ip of shuffledIPs) {
-        // 为每个IP添加所有端口的测试任务
-        for (const port of ports) {
-            testTasks.push({ ip, port });
-        }
+        // 为每个IP随机选择一个端口
+        const port = ports[Math.floor(Math.random() * ports.length)];
+        testTasks.push({ ip, port });
     }
     
-    // 再次随机打乱任务顺序，确保不同端口的测试分散进行
-    for (let i = testTasks.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [testTasks[i], testTasks[j]] = [testTasks[j], testTasks[i]];
-    }
-    
-    console.log(`创建了${testTasks.length}个测试任务，共${shuffledIPs.length}个IP，${ports.length}个端口`);
+    console.log(`创建了${testTasks.length}个测试任务`);
     
     // 批量执行测试任务
     const startTestTime = Date.now();
     let taskIndex = 0;
-    let retryCount = 0;
-    const MAX_RETRIES = 3; // 最大重试次数
-    const testedIPs = new Set(); // 记录已测试过的IP
-    
-    // 创建一个延迟函数
-    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
     
     while (taskIndex < testTasks.length && results.length < minResults && (Date.now() - startTestTime) < MAX_TEST_DURATION) {
         // 创建当前批次的测试任务
         const currentBatch = [];
         const batchSize = Math.min(MAX_CONCURRENT, testTasks.length - taskIndex);
         
-        for (let i = 0; i < batchSize && taskIndex < testTasks.length; i++) {
+        for (let i = 0; i < batchSize; i++) {
             const task = testTasks[taskIndex++];
             currentBatch.push(testSingleIP(task.ip, task.port));
-            testedIPs.add(task.ip); // 记录已测试的IP
         }
         
-        try {
-            // 等待当前批次完成
-            const batchResults = await Promise.all(currentBatch);
-            
-            // 处理结果
-            for (const result of batchResults) {
-                if (result.success) {
-                    results.push({
-                        ip: result.ip,
-                        port: result.port,
-                        time: result.time,
-                        status: result.status || 'success'
-                    });
-                    
-                    // 记录进度
-                    if (results.length % 5 === 0) {
-                        console.log(`已找到${results.length}个可用IP，已测试${taskIndex}/${testTasks.length}个任务，已测试${testedIPs.size}个不同IP`);
-                    }
-                    
-                    // 如果已经有足够的结果，可以提前结束
-                    if (results.length >= minResults * 2) {
-                        console.log(`已找到足够的可用IP (${results.length})，提前结束测试`);
-                        break;
-                    }
-                }
-            }
-            
-            // 如果结果太少，但已经测试了很多IP，增加重试次数
-            if (results.length < 5 && taskIndex > testTasks.length / 3 && retryCount < MAX_RETRIES) {
-                console.log(`测试进度过三分之一但结果太少(${results.length})，尝试第${retryCount + 1}次重试`);
-                retryCount++;
+        // 等待当前批次完成
+        const batchResults = await Promise.all(currentBatch);
+        
+        // 处理结果
+        for (const result of batchResults) {
+            if (result.success) {
+                results.push({
+                    ip: result.ip,
+                    port: result.port,
+                    time: result.time,
+                    status: 'success'
+                });
                 
-                // 延迟一段时间再重试
-                await delay(1000);
-                
-                // 重新打乱剩余任务
-                const remainingTasks = testTasks.slice(taskIndex);
-                for (let i = remainingTasks.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [remainingTasks[i], remainingTasks[j]] = [remainingTasks[j], remainingTasks[i]];
+                // 记录进度
+                if (results.length % 10 === 0) {
+                    console.log(`已找到${results.length}个可用IP，已测试${taskIndex}/${testTasks.length}`);
                 }
                 
-                // 替换剩余任务
-                testTasks.splice(taskIndex, remainingTasks.length, ...remainingTasks);
+                // 如果已经有足够的结果，可以提前结束
+                if (results.length >= minResults * 2) {
+                    console.log(`已找到足够的可用IP (${results.length})，提前结束测试`);
+                    break;
+                }
             }
-        } catch (error) {
-            console.error('批量测试出错:', error);
-            // 出错时等待一段时间再继续
-            await delay(2000);
+        }
+        
+        // 如果结果太少，但已经测试了很多IP，降低标准
+        if (results.length < 5 && taskIndex > testTasks.length / 2) {
+            console.log(`测试进度过半但结果太少(${results.length})，降低标准继续测试`);
         }
     }
     
-    console.log(`测试完成，共测试了${taskIndex}/${testTasks.length}个任务，${testedIPs.size}个不同IP，找到${results.length}个可用IP`);
+    console.log(`测试完成，共测试了${taskIndex}/${testTasks.length}个IP，找到${results.length}个可用IP`);
     
     // 如果没有找到任何可用IP，记录警告信息
     if (results.length === 0) {
         console.log('警告：未找到任何可用的IP，请检查网络连接或尝试其他端口');
-        // 返回一个特殊标记，表示测试失败
-        return [{ ip: '0.0.0.0', port: '443', time: 9999, status: 'failed', message: '未找到任何可用的IP，请检查网络连接或尝试其他端口' }];
     }
     
     return results;
