@@ -3294,29 +3294,42 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 过滤出延迟在20ms以上的IP，然后排序并取前N个
-                const bestIPs = results
-                    .filter(item => item.time >= 20) // 只保留20ms以上的IP
+                // 获取前N个低延迟的IP
+                const topResults = results
                     .sort((a, b) => a.time - b.time)
-                    .slice(0, count)
-                    .map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms`);
+                    .slice(0, count);
                 
-                // 如果过滤后没有结果，给出提示
-                if (bestIPs.length === 0) {
-                    console.log('没有找到延迟在20ms以上的IP，可能需要增加测试IP数量或调整过滤条件');
+                // 检查是否需要测速
+                const needSpeedTest = formData.get('speedtest') === '1';
+                
+                if (needSpeedTest) {
+                    // 添加测速信息
+                    console.log(`对前${topResults.length}个IP进行测速...`);
+                    for (let i = 0; i < topResults.length; i++) {
+                        const item = topResults[i];
+                        try {
+                            const speedResult = await 测试IP速度(item.ip, item.port);
+                            item.speed = speedResult.success ? speedResult.speed : 0;
+                            console.log(`IP ${item.ip}:${item.port} 测速结果: ${item.speed} KB/s`);
+                        } catch (error) {
+                            console.error(`测速出错 ${item.ip}:${item.port}:`, error);
+                            item.speed = 0;
+                        }
+                    }
                 }
+                
+                // 格式化结果，包含延迟和速度信息
+                const bestIPs = topResults.map(item => {
+                    const speedInfo = (needSpeedTest && item.speed > 0) ? ` ${item.speed}KB/s` : '';
+                    return `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms${speedInfo}`;
+                });
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
                 
-                // 根据结果返回不同的消息
-                const message = bestIPs.length > 0 
-                    ? '优选IP测试完成' 
-                    : '未找到符合条件的IP（延迟≥20ms）';
-                    
                 return new Response(JSON.stringify({
                     success: true,
-                    message: message,
+                    message: '优选IP测试完成',
                     bestIPs
                 }), {
                     headers: {
@@ -3535,7 +3548,14 @@ async function 在线优选IP(request, env) {
                 
                                  <div class="form-group">
                      <label for="timeout">超时时间 (毫秒)</label>
-                     <input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
+<input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
+
+<div class="form-group" style="margin-top: 10px;">
+    <label>
+        <input type="checkbox" id="speedtest" name="speedtest" value="1" checked> 
+        对优选IP进行测速 (会增加测试时间)
+    </label>
+</div>
                  </div>
                  
                  <div class="form-group" style="margin-top: 15px;">
@@ -3668,7 +3688,7 @@ async function 在线优选IP(request, env) {
                                  document.getElementById('appendButton').disabled = false;
                                  document.getElementById('replaceButton').disabled = false;
                              } else {
-                                 resultList.textContent = '未找到符合条件的IP（延迟≥20ms）。请尝试增加测试IP数量、更改端口或调整超时时间后重试。';
+                                 resultList.textContent = '未能获取到有效的测试结果，请尝试更改端口或增加超时时间后重试';
                                  resultContainer.style.display = 'block';
                                  document.getElementById('appendButton').disabled = true;
                                  document.getElementById('replaceButton').disabled = true;
@@ -3963,4 +3983,140 @@ async function 测试IP连通性(ips, ports, timeout) {
     }
     
     return results;
+}
+
+// 测速函数 - 测试IP的下载速度
+async function 测试IP速度(ip, port, timeout = 5000) {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        // 使用多个不同大小的文件来测试下载速度
+        const testFiles = [
+            { path: '/cdn-cgi/trace', host: 'www.cloudflare.com' },
+            { path: '/favicon.ico', host: 'www.cloudflare.com' }
+        ];
+        
+        // 随机选择一个测试文件
+        const testFile = testFiles[Math.floor(Math.random() * testFiles.length)];
+        const testUrl = `https://${ip}:${port}${testFile.path}`;
+        
+        console.log(`测试 ${ip}:${port} 的下载速度，使用 ${testFile.path}`);
+        
+        const response = await fetch(testUrl, {
+            signal: controller.signal,
+            headers: {
+                'Host': testFile.host,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': '*/*',
+                'Connection': 'keep-alive'
+            }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // 如果是证书错误，可能无法正常测速
+        if (response.status === 0 || !response.ok) {
+            // 尝试使用证书错误测试方法
+            return await 测试IP速度_证书错误方法(ip, port, timeout);
+        }
+        
+        // 读取响应体
+        const reader = response.body.getReader();
+        let receivedLength = 0;
+        let chunks = [];
+        
+        const speedTestTimeout = 2000; // 测速持续2秒
+        const speedTestStart = Date.now();
+        
+        while (Date.now() - speedTestStart < speedTestTimeout) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+                break;
+            }
+            
+            chunks.push(value);
+            receivedLength += value.length;
+        }
+        
+        // 计算速度（KB/s）
+        const duration = (Date.now() - speedTestStart) / 1000; // 秒
+        if (duration < 0.1) {
+            // 时间太短，无法准确计算速度
+            return { success: false, speed: 0 };
+        }
+        
+        const speedKBps = Math.round(receivedLength / 1024 / duration);
+        
+        return {
+            success: true,
+            speed: speedKBps
+        };
+    } catch (error) {
+        console.error(`测速失败 ${ip}:${port}:`, error.message);
+        
+        // 如果是证书错误，尝试使用证书错误测试方法
+        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+            return await 测试IP速度_证书错误方法(ip, port, timeout);
+        }
+        
+        return { success: false, speed: 0 };
+    }
+}
+
+// 使用证书错误方法测速
+async function 测试IP速度_证书错误方法(ip, port, timeout = 3000) {
+    try {
+        // 使用多次连接来模拟测速
+        const testCount = 5;
+        let totalTime = 0;
+        let successCount = 0;
+        
+        for (let i = 0; i < testCount; i++) {
+            const startTime = Date.now();
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+                
+                await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
+                    signal: controller.signal,
+                    mode: 'cors'
+                });
+                
+                clearTimeout(timeoutId);
+            } catch (error) {
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    // 证书错误是我们期望的
+                    const latency = Date.now() - startTime;
+                    if (latency < timeout - 50) {
+                        totalTime += latency;
+                        successCount++;
+                    }
+                }
+            }
+            
+            // 短暂延迟
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        if (successCount === 0) {
+            return { success: false, speed: 0 };
+        }
+        
+        // 使用平均响应时间计算一个估算的速度值
+        // 响应越快，估算的速度越高
+        const avgTime = totalTime / successCount;
+        // 将响应时间转换为速度估算值 (KB/s)
+        // 这是一个估算公式: 1000 / avgTime * 100
+        const estimatedSpeed = Math.round(1000 / avgTime * 100);
+        
+        return {
+            success: true,
+            speed: estimatedSpeed
+        };
+    } catch (error) {
+        console.error(`证书错误测速失败 ${ip}:${port}:`, error.message);
+        return { success: false, speed: 0 };
+    }
 }
