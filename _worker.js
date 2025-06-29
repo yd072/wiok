@@ -3299,8 +3299,8 @@ async function 在线优选IP(request, env) {
                 // 获取测速URL
                 const speedTestUrl = formData.get('speedTestUrl') || 'https://download.parallels.com/desktop/v17/17.1.1-51537/ParallelsDesktop-17.1.1-51537.dmg';
                 
-                // 从延迟测试结果中选择前50个进行速度测试
-                const topLatencyIPs = latencyResults.slice(0, 50).map(item => item.ip);
+                // 从延迟测试结果中选择前20个进行速度测试
+                const topLatencyIPs = latencyResults.slice(0, 20).map(item => item.ip);
                 const selectedPort = ports[0]; // 使用第一个端口进行测速
                 
                 console.log(`从延迟最低的${topLatencyIPs.length}个IP中进行速度测试`);
@@ -3308,7 +3308,7 @@ async function 在线优选IP(request, env) {
                 // 测试下载速度，要求速度≥10MB/s，最多获取10个结果
                 let speedResults = [];
                 try {
-                    speedResults = await 测试IP下载速度(topLatencyIPs, selectedPort, speedTestUrl, 10, 10);
+                    speedResults = await 测试IP下载速度(topLatencyIPs, selectedPort, speedTestUrl, 5, 10);
                     console.log(`速度测试获取到 ${speedResults.length} 个结果`);
                 } catch (error) {
                     console.error('测试IP下载速度时出错:', error);
@@ -3608,9 +3608,10 @@ async function 在线优选IP(request, env) {
                  </div>
             </form>
             
-            <div class="loading" id="loading">
+                            <div class="loading" id="loading">
                 <div class="spinner"></div>
                 <p>正在测试IP，请稍候...</p>
+                <p style="font-size: 14px; color: #666;">测试过程分为两步：先测试延迟，再测试下载速度，整个过程可能需要1-2分钟</p>
             </div>
             
                          <div class="result-container" id="resultContainer" style="display: none;">
@@ -3859,12 +3860,12 @@ async function 生成随机IP(ranges, count) {
 // 测试IP连通性函数 - 使用源码2的方法
 async function 测试IP连通性(ips, ports, timeout) {
     const results = [];
-    const MAX_CONCURRENT = 50; // 最大并发测试数
-    const MAX_TEST_DURATION = 30000; // 最长测试时间(毫秒)
-    const minResults = 15; // 最少需要的结果数
+    const MAX_CONCURRENT = 30; // 最大并发测试数，减少并发以提高成功率
+    const MAX_TEST_DURATION = 60000; // 最长测试时间(毫秒)，增加测试总时间
+    const minResults = 20; // 最少需要的结果数
     
-    // 强制使用较短的超时时间，这对于证书错误测试方法很重要
-    const actualTimeout = Math.min(timeout, 999);
+    // 使用更合理的超时时间
+    const actualTimeout = Math.min(timeout, 1500);
     
     console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
     
@@ -3899,10 +3900,14 @@ async function 测试IP连通性(ips, ports, timeout) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
-            // 使用cdn-cgi/trace路径，这是源码2使用的路径
-            const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
+            // 尝试访问根路径，这样更可能触发证书错误
+            const response = await fetch(`https://${ip}:${port}/`, {
                 signal: controller.signal,
-                mode: 'cors'
+                mode: 'cors',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': '*/*'
+                }
             });
             
             clearTimeout(timeoutId);
@@ -3926,8 +3931,11 @@ async function 测试IP连通性(ips, ports, timeout) {
                 return null; // 真正的超时，认为测试失败
             }
             
-            // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
-            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+            // 检查是否是证书错误或连接错误 - 这些通常是我们想要的结果
+            if ((error.name === 'TypeError' && error.message.includes('Failed to fetch')) || 
+                error.message.includes('certificate') || 
+                error.message.includes('SSL') || 
+                error.message.includes('TLS')) {
                 return {
                     success: true, // 这里标记为成功，因为这是我们想要的结果
                     ip,
@@ -4033,16 +4041,14 @@ async function 测试IP下载速度(ips, port, speedTestUrl, minSpeed = 10, maxC
             
             const startTime = Date.now();
             
-            // 使用fetch API测试下载速度
-            const response = await fetch(speedTestUrl, {
+            // 使用fetch API测试下载速度 - 修复：直接使用IP作为主机名
+            const response = await fetch(`https://${ip}:${port}/`, {
                 signal: controller.signal,
                 headers: {
                     'Host': new URL(speedTestUrl).hostname,
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                     'Accept': '*/*',
-                    'Connection': 'keep-alive',
-                    'CF-Connecting-IP': ip,
-                    'X-Forwarded-For': ip
+                    'Connection': 'keep-alive'
                 }
             });
             
