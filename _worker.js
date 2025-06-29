@@ -3150,74 +3150,143 @@ async function handleGetRequest(env, txt) {
 
 // 添加在线优选IP页面函数
 async function 在线优选IP页面(request, env) {
+	console.log('请求方法:', request.method);
 	try {
 		if (request.method === "POST") {
+			// 解析表单数据
 			const formData = await request.formData();
 			const action = formData.get('action');
 			const selectedIPs = formData.get('selected_ips');
 			
+			console.log('收到POST请求:', action);
+			console.log('选择的IP数量:', selectedIPs ? selectedIPs.split('\n').length : 0);
+			
 			if (!env.KV) {
-				return new Response("未绑定KV空间", { status: 400 });
+				console.error('未绑定KV空间');
+				return new Response("未绑定KV空间", { 
+					status: 400,
+					headers: { "Content-Type": "text/plain;charset=utf-8" }
+				});
 			}
 			
 			if (action === 'replace' || action === 'append') {
+				console.log('处理', action, '操作');
 				let existingContent = '';
 				if (action === 'append') {
 					existingContent = await env.KV.get('ADD.txt') || '';
+					console.log('现有内容长度:', existingContent.length);
 					if (existingContent && !existingContent.endsWith('\n')) {
 						existingContent += '\n';
 					}
 				}
 				
 				await env.KV.put('ADD.txt', existingContent + selectedIPs);
-				return new Response("IP列表已" + (action === 'replace' ? "替换" : "追加") + "到ADD编辑列表", {
-					headers: { "Content-Type": "text/plain;charset=utf-8" }
-				});
+				console.log('KV更新成功');
+				
+				// 重定向回编辑页面
+				const pathParts = new URL(request.url).pathname.split('/');
+				pathParts.pop(); // 移除 "optimize"
+				const editPath = pathParts.join('/') + '/edit';
+				
+				return Response.redirect(editPath, 302);
 			}
 			
 			// 添加处理重新优选IP的请求
 			if (action === 'optimize') {
-				// 获取Cloudflare IP列表
-				const response = await fetch('https://www.cloudflare.com/ips-v4/');
-				if (!response.ok) {
-					return new Response(JSON.stringify({ error: '获取Cloudflare IP列表失败' }), { 
+				console.log('收到优选IP请求');
+				try {
+					// 获取Cloudflare IP列表
+					const response = await fetch('https://www.cloudflare.com/ips-v4/');
+					if (!response.ok) {
+						console.error('获取Cloudflare IP列表失败:', response.status);
+						return new Response(JSON.stringify({ error: '获取Cloudflare IP列表失败' }), { 
+							status: 500,
+							headers: { "Content-Type": "application/json" }
+						});
+					}
+					
+					const text = await response.text();
+					console.log('成功获取Cloudflare IP列表');
+					
+					// 分割IP段
+					const ipRanges = text.trim().split('\n');
+					console.log(`获取到 ${ipRanges.length} 个IP段`);
+					
+					const selectedIPs = [];
+					const limit = 15;
+					let counter = 0;
+					
+					// 从每个IP段中随机选择IP
+					for (const range of ipRanges) {
+						if (selectedIPs.length >= limit) break;
+						const trimmedRange = range.trim();
+						if (!trimmedRange) continue;
+						
+						try {
+							counter++;
+							const randomIP = generateRandomIPFromCIDR(trimmedRange);
+							// 添加随机端口
+							const ports = ['443', '2053', '2083', '2087', '2096', '8443'];
+							const randomPort = ports[Math.floor(Math.random() * ports.length)];
+							selectedIPs.push(`${randomIP}:${randomPort}#CF优选IP-${selectedIPs.length + 1}`);
+							console.log(`成功生成IP: ${randomIP}:${randomPort}`);
+						} catch (error) {
+							console.error(`处理IP段 ${trimmedRange} 时出错:`, error);
+							continue;
+						}
+					}
+					
+					console.log(`共生成 ${selectedIPs.length} 个优选IP`);
+					
+					// 如果IP数量不足，使用硬编码的IP段再次尝试
+					if (selectedIPs.length < limit) {
+						console.log('IP数量不足，使用硬编码IP段');
+						const backupRanges = [
+							'103.21.244.0/24',
+							'104.16.0.0/13',
+							'104.24.0.0/14',
+							'172.64.0.0/14',
+							'104.16.0.0/14',
+							'104.24.0.0/15',
+							'141.101.64.0/19',
+							'172.64.0.0/14',
+							'188.114.96.0/21',
+							'190.93.240.0/21',
+							'162.159.152.0/23'
+						];
+						
+						for (const range of backupRanges) {
+							if (selectedIPs.length >= limit) break;
+							
+							try {
+								const randomIP = generateRandomIPFromCIDR(range);
+								const ports = ['443', '2053', '2083', '2087', '2096', '8443'];
+								const randomPort = ports[Math.floor(Math.random() * ports.length)];
+								selectedIPs.push(`${randomIP}:${randomPort}#CF优选IP-${selectedIPs.length + 1}`);
+								console.log(`使用备用IP段生成IP: ${randomIP}:${randomPort}`);
+							} catch (error) {
+								console.error(`处理备用IP段 ${range} 时出错:`, error);
+								continue;
+							}
+						}
+					}
+					
+					return new Response(JSON.stringify({ ips: selectedIPs }), {
+						headers: { "Content-Type": "application/json" }
+					});
+				} catch (error) {
+					console.error('优选IP过程中发生错误:', error);
+					return new Response(JSON.stringify({ error: '优选IP失败: ' + error.message }), { 
 						status: 500,
 						headers: { "Content-Type": "application/json" }
 					});
 				}
-				
-				const text = await response.text();
-				// 分割IP段
-				const ipRanges = text.trim().split(' ');
-				const selectedIPs = [];
-				const limit = 15;
-				
-				// 从每个IP段中随机选择IP
-				for (const range of ipRanges) {
-					if (selectedIPs.length >= limit) break;
-					
-					try {
-						const randomIP = generateRandomIPFromCIDR(range);
-						// 添加随机端口
-						const ports = ['443', '2053', '2083', '2087', '2096', '8443'];
-						const randomPort = ports[Math.floor(Math.random() * ports.length)];
-						selectedIPs.push(`${randomIP}:${randomPort}#CF优选IP-${selectedIPs.length + 1}`);
-					} catch (error) {
-						console.error(`处理IP段 ${range} 时出错:`, error);
-						continue;
-					}
-				}
-				
-				return new Response(JSON.stringify({ ips: selectedIPs }), {
-					headers: { "Content-Type": "application/json" }
-				});
 			}
 			
 			return new Response("无效的操作", { status: 400 });
 		}
 		
 		// 不再预先获取优选IP列表
-		// const cloudflareIPs = await 优选CloudflareIP('https://www.cloudflare.com/ips-v4/', 15);
 		
 		const html = `
 		<!DOCTYPE html>
@@ -3227,426 +3296,320 @@ async function 在线优选IP页面(request, env) {
 			<meta charset="utf-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1">
 			<style>
-				:root {
-					--primary-color: #4CAF50;
-					--secondary-color: #45a049;
-					--border-color: #e0e0e0;
-					--text-color: #333;
-					--background-color: #f5f5f5;
-				}
-				
 				body {
+					font-family: Arial, sans-serif;
 					margin: 0;
 					padding: 20px;
-					font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-					line-height: 1.6;
-					color: var(--text-color);
-					background-color: var(--background-color);
+					background-color: #f5f5f5;
 				}
-
 				.container {
-					max-width: 1000px;
+					max-width: 800px;
 					margin: 0 auto;
 					background: white;
-					padding: 25px;
-					border-radius: 10px;
+					padding: 20px;
+					border-radius: 8px;
 					box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 				}
-
 				.title {
-					font-size: 1.5em;
-					color: var(--text-color);
+					font-size: 24px;
 					margin-bottom: 20px;
 					padding-bottom: 10px;
-					border-bottom: 2px solid var(--border-color);
+					border-bottom: 1px solid #eee;
 				}
-
-				.ip-list {
-					margin: 20px 0;
-					border: 1px solid var(--border-color);
-					border-radius: 8px;
-					overflow: hidden;
-					display: none; /* 初始隐藏IP列表 */
-				}
-
-				.ip-item {
-					padding: 10px;
-					border-bottom: 1px solid var(--border-color);
-					display: flex;
-					align-items: center;
-				}
-
-				.ip-item:last-child {
-					border-bottom: none;
-				}
-
-				.ip-item input[type="checkbox"] {
-					margin-right: 10px;
-				}
-
-				.button-group {
-					display: flex;
-					gap: 12px;
-					margin-top: 15px;
-					flex-wrap: wrap;
-				}
-
 				.btn {
-					padding: 8px 20px;
+					padding: 10px 20px;
 					border: none;
-					border-radius: 6px;
-					font-size: 14px;
-					font-weight: 500;
+					border-radius: 4px;
 					cursor: pointer;
-					transition: all 0.3s ease;
-				}
-
-				.btn:disabled {
-					opacity: 0.6;
-					cursor: not-allowed;
-				}
-
-				.btn-primary {
-					background: var(--primary-color);
-					color: white;
-				}
-
-				.btn-primary:hover:not(:disabled) {
-					background: var(--secondary-color);
-				}
-
-				.btn-secondary {
-					background: #666;
-					color: white;
-				}
-
-				.btn-secondary:hover:not(:disabled) {
-					background: #555;
-				}
-
-				.btn-optimize {
-					background: #2196F3;
-					color: white;
-				}
-
-				.btn-optimize:hover:not(:disabled) {
-					background: #0b7dda;
-				}
-
-				.divider {
-					height: 1px;
-					background: var(--border-color);
-					margin: 20px 0;
-				}
-
-				.select-all-container {
+					font-size: 16px;
+					margin-right: 10px;
 					margin-bottom: 10px;
-					display: none; /* 初始隐藏全选框 */
 				}
-				
-				.progress-container {
-					margin: 20px 0;
-					display: none;
+				.btn-blue {
+					background-color: #2196F3;
+					color: white;
 				}
-				
+				.btn-green {
+					background-color: #4CAF50;
+					color: white;
+				}
+				.btn-gray {
+					background-color: #757575;
+					color: white;
+				}
 				.progress-bar {
 					height: 20px;
 					background-color: #e0e0e0;
-					border-radius: 10px;
+					border-radius: 4px;
+					margin: 20px 0;
 					overflow: hidden;
+					display: none;
 				}
-				
 				.progress {
 					height: 100%;
-					background-color: var(--primary-color);
+					background-color: #4CAF50;
 					width: 0%;
-					transition: width 0.3s ease;
 				}
-				
-				.progress-text {
-					margin-top: 5px;
-					font-size: 14px;
+				.ip-list {
+					margin: 20px 0;
+					border: 1px solid #e0e0e0;
+					border-radius: 4px;
+					display: none;
+				}
+				.ip-item {
+					padding: 10px;
+					border-bottom: 1px solid #e0e0e0;
+				}
+				.ip-item:last-child {
+					border-bottom: none;
+				}
+				.ip-item input {
+					margin-right: 10px;
+				}
+				.status {
+					margin: 10px 0;
 					color: #666;
 				}
-				
-				.optimize-container {
-					margin: 20px 0;
-					display: flex;
-					justify-content: space-between;
-					align-items: center;
+				.select-all {
+					margin-bottom: 10px;
+					display: none;
 				}
-				
-				.action-buttons {
-					display: none; /* 初始隐藏操作按钮 */
-					margin-top: 15px;
+				.buttons {
+					display: none;
 				}
-				
-				.optimize-info {
+				.center {
 					text-align: center;
-					margin: 40px 0;
 				}
-				
-				.optimize-btn-large {
-					padding: 12px 30px;
-					font-size: 16px;
-					background: #2196F3;
-					color: white;
-					border: none;
-					border-radius: 6px;
-					cursor: pointer;
-					transition: all 0.3s ease;
+				.big-button {
+					padding: 15px 30px;
+					font-size: 18px;
 					margin: 20px auto;
 					display: block;
-				}
-				
-				.optimize-btn-large:hover {
-					background: #0b7dda;
 				}
 			</style>
 		</head>
 		<body>
 			<div class="container">
-				<div class="title">在线优选IP</div>
+				<h1 class="title">在线优选IP</h1>
 				
-				<div id="initialView" class="optimize-info">
-					<p>点击下方按钮开始优选Cloudflare IP，系统将从Cloudflare IP池中优选出15个最佳IP。</p>
-					<button type="button" class="optimize-btn-large" id="startOptimizeBtn">开始优选IP</button>
+				<div id="start-view" class="center">
+					<p>点击下方按钮开始从Cloudflare IP池中优选15个最佳IP</p>
+					<button id="start-btn" class="btn btn-blue big-button">开始优选IP</button>
 				</div>
 				
-				<div class="progress-container" id="progressContainer">
-					<div class="progress-bar">
-						<div class="progress" id="progressBar"></div>
-					</div>
-					<div class="progress-text" id="progressText">正在优选IP...</div>
+				<div id="progress-container" class="progress-bar">
+					<div id="progress-bar" class="progress"></div>
 				</div>
 				
-				<form id="optimizeForm" method="POST">
-					<div class="select-all-container" id="selectAllContainer">
-						<label>
-							<input type="checkbox" id="selectAll" onclick="toggleSelectAll()"> 全选
-						</label>
-					</div>
-					
-					<div class="ip-list" id="ipList">
-						<!-- IP列表将在优选完成后动态添加 -->
-					</div>
-					
-					<input type="hidden" name="selected_ips" id="selectedIPs">
-					<input type="hidden" name="action" id="actionType">
-					
-					<div class="button-group action-buttons" id="actionButtons">
-						<button type="button" class="btn btn-secondary" id="backBtn">返回</button>
-						<button type="button" class="btn btn-primary" id="replaceBtn">替换到ADD列表</button>
-						<button type="button" class="btn btn-primary" id="appendBtn">追加到ADD列表</button>
-						<button type="button" class="btn btn-optimize" id="reoptimizeBtn">重新优选IP</button>
-					</div>
-				</form>
+				<div id="status" class="status"></div>
 				
-				<div class="divider"></div>
+				<div id="select-all" class="select-all">
+					<label><input type="checkbox" id="select-all-checkbox"> 全选</label>
+				</div>
+				
+				<div id="ip-list" class="ip-list"></div>
+				
+				<div id="buttons" class="buttons">
+					<button id="back-btn" class="btn btn-gray">返回</button>
+					<button id="replace-btn" class="btn btn-green">替换到ADD列表</button>
+					<button id="append-btn" class="btn btn-green">追加到ADD列表</button>
+					<button id="reoptimize-btn" class="btn btn-blue">重新优选IP</button>
+				</div>
+				
+				<div class="divider" style="height: 1px; background: #e0e0e0; margin: 20px 0;"></div>
 				${cmad}
 			</div>
-
+			
 			<script>
-				// 页面加载完成后执行
 				document.addEventListener('DOMContentLoaded', function() {
-					console.log('页面加载完成');
-					// 为开始优选IP按钮添加点击事件
-					const startBtn = document.getElementById('startOptimizeBtn');
-					if (startBtn) {
-						console.log('找到开始优选按钮');
-						startBtn.addEventListener('click', startOptimize);
-					} else {
-						console.error('未找到开始优选按钮');
+					// 获取元素
+					const startView = document.getElementById('start-view');
+					const startBtn = document.getElementById('start-btn');
+					const progressContainer = document.getElementById('progress-container');
+					const progressBar = document.getElementById('progress-bar');
+					const status = document.getElementById('status');
+					const selectAll = document.getElementById('select-all');
+					const selectAllCheckbox = document.getElementById('select-all-checkbox');
+					const ipList = document.getElementById('ip-list');
+					const buttons = document.getElementById('buttons');
+					const backBtn = document.getElementById('back-btn');
+					const replaceBtn = document.getElementById('replace-btn');
+					const appendBtn = document.getElementById('append-btn');
+					const reoptimizeBtn = document.getElementById('reoptimize-btn');
+					
+					// 绑定事件
+					startBtn.onclick = startOptimize;
+					reoptimizeBtn.onclick = startOptimize;
+					backBtn.onclick = goBack;
+					replaceBtn.onclick = function() { submitForm('replace'); };
+					appendBtn.onclick = function() { submitForm('append'); };
+					selectAllCheckbox.onchange = toggleSelectAll;
+					
+					// 开始优选IP
+					function startOptimize() {
+						console.log('开始优选IP');
+						
+						// 隐藏开始视图
+						startView.style.display = 'none';
+						
+						// 显示进度条
+						progressContainer.style.display = 'block';
+						progressBar.style.width = '0%';
+						status.textContent = '正在获取Cloudflare IP列表...';
+						
+						// 禁用所有按钮
+						const allButtons = document.querySelectorAll('button');
+						allButtons.forEach(button => button.disabled = true);
+						
+						// 创建FormData
+						const formData = new FormData();
+						formData.append('action', 'optimize');
+						
+						// 创建XHR
+						const xhr = new XMLHttpRequest();
+						xhr.open('POST', window.location.href);
+						
+						// 模拟进度
+						let progress = 0;
+						const progressInterval = setInterval(() => {
+							if (progress < 90) {
+								progress += 5;
+								progressBar.style.width = progress + '%';
+								status.textContent = '正在优选IP... ' + progress + '%';
+							}
+						}, 200);
+						
+						// 处理响应
+						xhr.onload = function() {
+							clearInterval(progressInterval);
+							console.log('收到响应:', xhr.status);
+							
+							if (xhr.status === 200) {
+								try {
+									const response = JSON.parse(xhr.responseText);
+									console.log('解析响应:', response);
+									
+									if (response.error) {
+										progressBar.style.width = '100%';
+										status.textContent = '优选失败: ' + response.error;
+									} else {
+										// 更新进度
+										progressBar.style.width = '100%';
+										status.textContent = '优选完成!';
+										
+										// 更新IP列表
+										updateIPList(response.ips);
+										
+										// 显示操作按钮
+										selectAll.style.display = 'block';
+										ipList.style.display = 'block';
+										buttons.style.display = 'block';
+										
+										// 延迟隐藏进度条
+										setTimeout(() => {
+											progressContainer.style.display = 'none';
+										}, 1000);
+									}
+								} catch (error) {
+									console.error('解析响应失败:', error);
+									progressBar.style.width = '100%';
+									status.textContent = '解析响应失败: ' + error.message;
+								}
+							} else {
+								progressBar.style.width = '100%';
+								status.textContent = '请求失败: ' + xhr.status;
+							}
+							
+							// 启用所有按钮
+							allButtons.forEach(button => button.disabled = false);
+						};
+						
+						// 处理错误
+						xhr.onerror = function() {
+							clearInterval(progressInterval);
+							console.error('网络错误');
+							progressBar.style.width = '100%';
+							status.textContent = '网络错误，请重试';
+							
+							// 启用所有按钮
+							allButtons.forEach(button => button.disabled = false);
+						};
+						
+						// 发送请求
+						console.log('发送请求');
+						xhr.send(formData);
 					}
 					
-					// 为重新优选IP按钮添加点击事件
-					const reoptimizeBtn = document.getElementById('reoptimizeBtn');
-					if (reoptimizeBtn) {
-						console.log('找到重新优选按钮');
-						reoptimizeBtn.addEventListener('click', startOptimize);
-					}
-					
-					// 为返回按钮添加点击事件
-					const backBtn = document.getElementById('backBtn');
-					if (backBtn) {
-						backBtn.addEventListener('click', goBack);
-					}
-					
-					// 为替换到ADD列表按钮添加点击事件
-					const replaceBtn = document.getElementById('replaceBtn');
-					if (replaceBtn) {
-						replaceBtn.addEventListener('click', function() {
-							submitForm('replace');
+					// 更新IP列表
+					function updateIPList(ips) {
+						ipList.innerHTML = '';
+						
+						ips.forEach((ip, index) => {
+							const item = document.createElement('div');
+							item.className = 'ip-item';
+							
+							const checkbox = document.createElement('input');
+							checkbox.type = 'checkbox';
+							checkbox.value = ip;
+							checkbox.id = 'ip-' + index;
+							checkbox.className = 'ip-checkbox';
+							
+							const label = document.createElement('label');
+							label.htmlFor = 'ip-' + index;
+							label.textContent = ip;
+							
+							item.appendChild(checkbox);
+							item.appendChild(label);
+							ipList.appendChild(item);
 						});
 					}
 					
-					// 为追加到ADD列表按钮添加点击事件
-					const appendBtn = document.getElementById('appendBtn');
-					if (appendBtn) {
-						appendBtn.addEventListener('click', function() {
-							submitForm('append');
+					// 全选/取消全选
+					function toggleSelectAll() {
+						const checkboxes = document.querySelectorAll('.ip-checkbox');
+						checkboxes.forEach(checkbox => {
+							checkbox.checked = selectAllCheckbox.checked;
 						});
+					}
+					
+					// 返回
+					function goBack() {
+						const pathParts = window.location.pathname.split('/');
+						pathParts.pop();
+						window.location.href = pathParts.join('/');
+					}
+					
+					// 提交表单
+					function submitForm(action) {
+						const checkboxes = document.querySelectorAll('.ip-checkbox:checked');
+						const selectedIPs = Array.from(checkboxes).map(checkbox => checkbox.value);
+						
+						if (selectedIPs.length === 0) {
+							alert('请至少选择一个IP');
+							return;
+						}
+						
+						const form = document.createElement('form');
+						form.method = 'POST';
+						form.style.display = 'none';
+						
+						const actionInput = document.createElement('input');
+						actionInput.type = 'hidden';
+						actionInput.name = 'action';
+						actionInput.value = action;
+						
+						const ipsInput = document.createElement('input');
+						ipsInput.type = 'hidden';
+						ipsInput.name = 'selected_ips';
+						ipsInput.value = selectedIPs.join('\n');
+						
+						form.appendChild(actionInput);
+						form.appendChild(ipsInput);
+						document.body.appendChild(form);
+						
+						form.submit();
 					}
 				});
-				
-				function goBack() {
-					const pathParts = window.location.pathname.split('/');
-					pathParts.pop(); // 移除 "optimize"
-					const newPath = pathParts.join('/');
-					window.location.href = newPath;
-				}
-				
-				function toggleSelectAll() {
-					const selectAllCheckbox = document.getElementById('selectAll');
-					const checkboxes = document.getElementsByClassName('ip-checkbox');
-					
-					for (let i = 0; i < checkboxes.length; i++) {
-						checkboxes[i].checked = selectAllCheckbox.checked;
-					}
-				}
-				
-				function submitForm(action) {
-					const checkboxes = document.getElementsByClassName('ip-checkbox');
-					const selectedIPs = [];
-					
-					for (let i = 0; i < checkboxes.length; i++) {
-						if (checkboxes[i].checked) {
-							selectedIPs.push(checkboxes[i].value);
-						}
-					}
-					
-					if (selectedIPs.length === 0) {
-						alert('请至少选择一个IP地址');
-						return;
-					}
-					
-					document.getElementById('selectedIPs').value = selectedIPs.join('\n');
-					document.getElementById('actionType').value = action;
-					document.getElementById('optimizeForm').submit();
-				}
-				
-				function startOptimize() {
-					// 添加调试信息
-					console.log('开始优选IP函数被调用');
-					
-					// 隐藏初始视图
-					const initialView = document.getElementById('initialView');
-					if (initialView) initialView.style.display = 'none';
-					
-					// 显示进度条
-					const progressContainer = document.getElementById('progressContainer');
-					const progressBar = document.getElementById('progressBar');
-					const progressText = document.getElementById('progressText');
-					
-					progressContainer.style.display = 'block';
-					progressBar.style.width = '0%';
-					progressText.textContent = '正在获取Cloudflare IP列表...';
-					
-					// 禁用按钮
-					const buttons = document.querySelectorAll('button');
-					buttons.forEach(button => button.disabled = true);
-					
-					// 创建FormData对象
-					const formData = new FormData();
-					formData.append('action', 'optimize');
-					
-					// 发送AJAX请求
-					const xhr = new XMLHttpRequest();
-					xhr.open('POST', window.location.href);
-					
-					// 设置进度更新
-					let progress = 0;
-					const progressInterval = setInterval(() => {
-						if (progress < 90) {
-							progress += 5;
-							progressBar.style.width = progress + '%';
-							progressText.textContent = '正在优选IP... ' + progress + '%';
-						}
-					}, 200);
-					
-					xhr.onload = function() {
-						clearInterval(progressInterval);
-						console.log('收到服务器响应:', xhr.status);
-						
-						if (xhr.status === 200) {
-							try {
-								const response = JSON.parse(xhr.responseText);
-								console.log('解析响应:', response);
-								
-								if (response.error) {
-									progressBar.style.width = '100%';
-									progressText.textContent = '优选失败: ' + response.error;
-								} else {
-									// 更新进度
-									progressBar.style.width = '100%';
-									progressText.textContent = '优选完成!';
-									
-									// 更新IP列表
-									updateIPList(response.ips);
-									
-									// 显示全选框和操作按钮
-									document.getElementById('selectAllContainer').style.display = 'block';
-									document.getElementById('actionButtons').style.display = 'flex';
-									document.getElementById('ipList').style.display = 'block';
-									
-									// 延迟隐藏进度条
-									setTimeout(() => {
-										progressContainer.style.display = 'none';
-									}, 1000);
-								}
-							} catch (error) {
-								console.error('解析响应失败:', error);
-								progressBar.style.width = '100%';
-								progressText.textContent = '解析响应失败: ' + error.message;
-							}
-						} else {
-							progressBar.style.width = '100%';
-							progressText.textContent = '请求失败: ' + xhr.status;
-						}
-						
-						// 启用按钮
-						buttons.forEach(button => button.disabled = false);
-					};
-					
-					xhr.onerror = function(error) {
-						console.error('网络错误:', error);
-						clearInterval(progressInterval);
-						progressBar.style.width = '100%';
-						progressText.textContent = '网络错误，请重试';
-						
-						// 启用按钮
-						buttons.forEach(button => button.disabled = false);
-					};
-					
-					console.log('发送优选请求');
-					xhr.send(formData);
-				}
-				
-				function updateIPList(ips) {
-					const ipList = document.getElementById('ipList');
-					ipList.innerHTML = '';
-					
-					ips.forEach(ip => {
-						const ipItem = document.createElement('div');
-						ipItem.className = 'ip-item';
-						
-						const checkbox = document.createElement('input');
-						checkbox.type = 'checkbox';
-						checkbox.name = 'ip';
-						checkbox.value = ip;
-						checkbox.className = 'ip-checkbox';
-						
-						const span = document.createElement('span');
-						span.textContent = ip;
-						
-						ipItem.appendChild(checkbox);
-						ipItem.appendChild(span);
-						ipList.appendChild(ipItem);
-					});
-					
-					// 重置全选复选框
-					document.getElementById('selectAll').checked = false;
-				}
 			</script>
 		</body>
 		</html>
