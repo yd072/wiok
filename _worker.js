@@ -3223,7 +3223,7 @@ async function 在线优选IP(request, env) {
                         success: false,
                         message: 'VPN检测调试信息',
                         vpnStatus: vpnStatus.isVpn ? 
-                            '检测到您当前很可能处于代理/VPN环境中，代理状态下进行的IP优选测试结果将不准确' : 
+                            '检测到您正在使用VPN或代理服务，这可能会影响IP优选结果的准确性' : 
                             '未检测到代理/VPN环境，您可以正常进行IP优选测试',
                         vpnDetails: vpnStatus.details
                     }), {
@@ -3545,7 +3545,7 @@ async function 在线优选IP(request, env) {
                 <h4 style="margin-top: 0; margin-bottom: 10px; display: flex; align-items: center;">
                     <span style="font-size: 20px; margin-right: 8px;">⚠️</span> 代理/VPN环境检测警告
                 </h4>
-                <p>检测到您当前很可能处于代理/VPN环境中，代理状态下进行的IP优选测试结果将不准确。建议关闭VPN后再测试。</p>
+                <p>检测到您正在使用VPN或代理服务，这可能会影响IP优选结果的准确性。请关闭VPN后再进行测试。</p>
                 <p style="margin-bottom: 0;">
                     <button type="button" id="ignoreVpnGlobalButton" class="btn" style="background-color: #dc3545; color: white; border: none;">
                         我已了解风险，继续使用
@@ -3646,9 +3646,12 @@ async function 在线优选IP(request, env) {
                         vpnStatusChecking.style.display = 'none';
                         
                         // 如果检测到VPN，显示警告
-                        if (result.vpnStatus && result.vpnStatus.includes('代理/VPN环境')) {
+                        if (result.vpnStatus && (result.vpnStatus.includes('代理/VPN环境') || result.vpnStatus.includes('使用VPN或代理'))) {
                             isVpnDetected = true;
                             vpnWarning.style.display = 'block';
+                        } else {
+                            isVpnDetected = false;
+                            vpnWarning.style.display = 'none';
                         }
                     } catch (error) {
                         console.error('VPN检测出错:', error);
@@ -3662,8 +3665,22 @@ async function 在线优选IP(request, env) {
                     vpnWarning.style.display = 'none';
                 });
                 
-                // 页面加载时立即检测VPN状态
-                checkVpnStatus();
+                // 定期检测VPN状态（每30秒检测一次）
+                function startVpnMonitoring() {
+                    // 页面加载时立即检测一次
+                    checkVpnStatus();
+                    
+                    // 设置定时器，每30秒检测一次
+                    setInterval(async () => {
+                        // 只有当用户没有选择忽略警告时才进行检测
+                        if (!ignoreVpnWarning) {
+                            await checkVpnStatus();
+                        }
+                    }, 30000); // 30秒
+                }
+                
+                // 启动VPN状态监控
+                startVpnMonitoring();
                 
                                  // 全局变量存储测试结果
                  let testResults = [];
