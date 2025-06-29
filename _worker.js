@@ -1577,7 +1577,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
@@ -2226,105 +2226,39 @@ async function 整理优选列表(api) {
 	}, 2000); 
 
 	try {
-		// 处理特殊URL格式 - Cloudflare官方IP列表
-		const cloudflareIPsPromises = [];
-		const normalAPIPromises = [];
-		
-		for (const apiUrl of api) {
-			if (apiUrl.startsWith('@https://') || apiUrl.startsWith('@http://')) {
-				// 处理Cloudflare IP列表等特殊URL
-				const actualUrl = apiUrl.substring(1); // 去掉@符号
-				cloudflareIPsPromises.push(
-					fetch(actualUrl, {
-						method: 'get',
-						headers: {
-							'Accept': 'text/plain,text/html,application/xhtml+xml,application/xml;',
-							'User-Agent': 'Mozilla/5.0 Chrome/91.0.4472.124'
-						},
-						signal: controller.signal
-					})
-					.then(response => response.ok ? response.text() : Promise.reject())
-					.then(content => {
-						// 处理Cloudflare IP列表格式
-						const ipRanges = content.trim().split(/\s+/);
-						let processedIPs = [];
-						
-						for (const range of ipRanges) {
-							if (range.includes('/')) {
-								// 这是CIDR格式，从每个范围中随机选择几个IP
-								try {
-									const randomIPs = generateRandomIPsFromCIDR(range, 3); // 每个范围生成3个随机IP
-									processedIPs = processedIPs.concat(randomIPs);
-								} catch (e) {
-									console.error(`处理CIDR范围出错: ${range}`, e);
-								}
-							} else {
-								// 单个IP
-								processedIPs.push(range);
-							}
-						}
-						
-						// 为每个IP添加端口和标签
-						return processedIPs.map(ip => 
-							`${ip}:443#CF官方IP-${ip.split('.')[0]}`
-						).join('\n');
-					})
-					.catch(err => {
-						console.error(`获取Cloudflare IP列表失败: ${actualUrl}`, err);
-						return '';
-					})
-				);
-			} else {
-				// 处理常规API
-				normalAPIPromises.push(
-					fetch(apiUrl, {
-						method: 'get',
-						headers: {
-							'Accept': 'text/html,application/xhtml+xml,application/xml;',
-							'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
-						},
-						signal: controller.signal
-					})
-					.then(response => response.ok ? response.text() : Promise.reject())
-				);
-			}
-		}
-		
-		// 处理Cloudflare IP列表结果
-		const cloudflareIPsResults = await Promise.allSettled(cloudflareIPsPromises);
-		for (const result of cloudflareIPsResults) {
-			if (result.status === 'fulfilled' && result.value) {
-				newapi += result.value + '\n';
-			}
-		}
-		
-		// 处理常规API结果
-		const normalAPIResults = await Promise.allSettled(normalAPIPromises);
-		for (const [index, response] of normalAPIResults.entries()) {
+		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
+			method: 'get',
+			headers: {
+				'Accept': 'text/html,application/xhtml+xml,application/xml;',
+				'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
+			},
+			signal: controller.signal 
+		}).then(response => response.ok ? response.text() : Promise.reject())));
+
+		for (const [index, response] of responses.entries()) {
 			if (response.status === 'fulfilled') {
 				const content = await response.value;
-				const apiUrl = api.filter(url => !url.startsWith('@'))[index];
 
 				const lines = content.split(/\r?\n/);
 				let 节点备注 = '';
 				let 测速端口 = '443';
 
 				if (lines[0].split(',').length > 3) {
-					const idMatch = apiUrl.match(/id=([^&]*)/);
+					const idMatch = api[index].match(/id=([^&]*)/);
 					if (idMatch) 节点备注 = idMatch[1];
 
-					const portMatch = apiUrl.match(/port=([^&]*)/);
+					const portMatch = api[index].match(/port=([^&]*)/);
 					if (portMatch) 测速端口 = portMatch[1];
 
 					for (let i = 1; i < lines.length; i++) {
 						const columns = lines[i].split(',')[0];
 						if (columns) {
 							newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
-							if (apiUrl.includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
+							if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
 						}
 					}
 				} else {
-					if (apiUrl.includes('proxyip=true')) {
+					if (api[index].includes('proxyip=true')) {
 						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
 						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
 							const baseItem = item.split('#')[0] || item;
@@ -2352,55 +2286,6 @@ async function 整理优选列表(api) {
 	const newAddressesapi = await 整理(newapi);
 
 	return newAddressesapi;
-}
-
-// 从CIDR范围中生成随机IP的函数
-function generateRandomIPsFromCIDR(cidr, count = 3) {
-    const [baseIP, mask] = cidr.split('/');
-    const baseIPNums = baseIP.split('.').map(Number);
-    const maskBits = parseInt(mask, 10);
-    
-    // 计算可用主机数
-    const hostBits = 32 - maskBits;
-    const maxHosts = Math.pow(2, hostBits) - 2; // 减去网络地址和广播地址
-    
-    if (maxHosts <= 0) return [baseIP]; // 如果没有可用主机，返回基础IP
-    
-    // 生成指定数量的随机IP，但不超过最大可用主机数
-    const actualCount = Math.min(count, maxHosts);
-    const result = [];
-    
-    // 生成不重复的随机IP
-    const usedIndices = new Set();
-    for (let i = 0; i < actualCount; i++) {
-        let randomHostIndex;
-        do {
-            // 生成1到maxHosts之间的随机数
-            randomHostIndex = 1 + Math.floor(Math.random() * maxHosts);
-        } while (usedIndices.has(randomHostIndex));
-        
-        usedIndices.add(randomHostIndex);
-        
-        // 计算随机IP
-        const ipNums = [...baseIPNums];
-        
-        // 根据掩码位计算IP
-        for (let bit = 0; bit < hostBits; bit++) {
-            const byteIndex = 3 - Math.floor(bit / 8);
-            const bitPosition = bit % 8;
-            const bitValue = (randomHostIndex >> bit) & 1;
-            
-            if (bitValue) {
-                ipNums[byteIndex] |= (1 << bitPosition);
-            } else {
-                ipNums[byteIndex] &= ~(1 << bitPosition);
-            }
-        }
-        
-        result.push(ipNums.join('.'));
-    }
-    
-    return result;
 }
 
 async function 整理测速结果(tls) {
@@ -2465,7 +2350,72 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
+async function 优选CloudflareIP(url, limit = 15) {
+    try {
+        // 获取Cloudflare IP列表
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.error('获取Cloudflare IP列表失败:', response.status);
+            return [];
+        }
+        
+        const text = await response.text();
+        // 分割IP段
+        const ipRanges = text.trim().split(' ');
+        const selectedIPs = [];
+        
+        // 从每个IP段中随机选择IP
+        for (const range of ipRanges) {
+            if (selectedIPs.length >= limit) break;
+            
+            try {
+                const randomIP = generateRandomIPFromCIDR(range);
+                // 添加随机端口
+                const ports = ['443', '2053', '2083', '2087', '2096', '8443'];
+                const randomPort = ports[Math.floor(Math.random() * ports.length)];
+                selectedIPs.push(`${randomIP}:${randomPort}#CF优选IP-${selectedIPs.length + 1}`);
+            } catch (error) {
+                console.error(`处理IP段 ${range} 时出错:`, error);
+                continue;
+            }
+        }
+        
+        return selectedIPs;
+    } catch (error) {
+        console.error('优选CloudflareIP失败:', error);
+        return [];
+    }
+}
+
+// 从CIDR生成随机IP的函数
+function generateRandomIPFromCIDR(cidr) {
+    const [base, mask] = cidr.split('/');
+    const baseIP = base.split('.').map(Number);
+    const subnetMask = parseInt(mask, 10);
+    const hostBits = 32 - subnetMask;
+    
+    // 计算可用主机数
+    const maxHosts = Math.pow(2, hostBits) - 2;
+    if (maxHosts <= 0) return base; // 如果没有可用主机，直接返回基础IP
+    
+    // 生成随机主机号
+    const randomHost = Math.floor(Math.random() * maxHosts) + 1;
+    
+    // 计算IP地址
+    const ipLong = (baseIP[0] << 24) | (baseIP[1] << 16) | (baseIP[2] << 8) | baseIP[3];
+    const networkAddr = ipLong & (0xffffffff << hostBits);
+    const resultIP = networkAddr | randomHost;
+    
+    // 转换回点分十进制
+    return [
+        (resultIP >> 24) & 0xff,
+        (resultIP >> 16) & 0xff,
+        (resultIP >> 8) & 0xff,
+        resultIP & 0xff
+    ].join('.');
+}
+
+async function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
@@ -2536,7 +2486,20 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 
 	}
 
-	const uniqueAddresses = [...new Set(addresses)];
+	let uniqueAddresses = [...new Set(addresses)];
+	
+	// 如果地址数量不足15个，从Cloudflare IP列表获取更多IP
+	if (uniqueAddresses.length < 15) {
+		try {
+			const cloudflareIPs = await 优选CloudflareIP('https://www.cloudflare.com/ips-v4/', 15 - uniqueAddresses.length);
+			if (cloudflareIPs && cloudflareIPs.length > 0) {
+				console.log(`成功获取 ${cloudflareIPs.length} 个Cloudflare优选IP`);
+				uniqueAddresses = uniqueAddresses.concat(cloudflareIPs);
+			}
+		} catch (error) {
+			console.error('获取Cloudflare优选IP失败:', error);
+		}
+	}
 
 	const responseBody = uniqueAddresses.map(address => {
 		let port = "-1";
@@ -3037,16 +3000,12 @@ async function handleGetRequest(env, txt) {
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
 				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
-
-                    <strong>4.</strong> 在线优选IP功能，可直接从Cloudflare官方IP列表获取IP，只需在URL前添加@符号，例如：<br>
-                    &nbsp;&nbsp;@https://www.cloudflare.com/ips-v4/<br><br>
-                    系统会自动从CIDR范围中随机生成IP，并添加到您的优选列表中。<br>
                 </div>
 
-                                <div class="editor-container">
+                <div class="editor-container">
                     ${hasKV ? `
                         <textarea class="editor" 
-                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQpAaHR0cHMlM0ElMkYlMkZ3d3cuY2xvdWRmbGFyZS5jb20lMkZpcHMtdjQlMkY='))}"
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
@@ -3057,7 +3016,7 @@ async function handleGetRequest(env, txt) {
                         ${cmad}
                     ` : '<p>未绑定KV空间</p>'}
                 </div>
-              </div>
+            </div>
 
             <script>
             function goBack() {
