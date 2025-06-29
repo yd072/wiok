@@ -3238,8 +3238,7 @@ async function 在线优选IP(request, env) {
                         
                         if (saveMode === 'replace') {
                             // 替换模式：保留所有非优选IP行，然后添加新的优选IP
-                            const existingLines = existingContent.split('\n').filter(line => 
-                                !line.includes('#优选IP') && !line.includes('#CF优选IP'));
+                            const existingLines = existingContent.split('\n').filter(line => !line.includes('#优选IP'));
                             newContent = [...existingLines, ...bestIPs].join('\n');
                         } else if (saveMode === 'replaceAll') {
                             // 完全替换模式：仅保留新的优选IP
