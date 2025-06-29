@@ -3132,12 +3132,20 @@ async function 在线优选IP(request, env) {
             const asn = geoInfo.asn || '';
             const asOrganization = geoInfo.asOrganization || '';
             
+            // 获取请求头信息
+            const userAgent = request.headers.get('User-Agent') || '';
+            const acceptLanguage = request.headers.get('Accept-Language') || '';
+            const xForwardedFor = request.headers.get('X-Forwarded-For') || '';
+            const xRealIP = request.headers.get('X-Real-IP') || '';
+            
             // VPN/代理服务提供商关键词
             const vpnKeywords = [
                 'vpn', 'proxy', 'tunnel', 'anonymizer', 'anonymous', 
                 'hide', 'mask', 'private network', 'virtual private', 
                 'nord', 'express', 'surfshark', 'cyberghost', 'proton',
-                'torguard', 'mullvad', 'windscribe', 'ipvanish', 'purevpn'
+                'torguard', 'mullvad', 'windscribe', 'ipvanish', 'purevpn',
+                'hotspot', 'avast', 'secure', 'private internet', 'hide my ass',
+                'zenmate', 'vyprvpn', 'strongvpn', 'privatevpn', 'tunnelbear'
             ];
             
             // 检查ASN组织名称是否包含VPN关键词
@@ -3146,9 +3154,27 @@ async function 在线优选IP(request, env) {
                     asOrganization.toLowerCase().includes(keyword)
                 );
             
-            // 综合判断是否使用VPN
-            const isVpn = isPrivateIP || isVpnAsn;
+            // 检查是否有多个IP地址（可能是代理链）
+            const hasMultipleIPs = xForwardedFor && xForwardedFor.split(',').length > 1;
             
+            // 检查是否有代理相关的请求头
+            const hasProxyHeaders = request.headers.has('Proxy-Connection') || 
+                                   request.headers.has('Via') || 
+                                   request.headers.has('X-Proxy-ID');
+                                   
+            // 检查是否通过移动数据连接（通常移动数据运营商会使用NAT，看起来像VPN）
+            const isMobileNetwork = asOrganization && 
+                /mobile|wireless|cellular|3g|4g|5g|lte|telecommunication/i.test(asOrganization.toLowerCase());
+                
+            // 检查是否是已知的数据中心IP（可能是VPS或代理）
+            const isDatacenter = asOrganization && 
+                /hosting|datacenter|data center|server|cloud|aws|azure|google cloud|alibaba|tencent|oracle|digital ocean|linode|vultr|ovh/i.test(asOrganization.toLowerCase());
+            
+            // 综合判断是否使用VPN
+            // 注意：移动网络可能会误判，所以如果检测到移动网络，降低判断标准
+            const isVpn = (isPrivateIP || isVpnAsn || (hasMultipleIPs && hasProxyHeaders) || isDatacenter) && !isMobileNetwork;
+            
+            // 为了调试，返回详细的检测信息
             return {
                 isVpn,
                 details: {
@@ -3157,7 +3183,16 @@ async function 在线优选IP(request, env) {
                     asn,
                     asOrganization,
                     isPrivateIP,
-                    isVpnAsn
+                    isVpnAsn,
+                    hasMultipleIPs,
+                    hasProxyHeaders,
+                    isMobileNetwork,
+                    isDatacenter,
+                    headers: {
+                        userAgent: userAgent.substring(0, 100), // 截取前100个字符避免过长
+                        acceptLanguage,
+                        xForwardedFor: xForwardedFor.substring(0, 100)
+                    }
                 }
             };
         } catch (error) {
@@ -3178,6 +3213,21 @@ async function 在线优选IP(request, env) {
                 
                 // 检测VPN状态
                 const vpnStatus = await 检测VPN状态(request);
+                
+                // 检查是否是调试模式
+                const isDebug = formData.get('debug') === 'true';
+                
+                // 如果是调试模式，返回VPN检测的详细信息
+                if (isDebug) {
+                    return new Response(JSON.stringify({
+                        success: false,
+                        message: 'VPN检测调试信息',
+                        vpnStatus: vpnStatus.isVpn ? '检测到VPN/代理' : '未检测到VPN/代理',
+                        vpnDetails: vpnStatus.details
+                    }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
                 
                 // 如果检测到VPN且用户没有选择忽略警告，返回提示信息
                 if (vpnStatus.isVpn && !ignoreVpn) {
@@ -3476,11 +3526,15 @@ async function 在线优选IP(request, env) {
                          <strong>说明：</strong><br>
                          • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
                          • 输入多个端口时，系统会为每个IP随机选择一个端口进行测试<br>
-                         • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表
+                         • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
+                         • 如果您使用VPN，可能会影响测试结果的准确性
                      </div>
                  </div>
                  
-                 <button type="submit" id="testButton" class="btn">开始测试</button>
+                 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                     <button type="submit" id="testButton" class="btn">开始测试</button>
+                     <button type="button" id="debugButton" class="btn" style="background-color: #6c757d;">检查VPN状态</button>
+                 </div>
             </form>
             
             <div class="loading" id="loading">
@@ -3671,6 +3725,61 @@ async function 在线优选IP(request, env) {
                  
                  document.getElementById('replaceButton').addEventListener('click', function() {
                      saveResults('replace');
+                 });
+                 
+                 // 添加调试按钮事件
+                 document.getElementById('debugButton').addEventListener('click', function() {
+                     const formData = new FormData(testForm);
+                     formData.append('action', 'test');
+                     formData.append('debug', 'true');
+                     
+                     // 显示加载状态
+                     loading.style.display = 'block';
+                     
+                     fetch(window.location.href, {
+                         method: 'POST',
+                         body: formData
+                     })
+                     .then(response => response.json())
+                     .then(result => {
+                         // 创建格式化的调试信息
+                         let debugInfo = '<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; border-radius: 4px;">';
+                         debugInfo += '<h4 style="margin-top: 0;">VPN检测结果</h4>';
+                         debugInfo += '<p><strong>状态:</strong> ' + result.vpnStatus + '</p>';
+                         
+                         if (result.vpnDetails) {
+                             debugInfo += '<h5>详细信息:</h5>';
+                             debugInfo += '<ul style="padding-left: 20px;">';
+                             
+                             const details = result.vpnDetails;
+                             debugInfo += '<li><strong>IP地址:</strong> ' + (details.clientIP || 'N/A') + '</li>';
+                             debugInfo += '<li><strong>国家:</strong> ' + (details.country || 'N/A') + '</li>';
+                             debugInfo += '<li><strong>ASN:</strong> ' + (details.asn || 'N/A') + '</li>';
+                             debugInfo += '<li><strong>组织:</strong> ' + (details.asOrganization || 'N/A') + '</li>';
+                             
+                             // 检测结果
+                             debugInfo += '<li><strong>私有IP:</strong> ' + (details.isPrivateIP ? '是' : '否') + '</li>';
+                             debugInfo += '<li><strong>VPN ASN:</strong> ' + (details.isVpnAsn ? '是' : '否') + '</li>';
+                             debugInfo += '<li><strong>多IP地址:</strong> ' + (details.hasMultipleIPs ? '是' : '否') + '</li>';
+                             debugInfo += '<li><strong>代理头:</strong> ' + (details.hasProxyHeaders ? '是' : '否') + '</li>';
+                             debugInfo += '<li><strong>移动网络:</strong> ' + (details.isMobileNetwork ? '是' : '否') + '</li>';
+                             debugInfo += '<li><strong>数据中心IP:</strong> ' + (details.isDatacenter ? '是' : '否') + '</li>';
+                             
+                             debugInfo += '</ul>';
+                         }
+                         
+                         debugInfo += '</div>';
+                         
+                         // 显示调试信息
+                         resultList.innerHTML = debugInfo;
+                         resultContainer.style.display = 'block';
+                     })
+                     .catch(error => {
+                         alert('请求出错: ' + error.message);
+                     })
+                     .finally(() => {
+                         loading.style.display = 'none';
+                     });
                  });
             });
         </script>
