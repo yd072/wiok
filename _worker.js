@@ -3076,28 +3076,40 @@ async function 在线优选IP(request, env) {
     
     // 从Cloudflare官方网站获取IP范围列表
     async function 获取Cloudflare_IP范围() {
-        // 直接使用代码中的官方IP列表
-        // 来源: https://www.cloudflare.com/ips-v4/
-        const ranges = [
-            '173.245.48.0/20',
-            '103.21.244.0/22',
-            '103.22.200.0/22',
-            '103.31.4.0/22',
-            '141.101.64.0/18',
-            '108.162.192.0/18',
-            '190.93.240.0/20',
-            '188.114.96.0/20',
-            '197.234.240.0/22',
-            '198.41.128.0/17',
-            '162.158.0.0/15',
-            '104.16.0.0/13',
-            '104.24.0.0/14',
-            '172.64.0.0/13',
-            '131.0.72.0/22'
-        ];
-        
-        console.log(`使用代码内置的${ranges.length}个Cloudflare IP范围`);
-        return ranges;
+        try {
+            console.log('开始从Cloudflare官方网站获取IP范围列表...');
+            const response = await fetch('https://www.cloudflare.com/ips-v4/');
+            
+            if (!response.ok) {
+                throw new Error(`获取失败，状态码: ${response.status}`);
+            }
+            
+            const text = await response.text();
+            const ranges = text.trim().split(/\s+/);
+            
+            console.log(`成功获取到${ranges.length}个Cloudflare IP范围`);
+            return ranges;
+        } catch (error) {
+            console.error('获取Cloudflare IP范围失败:', error);
+            // 返回一些默认值作为备份
+            return [
+                '173.245.48.0/20',
+                '103.21.244.0/22',
+                '103.22.200.0/22',
+                '103.31.4.0/22',
+                '141.101.64.0/18',
+                '108.162.192.0/18',
+                '190.93.240.0/20',
+                '188.114.96.0/20',
+                '197.234.240.0/22',
+                '198.41.128.0/17',
+                '162.158.0.0/15',
+                '104.16.0.0/13',
+                '104.24.0.0/14',
+                '172.64.0.0/13',
+                '131.0.72.0/22'
+            ];
+        }
     }
     
     // 检测VPN状态的函数 - 使用源码2的方式
@@ -3168,7 +3180,7 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 获取用户输入的IP范围或使用内置的官方IP列表
+                // 获取用户输入的IP范围或从Cloudflare官方获取
                 let ranges;
                 const userRanges = formData.get('ranges')?.split('\n').filter(Boolean);
                 
@@ -3177,9 +3189,9 @@ async function 在线优选IP(request, env) {
                     ranges = userRanges;
                     console.log(`使用用户提供的${ranges.length}个IP范围`);
                 } else {
-                    // 使用内置的Cloudflare官方IP列表
+                    // 从Cloudflare官方获取IP范围
                     ranges = await 获取Cloudflare_IP范围();
-                    console.log(`使用内置的Cloudflare官方IP列表(${ranges.length}个IP范围)`);
+                    console.log(`使用从Cloudflare官方获取的${ranges.length}个IP范围`);
                 }
                 
                 const count = parseInt(formData.get('count') || '15', 10);
@@ -3215,7 +3227,7 @@ async function 在线优选IP(request, env) {
                 const bestIPs = results
                     .sort((a, b) => a.time - b.time)
                     .slice(0, count)
-                    .map(item => `${item.ip}:${item.port}#优选IP ${Math.round(item.time)}ms`);
+                    .map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms`);
                 
                 // 如果绑定了KV，保存结果
                 if (env.KV && bestIPs.length > 0) {
@@ -3226,7 +3238,8 @@ async function 在线优选IP(request, env) {
                         
                         if (saveMode === 'replace') {
                             // 替换模式：保留所有非优选IP行，然后添加新的优选IP
-                            const existingLines = existingContent.split('\n').filter(line => !line.includes('#优选IP'));
+                            const existingLines = existingContent.split('\n').filter(line => 
+                                !line.includes('#优选IP') && !line.includes('#CF优选IP'));
                             newContent = [...existingLines, ...bestIPs].join('\n');
                         } else if (saveMode === 'replaceAll') {
                             // 完全替换模式：仅保留新的优选IP
@@ -3447,8 +3460,8 @@ async function 在线优选IP(request, env) {
             
             <form id="testForm">
                 <div class="form-group">
-                    <label for="ranges">IP范围列表 (CIDR格式，每行一个，留空将使用内置的官方IP列表)</label>
-                    <textarea id="ranges" name="ranges" placeholder="留空将使用内置的官方IP列表进行测试&#10;如需自定义，请按以下格式输入：&#10;173.245.48.0/20&#10;103.21.244.0/22&#10;103.22.200.0/22&#10;103.31.4.0/22&#10;141.101.64.0/18"></textarea>
+                    <label for="ranges">IP范围列表 (CIDR格式，每行一个，留空将自动从官方获取)</label>
+                    <textarea id="ranges" name="ranges" placeholder="103.21.244.0/22&#10;104.16.0.0/13&#10;104.24.0.0/14&#10;172.64.0.0/13&#10;131.0.72.0/22"></textarea>
                 </div>
                 
                 <div class="form-group">
@@ -3469,9 +3482,8 @@ async function 在线优选IP(request, env) {
                  <div class="form-group" style="margin-top: 15px;">
                      <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
                          <strong>说明：</strong><br>
-                         • 系统使用内置的 <a href="https://www.cloudflare.com/ips-v4/" target="_blank">Cloudflare官方IP范围</a> 随机抽取1000个IP进行测试<br>
+                         • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
                          • 输入多个端口时，系统会为每个IP随机选择一个端口进行测试<br>
-                         • 测试使用16个并发线程，可以获得更稳定的结果<br>
                          • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
                          • 如果您使用VPN，可能会影响测试结果的准确性
                      </div>
@@ -3726,42 +3738,59 @@ async function 生成随机IP(ranges, count) {
     return ips;
 }
 
-// 测试IP连通性函数
+// 测试IP连通性函数 - 使用源码2的方法
 async function 测试IP连通性(ips, ports, timeout) {
     const results = [];
-    const MAX_CONCURRENT = 16; // 最大并发测试数 - 设置为16个线程
+    const MAX_CONCURRENT = 50; // 最大并发测试数
     const MAX_TEST_DURATION = 30000; // 最长测试时间(毫秒)
     const minResults = 15; // 最少需要的结果数
     
+    // 强制使用较短的超时时间，这对于证书错误测试方法很重要
+    const actualTimeout = Math.min(timeout, 999);
+    
     console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
     
-    // 测试单个IP函数
+    // 测试单个IP函数 - 使用源码2的方法
     async function testSingleIP(ip, port) {
+        // 第一次测试
+        const firstResult = await singleTest(ip, port, actualTimeout);
+        if (!firstResult) {
+            return { success: false, ip, port };
+        }
+        
+        console.log(`IP ${ip}:${port} 第一次测试成功: ${firstResult.time}ms，进行第二次测试...`);
+        
+        // 第二次测试
+        const secondResult = await singleTest(ip, port, actualTimeout);
+        
+        // 取最佳结果
+        if (secondResult && secondResult.time < firstResult.time) {
+            console.log(`IP ${ip}:${port} 第二次测试更好: ${secondResult.time}ms`);
+            return secondResult;
+        } else {
+            console.log(`IP ${ip}:${port} 使用第一次结果: ${firstResult.time}ms`);
+            return firstResult;
+        }
+    }
+    
+    // 单次测试函数
+    async function singleTest(ip, port, timeout) {
         const startTime = Date.now();
+        
         try {
-            // 使用fetch API测试连接
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
-            // 尝试多个路径增加成功率
-            const paths = ['/cdn-cgi/trace', '/', '/favicon.ico'];
-            const path = paths[Math.floor(Math.random() * paths.length)];
-            
-            const response = await fetch(`https://${ip}:${port}${path}`, {
+            // 使用cdn-cgi/trace路径，这是源码2使用的路径
+            const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
                 signal: controller.signal,
-                headers: {
-                    'Host': 'www.cloudflare.com',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Connection': 'keep-alive'
-                },
-                redirect: 'follow',
-                cache: 'no-cache'
+                mode: 'cors'
             });
             
             clearTimeout(timeoutId);
             
-            // 只要能连接上就算成功，不一定要200状态码
+            // 如果请求成功，在源码2中这被认为是不需要的IP
+            // 但我们保持原有逻辑，认为连接成功也是可用的
             const endTime = Date.now();
             return {
                 success: true,
@@ -3769,9 +3798,28 @@ async function 测试IP连通性(ips, ports, timeout) {
                 port,
                 time: endTime - startTime
             };
+            
         } catch (error) {
-            // 连接失败
-            return { success: false, ip, port };
+            const endTime = Date.now();
+            const latency = endTime - startTime;
+            
+            // 检查是否是真正的超时（接近设定的timeout时间）
+            if (latency >= timeout - 50) {
+                return null; // 真正的超时，认为测试失败
+            }
+            
+            // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
+            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                return {
+                    success: true, // 这里标记为成功，因为这是我们想要的结果
+                    ip,
+                    port,
+                    time: latency
+                };
+            }
+            
+            // 其他错误
+            return null;
         }
     }
     
@@ -3811,11 +3859,15 @@ async function 测试IP连通性(ips, ports, timeout) {
         
         // 处理结果
         for (const result of batchResults) {
-            if (result.success) {
+            if (result && result.success) {
+                // 计算显示延迟 - 类似源码2的方法，显示的延迟是实际延迟的一半
+                const displayTime = Math.floor(result.time / 2);
+                
                 results.push({
                     ip: result.ip,
                     port: result.port,
-                    time: result.time,
+                    time: displayTime,
+                    originalTime: result.time,
                     status: 'success'
                 });
                 
