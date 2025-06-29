@@ -3235,7 +3235,7 @@ async function 在线优选IP(request, env) {
                 if (vpnStatus.isVpn && !ignoreVpn) {
                     return new Response(JSON.stringify({
                         success: false,
-                        message: '检测到您当前很可能处于代理/VPN环境中，代理状态下进行的IP优选测试结果将不准确。建议关闭VPN后再测试，或点击下方按钮忽略此警告。',
+                        message: '检测到您正在使用VPN或代理服务，这可能会影响IP优选结果的准确性。请关闭VPN后再进行测试。',
                         vpnDetails: vpnStatus.details
                     }), {
                         headers: { 'Content-Type': 'application/json' }
@@ -3380,6 +3380,37 @@ async function 在线优选IP(request, env) {
                 color: var(--text-color);
                 background-color: var(--background-color);
             }
+            
+            .vpn-warning {
+                background-color: #f8d7da;
+                border: 1px solid #f5c6cb;
+                color: #721c24;
+                padding: 15px;
+                border-radius: 4px;
+                margin-bottom: 20px;
+                display: none;
+            }
+            
+            .vpn-status-checking {
+                background-color: #e2f3f5;
+                border: 1px solid #b3e5fc;
+                color: #0288d1;
+                padding: 15px;
+                border-radius: 4px;
+                margin-bottom: 20px;
+                display: flex;
+                align-items: center;
+            }
+            
+            .spinner-small {
+                border: 3px solid rgba(0, 0, 0, 0.1);
+                border-radius: 50%;
+                border-top: 3px solid #0288d1;
+                width: 20px;
+                height: 20px;
+                animation: spin 1s linear infinite;
+                margin-right: 10px;
+            }
 
             .container {
                 max-width: 800px;
@@ -3485,6 +3516,8 @@ async function 在线优选IP(request, env) {
                 0% { transform: rotate(0deg); }
                 100% { transform: rotate(360deg); }
             }
+            
+            /* 小型加载动画也使用相同的旋转动画 */
 
             .back-link {
                 display: inline-block;
@@ -3501,6 +3534,24 @@ async function 在线优选IP(request, env) {
     <body>
         <div class="container">
             <h1 class="title">Cloudflare IP优选工具</h1>
+            
+            <!-- VPN检测状态区域 -->
+            <div id="vpnStatusChecking" class="vpn-status-checking">
+                <div class="spinner-small"></div>
+                <span>正在检测网络环境，请稍候...</span>
+            </div>
+            
+            <div id="vpnWarning" class="vpn-warning">
+                <h4 style="margin-top: 0; margin-bottom: 10px; display: flex; align-items: center;">
+                    <span style="font-size: 20px; margin-right: 8px;">⚠️</span> 代理/VPN环境检测警告
+                </h4>
+                <p>检测到您当前很可能处于代理/VPN环境中，代理状态下进行的IP优选测试结果将不准确。建议关闭VPN后再测试。</p>
+                <p style="margin-bottom: 0;">
+                    <button type="button" id="ignoreVpnGlobalButton" class="btn" style="background-color: #dc3545; color: white; border: none;">
+                        我已了解风险，继续使用
+                    </button>
+                </p>
+            </div>
             
             <form id="testForm">
                 <div class="form-group">
@@ -3564,9 +3615,55 @@ async function 在线优选IP(request, env) {
                 const resultContainer = document.getElementById('resultContainer');
                 const resultList = document.getElementById('resultList');
                 const backLink = document.getElementById('backLink');
+                const vpnStatusChecking = document.getElementById('vpnStatusChecking');
+                const vpnWarning = document.getElementById('vpnWarning');
+                const ignoreVpnGlobalButton = document.getElementById('ignoreVpnGlobalButton');
                 
                 // 设置返回链接
                 backLink.href = window.location.pathname.replace('/bestip', '');
+                
+                // 全局变量，用于记录VPN状态
+                let isVpnDetected = false;
+                let ignoreVpnWarning = false;
+                
+                // 页面加载时自动检测VPN状态
+                async function checkVpnStatus() {
+                    vpnStatusChecking.style.display = 'flex';
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('action', 'test');
+                        formData.append('debug', 'true');
+                        
+                        const response = await fetch(window.location.href, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        
+                        // 隐藏检测中提示
+                        vpnStatusChecking.style.display = 'none';
+                        
+                        // 如果检测到VPN，显示警告
+                        if (result.vpnStatus && result.vpnStatus.includes('代理/VPN环境')) {
+                            isVpnDetected = true;
+                            vpnWarning.style.display = 'block';
+                        }
+                    } catch (error) {
+                        console.error('VPN检测出错:', error);
+                        vpnStatusChecking.style.display = 'none';
+                    }
+                }
+                
+                // 忽略VPN警告的全局按钮
+                ignoreVpnGlobalButton.addEventListener('click', function() {
+                    ignoreVpnWarning = true;
+                    vpnWarning.style.display = 'none';
+                });
+                
+                // 页面加载时立即检测VPN状态
+                checkVpnStatus();
                 
                                  // 全局变量存储测试结果
                  let testResults = [];
@@ -3618,6 +3715,14 @@ async function 在线优选IP(request, env) {
                  testForm.addEventListener('submit', async function(e) {
                      e.preventDefault();
                      
+                     // 如果检测到VPN且用户没有选择忽略，显示警告
+                     if (isVpnDetected && !ignoreVpnWarning) {
+                         vpnWarning.style.display = 'block';
+                         // 滚动到警告区域
+                         vpnWarning.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                         return;
+                     }
+                     
                      // 显示加载状态
                      testButton.disabled = true;
                      loading.style.display = 'block';
@@ -3626,6 +3731,11 @@ async function 在线优选IP(request, env) {
                      
                      const formData = new FormData(testForm);
                      formData.append('action', 'test');
+                     
+                     // 如果用户已确认忽略VPN警告，添加标记
+                     if (isVpnDetected && ignoreVpnWarning) {
+                         formData.append('ignoreVpn', 'true');
+                     }
                      
                      try {
                          const response = await fetch(window.location.href, {
