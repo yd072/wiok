@@ -3106,7 +3106,7 @@ async function 在线优选IP(request, env) {
                 const timeout = parseInt(formData.get('timeout') || '2000', 10);
                 
                                  // 从CIDR范围中生成随机IP
-                 const ips = await 生成随机IP(ranges, count * 3); // 生成3倍数量，以便有足够的IP进行测试
+                 const ips = await 生成随机IP(ranges, 1000); // 固定生成1000个IP进行测试
                  
                  // 测试IP连通性
                  let results = [];
@@ -3115,56 +3115,51 @@ async function 在线优选IP(request, env) {
                      console.log(`获取到 ${results.length} 个测试结果`);
                  } catch (error) {
                      console.error('测试IP连通性时出错:', error);
-                     // 使用默认IP
-                     results = [
-                         { ip: '104.16.1.1', port: '443', time: 100 },
-                         { ip: '104.17.1.1', port: '443', time: 110 },
-                         { ip: '104.18.1.1', port: '443', time: 120 },
-                         { ip: '104.19.1.1', port: '443', time: 130 },
-                         { ip: '104.20.1.1', port: '443', time: 140 },
-                         { ip: '172.64.1.1', port: '443', time: 150 },
-                         { ip: '172.65.1.1', port: '443', time: 160 },
-                         { ip: '172.66.1.1', port: '443', time: 170 },
-                         { ip: '172.67.1.1', port: '443', time: 180 },
-                         { ip: '104.21.1.1', port: '443', time: 190 },
-                         { ip: '104.22.1.1', port: '443', time: 200 },
-                         { ip: '104.23.1.1', port: '443', time: 210 },
-                         { ip: '104.24.1.1', port: '443', time: 220 },
-                         { ip: '104.25.1.1', port: '443', time: 230 },
-                         { ip: '104.26.1.1', port: '443', time: 240 }
-                     ];
                  }
                 
                 // 按响应时间排序并取前N个
+                // 检查是否有测试结果
+                if (results.length === 0) {
+                    return new Response(JSON.stringify({
+                        success: true,
+                        message: '未找到可用IP',
+                        bestIPs: []
+                    }), {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                }
+                
                 const bestIPs = results
                     .sort((a, b) => a.time - b.time)
                     .slice(0, count)
                     .map(item => `${item.ip}:${item.port}#优选IP ${Math.round(item.time)}ms`);
                 
-                                 // 如果绑定了KV，保存结果
-                 if (env.KV) {
-                     try {
-                         const saveMode = formData.get('saveMode') || 'append';
-                         const existingContent = await env.KV.get('ADD.txt') || '';
-                         let newContent = '';
-                         
-                         if (saveMode === 'replace') {
-                             // 替换模式：保留所有非优选IP行，然后添加新的优选IP
-                             const existingLines = existingContent.split('\n').filter(line => !line.includes('#优选IP'));
-                             newContent = [...existingLines, ...bestIPs].join('\n');
-                         } else if (saveMode === 'replaceAll') {
-                             // 完全替换模式：仅保留新的优选IP
-                             newContent = bestIPs.join('\n');
-                         } else {
-                             // 追加模式：保留所有现有内容，添加新的优选IP
-                             newContent = existingContent ? existingContent + '\n' + bestIPs.join('\n') : bestIPs.join('\n');
-                         }
-                         
-                         await env.KV.put('ADD.txt', newContent);
-                     } catch (error) {
-                         console.error('保存优选IP时出错:', error);
-                     }
-                 }
+                // 如果绑定了KV，保存结果
+                if (env.KV && bestIPs.length > 0) {
+                    try {
+                        const saveMode = formData.get('saveMode') || 'append';
+                        const existingContent = await env.KV.get('ADD.txt') || '';
+                        let newContent = '';
+                        
+                        if (saveMode === 'replace') {
+                            // 替换模式：保留所有非优选IP行，然后添加新的优选IP
+                            const existingLines = existingContent.split('\n').filter(line => !line.includes('#优选IP'));
+                            newContent = [...existingLines, ...bestIPs].join('\n');
+                        } else if (saveMode === 'replaceAll') {
+                            // 完全替换模式：仅保留新的优选IP
+                            newContent = bestIPs.join('\n');
+                        } else {
+                            // 追加模式：保留所有现有内容，添加新的优选IP
+                            newContent = existingContent ? existingContent + '\n' + bestIPs.join('\n') : bestIPs.join('\n');
+                        }
+                        
+                        await env.KV.put('ADD.txt', newContent);
+                    } catch (error) {
+                        console.error('保存优选IP时出错:', error);
+                    }
+                }
                 
                 return new Response(JSON.stringify({
                     success: true,
@@ -3371,7 +3366,8 @@ async function 在线优选IP(request, env) {
                  <div class="form-group" style="margin-top: 15px;">
                      <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
                          <strong>说明：</strong><br>
-                         • 点击"开始测试"按钮进行IP优选测试<br>
+                         • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
+                         • 输入多个端口时，系统会为每个IP随机选择一个端口进行测试<br>
                          • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表
                      </div>
                  </div>
@@ -3483,8 +3479,10 @@ async function 在线优选IP(request, env) {
                                  resultList.textContent = result.bestIPs.join('\\n');
                                  resultContainer.style.display = 'block';
                              } else {
-                                 resultList.textContent = '未能获取到有效的测试结果，已使用默认IP';
+                                 resultList.textContent = '未能获取到有效的测试结果，请尝试更改端口或增加超时时间后重试';
                                  resultContainer.style.display = 'block';
+                                 document.getElementById('appendButton').disabled = true;
+                                 document.getElementById('replaceButton').disabled = true;
                              }
                          } else {
                              alert('测试失败: ' + result.message);
@@ -3522,13 +3520,24 @@ async function 在线优选IP(request, env) {
 // 生成随机IP函数
 async function 生成随机IP(ranges, count) {
     const ips = [];
+    const MAX_SAMPLE_SIZE = 1000; // 最大抽样数量
+    const actualCount = Math.min(count, MAX_SAMPLE_SIZE); // 限制最大数量
     
-    function generateIPFromCIDR(cidr) {
+    console.log(`从Cloudflare IP范围中抽取${actualCount}个IP进行测试`);
+    
+    // CIDR转换为IP范围函数
+    function cidrToIPRange(cidr) {
         const [baseIP, prefixLength] = cidr.split('/');
         const baseIPNum = baseIP.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0);
         const mask = ~((1 << (32 - parseInt(prefixLength, 10))) - 1);
         const networkIP = baseIPNum & mask;
         const maxHost = (1 << (32 - parseInt(prefixLength, 10))) - 1;
+        return { networkIP, maxHost };
+    }
+    
+    // 生成随机IP函数
+    function generateIPFromCIDR(cidr) {
+        const { networkIP, maxHost } = cidrToIPRange(cidr);
         
         // 生成随机主机部分
         const randomHostPart = Math.floor(Math.random() * maxHost) + 1; // 避免使用网络地址(0)和广播地址(maxHost)
@@ -3543,27 +3552,64 @@ async function 生成随机IP(ranges, count) {
         ].join('.');
     }
     
+    // 计算每个CIDR块的IP数量
+    const cidrSizes = ranges.map(cidr => {
+        const { maxHost } = cidrToIPRange(cidr);
+        return maxHost;
+    });
+    
+    // 计算总IP数量
+    const totalIPs = cidrSizes.reduce((sum, size) => sum + size, 0);
+    console.log(`Cloudflare IP范围包含约${totalIPs}个IP地址`);
+    
+    // 为每个范围分配权重，确保大范围有更多的抽样
+    const weights = cidrSizes.map(size => size / totalIPs);
+    
+    // 根据权重分配每个CIDR块应该生成的IP数量
+    const ipCountPerRange = weights.map(weight => Math.ceil(actualCount * weight));
+    
     // 为每个范围生成随机IP
-    while (ips.length < count) {
-        const randomRangeIndex = Math.floor(Math.random() * ranges.length);
-        const ip = generateIPFromCIDR(ranges[randomRangeIndex]);
-        if (!ips.includes(ip)) {
-            ips.push(ip);
+    for (let i = 0; i < ranges.length; i++) {
+        const cidr = ranges[i];
+        const ipCount = Math.min(ipCountPerRange[i], cidrSizes[i]); // 不超过该CIDR块的最大IP数
+        
+        // 生成指定数量的随机IP
+        const rangeIPs = new Set();
+        let attempts = 0;
+        const maxAttempts = ipCount * 2; // 最大尝试次数，避免无限循环
+        
+        while (rangeIPs.size < ipCount && attempts < maxAttempts) {
+            const ip = generateIPFromCIDR(cidr);
+            rangeIPs.add(ip);
+            attempts++;
         }
+        
+        // 将该范围的IP添加到总列表
+        ips.push(...Array.from(rangeIPs));
     }
     
+    // 如果生成的IP数量超过要求，随机选择指定数量
+    if (ips.length > actualCount) {
+        // Fisher-Yates洗牌算法
+        for (let i = ips.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [ips[i], ips[j]] = [ips[j], ips[i]];
+        }
+        ips.length = actualCount;
+    }
+    
+    console.log(`成功生成${ips.length}个随机IP用于测试`);
     return ips;
 }
 
 // 测试IP连通性函数
 async function 测试IP连通性(ips, ports, timeout) {
     const results = [];
-    const promises = [];
+    const MAX_CONCURRENT = 50; // 最大并发测试数
+    const MAX_TEST_DURATION = 30000; // 最长测试时间(毫秒)
+    const minResults = 15; // 最少需要的结果数
     
-    // 确保至少有一些结果
-    const minResults = 5;
-    let retryCount = 0;
-    const maxRetries = 3;
+    console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
     
     // 测试单个IP函数
     async function testSingleIP(ip, port) {
@@ -3593,72 +3639,86 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             // 只要能连接上就算成功，不一定要200状态码
             const endTime = Date.now();
-            results.push({
+            return {
+                success: true,
                 ip,
                 port,
-                time: endTime - startTime,
-                status: 'success'
-            });
-            return true;
+                time: endTime - startTime
+            };
         } catch (error) {
-            // 连接失败，不添加到结果中
-            return false;
+            // 连接失败
+            return { success: false, ip, port };
         }
     }
     
-    // 主测试循环
-    while (results.length < minResults && retryCount < maxRetries) {
-        console.log(`测试轮次 ${retryCount + 1}，当前结果数: ${results.length}`);
+    // 随机打乱IP列表，确保公平测试
+    const shuffledIPs = [...ips];
+    for (let i = shuffledIPs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledIPs[i], shuffledIPs[j]] = [shuffledIPs[j], shuffledIPs[i]];
+    }
+    
+    // 创建测试任务队列
+    const testTasks = [];
+    for (const ip of shuffledIPs) {
+        // 为每个IP随机选择一个端口
+        const port = ports[Math.floor(Math.random() * ports.length)];
+        testTasks.push({ ip, port });
+    }
+    
+    console.log(`创建了${testTasks.length}个测试任务`);
+    
+    // 批量执行测试任务
+    const startTestTime = Date.now();
+    let taskIndex = 0;
+    
+    while (taskIndex < testTasks.length && results.length < minResults && (Date.now() - startTestTime) < MAX_TEST_DURATION) {
+        // 创建当前批次的测试任务
+        const currentBatch = [];
+        const batchSize = Math.min(MAX_CONCURRENT, testTasks.length - taskIndex);
         
-        // 清空之前的promises
-        promises.length = 0;
+        for (let i = 0; i < batchSize; i++) {
+            const task = testTasks[taskIndex++];
+            currentBatch.push(testSingleIP(task.ip, task.port));
+        }
         
-        // 为每个IP创建测试任务
-        for (const ip of ips) {
-            // 为每个IP尝试多个端口以增加成功率
-            for (let i = 0; i < 2; i++) { // 每个IP尝试两个不同端口
-                const port = ports[Math.floor(Math.random() * ports.length)];
-                promises.push(testSingleIP(ip, port));
+        // 等待当前批次完成
+        const batchResults = await Promise.all(currentBatch);
+        
+        // 处理结果
+        for (const result of batchResults) {
+            if (result.success) {
+                results.push({
+                    ip: result.ip,
+                    port: result.port,
+                    time: result.time,
+                    status: 'success'
+                });
+                
+                // 记录进度
+                if (results.length % 10 === 0) {
+                    console.log(`已找到${results.length}个可用IP，已测试${taskIndex}/${testTasks.length}`);
+                }
+                
+                // 如果已经有足够的结果，可以提前结束
+                if (results.length >= minResults * 2) {
+                    console.log(`已找到足够的可用IP (${results.length})，提前结束测试`);
+                    break;
+                }
             }
         }
         
-        // 等待所有测试完成
-        await Promise.allSettled(promises);
-        
-        // 如果结果不足，增加重试计数
-        if (results.length < minResults) {
-            retryCount++;
-            // 如果还需要重试，等待一小段时间
-            if (retryCount < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        } else {
-            break; // 已有足够结果，退出循环
+        // 如果结果太少，但已经测试了很多IP，降低标准
+        if (results.length < 5 && taskIndex > testTasks.length / 2) {
+            console.log(`测试进度过半但结果太少(${results.length})，降低标准继续测试`);
         }
     }
     
-    // 如果经过多次重试后仍然没有足够结果，添加一些默认IP
+    console.log(`测试完成，共测试了${taskIndex}/${testTasks.length}个IP，找到${results.length}个可用IP`);
+    
+    // 如果没有找到任何可用IP，记录警告信息
     if (results.length === 0) {
-        console.log('测试失败，添加默认IP');
-        // 添加一些默认的已知可用的Cloudflare IP
-        const defaultIPs = [
-            { ip: '104.16.1.1', port: '443', time: 100 },
-            { ip: '104.17.1.1', port: '443', time: 110 },
-            { ip: '104.18.1.1', port: '443', time: 120 },
-            { ip: '104.19.1.1', port: '443', time: 130 },
-            { ip: '104.20.1.1', port: '443', time: 140 },
-            { ip: '172.64.1.1', port: '443', time: 150 },
-            { ip: '172.65.1.1', port: '443', time: 160 },
-            { ip: '172.66.1.1', port: '443', time: 170 },
-            { ip: '172.67.1.1', port: '443', time: 180 },
-            { ip: '104.21.1.1', port: '443', time: 190 },
-            { ip: '104.22.1.1', port: '443', time: 200 },
-            { ip: '104.23.1.1', port: '443', time: 210 },
-            { ip: '104.24.1.1', port: '443', time: 220 },
-            { ip: '104.25.1.1', port: '443', time: 230 },
-            { ip: '104.26.1.1', port: '443', time: 240 }
-        ];
-        results.push(...defaultIPs);
+        console.log('警告：未找到任何可用的IP，请检查网络连接或尝试其他端口');
     }
     
     return results;
