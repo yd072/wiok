@@ -3071,27 +3071,46 @@ async function handleGetRequest(env, txt) {
 }
 
 async function 在线优选IP(request, env) {
-    // Cloudflare IP范围列表，来自 https://www.cloudflare.com/ips-v4/
-    const CF_IP_RANGES = [
-        '173.245.48.0/20',
-        '103.21.244.0/22',
-        '103.22.200.0/22',
-        '103.31.4.0/22',
-        '141.101.64.0/18',
-        '108.162.192.0/18',
-        '190.93.240.0/20',
-        '188.114.96.0/20',
-        '197.234.240.0/22',
-        '198.41.128.0/17',
-        '162.158.0.0/15',
-        '104.16.0.0/13',
-        '104.24.0.0/14',
-        '172.64.0.0/13',
-        '131.0.72.0/22'
-    ];
-    
     // 默认端口列表
     const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
+    
+    // 从Cloudflare官方网站获取IP范围列表
+    async function 获取Cloudflare_IP范围() {
+        try {
+            console.log('开始从Cloudflare官方网站获取IP范围列表...');
+            const response = await fetch('https://www.cloudflare.com/ips-v4/');
+            
+            if (!response.ok) {
+                throw new Error(`获取失败，状态码: ${response.status}`);
+            }
+            
+            const text = await response.text();
+            const ranges = text.trim().split(/\s+/);
+            
+            console.log(`成功获取到${ranges.length}个Cloudflare IP范围`);
+            return ranges;
+        } catch (error) {
+            console.error('获取Cloudflare IP范围失败:', error);
+            // 返回一些默认值作为备份
+            return [
+                '173.245.48.0/20',
+                '103.21.244.0/22',
+                '103.22.200.0/22',
+                '103.31.4.0/22',
+                '141.101.64.0/18',
+                '108.162.192.0/18',
+                '190.93.240.0/20',
+                '188.114.96.0/20',
+                '197.234.240.0/22',
+                '198.41.128.0/17',
+                '162.158.0.0/15',
+                '104.16.0.0/13',
+                '104.24.0.0/14',
+                '172.64.0.0/13',
+                '131.0.72.0/22'
+            ];
+        }
+    }
     
     // 处理POST请求
     if (request.method === 'POST') {
@@ -3100,7 +3119,20 @@ async function 在线优选IP(request, env) {
             const action = formData.get('action');
             
             if (action === 'test') {
-                const ranges = formData.get('ranges')?.split('\n').filter(Boolean) || CF_IP_RANGES;
+                // 获取用户输入的IP范围或从Cloudflare官方获取
+                let ranges;
+                const userRanges = formData.get('ranges')?.split('\n').filter(Boolean);
+                
+                if (userRanges && userRanges.length > 0) {
+                    // 使用用户提供的IP范围
+                    ranges = userRanges;
+                    console.log(`使用用户提供的${ranges.length}个IP范围`);
+                } else {
+                    // 从Cloudflare官方获取IP范围
+                    ranges = await 获取Cloudflare_IP范围();
+                    console.log(`使用从Cloudflare官方获取的${ranges.length}个IP范围`);
+                }
+                
                 const count = parseInt(formData.get('count') || '15', 10);
                 const ports = formData.get('ports')?.split(',').map(p => p.trim()).filter(Boolean) || DEFAULT_PORTS;
                 const timeout = parseInt(formData.get('timeout') || '2000', 10);
@@ -3344,8 +3376,8 @@ async function 在线优选IP(request, env) {
             
             <form id="testForm">
                 <div class="form-group">
-                    <label for="ranges">IP范围列表 (CIDR格式，每行一个)</label>
-                    <textarea id="ranges" name="ranges" placeholder="103.21.244.0/22&#10;104.16.0.0/13&#10;104.24.0.0/14&#10;172.64.0.0/13&#10;131.0.72.0/22">${CF_IP_RANGES.join('\n')}</textarea>
+                    <label for="ranges">IP范围列表 (CIDR格式，每行一个，留空将自动从官方获取)</label>
+                    <textarea id="ranges" name="ranges" placeholder="103.21.244.0/22&#10;104.16.0.0/13&#10;104.24.0.0/14&#10;172.64.0.0/13&#10;131.0.72.0/22"></textarea>
                 </div>
                 
                 <div class="form-group">
