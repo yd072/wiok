@@ -3112,84 +3112,39 @@ async function 在线优选IP(request, env) {
         }
     }
     
-    // 检测VPN状态的函数
+    // 检测VPN状态的函数 - 使用源码2的方式
     async function 检测VPN状态(request) {
         try {
-            // 获取用户IP
+            // 获取用户IP和国家信息
             const clientIP = request.headers.get('CF-Connecting-IP') || '';
-            
-            // 检查是否为私有IP或明显的代理IP
-            const isPrivateIP = /^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.|127\.|169\.254\.|::1|fc00:|fe80:)/i.test(clientIP);
-            
-            // 检查是否使用了Cloudflare的代理
-            const cfRay = request.headers.get('CF-Ray') || '';
-            const cfVisitor = request.headers.get('CF-Visitor') || '';
-            const cfIpCountry = request.headers.get('CF-IPCountry') || '';
-            
-            // 尝试获取用户真实位置信息
             const geoInfo = request.cf || {};
+            const cfIpCountry = request.headers.get('CF-IPCountry') || '';
             const country = geoInfo.country || cfIpCountry || '';
+            
+            // 判断是否为中国用户
+            const isChina = country === 'CN';
+            
+            // 如果不是中国用户，很可能使用了VPN
+            const isVpn = !isChina;
+            
+            // 获取其他详细信息用于调试
             const asn = geoInfo.asn || '';
             const asOrganization = geoInfo.asOrganization || '';
-            
-            // 获取请求头信息
             const userAgent = request.headers.get('User-Agent') || '';
             const acceptLanguage = request.headers.get('Accept-Language') || '';
             const xForwardedFor = request.headers.get('X-Forwarded-For') || '';
-            const xRealIP = request.headers.get('X-Real-IP') || '';
             
-            // VPN/代理服务提供商关键词
-            const vpnKeywords = [
-                'vpn', 'proxy', 'tunnel', 'anonymizer', 'anonymous', 
-                'hide', 'mask', 'private network', 'virtual private', 
-                'nord', 'express', 'surfshark', 'cyberghost', 'proton',
-                'torguard', 'mullvad', 'windscribe', 'ipvanish', 'purevpn',
-                'hotspot', 'avast', 'secure', 'private internet', 'hide my ass',
-                'zenmate', 'vyprvpn', 'strongvpn', 'privatevpn', 'tunnelbear'
-            ];
-            
-            // 检查ASN组织名称是否包含VPN关键词
-            const isVpnAsn = asOrganization && 
-                vpnKeywords.some(keyword => 
-                    asOrganization.toLowerCase().includes(keyword)
-                );
-            
-            // 检查是否有多个IP地址（可能是代理链）
-            const hasMultipleIPs = xForwardedFor && xForwardedFor.split(',').length > 1;
-            
-            // 检查是否有代理相关的请求头
-            const hasProxyHeaders = request.headers.has('Proxy-Connection') || 
-                                   request.headers.has('Via') || 
-                                   request.headers.has('X-Proxy-ID');
-                                   
-            // 检查是否通过移动数据连接（通常移动数据运营商会使用NAT，看起来像VPN）
-            const isMobileNetwork = asOrganization && 
-                /mobile|wireless|cellular|3g|4g|5g|lte|telecommunication/i.test(asOrganization.toLowerCase());
-                
-            // 检查是否是已知的数据中心IP（可能是VPS或代理）
-            const isDatacenter = asOrganization && 
-                /hosting|datacenter|data center|server|cloud|aws|azure|google cloud|alibaba|tencent|oracle|digital ocean|linode|vultr|ovh/i.test(asOrganization.toLowerCase());
-            
-            // 综合判断是否使用VPN
-            // 注意：移动网络可能会误判，所以如果检测到移动网络，降低判断标准
-            const isVpn = (isPrivateIP || isVpnAsn || (hasMultipleIPs && hasProxyHeaders) || isDatacenter) && !isMobileNetwork;
-            
-            // 为了调试，返回详细的检测信息
+            // 返回检测结果
             return {
                 isVpn,
                 details: {
                     clientIP,
                     country,
+                    isChina,
                     asn,
                     asOrganization,
-                    isPrivateIP,
-                    isVpnAsn,
-                    hasMultipleIPs,
-                    hasProxyHeaders,
-                    isMobileNetwork,
-                    isDatacenter,
                     headers: {
-                        userAgent: userAgent.substring(0, 100), // 截取前100个字符避免过长
+                        userAgent: userAgent.substring(0, 100),
                         acceptLanguage,
                         xForwardedFor: xForwardedFor.substring(0, 100)
                     }
