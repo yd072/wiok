@@ -3294,8 +3294,10 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 筛选20-200毫秒范围内的IP
+                // 筛选20-200毫秒范围内的IP（注意：显示的延迟是实际延迟的一半）
+                console.log(`筛选前共有 ${results.length} 个IP结果`);
                 const filteredResults = results.filter(item => item.time >= 20 && item.time <= 200);
+                console.log(`筛选后剩余 ${filteredResults.length} 个IP结果（20-200毫秒范围内）`);
                 
                 // 如果筛选后没有结果，返回提示信息
                 if (filteredResults.length === 0) {
@@ -3554,7 +3556,7 @@ async function 在线优选IP(request, env) {
                  </div>
                  
                  <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                     <button type="submit" id="testButton" class="btn">开始测试</button>
+                     <button type="button" id="testButton" class="btn">开始测试</button>
                      <button type="button" id="appendButton" class="btn" style="background-color: #2196F3;" disabled>追加到列表</button>
                      <button type="button" id="replaceButton" class="btn" style="background-color: #FF9800;" disabled>替换列表</button>
                  </div>
@@ -3638,8 +3640,8 @@ async function 在线优选IP(request, env) {
                      }
                  }
                  
-                 // 测试表单提交
-                 testForm.addEventListener('submit', async function(e) {
+                 // 测试按钮点击事件
+                 testButton.addEventListener('click', async function(e) {
                      e.preventDefault();
                      
                      // 显示加载状态
@@ -3673,7 +3675,11 @@ async function 在线优选IP(request, env) {
                                  document.getElementById('appendButton').disabled = false;
                                  document.getElementById('replaceButton').disabled = false;
                              } else {
-                                 resultList.textContent = '未能获取到有效的测试结果，请尝试更改端口或增加超时时间后重试';
+                                 if (result.message && result.message.includes('未找到20-200毫秒范围内的IP')) {
+                                     resultList.textContent = '未找到20-200毫秒范围内的IP，请尝试增加超时时间或更改端口后重试';
+                                 } else {
+                                     resultList.textContent = '未能获取到有效的测试结果，请尝试更改端口或增加超时时间后重试';
+                                 }
                                  resultContainer.style.display = 'block';
                                  document.getElementById('appendButton').disabled = true;
                                  document.getElementById('replaceButton').disabled = true;
