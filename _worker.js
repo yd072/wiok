@@ -3269,20 +3269,19 @@ async function 在线优选IP(request, env) {
                 const timeout = parseInt(formData.get('timeout') || '2000', 10);
                 
                                  // 从CIDR范围中生成随机IP
-                 const ips = await 生成随机IP(ranges, 1000); // 固定生成1000个IP进行测试
-                 
-                 // 测试IP连通性
-                 let results = [];
-                 try {
-                     results = await 测试IP连通性(ips, ports, timeout);
-                     console.log(`获取到 ${results.length} 个测试结果`);
-                 } catch (error) {
-                     console.error('测试IP连通性时出错:', error);
-                 }
+                const ips = await 生成随机IP(ranges, 1000); // 固定生成1000个IP进行测试
                 
-                // 按响应时间排序并取前N个
-                // 检查是否有测试结果
-                if (results.length === 0) {
+                // 测试IP连通性
+                let latencyResults = [];
+                try {
+                    latencyResults = await 测试IP连通性(ips, ports, timeout);
+                    console.log(`延迟测试获取到 ${latencyResults.length} 个结果`);
+                } catch (error) {
+                    console.error('测试IP连通性时出错:', error);
+                }
+                
+                // 检查是否有延迟测试结果
+                if (latencyResults.length === 0) {
                     return new Response(JSON.stringify({
                         success: true,
                         message: '未找到可用IP',
@@ -3294,55 +3293,69 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 处理测试结果 - 先按延迟排序
-                const lowLatencyIPs = results
-                    .sort((a, b) => a.time - b.time)
-                    .slice(0, Math.min(30, count * 2)); // 选取更多IP进行速度测试
+                // 按响应时间排序
+                latencyResults.sort((a, b) => a.time - b.time);
                 
-                // 更新前端提示，表明进入测速阶段
-                const updateTestingPhase = new Response(JSON.stringify({
-                    phase: 'speed',
-                    message: `正在对${lowLatencyIPs.length}个低延迟IP进行速度测试...`
-                }), {
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
+                // 获取测速URL
+                const speedTestUrl = formData.get('speedTestUrl') || 'https://download.parallels.com/desktop/v17/17.1.1-51537/ParallelsDesktop-17.1.1-51537.dmg';
                 
-                // 发送更新消息（这不会中断当前请求）
-                env.ASSETS && env.ASSETS.put('testing_phase', updateTestingPhase);
+                // 从延迟测试结果中选择前50个进行速度测试
+                const topLatencyIPs = latencyResults.slice(0, 50).map(item => item.ip);
+                const selectedPort = ports[0]; // 使用第一个端口进行测速
                 
-                // 进行速度测试
-                console.log(`对${lowLatencyIPs.length}个低延迟IP进行速度测试`);
-                const speedTestResults = await 测试IP速度(lowLatencyIPs.map(item => ({
-                    ip: item.ip,
-                    port: item.port,
-                    time: item.time
-                })));
+                console.log(`从延迟最低的${topLatencyIPs.length}个IP中进行速度测试`);
                 
-                // 按速度排序，选出速度大于10MB/s的IP
-                const highSpeedIPs = speedTestResults
-                    .filter(item => item.speed >= 10) // 筛选速度大于10MB/s的IP
-                    .sort((a, b) => b.speed - a.speed) // 按速度从高到低排序
-                    .slice(0, count); // 取前N个
-                
-                // 如果高速IP不足，补充低延迟IP
-                let bestIPs = [];
-                if (highSpeedIPs.length < count) {
-                    const remainingCount = count - highSpeedIPs.length;
-                    const additionalIPs = lowLatencyIPs
-                        .filter(item => !highSpeedIPs.some(hsIP => hsIP.ip === item.ip && hsIP.port === item.port))
-                        .slice(0, remainingCount);
-                    
-                    bestIPs = [
-                        ...highSpeedIPs.map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms ${item.speed.toFixed(2)}MB/s`),
-                        ...additionalIPs.map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms`)
-                    ];
-                } else {
-                    bestIPs = highSpeedIPs.map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms ${item.speed.toFixed(2)}MB/s`);
+                // 测试下载速度，要求速度≥10MB/s，最多获取10个结果
+                let speedResults = [];
+                try {
+                    speedResults = await 测试IP下载速度(topLatencyIPs, selectedPort, speedTestUrl, 10, 10);
+                    console.log(`速度测试获取到 ${speedResults.length} 个结果`);
+                } catch (error) {
+                    console.error('测试IP下载速度时出错:', error);
                 }
                 
-                console.log(`优选完成，找到${highSpeedIPs.length}个高速IP（>10MB/s），总共选择了${bestIPs.length}个IP`);
+                // 合并延迟和速度结果
+                let finalResults = [];
+                
+                // 如果有速度测试结果，优先使用速度测试结果
+                if (speedResults.length > 0) {
+                    // 为每个速度测试结果添加延迟信息
+                    finalResults = speedResults.map(speedResult => {
+                        const latencyResult = latencyResults.find(item => item.ip === speedResult.ip);
+                        return {
+                            ip: speedResult.ip,
+                            port: speedResult.port,
+                            time: latencyResult ? latencyResult.time : 0,
+                            speed: speedResult.speed,
+                            status: 'success'
+                        };
+                    });
+                    
+                    // 按速度排序
+                    finalResults.sort((a, b) => b.speed - a.speed);
+                } else {
+                    // 如果没有速度测试结果，使用延迟测试结果
+                    finalResults = latencyResults.slice(0, count);
+                }
+                
+                // 检查最终结果
+                if (finalResults.length === 0) {
+                    return new Response(JSON.stringify({
+                        success: true,
+                        message: '未找到符合条件的IP',
+                        bestIPs: []
+                    }), {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                }
+                
+                // 生成最终IP列表
+                const bestIPs = finalResults.slice(0, count).map(item => {
+                    const speedInfo = item.speed ? `${item.speed.toFixed(2)}MB/s` : '';
+                    return `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms${speedInfo ? ' ' + speedInfo : ''}`;
+                });
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
@@ -3566,22 +3579,26 @@ async function 在线优选IP(request, env) {
                     <input type="text" id="ports" name="ports" value="${DEFAULT_PORTS.join(',')}">
                 </div>
                 
-                                 <div class="form-group">
-                     <label for="timeout">超时时间 (毫秒)</label>
-                     <input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
-                 </div>
-                 
-                 <div class="form-group" style="margin-top: 15px;">
-                     <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
-                         <strong>说明：</strong><br>
-                         • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
-                         • 先测试延迟，然后对低延迟IP进行速度测试（10MB大小文件）<br>
-                         • <span style="color: #1976D2;">优先选择下载速度≥10MB/s的IP，按速度从高到低排序</span><br>
-                         • 如果高速IP不足，将用低延迟IP补充至设定数量<br>
-                         • 输入多个端口时，系统会为每个IP随机选择一个端口进行测试<br>
-                         • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
-                         • 如果您使用VPN，可能会影响测试结果的准确性
-                     </div>
+                                                 <div class="form-group">
+                    <label for="timeout">超时时间 (毫秒)</label>
+                    <input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
+                </div>
+                
+                <div class="form-group">
+                    <label for="speedTestUrl">测速下载地址 (用于测试下载速度)</label>
+                    <input type="text" id="speedTestUrl" name="speedTestUrl" value="https://download.parallels.com/desktop/v17/17.1.1-51537/ParallelsDesktop-17.1.1-51537.dmg">
+                </div>
+                
+                <div class="form-group" style="margin-top: 15px;">
+                                         <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                        <strong>说明：</strong><br>
+                        • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
+                        • 先测试延迟，再从延迟最低的IP中测试下载速度<br>
+                        • 优先选择下载速度≥10MB/s的IP，最多10个<br>
+                        • 输入多个端口时，系统会为每个IP随机选择一个端口进行延迟测试<br>
+                        • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
+                        • 如果您使用VPN，可能会影响测试结果的准确性
+                    </div>
                  </div>
                  
                  <div style="display: flex; gap: 10px; margin-bottom: 20px;">
@@ -3593,8 +3610,7 @@ async function 在线优选IP(request, env) {
             
             <div class="loading" id="loading">
                 <div class="spinner"></div>
-                <p id="loadingText">正在测试IP延迟，请稍候...</p>
-                <p style="font-size: 13px; color: #666;">测试分两步：1.测延迟 2.测速度</p>
+                <p>正在测试IP，请稍候...</p>
             </div>
             
                          <div class="result-container" id="resultContainer" style="display: none;">
@@ -3682,10 +3698,6 @@ async function 在线优选IP(request, env) {
                      resultContainer.style.display = 'none';
                      document.getElementById('saveMessage').textContent = '';
                      vpnWarning.style.display = 'none';
-                     
-                     // 获取加载文本元素
-                     const loadingText = document.getElementById('loadingText');
-                     loadingText.textContent = '正在测试IP延迟，请稍候...';
                      
                      const formData = new FormData(testForm);
                      formData.append('action', 'test');
@@ -4006,111 +4018,98 @@ async function 测试IP连通性(ips, ports, timeout) {
     return results;
 }
 
-// 测试IP速度函数
-async function 测试IP速度(ips) {
+// 测试IP下载速度函数
+async function 测试IP下载速度(ips, port, speedTestUrl, minSpeed = 10, maxCount = 10) {
     const results = [];
-    const MAX_CONCURRENT = 10; // 速度测试并发数较小
-    const TEST_FILE_SIZE = 10 * 1024 * 1024; // 10MB测试文件
-    const TEST_TIMEOUT = 15000; // 15秒超时
+    const MAX_CONCURRENT = 5; // 测速并发数较小，避免网络拥堵
     
-    console.log(`开始对${ips.length}个IP进行速度测试`);
+    console.log(`开始测速，目标: ${ips.length}个IP，测速地址: ${speedTestUrl}`);
     
-    // 测试单个IP的速度
+    // 测试单个IP的下载速度
     async function testSingleIPSpeed(ip, port) {
         try {
-            const startTime = Date.now();
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), TEST_TIMEOUT);
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
             
-            // 使用较大文件进行测速
-            const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
+            const startTime = Date.now();
+            
+            // 使用fetch API测试下载速度
+            const response = await fetch(speedTestUrl, {
                 signal: controller.signal,
                 headers: {
-                    'Host': 'speed.cloudflare.com',
+                    'Host': new URL(speedTestUrl).hostname,
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                     'Accept': '*/*',
-                    'Connection': 'keep-alive'
+                    'Connection': 'keep-alive',
+                    'CF-Connecting-IP': ip,
+                    'X-Forwarded-For': ip
                 }
             });
             
+            if (!response.ok) {
+                clearTimeout(timeoutId);
+                console.log(`IP ${ip}:${port} 请求失败: ${response.status}`);
+                return { success: false, ip, port };
+            }
+            
+            // 读取响应的前10MB数据来测速
+            const reader = response.body.getReader();
+            let bytesReceived = 0;
+            const MAX_BYTES = 10 * 1024 * 1024; // 10MB
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done || bytesReceived >= MAX_BYTES) {
+                    break;
+                }
+                bytesReceived += value.length;
+            }
+            
+            // 取消请求并清除超时
+            controller.abort();
             clearTimeout(timeoutId);
             
-            // 如果响应成功
-            if (response.ok) {
-                // 读取响应内容
-                const reader = response.body.getReader();
-                let receivedSize = 0;
-                
-                // 开始计时
-                const downloadStartTime = Date.now();
-                
-                // 读取数据流
-                while (true) {
-                    const {done, value} = await reader.read();
-                    if (done) break;
-                    receivedSize += value.length;
-                }
-                
-                // 计算下载时间和速度
-                const downloadTime = (Date.now() - downloadStartTime) / 1000; // 秒
-                const speedMBps = receivedSize / 1024 / 1024 / downloadTime; // MB/s
-                
-                console.log(`IP ${ip}:${port} 速度测试完成: ${speedMBps.toFixed(2)} MB/s`);
-                
-                return {
-                    ip,
-                    port,
-                    time: ips.find(item => item.ip === ip && item.port === item.port)?.time || 0,
-                    speed: speedMBps,
-                    status: 'success'
-                };
-            } else {
-                // 响应不成功
-                console.log(`IP ${ip}:${port} 速度测试失败: HTTP ${response.status}`);
-                return null;
-            }
+            const endTime = Date.now();
+            const timeUsed = (endTime - startTime) / 1000; // 秒
+            
+            // 计算速度 (MB/s)
+            const speedMBps = bytesReceived / 1024 / 1024 / timeUsed;
+            
+            console.log(`IP ${ip}:${port} 下载速度: ${speedMBps.toFixed(2)} MB/s (${bytesReceived} bytes in ${timeUsed.toFixed(2)}s)`);
+            
+            return {
+                success: true,
+                ip,
+                port,
+                speed: speedMBps,
+                bytesReceived,
+                timeUsed
+            };
         } catch (error) {
-            // 测速过程中出错
-            console.log(`IP ${ip}:${port} 速度测试出错: ${error.message}`);
-            
-            // 对于证书错误，我们可以尝试估算速度
-            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                const errorTime = Date.now() - startTime;
-                // 根据错误发生的速度粗略估计连接质量
-                // 这只是一个近似值，实际速度测量需要更复杂的方法
-                const estimatedSpeed = 5 + Math.random() * 10; // 随机估计5-15MB/s
-                
-                return {
-                    ip,
-                    port,
-                    time: ips.find(item => item.ip === ip && item.port === port)?.time || 0,
-                    speed: estimatedSpeed,
-                    status: 'estimated'
-                };
-            }
-            
-            return null;
+            console.log(`IP ${ip}:${port} 测速出错: ${error.message}`);
+            return { success: false, ip, port };
         }
     }
     
-    // 随机打乱IP列表
-    const shuffledIPs = [...ips];
-    for (let i = shuffledIPs.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledIPs[i], shuffledIPs[j]] = [shuffledIPs[j], shuffledIPs[i]];
+    // 批量执行测速任务
+    const tasks = [];
+    for (const ip of ips) {
+        tasks.push({ ip, port });
     }
     
-    // 批量执行测速任务
+    console.log(`创建了${tasks.length}个测速任务`);
+    
+    // 分批执行测速任务
     let taskIndex = 0;
     
-    while (taskIndex < shuffledIPs.length) {
+    while (taskIndex < tasks.length && results.length < maxCount) {
         // 创建当前批次的测试任务
         const currentBatch = [];
-        const batchSize = Math.min(MAX_CONCURRENT, shuffledIPs.length - taskIndex);
+        const batchSize = Math.min(MAX_CONCURRENT, tasks.length - taskIndex);
         
         for (let i = 0; i < batchSize; i++) {
-            const item = shuffledIPs[taskIndex++];
-            currentBatch.push(testSingleIPSpeed(item.ip, item.port));
+            const task = tasks[taskIndex++];
+            currentBatch.push(testSingleIPSpeed(task.ip, task.port));
         }
         
         // 等待当前批次完成
@@ -4118,17 +4117,27 @@ async function 测试IP速度(ips) {
         
         // 处理结果
         for (const result of batchResults) {
-            if (result) {
-                results.push(result);
+            if (result.success && result.speed >= minSpeed) {
+                results.push({
+                    ip: result.ip,
+                    port: result.port,
+                    speed: result.speed,
+                    time: 0, // 延迟信息会在外部合并
+                    status: 'success'
+                });
                 
                 // 记录进度
-                if (results.length % 5 === 0) {
-                    console.log(`已完成${results.length}/${shuffledIPs.length}个IP的速度测试`);
+                console.log(`已找到${results.length}个速度≥${minSpeed}MB/s的IP，已测试${taskIndex}/${tasks.length}`);
+                
+                // 如果已经有足够的结果，可以提前结束
+                if (results.length >= maxCount) {
+                    console.log(`已找到足够的高速IP (${results.length})，提前结束测速`);
+                    break;
                 }
             }
         }
     }
     
-    console.log(`速度测试完成，共测试了${shuffledIPs.length}个IP，有${results.length}个返回了结果`);
+    console.log(`测速完成，共测试了${taskIndex}/${tasks.length}个IP，找到${results.length}个速度≥${minSpeed}MB/s的IP`);
     return results;
 }
