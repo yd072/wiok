@@ -3162,7 +3162,77 @@ async function 在线优选IP(request, env) {
             const formData = await request.formData();
             const action = formData.get('action');
             
-            if (action === 'test') {
+            // 处理保存请求
+            if (action === 'save') {
+                // 检查是否有KV存储
+                if (!env.KV) {
+                    return new Response(JSON.stringify({
+                        success: false,
+                        message: '服务器未配置KV存储，无法保存IP列表'
+                    }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                
+                try {
+                    // 获取要保存的IP列表
+                    const ips = formData.getAll('ips[]');
+                    
+                    if (!ips || ips.length === 0) {
+                        return new Response(JSON.stringify({
+                            success: false,
+                            message: '没有提供要保存的IP'
+                        }), {
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    }
+                    
+                    // 获取保存模式
+                    const saveMode = formData.get('saveMode') || 'append';
+                    
+                    // 获取现有内容
+                    const existingContent = await env.KV.get('ADD.txt') || '';
+                    let newContent = '';
+                    
+                    if (saveMode === 'replaceAll') {
+                        // 完全替换模式：仅保留新的优选IP
+                        newContent = ips.join('\n');
+                    } else {
+                        // 追加模式：保留所有现有内容，添加新的优选IP
+                        // 或替换模式：保留所有非优选IP行，然后添加新的优选IP
+                        if (saveMode === 'replace') {
+                            // 替换模式：过滤掉已有的优选IP
+                            const existingLines = existingContent.split('\n').filter(line => 
+                                !line.includes('#优选IP') && !line.includes('#CF优选IP'));
+                            newContent = [...existingLines, ...ips].join('\n');
+                        } else {
+                            // 追加模式
+                            newContent = existingContent ? existingContent + '\n' + ips.join('\n') : ips.join('\n');
+                        }
+                    }
+                    
+                    // 保存到KV
+                    await env.KV.put('ADD.txt', newContent);
+                    
+                    return new Response(JSON.stringify({
+                        success: true,
+                        message: '保存成功',
+                        count: ips.length
+                    }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                } catch (error) {
+                    console.error('保存IP时出错:', error);
+                    return new Response(JSON.stringify({
+                        success: false,
+                        message: '保存失败: ' + error.message
+                    }), {
+                        status: 500,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+            }
+            else if (action === 'test') {
                 // 检测VPN状态
                 const vpnStatus = await 检测VPN状态(request);
                 
@@ -3229,30 +3299,8 @@ async function 在线优选IP(request, env) {
                     .slice(0, count)
                     .map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms`);
                 
-                // 如果绑定了KV，保存结果
-                if (env.KV && bestIPs.length > 0) {
-                    try {
-                        const saveMode = formData.get('saveMode') || 'append';
-                        const existingContent = await env.KV.get('ADD.txt') || '';
-                        let newContent = '';
-                        
-                        if (saveMode === 'replace') {
-                            // 替换模式：保留所有非优选IP行，然后添加新的优选IP
-                            const existingLines = existingContent.split('\n').filter(line => !line.includes('#优选IP'));
-                            newContent = [...existingLines, ...bestIPs].join('\n');
-                        } else if (saveMode === 'replaceAll') {
-                            // 完全替换模式：仅保留新的优选IP
-                            newContent = bestIPs.join('\n');
-                        } else {
-                            // 追加模式：保留所有现有内容，添加新的优选IP
-                            newContent = existingContent ? existingContent + '\n' + bestIPs.join('\n') : bestIPs.join('\n');
-                        }
-                        
-                        await env.KV.put('ADD.txt', newContent);
-                    } catch (error) {
-                        console.error('保存优选IP时出错:', error);
-                    }
-                }
+                // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
+                // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
                 
                 return new Response(JSON.stringify({
                     success: true,
@@ -3539,13 +3587,19 @@ async function 在线优选IP(request, env) {
                          saveButton.disabled = true;
                          saveButton.textContent = '保存中...';
                          
-                         const formData = new FormData(testForm);
-                         formData.append('action', 'test');
-                         formData.append('saveMode', mode === 'append' ? 'append' : 'replaceAll');
+                         // 创建一个新的FormData对象
+                         const saveFormData = new FormData();
+                         saveFormData.append('action', 'save'); // 使用不同的action
+                         saveFormData.append('saveMode', mode === 'append' ? 'append' : 'replaceAll');
+                         
+                         // 添加测试结果
+                         testResults.forEach(ip => {
+                             saveFormData.append('ips[]', ip);
+                         });
                          
                          const response = await fetch(window.location.href, {
                              method: 'POST',
-                             body: formData
+                             body: saveFormData
                          });
                          
                          const result = await response.json();
