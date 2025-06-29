@@ -3112,6 +3112,60 @@ async function 在线优选IP(request, env) {
         }
     }
     
+    // 检测VPN状态的函数
+    async function 检测VPN状态(request) {
+        try {
+            // 获取用户IP
+            const clientIP = request.headers.get('CF-Connecting-IP') || '';
+            
+            // 检查是否为私有IP或明显的代理IP
+            const isPrivateIP = /^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.|127\.|169\.254\.|::1|fc00:|fe80:)/i.test(clientIP);
+            
+            // 检查是否使用了Cloudflare的代理
+            const cfRay = request.headers.get('CF-Ray') || '';
+            const cfVisitor = request.headers.get('CF-Visitor') || '';
+            const cfIpCountry = request.headers.get('CF-IPCountry') || '';
+            
+            // 尝试获取用户真实位置信息
+            const geoInfo = request.cf || {};
+            const country = geoInfo.country || cfIpCountry || '';
+            const asn = geoInfo.asn || '';
+            const asOrganization = geoInfo.asOrganization || '';
+            
+            // VPN/代理服务提供商关键词
+            const vpnKeywords = [
+                'vpn', 'proxy', 'tunnel', 'anonymizer', 'anonymous', 
+                'hide', 'mask', 'private network', 'virtual private', 
+                'nord', 'express', 'surfshark', 'cyberghost', 'proton',
+                'torguard', 'mullvad', 'windscribe', 'ipvanish', 'purevpn'
+            ];
+            
+            // 检查ASN组织名称是否包含VPN关键词
+            const isVpnAsn = asOrganization && 
+                vpnKeywords.some(keyword => 
+                    asOrganization.toLowerCase().includes(keyword)
+                );
+            
+            // 综合判断是否使用VPN
+            const isVpn = isPrivateIP || isVpnAsn;
+            
+            return {
+                isVpn,
+                details: {
+                    clientIP,
+                    country,
+                    asn,
+                    asOrganization,
+                    isPrivateIP,
+                    isVpnAsn
+                }
+            };
+        } catch (error) {
+            console.error('检测VPN状态时出错:', error);
+            return { isVpn: false, details: {} };
+        }
+    }
+    
     // 处理POST请求
     if (request.method === 'POST') {
         try {
@@ -3119,6 +3173,28 @@ async function 在线优选IP(request, env) {
             const action = formData.get('action');
             
             if (action === 'test') {
+                // 检查是否忽略VPN检测
+                const ignoreVpn = formData.get('ignoreVpn') === 'true';
+                
+                // 检测VPN状态
+                const vpnStatus = await 检测VPN状态(request);
+                
+                // 如果检测到VPN且用户没有选择忽略警告，返回提示信息
+                if (vpnStatus.isVpn && !ignoreVpn) {
+                    return new Response(JSON.stringify({
+                        success: false,
+                        message: '检测到您正在使用VPN或代理服务，这可能会影响IP优选结果的准确性。请关闭VPN后再进行测试。',
+                        vpnDetails: vpnStatus.details
+                    }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                
+                // 如果用户选择忽略VPN警告，记录日志
+                if (vpnStatus.isVpn && ignoreVpn) {
+                    console.log('用户选择忽略VPN警告继续测试', vpnStatus.details);
+                }
+                
                 // 获取用户输入的IP范围或从Cloudflare官方获取
                 let ranges;
                 const userRanges = formData.get('ranges')?.split('\n').filter(Boolean);
@@ -3517,7 +3593,67 @@ async function 在线优选IP(request, env) {
                                  document.getElementById('replaceButton').disabled = true;
                              }
                          } else {
-                             alert('测试失败: ' + result.message);
+                             // 显示错误信息
+                             if (result.message && result.message.includes('VPN')) {
+                                 // VPN警告使用更友好的提示
+                                 const vpnWarningHTML = 
+                                     '<div style="background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 4px; margin-bottom: 15px;">' +
+                                     '<h4 style="margin-top: 0; margin-bottom: 10px;">⚠️ VPN检测警告</h4>' +
+                                     '<p>' + result.message + '</p>' +
+                                     '<p style="margin-bottom: 0;">' +
+                                     '<button id="ignoreVpnButton" class="btn" style="background-color: #ffc107; color: #212529; border: none;">' +
+                                     '忽略警告并继续测试' +
+                                     '</button>' +
+                                     '</p>' +
+                                     '</div>';
+                                 
+                                 resultList.innerHTML = vpnWarningHTML;
+                                 resultContainer.style.display = 'block';
+                                 
+                                 // 添加忽略按钮事件
+                                 document.getElementById('ignoreVpnButton').addEventListener('click', function() {
+                                     const formData = new FormData(testForm);
+                                     formData.append('action', 'test');
+                                     formData.append('ignoreVpn', 'true');
+                                     
+                                     // 显示加载状态
+                                     testButton.disabled = true;
+                                     loading.style.display = 'block';
+                                     resultContainer.style.display = 'none';
+                                     
+                                     fetch(window.location.href, {
+                                         method: 'POST',
+                                         body: formData
+                                     })
+                                     .then(response => response.json())
+                                     .then(result => {
+                                         if (result.success) {
+                                             if (result.bestIPs && result.bestIPs.length > 0) {
+                                                 testResults = result.bestIPs;
+                                                 resultList.textContent = result.bestIPs.join('\\n');
+                                                 resultContainer.style.display = 'block';
+                                             } else {
+                                                 resultList.textContent = '未能获取到有效的测试结果，请尝试更改端口或增加超时时间后重试';
+                                                 resultContainer.style.display = 'block';
+                                                 document.getElementById('appendButton').disabled = true;
+                                                 document.getElementById('replaceButton').disabled = true;
+                                             }
+                                         } else {
+                                             alert('测试失败: ' + result.message);
+                                         }
+                                     })
+                                     .catch(error => {
+                                         alert('请求出错: ' + error.message);
+                                     })
+                                     .finally(() => {
+                                         testButton.disabled = false;
+                                         loading.style.display = 'none';
+                                     });
+                                 });
+                             } else {
+                                 // 其他错误使用普通alert
+                                 alert('测试失败: ' + result.message);
+                             }
                          }
                      } catch (error) {
                          alert('请求出错: ' + error.message);
