@@ -3216,8 +3216,8 @@ async function 在线优选IP页面(request, env) {
 			return new Response("无效的操作", { status: 400 });
 		}
 		
-		// 获取优选IP列表
-		const cloudflareIPs = await 优选CloudflareIP('https://www.cloudflare.com/ips-v4/', 15);
+		// 不再预先获取优选IP列表
+		// const cloudflareIPs = await 优选CloudflareIP('https://www.cloudflare.com/ips-v4/', 15);
 		
 		const html = `
 		<!DOCTYPE html>
@@ -3266,6 +3266,7 @@ async function 在线优选IP页面(request, env) {
 					border: 1px solid var(--border-color);
 					border-radius: 8px;
 					overflow: hidden;
+					display: none; /* 初始隐藏IP列表 */
 				}
 
 				.ip-item {
@@ -3340,6 +3341,7 @@ async function 在线优选IP页面(request, env) {
 
 				.select-all-container {
 					margin-bottom: 10px;
+					display: none; /* 初始隐藏全选框 */
 				}
 				
 				.progress-container {
@@ -3373,15 +3375,42 @@ async function 在线优选IP页面(request, env) {
 					justify-content: space-between;
 					align-items: center;
 				}
+				
+				.action-buttons {
+					display: none; /* 初始隐藏操作按钮 */
+					margin-top: 15px;
+				}
+				
+				.optimize-info {
+					text-align: center;
+					margin: 40px 0;
+				}
+				
+				.optimize-btn-large {
+					padding: 12px 30px;
+					font-size: 16px;
+					background: #2196F3;
+					color: white;
+					border: none;
+					border-radius: 6px;
+					cursor: pointer;
+					transition: all 0.3s ease;
+					margin: 20px auto;
+					display: block;
+				}
+				
+				.optimize-btn-large:hover {
+					background: #0b7dda;
+				}
 			</style>
 		</head>
 		<body>
 			<div class="container">
 				<div class="title">在线优选IP</div>
 				
-				<div class="optimize-container">
-					<p>以下是从Cloudflare IP池中优选的15个IP地址，您可以选择将它们添加到您的优选列表中。</p>
-					<button type="button" class="btn btn-optimize" onclick="reoptimizeIPs()">重新优选IP</button>
+				<div id="initialView" class="optimize-info">
+					<p>点击下方按钮开始优选Cloudflare IP，系统将从Cloudflare IP池中优选出15个最佳IP。</p>
+					<button type="button" class="optimize-btn-large" onclick="startOptimize()">开始优选IP</button>
 				</div>
 				
 				<div class="progress-container" id="progressContainer">
@@ -3392,28 +3421,24 @@ async function 在线优选IP页面(request, env) {
 				</div>
 				
 				<form id="optimizeForm" method="POST">
-					<div class="select-all-container">
+					<div class="select-all-container" id="selectAllContainer">
 						<label>
 							<input type="checkbox" id="selectAll" onclick="toggleSelectAll()"> 全选
 						</label>
 					</div>
 					
 					<div class="ip-list" id="ipList">
-						${cloudflareIPs.map(ip => `
-							<div class="ip-item">
-								<input type="checkbox" name="ip" value="${ip}" class="ip-checkbox">
-								<span>${ip}</span>
-							</div>
-						`).join('')}
+						<!-- IP列表将在优选完成后动态添加 -->
 					</div>
 					
 					<input type="hidden" name="selected_ips" id="selectedIPs">
 					<input type="hidden" name="action" id="actionType">
 					
-					<div class="button-group">
+					<div class="button-group action-buttons" id="actionButtons">
 						<button type="button" class="btn btn-secondary" onclick="goBack()">返回</button>
 						<button type="button" class="btn btn-primary" onclick="submitForm('replace')">替换到ADD列表</button>
 						<button type="button" class="btn btn-primary" onclick="submitForm('append')">追加到ADD列表</button>
+						<button type="button" class="btn btn-optimize" onclick="startOptimize()">重新优选IP</button>
 					</div>
 				</form>
 				
@@ -3458,7 +3483,11 @@ async function 在线优选IP页面(request, env) {
 					document.getElementById('optimizeForm').submit();
 				}
 				
-				function reoptimizeIPs() {
+				function startOptimize() {
+					// 隐藏初始视图
+					const initialView = document.getElementById('initialView');
+					if (initialView) initialView.style.display = 'none';
+					
 					// 显示进度条
 					const progressContainer = document.getElementById('progressContainer');
 					const progressBar = document.getElementById('progressBar');
@@ -3507,6 +3536,11 @@ async function 在线优选IP页面(request, env) {
 									
 									// 更新IP列表
 									updateIPList(response.ips);
+									
+									// 显示全选框和操作按钮
+									document.getElementById('selectAllContainer').style.display = 'block';
+									document.getElementById('actionButtons').style.display = 'flex';
+									document.getElementById('ipList').style.display = 'block';
 									
 									// 延迟隐藏进度条
 									setTimeout(() => {
