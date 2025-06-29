@@ -654,6 +654,9 @@ export default {
 				} else if (url.pathname == `/${动态UUID}/edit` || 路径 == `/${userID}/edit`) {
 					const html = await KV(request, env);
 					return html;
+				} else if (url.pathname == `/${动态UUID}/optimize` || 路径 == `/${userID}/optimize`) {
+					const html = await 在线优选IP页面(request, env);
+					return html;
 				} else if (url.pathname == `/${动态UUID}` || 路径 == `/${userID}`) {
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 					const 维列斯Config = await 生成配置信息(userID, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
@@ -1820,7 +1823,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		}
 
 		let 订阅器 = '<br>';
-		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
+		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a> | <a href='${_url.pathname}/optimize'>在线优选IP</a>` : '';
 		
 		if (sub) {
 			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
@@ -3143,4 +3146,240 @@ async function handleGetRequest(env, txt) {
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
+}
+
+// 添加在线优选IP页面函数
+async function 在线优选IP页面(request, env) {
+	try {
+		if (request.method === "POST") {
+			const formData = await request.formData();
+			const action = formData.get('action');
+			const selectedIPs = formData.get('selected_ips');
+			
+			if (!env.KV) {
+				return new Response("未绑定KV空间", { status: 400 });
+			}
+			
+			if (action === 'replace' || action === 'append') {
+				let existingContent = '';
+				if (action === 'append') {
+					existingContent = await env.KV.get('ADD.txt') || '';
+					if (existingContent && !existingContent.endsWith('\n')) {
+						existingContent += '\n';
+					}
+				}
+				
+				await env.KV.put('ADD.txt', existingContent + selectedIPs);
+				return new Response("IP列表已" + (action === 'replace' ? "替换" : "追加") + "到ADD编辑列表", {
+					headers: { "Content-Type": "text/plain;charset=utf-8" }
+				});
+			}
+			
+			return new Response("无效的操作", { status: 400 });
+		}
+		
+		// 获取优选IP列表
+		const cloudflareIPs = await 优选CloudflareIP('https://www.cloudflare.com/ips-v4/', 15);
+		
+		const html = `
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<title>在线优选IP</title>
+			<meta charset="utf-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<style>
+				:root {
+					--primary-color: #4CAF50;
+					--secondary-color: #45a049;
+					--border-color: #e0e0e0;
+					--text-color: #333;
+					--background-color: #f5f5f5;
+				}
+				
+				body {
+					margin: 0;
+					padding: 20px;
+					font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+					line-height: 1.6;
+					color: var(--text-color);
+					background-color: var(--background-color);
+				}
+
+				.container {
+					max-width: 1000px;
+					margin: 0 auto;
+					background: white;
+					padding: 25px;
+					border-radius: 10px;
+					box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+				}
+
+				.title {
+					font-size: 1.5em;
+					color: var(--text-color);
+					margin-bottom: 20px;
+					padding-bottom: 10px;
+					border-bottom: 2px solid var(--border-color);
+				}
+
+				.ip-list {
+					margin: 20px 0;
+					border: 1px solid var(--border-color);
+					border-radius: 8px;
+					overflow: hidden;
+				}
+
+				.ip-item {
+					padding: 10px;
+					border-bottom: 1px solid var(--border-color);
+					display: flex;
+					align-items: center;
+				}
+
+				.ip-item:last-child {
+					border-bottom: none;
+				}
+
+				.ip-item input[type="checkbox"] {
+					margin-right: 10px;
+				}
+
+				.button-group {
+					display: flex;
+					gap: 12px;
+					margin-top: 15px;
+				}
+
+				.btn {
+					padding: 8px 20px;
+					border: none;
+					border-radius: 6px;
+					font-size: 14px;
+					font-weight: 500;
+					cursor: pointer;
+					transition: all 0.3s ease;
+				}
+
+				.btn:disabled {
+					opacity: 0.6;
+					cursor: not-allowed;
+				}
+
+				.btn-primary {
+					background: var(--primary-color);
+					color: white;
+				}
+
+				.btn-primary:hover:not(:disabled) {
+					background: var(--secondary-color);
+				}
+
+				.btn-secondary {
+					background: #666;
+					color: white;
+				}
+
+				.btn-secondary:hover:not(:disabled) {
+					background: #555;
+				}
+
+				.divider {
+					height: 1px;
+					background: var(--border-color);
+					margin: 20px 0;
+				}
+
+				.select-all-container {
+					margin-bottom: 10px;
+				}
+			</style>
+		</head>
+		<body>
+			<div class="container">
+				<div class="title">在线优选IP</div>
+				
+				<p>以下是从Cloudflare IP池中优选的15个IP地址，您可以选择将它们添加到您的优选列表中。</p>
+				
+				<form id="optimizeForm" method="POST">
+					<div class="select-all-container">
+						<label>
+							<input type="checkbox" id="selectAll" onclick="toggleSelectAll()"> 全选
+						</label>
+					</div>
+					
+					<div class="ip-list">
+						${cloudflareIPs.map(ip => `
+							<div class="ip-item">
+								<input type="checkbox" name="ip" value="${ip}" class="ip-checkbox">
+								<span>${ip}</span>
+							</div>
+						`).join('')}
+					</div>
+					
+					<input type="hidden" name="selected_ips" id="selectedIPs">
+					<input type="hidden" name="action" id="actionType">
+					
+					<div class="button-group">
+						<button type="button" class="btn btn-secondary" onclick="goBack()">返回</button>
+						<button type="button" class="btn btn-primary" onclick="submitForm('replace')">替换到ADD列表</button>
+						<button type="button" class="btn btn-primary" onclick="submitForm('append')">追加到ADD列表</button>
+					</div>
+				</form>
+				
+				<div class="divider"></div>
+				${cmad}
+			</div>
+
+			<script>
+				function goBack() {
+					const pathParts = window.location.pathname.split('/');
+					pathParts.pop(); // 移除 "optimize"
+					const newPath = pathParts.join('/');
+					window.location.href = newPath;
+				}
+				
+				function toggleSelectAll() {
+					const selectAllCheckbox = document.getElementById('selectAll');
+					const checkboxes = document.getElementsByClassName('ip-checkbox');
+					
+					for (let i = 0; i < checkboxes.length; i++) {
+						checkboxes[i].checked = selectAllCheckbox.checked;
+					}
+				}
+				
+				function submitForm(action) {
+					const checkboxes = document.getElementsByClassName('ip-checkbox');
+					const selectedIPs = [];
+					
+					for (let i = 0; i < checkboxes.length; i++) {
+						if (checkboxes[i].checked) {
+							selectedIPs.push(checkboxes[i].value);
+						}
+					}
+					
+					if (selectedIPs.length === 0) {
+						alert('请至少选择一个IP地址');
+						return;
+					}
+					
+					document.getElementById('selectedIPs').value = selectedIPs.join('\n');
+					document.getElementById('actionType').value = action;
+					document.getElementById('optimizeForm').submit();
+				}
+			</script>
+		</body>
+		</html>
+		`;
+
+		return new Response(html, {
+			headers: { "Content-Type": "text/html;charset=utf-8" }
+		});
+	} catch (error) {
+		console.error('处理在线优选IP请求时发生错误:', error);
+		return new Response("服务器错误: " + error.message, {
+			status: 500,
+			headers: { "Content-Type": "text/plain;charset=utf-8" }
+		});
+	}
 }
