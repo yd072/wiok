@@ -3294,17 +3294,29 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
+                // 过滤出延迟在20ms以上的IP，然后排序并取前N个
                 const bestIPs = results
+                    .filter(item => item.time >= 20) // 只保留20ms以上的IP
                     .sort((a, b) => a.time - b.time)
                     .slice(0, count)
                     .map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms`);
                 
+                // 如果过滤后没有结果，给出提示
+                if (bestIPs.length === 0) {
+                    console.log('没有找到延迟在20ms以上的IP，可能需要增加测试IP数量或调整过滤条件');
+                }
+                
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
                 
+                // 根据结果返回不同的消息
+                const message = bestIPs.length > 0 
+                    ? '优选IP测试完成' 
+                    : '未找到符合条件的IP（延迟≥20ms）';
+                    
                 return new Response(JSON.stringify({
                     success: true,
-                    message: '优选IP测试完成',
+                    message: message,
                     bestIPs
                 }), {
                     headers: {
@@ -3656,7 +3668,7 @@ async function 在线优选IP(request, env) {
                                  document.getElementById('appendButton').disabled = false;
                                  document.getElementById('replaceButton').disabled = false;
                              } else {
-                                 resultList.textContent = '未能获取到有效的测试结果，请尝试更改端口或增加超时时间后重试';
+                                 resultList.textContent = '未找到符合条件的IP（延迟≥20ms）。请尝试增加测试IP数量、更改端口或调整超时时间后重试。';
                                  resultContainer.style.display = 'block';
                                  document.getElementById('appendButton').disabled = true;
                                  document.getElementById('replaceButton').disabled = true;
