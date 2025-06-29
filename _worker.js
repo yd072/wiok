@@ -654,6 +654,9 @@ export default {
 				} else if (url.pathname == `/${动态UUID}/edit` || 路径 == `/${userID}/edit`) {
 					const html = await KV(request, env);
 					return html;
+				} else if (url.pathname == `/${动态UUID}/bestip` || 路径 == `/${userID}/bestip`) {
+					const html = await 在线优选IP(request, env);
+					return html;
 				} else if (url.pathname == `/${动态UUID}` || 路径 == `/${userID}`) {
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 					const 维列斯Config = await 生成配置信息(userID, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
@@ -1820,7 +1823,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		}
 
 		let 订阅器 = '<br>';
-		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
+		let 判断是否绑定KV空间 = env.KV ? ` [<a href='${_url.pathname}/edit'>编辑优选列表</a>]  [<a href='${_url.pathname}/bestip'>在线优选IP</a>]` : '';
 		
 		if (sub) {
 			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
@@ -3065,4 +3068,426 @@ async function handleGetRequest(env, txt) {
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
     });
+}
+
+async function 在线优选IP(request, env) {
+    // Cloudflare IP范围列表，来自 https://www.cloudflare.com/ips-v4/
+    const CF_IP_RANGES = [
+        '173.245.48.0/20',
+        '103.21.244.0/22',
+        '103.22.200.0/22',
+        '103.31.4.0/22',
+        '141.101.64.0/18',
+        '108.162.192.0/18',
+        '190.93.240.0/20',
+        '188.114.96.0/20',
+        '197.234.240.0/22',
+        '198.41.128.0/17',
+        '162.158.0.0/15',
+        '104.16.0.0/13',
+        '104.24.0.0/14',
+        '172.64.0.0/13',
+        '131.0.72.0/22'
+    ];
+    
+    // 默认端口列表
+    const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
+    
+    // 处理POST请求
+    if (request.method === 'POST') {
+        try {
+            const formData = await request.formData();
+            const action = formData.get('action');
+            
+            if (action === 'test') {
+                const ranges = formData.get('ranges')?.split('\n').filter(Boolean) || CF_IP_RANGES;
+                const count = parseInt(formData.get('count') || '15', 10);
+                const ports = formData.get('ports')?.split(',').map(p => p.trim()).filter(Boolean) || DEFAULT_PORTS;
+                const timeout = parseInt(formData.get('timeout') || '2000', 10);
+                
+                // 从CIDR范围中生成随机IP
+                const ips = await 生成随机IP(ranges, count * 3); // 生成3倍数量，以便有足够的IP进行测试
+                
+                // 测试IP连通性
+                const results = await 测试IP连通性(ips, ports, timeout);
+                
+                // 按响应时间排序并取前N个
+                const bestIPs = results
+                    .sort((a, b) => a.time - b.time)
+                    .slice(0, count)
+                    .map(item => `${item.ip}:${item.port}#优选IP ${Math.round(item.time)}ms`);
+                
+                // 如果绑定了KV，保存结果
+                if (env.KV) {
+                    try {
+                        const existingContent = await env.KV.get('ADD.txt') || '';
+                        const existingLines = existingContent.split('\n').filter(line => !line.includes('#优选IP'));
+                        const newContent = [...existingLines, ...bestIPs].join('\n');
+                        await env.KV.put('ADD.txt', newContent);
+                    } catch (error) {
+                        console.error('保存优选IP时出错:', error);
+                    }
+                }
+                
+                return new Response(JSON.stringify({
+                    success: true,
+                    message: '优选IP测试完成',
+                    bestIPs
+                }), {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+            }
+            
+            return new Response(JSON.stringify({
+                success: false,
+                message: '未知操作'
+            }), {
+                status: 400,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+        } catch (error) {
+            return new Response(JSON.stringify({
+                success: false,
+                message: '处理请求时出错: ' + error.message
+            }), {
+                status: 500,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+        }
+    }
+    
+    // 生成HTML页面
+    const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Cloudflare IP优选工具</title>
+        <style>
+            :root {
+                --primary-color: #4CAF50;
+                --secondary-color: #45a049;
+                --border-color: #e0e0e0;
+                --text-color: #333;
+                --background-color: #f5f5f5;
+            }
+            
+            body {
+                margin: 0;
+                padding: 20px;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                line-height: 1.6;
+                color: var(--text-color);
+                background-color: var(--background-color);
+            }
+
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+                background: white;
+                padding: 25px;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+
+            .title {
+                font-size: 1.5em;
+                color: var(--primary-color);
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid var(--border-color);
+            }
+
+            .form-group {
+                margin-bottom: 15px;
+            }
+
+            label {
+                display: block;
+                margin-bottom: 5px;
+                font-weight: 500;
+            }
+
+            input[type="text"], 
+            input[type="number"],
+            textarea {
+                width: 100%;
+                padding: 8px 12px;
+                border: 1px solid var(--border-color);
+                border-radius: 4px;
+                box-sizing: border-box;
+                font-family: inherit;
+                font-size: 14px;
+            }
+
+            textarea {
+                height: 120px;
+                resize: vertical;
+            }
+
+            .btn {
+                display: inline-block;
+                padding: 10px 20px;
+                background-color: var(--primary-color);
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+            }
+
+            .btn:hover {
+                background-color: var(--secondary-color);
+            }
+
+            .btn:disabled {
+                background-color: #cccccc;
+                cursor: not-allowed;
+            }
+
+            .result-container {
+                margin-top: 20px;
+                padding: 15px;
+                border: 1px solid var(--border-color);
+                border-radius: 4px;
+                background-color: #f8f9fa;
+            }
+
+            .result-title {
+                font-weight: 500;
+                margin-bottom: 10px;
+            }
+
+            .result-list {
+                font-family: monospace;
+                white-space: pre-wrap;
+                word-break: break-all;
+            }
+
+            .loading {
+                display: none;
+                margin-top: 20px;
+                text-align: center;
+            }
+
+            .spinner {
+                border: 4px solid rgba(0, 0, 0, 0.1);
+                border-radius: 50%;
+                border-top: 4px solid var(--primary-color);
+                width: 30px;
+                height: 30px;
+                animation: spin 1s linear infinite;
+                margin: 0 auto 10px;
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+
+            .back-link {
+                display: inline-block;
+                margin-top: 20px;
+                color: var(--primary-color);
+                text-decoration: none;
+            }
+
+            .back-link:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1 class="title">Cloudflare IP优选工具</h1>
+            
+            <form id="testForm">
+                <div class="form-group">
+                    <label for="ranges">IP范围列表 (CIDR格式，每行一个)</label>
+                    <textarea id="ranges" name="ranges" placeholder="103.21.244.0/22&#10;104.16.0.0/13&#10;104.24.0.0/14&#10;172.64.0.0/13&#10;131.0.72.0/22">${CF_IP_RANGES.join('\n')}</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="count">优选IP数量</label>
+                    <input type="number" id="count" name="count" value="15" min="1" max="50">
+                </div>
+                
+                <div class="form-group">
+                    <label for="ports">测试端口 (逗号分隔)</label>
+                    <input type="text" id="ports" name="ports" value="${DEFAULT_PORTS.join(',')}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="timeout">超时时间 (毫秒)</label>
+                    <input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
+                </div>
+                
+                <button type="submit" id="testButton" class="btn">开始测试</button>
+            </form>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在测试IP，请稍候...</p>
+            </div>
+            
+            <div class="result-container" id="resultContainer" style="display: none;">
+                <div class="result-title">优选IP结果:</div>
+                <div class="result-list" id="resultList"></div>
+            </div>
+            
+            <a href="#" class="back-link" id="backLink">返回配置页</a>
+        </div>
+        
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const testForm = document.getElementById('testForm');
+                const testButton = document.getElementById('testButton');
+                const loading = document.getElementById('loading');
+                const resultContainer = document.getElementById('resultContainer');
+                const resultList = document.getElementById('resultList');
+                const backLink = document.getElementById('backLink');
+                
+                // 设置返回链接
+                backLink.href = window.location.pathname.replace('/bestip', '');
+                
+                testForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    // 显示加载状态
+                    testButton.disabled = true;
+                    loading.style.display = 'block';
+                    resultContainer.style.display = 'none';
+                    
+                    const formData = new FormData(testForm);
+                    formData.append('action', 'test');
+                    
+                    try {
+                        const response = await fetch(window.location.href, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            resultList.textContent = result.bestIPs.join('\\n');
+                            resultContainer.style.display = 'block';
+                        } else {
+                            alert('测试失败: ' + result.message);
+                        }
+                    } catch (error) {
+                        alert('请求出错: ' + error.message);
+                    } finally {
+                        // 隐藏加载状态
+                        testButton.disabled = false;
+                        loading.style.display = 'none';
+                    }
+                });
+            });
+        </script>
+    </body>
+    </html>
+    `;
+    
+    return new Response(html, {
+        headers: {
+            'Content-Type': 'text/html;charset=utf-8'
+        }
+    });
+}
+
+// 生成随机IP函数
+async function 生成随机IP(ranges, count) {
+    const ips = [];
+    
+    function generateIPFromCIDR(cidr) {
+        const [baseIP, prefixLength] = cidr.split('/');
+        const baseIPNum = baseIP.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0);
+        const mask = ~((1 << (32 - parseInt(prefixLength, 10))) - 1);
+        const networkIP = baseIPNum & mask;
+        const maxHost = (1 << (32 - parseInt(prefixLength, 10))) - 1;
+        
+        // 生成随机主机部分
+        const randomHostPart = Math.floor(Math.random() * maxHost) + 1; // 避免使用网络地址(0)和广播地址(maxHost)
+        const ipNum = networkIP | randomHostPart;
+        
+        // 转换回点分十进制
+        return [
+            (ipNum >> 24) & 255,
+            (ipNum >> 16) & 255,
+            (ipNum >> 8) & 255,
+            ipNum & 255
+        ].join('.');
+    }
+    
+    // 为每个范围生成随机IP
+    while (ips.length < count) {
+        const randomRangeIndex = Math.floor(Math.random() * ranges.length);
+        const ip = generateIPFromCIDR(ranges[randomRangeIndex]);
+        if (!ips.includes(ip)) {
+            ips.push(ip);
+        }
+    }
+    
+    return ips;
+}
+
+// 测试IP连通性函数
+async function 测试IP连通性(ips, ports, timeout) {
+    const results = [];
+    const promises = [];
+    
+    for (const ip of ips) {
+        // 随机选择一个端口
+        const port = ports[Math.floor(Math.random() * ports.length)];
+        
+        promises.push(
+            (async () => {
+                const startTime = Date.now();
+                try {
+                    // 使用fetch API测试连接
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeout);
+                    
+                    const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
+                        signal: controller.signal,
+                        headers: {
+                            'Host': 'www.cloudflare.com',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        }
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        const endTime = Date.now();
+                        results.push({
+                            ip,
+                            port,
+                            time: endTime - startTime,
+                            status: 'success'
+                        });
+                    }
+                } catch (error) {
+                    // 连接失败，不添加到结果中
+                }
+                
+                return null;
+            })()
+        );
+    }
+    
+    // 等待所有测试完成或超时
+    await Promise.allSettled(promises);
+    
+    return results;
 }
