@@ -3166,22 +3166,8 @@ async function 在线优选IP(request, env) {
                 // 检测VPN状态
                 const vpnStatus = await 检测VPN状态(request);
                 
-                // 检查是否是调试模式
-                const isDebug = formData.get('debug') === 'true';
-                
-                // 如果是调试模式，返回VPN检测的详细信息
-                if (isDebug) {
-                    return new Response(JSON.stringify({
-                        success: false,
-                        message: 'VPN检测调试信息',
-                        vpnStatus: vpnStatus.isVpn ? 
-                            '检测到您正在使用VPN或代理服务，这可能会影响IP优选结果的准确性' : 
-                            '未检测到代理/VPN环境，您可以正常进行IP优选测试',
-                        vpnDetails: vpnStatus.details
-                    }), {
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                }
+                // 调试模式功能已移除，但保留代码结构以便内部使用
+                const isDebug = false;
                 
                 // 如果检测到VPN，返回提示信息
                 if (vpnStatus.isVpn) {
@@ -3504,7 +3490,8 @@ async function 在线优选IP(request, env) {
                  
                  <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                      <button type="submit" id="testButton" class="btn">开始测试</button>
-                     <button type="button" id="debugButton" class="btn" style="background-color: #6c757d;">检查VPN状态</button>
+                     <button type="button" id="appendButton" class="btn" style="background-color: #2196F3;" disabled>追加到列表</button>
+                     <button type="button" id="replaceButton" class="btn" style="background-color: #FF9800;" disabled>替换列表</button>
                  </div>
             </form>
             
@@ -3516,10 +3503,6 @@ async function 在线优选IP(request, env) {
                          <div class="result-container" id="resultContainer" style="display: none;">
                  <div class="result-title">优选IP结果: <span id="saveMessage" style="color: #4CAF50; font-size: 14px; margin-left: 10px;"></span></div>
                  <div class="result-list" id="resultList"></div>
-                 <div style="margin-top: 15px; display: flex; gap: 10px;">
-                     <button type="button" id="appendButton" class="btn" style="background-color: #2196F3;">追加到列表</button>
-                     <button type="button" id="replaceButton" class="btn" style="background-color: #FF9800;">替换列表</button>
-                 </div>
              </div>
             
             <a href="#" class="back-link" id="backLink">返回配置页</a>
@@ -3590,6 +3573,8 @@ async function 在线优选IP(request, env) {
                      
                      // 显示加载状态
                      testButton.disabled = true;
+                     document.getElementById('appendButton').disabled = true;
+                     document.getElementById('replaceButton').disabled = true;
                      loading.style.display = 'block';
                      resultContainer.style.display = 'none';
                      document.getElementById('saveMessage').textContent = '';
@@ -3613,6 +3598,9 @@ async function 在线优选IP(request, env) {
                                  
                                  resultList.textContent = result.bestIPs.join('\\n');
                                  resultContainer.style.display = 'block';
+                                 // 启用按钮
+                                 document.getElementById('appendButton').disabled = false;
+                                 document.getElementById('replaceButton').disabled = false;
                              } else {
                                  resultList.textContent = '未能获取到有效的测试结果，请尝试更改端口或增加超时时间后重试';
                                  resultContainer.style.display = 'block';
@@ -3637,6 +3625,7 @@ async function 在线优选IP(request, env) {
                          // 隐藏加载状态
                          testButton.disabled = false;
                          loading.style.display = 'none';
+                         // 按钮状态根据测试结果在前面的代码中设置
                      }
                  });
                  
@@ -3649,66 +3638,7 @@ async function 在线优选IP(request, env) {
                      saveResults('replace');
                  });
                  
-                 // 添加调试按钮事件
-                 document.getElementById('debugButton').addEventListener('click', function() {
-                     const formData = new FormData(testForm);
-                     formData.append('action', 'test');
-                     formData.append('debug', 'true');
-                     
-                     // 显示加载状态
-                     loading.style.display = 'block';
-                     
-                     fetch(window.location.href, {
-                         method: 'POST',
-                         body: formData
-                     })
-                     .then(response => response.json())
-                     .then(result => {
-                         // 创建格式化的调试信息
-                         let debugInfo = '<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; border-radius: 4px;">';
-                         debugInfo += '<h4 style="margin-top: 0;">代理/VPN检测结果</h4>';
-                         
-                         // 根据检测结果设置不同的样式
-                         const statusStyle = result.vpnStatus.includes('检测到') ? 
-                             'color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;' : 
-                             'color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;';
-                         
-                         debugInfo += '<div style="' + statusStyle + '">' + result.vpnStatus + '</div>';
-                         
-                         if (result.vpnDetails) {
-                             debugInfo += '<h5>详细信息:</h5>';
-                             debugInfo += '<ul style="padding-left: 20px;">';
-                             
-                             const details = result.vpnDetails;
-                             debugInfo += '<li><strong>IP地址:</strong> ' + (details.clientIP || 'N/A') + '</li>';
-                             debugInfo += '<li><strong>国家:</strong> ' + (details.country || 'N/A') + '</li>';
-                             debugInfo += '<li><strong>ASN:</strong> ' + (details.asn || 'N/A') + '</li>';
-                             debugInfo += '<li><strong>组织:</strong> ' + (details.asOrganization || 'N/A') + '</li>';
-                             
-                             // 检测结果
-                             debugInfo += '<li><strong>私有IP:</strong> ' + (details.isPrivateIP ? '是' : '否') + '</li>';
-                             debugInfo += '<li><strong>VPN ASN:</strong> ' + (details.isVpnAsn ? '是' : '否') + '</li>';
-                             debugInfo += '<li><strong>多IP地址:</strong> ' + (details.hasMultipleIPs ? '是' : '否') + '</li>';
-                             debugInfo += '<li><strong>代理头:</strong> ' + (details.hasProxyHeaders ? '是' : '否') + '</li>';
-                             debugInfo += '<li><strong>移动网络:</strong> ' + (details.isMobileNetwork ? '是' : '否') + '</li>';
-                             debugInfo += '<li><strong>数据中心IP:</strong> ' + (details.isDatacenter ? '是' : '否') + '</li>';
-                             
-                             debugInfo += '</ul>';
-                         }
-                         
-                         debugInfo += '</div>';
-                         
-                         // 显示调试信息
-                         resultList.innerHTML = debugInfo;
-                         resultContainer.style.display = 'block';
-                     })
-                     .catch(error => {
-                         alert('请求出错: ' + error.message);
-                     })
-                     .finally(() => {
-                         loading.style.display = 'none';
-                     });
-                 });
+                 // 调试功能已移除
             });
         </script>
     </body>
