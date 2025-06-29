@@ -3294,7 +3294,13 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                const bestIPs = results
+                // 过滤出延迟大于20ms的IP
+                const filteredResults = results.filter(item => item.time >= 20);
+                
+                // 如果过滤后没有结果，使用原始结果
+                const resultsToUse = filteredResults.length > 0 ? filteredResults : results;
+                
+                const bestIPs = resultsToUse
                     .sort((a, b) => a.time - b.time)
                     .slice(0, count)
                     .map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms`);
@@ -3302,9 +3308,15 @@ async function 在线优选IP(request, env) {
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
                 
+                // 添加过滤信息
+                const filterInfo = filteredResults.length > 0 
+                    ? `已过滤出${filteredResults.length}个延迟≥20ms的IP` 
+                    : '未找到延迟≥20ms的IP，显示所有结果';
+                
                 return new Response(JSON.stringify({
                     success: true,
                     message: '优选IP测试完成',
+                    filterInfo: filterInfo,
                     bestIPs
                 }), {
                     headers: {
@@ -3649,6 +3661,15 @@ async function 在线优选IP(request, env) {
                              if (result.bestIPs && result.bestIPs.length > 0) {
                                  // 保存测试结果到全局变量
                                  testResults = result.bestIPs;
+                                 
+                                 // 显示过滤信息
+                                 if (result.filterInfo) {
+                                     // 添加过滤信息到结果顶部
+                                     const filterText = '【' + result.filterInfo + '】';
+                                     resultList.textContent = filterText + '\n' + result.bestIPs.join('\\n');
+                                 } else {
+                                     resultList.textContent = result.bestIPs.join('\\n');
+                                 }
                                  
                                  resultList.textContent = result.bestIPs.join('\\n');
                                  resultContainer.style.display = 'block';
