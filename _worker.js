@@ -3838,7 +3838,7 @@ async function 测试IP连通性(ips, ports, timeout) {
         }
     }
     
-    // 单次测试函数
+    // 单次测试函数 - 完全采用源码2的测试算法
     async function singleTest(ip, port, timeout) {
         const startTime = Date.now();
         
@@ -3846,7 +3846,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
-            // 使用cdn-cgi/trace路径，这是源码2使用的路径
+            // 使用cdn-cgi/trace路径
             const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
                 signal: controller.signal,
                 mode: 'cors'
@@ -3855,14 +3855,8 @@ async function 测试IP连通性(ips, ports, timeout) {
             clearTimeout(timeoutId);
             
             // 如果请求成功，在源码2中这被认为是不需要的IP
-            // 但我们保持原有逻辑，认为连接成功也是可用的
-            const endTime = Date.now();
-            return {
-                success: true,
-                ip,
-                port,
-                time: endTime - startTime
-            };
+            // 采用源码2的逻辑，连接成功的IP不是我们需要的
+            return null;
             
         } catch (error) {
             const endTime = Date.now();
@@ -3874,9 +3868,10 @@ async function 测试IP连通性(ips, ports, timeout) {
             }
             
             // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
+            // 只有证书错误的IP才是我们想要的
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
                 return {
-                    success: true, // 这里标记为成功，因为这是我们想要的结果
+                    success: true,
                     ip,
                     port,
                     time: latency
