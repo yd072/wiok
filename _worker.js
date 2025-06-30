@@ -2935,7 +2935,7 @@ async function handleGetRequest(env, txt) {
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                             <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
-                            <button class="btn" style="background-color: #673AB7;" onclick="goBestIP()">在线优选IP</button>
+                            <button class="btn" style="background-color: #673AB7; color: white;" onclick="goBestIP()">在线优选IP</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                         <div class="divider"></div>
@@ -3577,8 +3577,8 @@ async function 在线优选IP(request, env) {
                 // 设置优选订阅列表按钮
                 const listButton = document.getElementById('listButton');
                 listButton.addEventListener('click', function() {
-                    // 跳转到edgetunnel优选订阅列表页面
-                    window.location.href = window.location.pathname.replace('/bestip', '/edgetunnel');
+                    // 跳转到优选订阅列表页面
+                    window.location.href = window.location.pathname.replace('/bestip', '/edit');
                 });
                 
                 // 全局变量存储测试结果
