@@ -1248,27 +1248,35 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         }
     }, 5000);
 
-    try {
-        // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
     const writeData = async (chunk) => {
-        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                log("WebSocket 已关闭，跳过写入");
-                return;
-        }
+    // 等待 WebSocket 打开状态，最多重试 10 次（每次 20ms）
+    for (let i = 0; i < 10; i++) {
+        if (webSocket.readyState === WS_READY_STATE_OPEN) break;
+        await new Promise(resolve => setTimeout(resolve, 20));
+    }
 
+    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+        log("WebSocket 还未打开，放弃发送数据");
+        return;
+    }
+
+    try {
         if (header) {
-                // 预分配足够的 buffer，避免重复分配
-                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-                combinedData.set(new Uint8Array(header), 0);
-                combinedData.set(new Uint8Array(chunk), header.byteLength);
-                webSocket.send(combinedData);
-                header = null; // 清除 header 引用
+            const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+            combinedData.set(new Uint8Array(header), 0);
+            combinedData.set(new Uint8Array(chunk), header.byteLength);
+            webSocket.send(combinedData);
+            header = null;
         } else {
             webSocket.send(chunk);
         }
-        
-            hasIncomingData = true;
-        };
+        hasIncomingData = true;
+    } catch (error) {
+        log(`WebSocket 写入失败: ${error.message}`);
+        throw error;
+    }
+    };
+
 
         await remoteSocket.readable
             .pipeTo(
