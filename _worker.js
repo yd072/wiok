@@ -3355,7 +3355,9 @@ async function 在线优选IP(request, env) {
                             typeMarker = '🔸'; // 其他错误类型用橙点标记
                         }
                         
-                        return `${item.ip}:${item.port}#${typeMarker}${item.comment} ${Math.round(item.time)}ms`;
+                        // 确保延迟值正确显示
+                        const displayLatency = Math.round(item.time);
+                        return `${item.ip}:${item.port}#${typeMarker}${item.comment} ${displayLatency}ms`;
                     });
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
@@ -4059,8 +4061,8 @@ async function 测试IP连通性(ips, ports, timeout) {
         // 处理结果
         for (const result of batchResults) {
             if (result && result.success) {
-                // 计算显示延迟 - 类似源码2的方法，显示的延迟是实际延迟的一半
-                const displayTime = Math.floor(result.time / 2);
+                // 保持原始延迟值，不再除以2
+                const displayTime = Math.floor(result.time);
                 
                 // 为不同类型的结果添加标记
                 let resultType = result.type || 'unknown';
