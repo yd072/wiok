@@ -1252,9 +1252,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
     const writeData = async (chunk) => {
         if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                log("WebSocket 已关闭，跳过写入");
-                return;
-        }
+    log("WebSocket 已关闭，跳过写入并关闭连接");
+    safeCloseWebSocket(webSocket);
+    throw new Error("WebSocket closed unexpectedly");
+}
 
             try {
         if (header) {
