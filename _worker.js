@@ -3292,7 +3292,7 @@ async function 在线优选IP(request, env) {
                      console.error('测试IP连通性时出错:', error);
                  }
                 
-                // 按响应时间排序并取前N个
+                // 按类型和响应时间排序并取前N个
                 // 检查是否有测试结果
                 if (results.length === 0) {
                     return new Response(JSON.stringify({
@@ -3306,10 +3306,32 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
+                // 首先按类型排序，优先证书错误类型，然后是其他类型，最后是直连类型
+                // 然后在每个类型内部按响应时间排序
+                results.sort((a, b) => {
+                    // 首先按类型排序
+                    const typeOrder = {
+                        'cert_error': 0,  // 证书错误最优先
+                        'other_error': 1, // 其他错误次之
+                        'direct': 2,      // 直连最后
+                        'unknown': 3      // 未知类型最后
+                    };
+                    
+                    const typeA = a.type || 'unknown';
+                    const typeB = b.type || 'unknown';
+                    
+                    if (typeOrder[typeA] !== typeOrder[typeB]) {
+                        return typeOrder[typeA] - typeOrder[typeB];
+                    }
+                    
+                    // 类型相同时按响应时间排序
+                    return a.time - b.time;
+                });
+                
+                // 取前N个结果
                 const bestIPs = results
-                    .sort((a, b) => a.time - b.time)
                     .slice(0, count)
-                    .map(item => `${item.ip}:${item.port}#CF优选IP ${Math.round(item.time)}ms`);
+                    .map(item => `${item.ip}:${item.port}#${item.comment} ${Math.round(item.time)}ms`);
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
@@ -3815,7 +3837,7 @@ async function 测试IP连通性(ips, ports, timeout) {
     
     console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
     
-    // 测试单个IP函数 - 使用源码2的方法
+    // 测试单个IP函数 - 优化版本
     async function testSingleIP(ip, port) {
         // 第一次测试
         const firstResult = await singleTest(ip, port, actualTimeout);
@@ -3823,22 +3845,37 @@ async function 测试IP连通性(ips, ports, timeout) {
             return { success: false, ip, port };
         }
         
-        console.log(`IP ${ip}:${port} 第一次测试成功: ${firstResult.time}ms，进行第二次测试...`);
+        console.log(`IP ${ip}:${port} 第一次测试成功: ${firstResult.time}ms (类型: ${firstResult.type})，进行第二次测试...`);
         
         // 第二次测试
         const secondResult = await singleTest(ip, port, actualTimeout);
         
-        // 取最佳结果
-        if (secondResult && secondResult.time < firstResult.time) {
-            console.log(`IP ${ip}:${port} 第二次测试更好: ${secondResult.time}ms`);
-            return secondResult;
-        } else {
-            console.log(`IP ${ip}:${port} 使用第一次结果: ${firstResult.time}ms`);
-            return firstResult;
+        // 如果两次测试都成功，优先选择证书错误类型的结果
+        if (secondResult) {
+            console.log(`IP ${ip}:${port} 第二次测试成功: ${secondResult.time}ms (类型: ${secondResult.type})`);
+            
+            // 优先选择证书错误类型的结果
+            if (firstResult.type === 'cert_error' && secondResult.type !== 'cert_error') {
+                console.log(`IP ${ip}:${port} 选择第一次结果(证书错误优先)`);
+                return firstResult;
+            } 
+            else if (firstResult.type !== 'cert_error' && secondResult.type === 'cert_error') {
+                console.log(`IP ${ip}:${port} 选择第二次结果(证书错误优先)`);
+                return secondResult;
+            }
+            // 如果类型相同，选择延迟较低的
+            else if (secondResult.time < firstResult.time) {
+                console.log(`IP ${ip}:${port} 选择第二次结果(延迟更低)`);
+                return secondResult;
+            }
         }
+        
+        // 默认使用第一次结果
+        console.log(`IP ${ip}:${port} 使用第一次结果: ${firstResult.time}ms (类型: ${firstResult.type})`);
+        return firstResult;
     }
     
-    // 单次测试函数 - 完全采用源码2的测试算法
+    // 单次测试函数 - 优化的测试算法
     async function singleTest(ip, port, timeout) {
         const startTime = Date.now();
         
@@ -3854,8 +3891,23 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             clearTimeout(timeoutId);
             
-            // 如果请求成功，在源码2中这被认为是不需要的IP
-            // 采用源码2的逻辑，连接成功的IP不是我们需要的
+            // 连接成功的IP也可能是有用的，但优先级较低
+            const endTime = Date.now();
+            const latency = endTime - startTime;
+            
+            // 如果延迟较低，也可以考虑使用
+            if (latency < 300) {
+                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms`);
+                return {
+                    success: true,
+                    ip,
+                    port,
+                    time: latency,
+                    type: 'direct' // 标记为直连成功的IP
+                };
+            }
+            
+            // 延迟太高的直连IP不要
             return null;
             
         } catch (error) {
@@ -3868,17 +3920,31 @@ async function 测试IP连通性(ips, ports, timeout) {
             }
             
             // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
-            // 只有证书错误的IP才是我们想要的
+            // 证书错误的IP是我们优先需要的
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: latency
+                    time: latency,
+                    type: 'cert_error' // 标记为证书错误的IP
                 };
             }
             
-            // 其他错误
+            // 其他类型的错误也可能有用
+            if (latency < 300) {
+                console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，错误: ${error.name}`);
+                return {
+                    success: true,
+                    ip,
+                    port,
+                    time: latency,
+                    type: 'other_error' // 标记为其他错误的IP
+                };
+            }
+            
+            // 其他错误且延迟高的不要
             return null;
         }
     }
@@ -3923,12 +3989,27 @@ async function 测试IP连通性(ips, ports, timeout) {
                 // 计算显示延迟 - 类似源码2的方法，显示的延迟是实际延迟的一半
                 const displayTime = Math.floor(result.time / 2);
                 
+                // 为不同类型的结果添加标记
+                let resultType = result.type || 'unknown';
+                let comment = 'CF优选IP';
+                
+                // 证书错误的IP加上特殊标记
+                if (resultType === 'cert_error') {
+                    comment = 'CF优选IP-证书';
+                } else if (resultType === 'direct') {
+                    comment = 'CF优选IP-直连';
+                } else if (resultType === 'other_error') {
+                    comment = 'CF优选IP-其他';
+                }
+                
                 results.push({
                     ip: result.ip,
                     port: result.port,
                     time: displayTime,
                     originalTime: result.time,
-                    status: 'success'
+                    status: 'success',
+                    type: resultType,
+                    comment: comment
                 });
                 
                 // 记录进度
