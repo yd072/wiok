@@ -3250,23 +3250,14 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 获取用户输入的IP范围或从Cloudflare官方获取
-                let ranges;
-                const userRanges = formData.get('ranges')?.split('\n').filter(Boolean);
-                
-                if (userRanges && userRanges.length > 0) {
-                    // 使用用户提供的IP范围
-                    ranges = userRanges;
-                    console.log(`使用用户提供的${ranges.length}个IP范围`);
-                } else {
-                    // 从Cloudflare官方获取IP范围
-                    ranges = await 获取Cloudflare_IP范围();
-                    console.log(`使用从Cloudflare官方获取的${ranges.length}个IP范围`);
-                }
+                // 从Cloudflare官方获取IP范围
+                const ranges = await 获取Cloudflare_IP范围();
+                console.log(`使用从Cloudflare官方获取的${ranges.length}个IP范围`);
                 
                 const count = parseInt(formData.get('count') || '15', 10);
-                const ports = formData.get('ports')?.split(',').map(p => p.trim()).filter(Boolean) || DEFAULT_PORTS;
-                const timeout = parseInt(formData.get('timeout') || '2000', 10);
+                const port = formData.get('ports') || '443';
+                const ports = [port]; // 只使用选定的端口
+                const timeout = 2000; // 固定超时时间为2000毫秒
                 
                                  // 从CIDR范围中生成随机IP
                  const ips = await 生成随机IP(ranges, 1000); // 固定生成1000个IP进行测试
@@ -3506,41 +3497,38 @@ async function 在线优选IP(request, env) {
             </div>
             
             <form id="testForm">
-                <div class="form-group">
-                    <label for="ranges">IP范围列表 (CIDR格式，每行一个，留空将自动从官方获取)</label>
-                    <textarea id="ranges" name="ranges" placeholder="103.21.244.0/22&#10;104.16.0.0/13&#10;104.24.0.0/14&#10;172.64.0.0/13&#10;131.0.72.0/22"></textarea>
-                </div>
-                
-                <div class="form-group">
+                                <div class="form-group">
                     <label for="count">优选IP数量</label>
                     <input type="number" id="count" name="count" value="15" min="1" max="50">
                 </div>
                 
                 <div class="form-group">
-                    <label for="ports">测试端口 (逗号分隔)</label>
-                    <input type="text" id="ports" name="ports" value="${DEFAULT_PORTS.join(',')}">
+                    <label for="port-select">测试端口</label>
+                    <select id="port-select" name="ports">
+                        <option value="443">443</option>
+                        <option value="2053">2053</option>
+                        <option value="2083">2083</option>
+                        <option value="2087">2087</option>
+                        <option value="2096">2096</option>
+                        <option value="8443" selected>8443</option>
+                    </select>
                 </div>
                 
-                                 <div class="form-group">
-                     <label for="timeout">超时时间 (毫秒)</label>
-                     <input type="number" id="timeout" name="timeout" value="2000" min="500" max="10000">
-                 </div>
-                 
-                 <div class="form-group" style="margin-top: 15px;">
-                     <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
-                         <strong>说明：</strong><br>
-                         • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
-                         • 输入多个端口时，系统会为每个IP随机选择一个端口进行测试<br>
-                         • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
-                         • 如果您使用VPN，可能会影响测试结果的准确性
-                     </div>
-                 </div>
-                 
-                 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                     <button type="submit" id="testButton" class="btn">开始测试</button>
-                     <button type="button" id="appendButton" class="btn" style="background-color: #2196F3;" disabled>追加到列表</button>
-                     <button type="button" id="replaceButton" class="btn" style="background-color: #FF9800;" disabled>替换列表</button>
-                 </div>
+                <div class="form-group" style="margin-top: 15px;">
+                    <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                        <strong>说明：</strong><br>
+                        • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
+                        • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
+                        • 如果您使用VPN，可能会影响测试结果的准确性
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button type="submit" id="testButton" class="btn">开始测试</button>
+                    <button type="button" id="appendButton" class="btn" style="background-color: #2196F3;" disabled>追加到列表</button>
+                    <button type="button" id="replaceButton" class="btn" style="background-color: #FF9800;" disabled>替换列表</button>
+                    <button type="button" id="listButton" class="btn" style="background-color: #673AB7;">优选订阅列表</button>
+                </div>
             </form>
             
             <div class="loading" id="loading">
@@ -3566,10 +3554,16 @@ async function 在线优选IP(request, env) {
                 const backLink = document.getElementById('backLink');
                 const vpnWarning = document.getElementById('vpnWarning');
                 
-                // 设置返回链接
+                                // 设置返回链接
                 backLink.href = window.location.pathname.replace('/bestip', '');
                 
-                                 // 全局变量存储测试结果
+                // 设置优选订阅列表按钮
+                const listButton = document.getElementById('listButton');
+                listButton.addEventListener('click', function() {
+                    window.location.href = window.location.pathname.replace('/bestip', '');
+                });
+                
+                // 全局变量存储测试结果
                  let testResults = [];
                  
                  // 保存结果函数
