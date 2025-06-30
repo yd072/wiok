@@ -3286,8 +3286,16 @@ async function 在线优选IP(request, env) {
                  // 测试IP连通性
                  let results = [];
                  try {
+                     console.log(`开始测试IP连通性，共 ${ips.length} 个IP，端口: ${ports.join(', ')}`);
                      results = await 测试IP连通性(ips, ports, timeout);
-                     console.log(`获取到 ${results.length} 个测试结果`);
+                     console.log(`测试完成，获取到 ${results.length} 个测试结果`);
+                     
+                     // 打印结果示例，帮助调试
+                     if (results.length > 0) {
+                         console.log('第一个结果示例:', JSON.stringify(results[0]));
+                     } else {
+                         console.log('没有找到可用的IP');
+                     }
                  } catch (error) {
                      console.error('测试IP连通性时出错:', error);
                  }
@@ -3307,15 +3315,13 @@ async function 在线优选IP(request, env) {
                 }
                 
                 // 源码2算法：只按延迟排序
-                results.sort((a, b) => a.time - b.time);
+                results.sort((a, b) => a.latency - b.latency);
                 
                 // 取前N个结果
                 const bestIPs = results
                     .slice(0, count)
                     .map(item => {
-                        // 确保显示的延迟至少为1ms
-                        const displayMs = Math.max(Math.round(item.time), 1);
-                        return `${item.ip}:${item.port}#${item.comment} ${displayMs}ms`;
+                        return item.display; // 直接使用已经格式化好的display属性
                     });
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
@@ -3669,7 +3675,14 @@ async function 在线优选IP(request, env) {
                                  // 保存测试结果到全局变量
                                  testResults = result.bestIPs;
                                  
-                                 resultList.textContent = result.bestIPs.join('\\n');
+                                 // 显示结果，确保换行符正确处理
+                                 resultList.innerHTML = '';
+                                 result.bestIPs.forEach(ip => {
+                                     const div = document.createElement('div');
+                                     div.textContent = ip;
+                                     resultList.appendChild(div);
+                                 });
+                                 
                                  resultContainer.style.display = 'block';
                                  // 启用按钮
                                  document.getElementById('appendButton').disabled = false;
@@ -3872,6 +3885,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
             // 使用cdn-cgi/trace路径
+            console.log(`测试 ${ip}:${port} 开始...`);
             const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
                 signal: controller.signal,
                 mode: 'cors'
@@ -3879,6 +3893,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             clearTimeout(timeoutId);
             // 如果请求成功了，说明这个IP不是我们要的
+            console.log(`${ip}:${port} 连接成功，不是我们需要的IP`);
             return null;
             
         } catch (error) {
@@ -3886,11 +3901,13 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             // 检查是否是真正的超时（接近设定的timeout时间）
             if (latency >= timeout - 50) {
+                console.log(`${ip}:${port} 超时 (${latency}ms)`);
                 return null;
             }
             
             // 检查是否是 Failed to fetch 错误（通常是SSL/证书错误）
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                console.log(`${ip}:${port} 证书错误，延迟: ${latency}ms - 符合要求`);
                 return {
                     ip: ip,
                     port: port,
@@ -3898,6 +3915,7 @@ async function 测试IP连通性(ips, ports, timeout) {
                 };
             }
             
+            console.log(`${ip}:${port} ${error.name}错误: ${error.message}`);
             return null;
         }
     }
