@@ -1251,22 +1251,26 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     try {
         // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
     const writeData = async (chunk) => {
-        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                throw new Error('WebSocket 未连接');
-        }
+            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                log("WebSocket 已关闭，跳过写入");
+                return;
+            }
 
-        if (header) {
-                // 预分配足够的 buffer，避免重复分配
-                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-                combinedData.set(new Uint8Array(header), 0);
-                combinedData.set(new Uint8Array(chunk), header.byteLength);
-                webSocket.send(combinedData);
-                header = null; // 清除 header 引用
-        } else {
-            webSocket.send(chunk);
-        }
-        
-            hasIncomingData = true;
+            try {
+                if (header) {
+                    const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                    combinedData.set(new Uint8Array(header), 0);
+                    combinedData.set(new Uint8Array(chunk), header.byteLength);
+                    webSocket.send(combinedData);
+                    header = null;
+                } else {
+                    webSocket.send(chunk);
+                }
+                hasIncomingData = true;
+            } catch (error) {
+                log(`WebSocket 写入失败: ${error.message}`);
+                throw error;
+            }
         };
 
         await remoteSocket.readable
