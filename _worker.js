@@ -3331,7 +3331,11 @@ async function 在线优选IP(request, env) {
                 // 取前N个结果
                 const bestIPs = results
                     .slice(0, count)
-                    .map(item => `${item.ip}:${item.port}#${item.comment} ${Math.round(item.time)}ms`);
+                    .map(item => {
+                        // 确保显示的延迟至少为1ms
+                        const displayMs = Math.max(Math.round(item.time), 1);
+                        return `${item.ip}:${item.port}#${item.comment} ${displayMs}ms`;
+                    });
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
@@ -3877,7 +3881,10 @@ async function 测试IP连通性(ips, ports, timeout) {
     
     // 单次测试函数 - 优化的测试算法
     async function singleTest(ip, port, timeout) {
-        const startTime = Date.now();
+        // 添加一个小延迟，确保计时更准确
+        await new Promise(resolve => setTimeout(resolve, 5));
+        
+        const startTime = performance.now ? performance.now() : Date.now();
         
         try {
             const controller = new AbortController();
@@ -3892,17 +3899,20 @@ async function 测试IP连通性(ips, ports, timeout) {
             clearTimeout(timeoutId);
             
             // 连接成功的IP也可能是有用的，但优先级较低
-            const endTime = Date.now();
-            const latency = endTime - startTime;
+            const endTime = performance.now ? performance.now() : Date.now();
+            const latency = Math.ceil(endTime - startTime);
+            
+            // 确保延迟至少为10ms，避免显示为0
+            const adjustedLatency = Math.max(latency, 10);
             
             // 如果延迟较低，也可以考虑使用
-            if (latency < 300) {
-                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms`);
+            if (adjustedLatency < 300) {
+                console.log(`IP ${ip}:${port} 连接成功，延迟: ${adjustedLatency}ms`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: latency,
+                    time: adjustedLatency,
                     type: 'direct' // 标记为直连成功的IP
                 };
             }
@@ -3911,35 +3921,38 @@ async function 测试IP连通性(ips, ports, timeout) {
             return null;
             
         } catch (error) {
-            const endTime = Date.now();
-            const latency = endTime - startTime;
+            const endTime = performance.now ? performance.now() : Date.now();
+            const latency = Math.ceil(endTime - startTime);
+            
+            // 确保延迟至少为10ms，避免显示为0
+            const adjustedLatency = Math.max(latency, 10);
             
             // 检查是否是真正的超时（接近设定的timeout时间）
-            if (latency >= timeout - 50) {
+            if (adjustedLatency >= timeout - 50) {
                 return null; // 真正的超时，认为测试失败
             }
             
             // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
             // 证书错误的IP是我们优先需要的
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms`);
+                console.log(`IP ${ip}:${port} 证书错误，延迟: ${adjustedLatency}ms`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: latency,
+                    time: adjustedLatency,
                     type: 'cert_error' // 标记为证书错误的IP
                 };
             }
             
             // 其他类型的错误也可能有用
-            if (latency < 300) {
-                console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，错误: ${error.name}`);
+            if (adjustedLatency < 300) {
+                console.log(`IP ${ip}:${port} 其他错误，延迟: ${adjustedLatency}ms，错误: ${error.name}`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: latency,
+                    time: adjustedLatency,
                     type: 'other_error' // 标记为其他错误的IP
                 };
             }
@@ -3986,8 +3999,8 @@ async function 测试IP连通性(ips, ports, timeout) {
         // 处理结果
         for (const result of batchResults) {
             if (result && result.success) {
-                // 计算显示延迟 - 类似源码2的方法，显示的延迟是实际延迟的一半
-                const displayTime = Math.floor(result.time / 2);
+                // 计算显示延迟 - 确保延迟值不会太小
+                const displayTime = Math.max(Math.floor(result.time / 2), 1);
                 
                 // 为不同类型的结果添加标记
                 let resultType = result.type || 'unknown';
