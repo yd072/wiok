@@ -3328,8 +3328,8 @@ async function 在线优选IP(request, env) {
                     if (typeA === 'cert_error') {
                         // 证书错误类型的IP，延迟在合理范围内时，优先选择延迟稳定的IP
                         // 这里我们假设originalTime与time的差距越小，说明两次测试结果越接近，越稳定
-                        const stabilityA = Math.abs(a.originalTime - a.time * 2);
-                        const stabilityB = Math.abs(b.originalTime - b.time * 2);
+                        const stabilityA = Math.abs(a.originalTime - a.time);
+                        const stabilityB = Math.abs(b.originalTime - b.time);
                         
                         // 如果延迟差异不大（小于30ms），优先考虑稳定性
                         if (Math.abs(a.time - b.time) < 30) {
@@ -3356,7 +3356,7 @@ async function 在线优选IP(request, env) {
                         }
                         
                         // 确保延迟值正确显示
-                        const displayLatency = Math.round(item.time);
+                        const displayLatency = Math.max(1, Math.round(item.time));
                         return `${item.ip}:${item.port}#${typeMarker}${item.comment} ${displayLatency}ms`;
                     });
                 
@@ -3873,6 +3873,8 @@ async function 测试IP连通性(ips, ports, timeout) {
             return { success: false, ip, port };
         }
         
+        // 确保延迟值至少为1ms
+        firstResult.time = Math.max(1, firstResult.time);
         console.log(`IP ${ip}:${port} 第一次测试成功: ${firstResult.time}ms (类型: ${firstResult.type})，进行第二次测试...`);
         
         // 第二次测试
@@ -3880,6 +3882,8 @@ async function 测试IP连通性(ips, ports, timeout) {
         
         // 如果两次测试都成功，优先选择证书错误类型的结果
         if (secondResult) {
+            // 确保延迟值至少为1ms
+            secondResult.time = Math.max(1, secondResult.time);
             console.log(`IP ${ip}:${port} 第二次测试成功: ${secondResult.time}ms (类型: ${secondResult.type})`);
             
             // 优先选择证书错误类型的结果
@@ -3921,10 +3925,12 @@ async function 测试IP连通性(ips, ports, timeout) {
             // 随机选择一个测试路径，增加测试多样性
             const testPath = testPaths[Math.floor(Math.random() * testPaths.length)];
             
-            const response = await fetch(`https://${ip}:${port}${testPath}`, {
+            // 添加随机参数避免缓存
+            const cacheBuster = `?t=${Date.now()}${Math.random().toString(36).substring(2, 15)}`;
+            
+            const response = await fetch(`https://${ip}:${port}${testPath}${cacheBuster}`, {
                 signal: controller.signal,
                 mode: 'cors',
-                // 添加随机查询参数避免缓存
                 cache: 'no-store',
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -3936,7 +3942,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             // 连接成功的IP也可能是有用的，但优先级较低
             const endTime = Date.now();
-            const latency = endTime - startTime;
+            const latency = Math.max(1, endTime - startTime); // 确保延迟至少为1ms
             
             // 更严格的延迟筛选
             if (latency < 250) {
@@ -3956,7 +3962,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             
         } catch (error) {
             const endTime = Date.now();
-            const latency = endTime - startTime;
+            const latency = Math.max(1, endTime - startTime); // 确保延迟至少为1ms
             
             // 检查是否是真正的超时（接近设定的timeout时间）
             if (latency >= timeout - 50) {
@@ -4062,7 +4068,7 @@ async function 测试IP连通性(ips, ports, timeout) {
         for (const result of batchResults) {
             if (result && result.success) {
                 // 保持原始延迟值，不再除以2
-                const displayTime = Math.floor(result.time);
+                const displayTime = Math.max(1, Math.floor(result.time));
                 
                 // 为不同类型的结果添加标记
                 let resultType = result.type || 'unknown';
