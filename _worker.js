@@ -3306,8 +3306,7 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 首先按类型排序，优先证书错误类型，然后是其他类型，最后是直连类型
-                // 然后在每个类型内部按响应时间排序
+                // 高级排序算法，综合考虑类型和延迟
                 results.sort((a, b) => {
                     // 首先按类型排序
                     const typeOrder = {
@@ -3324,14 +3323,40 @@ async function 在线优选IP(request, env) {
                         return typeOrder[typeA] - typeOrder[typeB];
                     }
                     
-                    // 类型相同时按响应时间排序
+                    // 类型相同时，使用加权排序
+                    // 对于证书错误类型，延迟不是唯一考虑因素，我们更关注稳定性
+                    if (typeA === 'cert_error') {
+                        // 证书错误类型的IP，延迟在合理范围内时，优先选择延迟稳定的IP
+                        // 这里我们假设originalTime与time的差距越小，说明两次测试结果越接近，越稳定
+                        const stabilityA = Math.abs(a.originalTime - a.time * 2);
+                        const stabilityB = Math.abs(b.originalTime - b.time * 2);
+                        
+                        // 如果延迟差异不大（小于30ms），优先考虑稳定性
+                        if (Math.abs(a.time - b.time) < 30) {
+                            return stabilityA - stabilityB;
+                        }
+                    }
+                    
+                    // 默认按响应时间排序
                     return a.time - b.time;
                 });
                 
-                // 取前N个结果
+                // 生成更详细的结果信息
                 const bestIPs = results
                     .slice(0, count)
-                    .map(item => `${item.ip}:${item.port}#${item.comment} ${Math.round(item.time)}ms`);
+                    .map(item => {
+                        // 为不同类型的IP添加不同的标记
+                        let typeMarker = '';
+                        if (item.type === 'cert_error') {
+                            typeMarker = '🔒'; // 证书错误类型用锁标记
+                        } else if (item.type === 'direct') {
+                            typeMarker = '🔵'; // 直连类型用蓝点标记
+                        } else if (item.type === 'other_error') {
+                            typeMarker = '🔸'; // 其他错误类型用橙点标记
+                        }
+                        
+                        return `${item.ip}:${item.port}#${typeMarker}${item.comment} ${Math.round(item.time)}ms`;
+                    });
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
@@ -3825,15 +3850,16 @@ async function 生成随机IP(ranges, count) {
     return ips;
 }
 
-// 测试IP连通性函数 - 使用源码2的方法
+// 优化的IP连通性测试函数
 async function 测试IP连通性(ips, ports, timeout) {
     const results = [];
-    const MAX_CONCURRENT = 50; // 最大并发测试数
-    const MAX_TEST_DURATION = 30000; // 最长测试时间(毫秒)
-    const minResults = 15; // 最少需要的结果数
+    const MAX_CONCURRENT = 100; // 增加最大并发测试数以提高效率
+    const MAX_TEST_DURATION = 45000; // 增加最长测试时间，给予更多时间找到优质IP
+    const minResults = 20; // 增加最少需要的结果数，确保有足够的候选IP
+    const certErrorMinResults = 10; // 证书错误类型IP的最小数量目标
     
     // 强制使用较短的超时时间，这对于证书错误测试方法很重要
-    const actualTimeout = Math.min(timeout, 999);
+    const actualTimeout = Math.min(timeout, 800); // 稍微降低超时时间，加快测试速度
     
     console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
     
@@ -3875,7 +3901,7 @@ async function 测试IP连通性(ips, ports, timeout) {
         return firstResult;
     }
     
-    // 单次测试函数 - 优化的测试算法
+    // 高级优化的单次测试函数
     async function singleTest(ip, port, timeout) {
         const startTime = Date.now();
         
@@ -3883,10 +3909,25 @@ async function 测试IP连通性(ips, ports, timeout) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
-            // 使用cdn-cgi/trace路径
-            const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
+            // 使用更可靠的测试路径
+            const testPaths = [
+                '/cdn-cgi/trace',    // 主要测试路径
+                '/favicon.ico',      // 备用测试路径
+                '/'                  // 最后的备用路径
+            ];
+            
+            // 随机选择一个测试路径，增加测试多样性
+            const testPath = testPaths[Math.floor(Math.random() * testPaths.length)];
+            
+            const response = await fetch(`https://${ip}:${port}${testPath}`, {
                 signal: controller.signal,
-                mode: 'cors'
+                mode: 'cors',
+                // 添加随机查询参数避免缓存
+                cache: 'no-store',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+                }
             });
             
             clearTimeout(timeoutId);
@@ -3895,15 +3936,16 @@ async function 测试IP连通性(ips, ports, timeout) {
             const endTime = Date.now();
             const latency = endTime - startTime;
             
-            // 如果延迟较低，也可以考虑使用
-            if (latency < 300) {
-                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms`);
+            // 更严格的延迟筛选
+            if (latency < 250) {
+                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms (路径: ${testPath})`);
                 return {
                     success: true,
                     ip,
                     port,
                     time: latency,
-                    type: 'direct' // 标记为直连成功的IP
+                    type: 'direct', // 标记为直连成功的IP
+                    path: testPath
                 };
             }
             
@@ -3922,18 +3964,21 @@ async function 测试IP连通性(ips, ports, timeout) {
             // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
             // 证书错误的IP是我们优先需要的
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms`);
-                return {
-                    success: true,
-                    ip,
-                    port,
-                    time: latency,
-                    type: 'cert_error' // 标记为证书错误的IP
-                };
+                // 证书错误IP的延迟阈值可以稍高一些
+                if (latency < 500) {
+                    console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms`);
+                    return {
+                        success: true,
+                        ip,
+                        port,
+                        time: latency,
+                        type: 'cert_error' // 标记为证书错误的IP
+                    };
+                }
             }
             
-            // 其他类型的错误也可能有用
-            if (latency < 300) {
+            // 其他类型的错误也可能有用，但要求更低的延迟
+            if (latency < 200) {
                 console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，错误: ${error.name}`);
                 return {
                     success: true,
@@ -3970,10 +4015,38 @@ async function 测试IP连通性(ips, ports, timeout) {
     const startTestTime = Date.now();
     let taskIndex = 0;
     
-    while (taskIndex < testTasks.length && results.length < minResults && (Date.now() - startTestTime) < MAX_TEST_DURATION) {
+    // 统计不同类型IP的数量
+    let certErrorCount = 0;
+    let directCount = 0;
+    let otherErrorCount = 0;
+    
+    // 动态调整测试策略的变量
+    let dynamicTimeout = actualTimeout;
+    let needMoreCertError = true;
+    
+    while (taskIndex < testTasks.length && (Date.now() - startTestTime) < MAX_TEST_DURATION) {
+        // 检查是否已经有足够的结果
+        const totalResults = results.length;
+        
+        // 如果已经有足够的结果且证书错误类型的IP也足够，可以提前结束
+        if (totalResults >= minResults && certErrorCount >= certErrorMinResults) {
+            console.log(`已找到足够的可用IP (总共${totalResults}个，证书错误${certErrorCount}个)，提前结束测试`);
+            break;
+        }
+        
+        // 动态调整并发数，根据已找到的结果数量
+        let dynamicConcurrent = MAX_CONCURRENT;
+        if (totalResults < 5) {
+            // 结果很少时，增加并发以快速找到更多IP
+            dynamicConcurrent = Math.min(MAX_CONCURRENT * 1.5, 150);
+        } else if (certErrorCount < certErrorMinResults && taskIndex > testTasks.length / 3) {
+            // 证书错误类型IP不足且已测试了一定数量，增加并发
+            dynamicConcurrent = Math.min(MAX_CONCURRENT * 1.2, 120);
+        }
+        
         // 创建当前批次的测试任务
         const currentBatch = [];
-        const batchSize = Math.min(MAX_CONCURRENT, testTasks.length - taskIndex);
+        const batchSize = Math.min(Math.floor(dynamicConcurrent), testTasks.length - taskIndex);
         
         for (let i = 0; i < batchSize; i++) {
             const task = testTasks[taskIndex++];
@@ -3996,10 +4069,13 @@ async function 测试IP连通性(ips, ports, timeout) {
                 // 证书错误的IP加上特殊标记
                 if (resultType === 'cert_error') {
                     comment = 'CF优选IP-证书';
+                    certErrorCount++;
                 } else if (resultType === 'direct') {
                     comment = 'CF优选IP-直连';
+                    directCount++;
                 } else if (resultType === 'other_error') {
                     comment = 'CF优选IP-其他';
+                    otherErrorCount++;
                 }
                 
                 results.push({
@@ -4013,15 +4089,20 @@ async function 测试IP连通性(ips, ports, timeout) {
                 });
                 
                 // 记录进度
-                if (results.length % 10 === 0) {
-                    console.log(`已找到${results.length}个可用IP，已测试${taskIndex}/${testTasks.length}`);
+                if (results.length % 10 === 0 || certErrorCount % 5 === 0) {
+                    console.log(`已找到${results.length}个可用IP (证书错误:${certErrorCount}, 直连:${directCount}, 其他:${otherErrorCount})，已测试${taskIndex}/${testTasks.length}`);
                 }
-                
-                // 如果已经有足够的结果，可以提前结束
-                if (results.length >= minResults * 2) {
-                    console.log(`已找到足够的可用IP (${results.length})，提前结束测试`);
-                    break;
-                }
+            }
+        }
+        
+        // 动态调整测试策略
+        if (taskIndex > testTasks.length / 3) {
+            // 测试进度超过1/3
+            if (certErrorCount < 3 && needMoreCertError) {
+                console.log(`证书错误类型IP太少(${certErrorCount})，调整测试策略...`);
+                // 如果证书错误类型的IP太少，尝试增加超时时间
+                dynamicTimeout = Math.min(dynamicTimeout + 100, 999);
+                needMoreCertError = false; // 只调整一次
             }
         }
         
