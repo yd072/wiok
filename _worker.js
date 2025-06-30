@@ -3286,9 +3286,23 @@ async function 在线优选IP(request, env) {
                  // 测试IP连通性
                  let results = [];
                  try {
-                     console.log(`开始测试IP连通性，共 ${ips.length} 个IP，端口: ${ports.join(', ')}`);
-                     results = await 测试IP连通性(ips, ports, timeout);
-                     console.log(`测试完成，获取到 ${results.length} 个测试结果`);
+                     // 使用源码2的方式测试每个端口
+                     for (const port of ports) {
+                         console.log(`使用端口 ${port} 测试IP...`);
+                         const portResults = await testIPsWithConcurrency(ips, port, 32);
+                         results.push(...portResults);
+                         
+                         // 如果已经找到足够的结果，可以提前结束
+                         if (results.length >= 20) {
+                             console.log(`已找到足够的可用IP (${results.length})，不再测试其他端口`);
+                             break;
+                         }
+                     }
+                     
+                     // 按延迟排序
+                     results.sort((a, b) => a.latency - b.latency);
+                     
+                     console.log(`测试完成，共找到${results.length}个可用IP`);
                      
                      // 打印结果示例，帮助调试
                      if (results.length > 0) {
@@ -3298,6 +3312,174 @@ async function 在线优选IP(request, env) {
                      }
                  } catch (error) {
                      console.error('测试IP连通性时出错:', error);
+                 }
+                 
+                 // 源码2的testIPsWithConcurrency函数
+                 async function testIPsWithConcurrency(ips, port, maxConcurrency = 32) {
+                     const testResults = [];
+                     const totalIPs = ips.length;
+                     let completedTests = 0;
+                     
+                     // 创建工作队列
+                     let index = 0;
+                     
+                     async function worker() {
+                         while (index < ips.length) {
+                             const currentIndex = index++;
+                             const ip = ips[currentIndex];
+                             
+                             const result = await testIP(ip, port);
+                             if (result) {
+                                 testResults.push(result);
+                             }
+                             
+                             completedTests++;
+                             
+                             // 记录进度
+                             if (completedTests % 50 === 0 || completedTests === totalIPs) {
+                                 const progress = (completedTests / totalIPs) * 100;
+                                 console.log(`测试进度: ${completedTests}/${totalIPs} (${progress.toFixed(1)}%) - 有效IP: ${testResults.length}`);
+                             }
+                         }
+                     }
+                     
+                     // 创建工作线程
+                     const workers = Array(Math.min(maxConcurrency, ips.length))
+                         .fill()
+                         .map(() => worker());
+                     
+                     await Promise.all(workers);
+                     
+                     return testResults;
+                 }
+                 
+                 // 源码2的testIP函数
+                 async function testIP(ip, port) {
+                     const timeout = 999; // 固定超时时间为999ms，与源码2一致
+                     
+                     // 解析IP格式
+                     const parsedIP = parseIPFormat(ip, port);
+                     if (!parsedIP) {
+                         return null;
+                     }
+                     
+                     // 第一次测试
+                     const firstResult = await singleTest(parsedIP.host, parsedIP.port, timeout);
+                     if (!firstResult) {
+                         return null; // 第一次测试失败，直接返回
+                     }
+                     
+                     // 第一次测试成功，再进行第二次测试
+                     console.log(`IP ${parsedIP.host}:${parsedIP.port} 第一次测试成功: ${firstResult.latency}ms，进行第二次测试...`);
+                     
+                     const results = [firstResult];
+                     
+                     // 进行第二次测试
+                     const secondResult = await singleTest(parsedIP.host, parsedIP.port, timeout);
+                     if (secondResult) {
+                         results.push(secondResult);
+                         console.log(`IP ${parsedIP.host}:${parsedIP.port} 第二次测试: ${secondResult.latency}ms`);
+                     }
+                     
+                     // 取最低延迟
+                     const bestResult = results.reduce((best, current) => 
+                         current.latency < best.latency ? current : best
+                     );
+                     
+                     const displayLatency = Math.floor(bestResult.latency / 2);
+                     
+                     console.log(`IP ${parsedIP.host}:${parsedIP.port} 最终结果: ${displayLatency}ms (原始: ${bestResult.latency}ms, 共${results.length}次有效测试)`);
+                     
+                     // 生成显示格式
+                     const comment = parsedIP.comment || 'CF优选IP';
+                     const display = `${parsedIP.host}:${parsedIP.port}#${comment} ${displayLatency}ms`;
+                     
+                     return {
+                         ip: parsedIP.host,
+                         port: parsedIP.port,
+                         latency: displayLatency,
+                         originalLatency: bestResult.latency,
+                         testCount: results.length,
+                         comment: comment,
+                         display: display
+                     };
+                 }
+                 
+                 // 源码2的parseIPFormat函数
+                 function parseIPFormat(ipString, defaultPort) {
+                     try {
+                         let host, port, comment;
+                         
+                         // 先处理注释部分（#之后的内容）
+                         let mainPart = ipString;
+                         if (ipString.includes('#')) {
+                             const parts = ipString.split('#');
+                             mainPart = parts[0];
+                             comment = parts[1];
+                         }
+                         
+                         // 处理端口部分
+                         if (mainPart.includes(':')) {
+                             const parts = mainPart.split(':');
+                             host = parts[0];
+                             port = parseInt(parts[1]);
+                         } else {
+                             host = mainPart;
+                             port = parseInt(defaultPort);
+                         }
+                         
+                         // 验证IP格式
+                         if (!host || !port || isNaN(port)) {
+                             return null;
+                         }
+                         
+                         return {
+                             host: host.trim(),
+                             port: port,
+                             comment: comment ? comment.trim() : null
+                         };
+                     } catch (error) {
+                         console.error('解析IP格式失败:', ipString, error);
+                         return null;
+                     }
+                 }
+                 
+                 // 源码2的singleTest函数
+                 async function singleTest(ip, port, timeout) {
+                     const startTime = Date.now();
+                     
+                     try {
+                         const controller = new AbortController();
+                         const timeoutId = setTimeout(() => controller.abort(), timeout);
+                         
+                         const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
+                             signal: controller.signal,
+                             mode: 'cors'
+                         });
+                         
+                         clearTimeout(timeoutId);
+                         // 如果请求成功了，说明这个IP不是我们要的
+                         return null;
+                         
+                     } catch (error) {
+                         const latency = Date.now() - startTime;
+                         
+                         // 检查是否是真正的超时（接近设定的timeout时间）
+                         if (latency >= timeout - 50) {
+                             return null;
+                         }
+                         
+                         // 检查是否是 Failed to fetch 错误（通常是SSL/证书错误）
+                         if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                             return {
+                                 ip: ip,
+                                 port: port,
+                                 latency: latency
+                             };
+                         }
+                         
+                         return null;
+                     }
                  }
                 
                 // 按类型和响应时间排序并取前N个
@@ -3314,15 +3496,12 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 源码2算法：只按延迟排序
-                results.sort((a, b) => a.latency - b.latency);
+                // 已经在前面的代码中按延迟排序，这里直接使用
                 
                 // 取前N个结果
                 const bestIPs = results
                     .slice(0, count)
-                    .map(item => {
-                        return item.display; // 直接使用已经格式化好的display属性
-                    });
+                    .map(item => item.display); // 直接使用已经格式化好的display属性
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
