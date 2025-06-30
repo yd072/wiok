@@ -3830,6 +3830,8 @@ async function 测试IP连通性(ips, ports, timeout) {
             return null; // 第一次测试失败，直接返回
         }
         
+        console.log(`IP ${ip}:${port} 第一次测试成功: ${firstResult.latency}ms，进行第二次测试...`);
+        
         // 第一次测试成功，再进行第二次测试
         const results = [firstResult];
         
@@ -3837,29 +3839,32 @@ async function 测试IP连通性(ips, ports, timeout) {
         const secondResult = await singleTest(ip, port, actualTimeout);
         if (secondResult) {
             results.push(secondResult);
+            console.log(`IP ${ip}:${port} 第二次测试: ${secondResult.latency}ms`);
         }
         
         // 取最低延迟
         const bestResult = results.reduce((best, current) => 
-            current.time < best.time ? current : best
+            current.latency < best.latency ? current : best
         );
         
         // 计算显示延迟 - 源码2的方法是实际延迟的一半
-        const displayTime = Math.floor(bestResult.time / 2);
+        const displayLatency = Math.floor(bestResult.latency / 2);
+        
+        console.log(`IP ${ip}:${port} 最终结果: ${displayLatency}ms (原始: ${bestResult.latency}ms, 共${results.length}次有效测试)`);
         
         // 返回结果
         return {
-            success: true,
             ip: bestResult.ip,
             port: bestResult.port,
-            time: displayTime,
-            originalTime: bestResult.time
+            latency: displayLatency,
+            originalLatency: bestResult.latency,
+            testCount: results.length,
+            comment: 'CF优选IP'
         };
     }
     
     // 单次测试函数 - 完全采用源码2的纯证书错误检测算法
     async function singleTest(ip, port, timeout) {
-        // 源码2不使用performance.now，只使用Date.now
         const startTime = Date.now();
         
         try {
@@ -3873,8 +3878,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             });
             
             clearTimeout(timeoutId);
-            
-            // 源码2算法：如果请求成功，则不是我们需要的IP
+            // 如果请求成功了，说明这个IP不是我们要的
             return null;
             
         } catch (error) {
@@ -3882,21 +3886,18 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             // 检查是否是真正的超时（接近设定的timeout时间）
             if (latency >= timeout - 50) {
-                return null; // 真正的超时，认为测试失败
+                return null;
             }
             
-            // 源码2算法：只接受证书错误（Failed to fetch）的IP
+            // 检查是否是 Failed to fetch 错误（通常是SSL/证书错误）
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
                 return {
-                    success: true,
-                    ip,
-                    port,
-                    time: latency,
-                    type: 'cert_error' // 标记为证书错误的IP
+                    ip: ip,
+                    port: port,
+                    latency: latency
                 };
             }
             
-            // 源码2算法：其他类型的错误不接受
             return null;
         }
     }
@@ -3937,24 +3938,22 @@ async function 测试IP连通性(ips, ports, timeout) {
         
         // 处理结果
         for (const result of batchResults) {
-            if (result && result.success) {
-                // 源码2算法只有证书错误类型的IP
-                let comment = 'CF优选IP';
-                
+            if (result) {
                 // 生成显示格式
-                const display = `${result.ip}:${result.port}#${comment} ${result.time}ms`;
+                const comment = 'CF优选IP';
+                const display = `${result.ip}:${result.port}#${comment} ${result.latency}ms`;
                 
                 results.push({
                     ip: result.ip,
                     port: result.port,
-                    latency: result.time,
-                    originalLatency: result.originalTime,
+                    latency: result.latency,
+                    originalLatency: result.originalLatency,
                     comment: comment,
                     display: display
                 });
                 
                 // 记录进度
-                if (results.length % 10 === 0) {
+                if (results.length % 5 === 0) {
                     console.log(`已找到${results.length}个可用IP，已测试${taskIndex}/${testTasks.length}`);
                 }
                 
