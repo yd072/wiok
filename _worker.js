@@ -2935,6 +2935,7 @@ async function handleGetRequest(env, txt) {
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                             <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <button class="btn" style="background-color: #673AB7;" onclick="goBestIP()">在线优选IP</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                         <div class="divider"></div>
@@ -2947,6 +2948,15 @@ async function handleGetRequest(env, txt) {
             function goBack() {
                 const pathParts = window.location.pathname.split('/');
                 pathParts.pop(); // 移除 "edit"
+                const newPath = pathParts.join('/');
+                window.location.href = newPath;
+            }
+            
+            function goBestIP() {
+                // 跳转到在线优选IP页面
+                const pathParts = window.location.pathname.split('/');
+                pathParts.pop(); // 移除 "edgetunnel"
+                pathParts.push('bestip'); // 添加 "bestip"
                 const newPath = pathParts.join('/');
                 window.location.href = newPath;
             }
@@ -3254,10 +3264,21 @@ async function 在线优选IP(request, env) {
                 const ranges = await 获取Cloudflare_IP范围();
                 console.log(`使用从Cloudflare官方获取的${ranges.length}个IP范围`);
                 
-                const count = parseInt(formData.get('count') || '15', 10);
-                const port = formData.get('ports') || '443';
-                const ports = [port]; // 只使用选定的端口
+                const count = 15; // 固定优选IP数量为15
+                const portSelection = formData.get('ports') || '443';
                 const timeout = 2000; // 固定超时时间为2000毫秒
+                
+                // 处理端口选择
+                let ports;
+                if (portSelection === 'all') {
+                    // 使用所有预设端口
+                    ports = DEFAULT_PORTS;
+                    console.log(`使用全部端口: ${ports.join(', ')}`);
+                } else {
+                    // 只使用选定的端口
+                    ports = [portSelection];
+                    console.log(`使用单一端口: ${portSelection}`);
+                }
                 
                                  // 从CIDR范围中生成随机IP
                  const ips = await 生成随机IP(ranges, 1000); // 固定生成1000个IP进行测试
@@ -3498,19 +3519,15 @@ async function 在线优选IP(request, env) {
             
             <form id="testForm">
                                 <div class="form-group">
-                    <label for="count">优选IP数量</label>
-                    <input type="number" id="count" name="count" value="15" min="1" max="50">
-                </div>
-                
-                <div class="form-group">
                     <label for="port-select">测试端口</label>
                     <select id="port-select" name="ports">
-                        <option value="443">443</option>
+                        <option value="443" selected>443</option>
                         <option value="2053">2053</option>
                         <option value="2083">2083</option>
                         <option value="2087">2087</option>
                         <option value="2096">2096</option>
-                        <option value="8443" selected>8443</option>
+                        <option value="8443">8443</option>
+                        <option value="all">全部端口</option>
                     </select>
                 </div>
                 
@@ -3560,7 +3577,8 @@ async function 在线优选IP(request, env) {
                 // 设置优选订阅列表按钮
                 const listButton = document.getElementById('listButton');
                 listButton.addEventListener('click', function() {
-                    window.location.href = window.location.pathname.replace('/bestip', '');
+                    // 跳转到edgetunnel优选订阅列表页面
+                    window.location.href = window.location.pathname.replace('/bestip', '/edgetunnel');
                 });
                 
                 // 全局变量存储测试结果
