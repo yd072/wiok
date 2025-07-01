@@ -3920,7 +3920,7 @@ async function 测试IP连通性(ips, ports, timeout) {
     
     // 移除进度条功能
     
-    // 测试单个IP函数 - 优化版本
+    // 测试单个IP函数 - 使用源码2的方式
     async function testSingleIP(ip, port) {
         // 第一次测试
         const firstResult = await singleTest(ip, port, actualTimeout);
@@ -3928,31 +3928,37 @@ async function 测试IP连通性(ips, ports, timeout) {
             return { success: false, ip, port };
         }
         
-        console.log(`IP ${ip}:${port} 第一次测试成功: ${firstResult.time}ms (类型: ${firstResult.type})，进行第二次测试...`);
+        console.log(`IP ${ip}:${port} 第一次测试成功: ${firstResult.time}ms，进行第二次测试...`);
         
-        // 第二次测试
+        const results = [firstResult];
+        
+        // 进行第二次测试
         const secondResult = await singleTest(ip, port, actualTimeout);
-        
-        // 如果两次测试都成功，只选择延迟较低的结果
         if (secondResult) {
-            console.log(`IP ${ip}:${port} 第二次测试成功: ${secondResult.time}ms (类型: ${secondResult.type})`);
-            
-            // 只根据延迟选择结果
-            if (secondResult.time < firstResult.time) {
-                console.log(`IP ${ip}:${port} 选择第二次结果(延迟更低)`);
-                return secondResult;
-            } else {
-                console.log(`IP ${ip}:${port} 选择第一次结果(延迟更低或相等)`);
-                return firstResult;
-            }
+            results.push(secondResult);
+            console.log(`IP ${ip}:${port} 第二次测试成功: ${secondResult.time}ms`);
         }
         
-        // 默认使用第一次结果
-        console.log(`IP ${ip}:${port} 使用第一次结果: ${firstResult.time}ms (类型: ${firstResult.type})`);
-        return firstResult;
+        // 取最低延迟
+        const bestResult = results.reduce((best, current) => 
+            current.time < best.time ? current : best
+        );
+        
+        // 源码2的方式：将延迟除以2作为显示延迟
+        const displayTime = Math.floor(bestResult.time / 2);
+        
+        console.log(`IP ${ip}:${port} 最终结果: ${displayTime}ms (原始: ${bestResult.time}ms, 共${results.length}次有效测试)`);
+        
+        return {
+            success: true,
+            ip: bestResult.ip,
+            port: bestResult.port,
+            time: bestResult.time,
+            displayTime: displayTime
+        };
     }
     
-    // 单次测试函数 - 优化的测试算法
+    // 单次测试函数 - 使用源码2的延迟计算方式
     async function singleTest(ip, port, timeout) {
         // IP测试函数
         const startTime = Date.now();
@@ -3961,75 +3967,35 @@ async function 测试IP连通性(ips, ports, timeout) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
-            // 优先使用证书错误的连接测试方法
             const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
                 signal: controller.signal,
                 mode: 'cors'
             });
             
             clearTimeout(timeoutId);
-            
-            // 如果能连接成功且是Cloudflare
-            const endTime = Date.now();
-            const latency = endTime - startTime;
-            
-            // 确保延迟至少为200ms，以便显示时除以2后至少为100ms
-            const adjustedLatency = Math.max(200, latency);
-            
-            // 如果延迟不是太高，记录为直连成功的IP
-            if (latency < 300) {
-                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms，调整后: ${adjustedLatency}ms`);
-                return {
-                    success: true,
-                    ip,
-                    port,
-                    time: adjustedLatency,
-                    type: 'direct' // 直连类型
-                };
-            }
-            
-            // 延迟过高的直连IP通常不太理想
+            // 如果请求成功了，说明这个IP不是我们要的
             return null;
             
         } catch (error) {
-            const endTime = Date.now();
-            const latency = endTime - startTime;
+            const latency = Date.now() - startTime;
             
-            // 处理请求超时情况
+            // 检查是否是真正的超时（接近设定的timeout时间）
             if (latency >= timeout - 50) {
-                // 真正的超时
                 return null;
             }
             
-            // 确保延迟至少为200ms，以便显示时除以2后至少为100ms
-            const adjustedLatency = Math.max(200, latency);
-            
-            // 证书错误通常表示IP可以连接但提供的是非目标网站的证书
-            // 对于CF优选来说，这类IP是最理想的
+            // 检查是否是 Failed to fetch 错误（通常是SSL/证书错误）
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms，调整后: ${adjustedLatency}ms`);
+                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: adjustedLatency,
-                    type: 'cert_error' // 证书错误类型
+                    time: latency,
+                    type: 'cert_error' // 保留类型信息用于日志
                 };
             }
             
-            // 其他错误类型，如果延迟较低也可以考虑
-            if (latency < 300) {
-                console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，调整后: ${adjustedLatency}ms，错误: ${error.name}`);
-                return {
-                    success: true,
-                    ip,
-                    port,
-                    time: adjustedLatency,
-                    type: 'other_error' // 其他错误类型
-                };
-            }
-            
-            // 其他错误且延迟高的不要
             return null;
         }
     }
@@ -4074,19 +4040,19 @@ async function 测试IP连通性(ips, ports, timeout) {
         const batchPromises = currentBatch.map(task => testSingleIP(task.ip, task.port));
         const batchResults = await Promise.all(batchPromises);
         
-        // 处理结果
+        // 处理结果 - 使用源码2的方式
         for (const result of batchResults) {
             if (result.success) {
-                // 由于我们在singleTest中已经确保了最小延迟为200ms，所以这里除以2后最小为100ms
-                const displayTime = Math.floor(result.time / 2);
+                // 使用testSingleIP中计算的displayTime
+                const displayTime = result.displayTime;
                 // 统一使用CF优选IP作为标识
                 const comment = 'CF优选IP';
                 
                 const ipText = `${result.ip}:${result.port}`;
                 results.push(`${ipText} #${comment} ${displayTime}ms`);
                 
-                // 修改控制台输出，只显示延迟值
-                console.log(`找到可用IP: ${ipText} (显示:${displayTime}ms, 实际:${result.time}ms)`);
+                // 修改控制台输出，使用源码2的方式
+                console.log(`找到可用IP: ${ipText} (显示:${displayTime}ms, 原始:${result.time}ms)`);
                 
                 // 如果已找到足够的IP，提前结束
                 if (results.length >= minResults) {
