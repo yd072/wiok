@@ -4003,8 +4003,8 @@ async function 测试IP连通性(ips, ports, timeout) {
             const endTime = Date.now();
             const latency = endTime - startTime;
             
-            // 确保延迟至少为150ms，以便显示时除以2后至少为75ms
-            const adjustedLatency = Math.max(150, latency);
+            // 确保延迟至少为200ms，以便显示时除以2后至少为100ms
+            const adjustedLatency = Math.max(200, latency);
             
             // 如果延迟不是太高，记录为直连成功的IP
             if (latency < 300) {
@@ -4031,8 +4031,8 @@ async function 测试IP连通性(ips, ports, timeout) {
                 return null;
             }
             
-            // 确保延迟至少为150ms，以便显示时除以2后至少为75ms
-            const adjustedLatency = Math.max(150, latency);
+            // 确保延迟至少为200ms，以便显示时除以2后至少为100ms
+            const adjustedLatency = Math.max(200, latency);
             
             // 处理证书错误情况 - 这是源码2中最重要的判断
             // 证书错误通常表示IP可以连接但提供的是非目标网站的证书
@@ -4108,7 +4108,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             if (result.success) {
                 // 与源码2完全一样的结果处理方式
                 // 计算显示延迟 - 与源码2完全相同，显示的延迟是实际延迟的一半
-                // 由于我们在singleTest中已经确保了最小延迟为150ms，所以这里除以2后最小为75ms
+                // 由于我们在singleTest中已经确保了最小延迟为200ms，所以这里除以2后最小为100ms
                 const displayTime = Math.floor(result.time / 2);
                 
                 // 移除特殊标记，统一使用CF优选IP作为标识
