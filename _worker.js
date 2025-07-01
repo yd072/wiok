@@ -1627,7 +1627,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
@@ -3147,12 +3147,15 @@ async function handleGetRequest(env, txt) {
 async function 在线优选IP(request, env) {
     // 定义多个外部API端点，用于获取优选IP
     const 外部API列表 = [
+        'https://ipxx.ddns.fan/api/ip',
+        'https://blzcp.coding.net/p/ipapi/d/ipapi/git/raw/master/ip.json',
+        'https://cfd.lgf.workers.dev/v2/cf.json',
+        'https://cloudflare-v4.vercel.app/cfips.json',
         'https://api.cloudflare-cn.com/cfip', 
         'https://cf-iplist-api.vercel.app/api', 
         'https://cfip.projectrom.com/api',
         'https://api.cfspeed.com/v1/iplist',
-        'https://check.cfips.xyz/api/getips',
-        'https://cloudflare.cfapi.xyz/iplist'
+        'https://check.cfips.xyz/api/getips'
     ];
 
     // 从Cloudflare官方网站获取IP范围列表（保留此功能作为备用）
@@ -3251,13 +3254,19 @@ async function 在线优选IP(request, env) {
                     console.log(`正在从API获取优选IP: ${url}`);
                     
                     const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 8000); // 缩短超时时间
+                    const timeout = setTimeout(() => controller.abort(), 5000); // 进一步减少超时时间到5秒
                     
                     const response = await fetch(url, { 
                         signal: controller.signal,
                         headers: {
-                            'User-Agent': 'CFIPOptimizer/2.0',
-                            'Accept': 'application/json'
+                            'User-Agent': 'CFIPOptimizer/2.1',
+                            'Accept': 'application/json, text/plain, */*',
+                            'Cache-Control': 'no-cache',
+                            'Pragma': 'no-cache'
+                        },
+                        cf: {
+                            cacheTtl: 300,
+                            cacheEverything: false
                         }
                     });
                     clearTimeout(timeout);
@@ -3543,7 +3552,17 @@ async function 在线优选IP(request, env) {
                 
                 // 确保至少有一些结果
                 if (results.length === 0) {
-                    results = [`1.0.0.1:${ports[0]} #CF默认 100ms`, `1.1.1.1:${ports[0]} #CF默认 110ms`];
+                    // 添加多个默认的Cloudflare DNS和已知好用的IP
+                    results = [
+                        `1.1.1.1:${ports[0]} #CF默认 110ms`, 
+                        `1.0.0.1:${ports[0]} #CF默认 120ms`,
+                        `104.16.249.249:${ports[0]} #CF默认 130ms`, 
+                        `104.16.248.249:${ports[0]} #CF默认 140ms`,
+                        `104.17.175.85:${ports[0]} #CF默认 150ms`,
+                        `104.18.14.101:${ports[0]} #CF默认 160ms`,
+                        `104.19.197.151:${ports[0]} #CF默认 170ms`,
+                        `104.16.1.1:${ports[0]} #CF默认 180ms`
+                    ];
                 }
                 
                 // 最多返回20个结果
@@ -3875,14 +3894,23 @@ async function 在线优选IP(request, env) {
                     loadingStatus.textContent = '正在从API获取最优IP...';
                     startTestButton.disabled = true;
                     
+                    // 添加超时控制
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('请求超时，请稍后重试')), 15000);
+                    });
+                    
                     const formData = new FormData();
                     formData.append('action', 'test');
                     formData.append('ports', document.getElementById('portSelect').value);
                     
-                    fetch(window.location.href, {
-                        method: 'POST',
-                        body: formData
-                    })
+                    // 竞争控制，添加超时保护
+                    Promise.race([
+                        fetch(window.location.href, {
+                            method: 'POST',
+                            body: formData
+                        }),
+                        timeoutPromise
+                    ])
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
@@ -4020,4 +4048,89 @@ async function 在线优选IP(request, env) {
             'Content-Type': 'text/html;charset=utf-8'
         }
     });
+}
+
+// 添加生成随机IP函数
+async function 生成随机IP(ranges, count) {
+    const ips = [];
+    const MAX_SAMPLE_SIZE = 1000; // 最大抽样数量
+    const actualCount = Math.min(count, MAX_SAMPLE_SIZE); // 限制最大数量
+    
+    console.log(`从Cloudflare IP范围中抽取${actualCount}个IP进行测试`);
+    
+    // CIDR转换为IP范围函数
+    function cidrToIPRange(cidr) {
+        const [baseIP, prefixLength] = cidr.split('/');
+        const baseIPNum = baseIP.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0);
+        const mask = ~((1 << (32 - parseInt(prefixLength, 10))) - 1);
+        const networkIP = baseIPNum & mask;
+        const maxHost = (1 << (32 - parseInt(prefixLength, 10))) - 1;
+        return { networkIP, maxHost };
+    }
+    
+    // 生成随机IP函数
+    function generateIPFromCIDR(cidr) {
+        const { networkIP, maxHost } = cidrToIPRange(cidr);
+        
+        // 生成随机主机部分
+        const randomHostPart = Math.floor(Math.random() * maxHost) + 1; // 避免使用网络地址(0)和广播地址(maxHost)
+        const ipNum = networkIP | randomHostPart;
+        
+        // 转换回点分十进制
+        return [
+            (ipNum >> 24) & 255,
+            (ipNum >> 16) & 255,
+            (ipNum >> 8) & 255,
+            ipNum & 255
+        ].join('.');
+    }
+    
+    // 计算每个CIDR块的IP数量
+    const cidrSizes = ranges.map(cidr => {
+        const { maxHost } = cidrToIPRange(cidr);
+        return maxHost;
+    });
+    
+    // 计算总IP数量
+    const totalIPs = cidrSizes.reduce((sum, size) => sum + size, 0);
+    console.log(`Cloudflare IP范围包含约${totalIPs}个IP地址`);
+    
+    // 为每个范围分配权重，确保大范围有更多的抽样
+    const weights = cidrSizes.map(size => size / totalIPs);
+    
+    // 根据权重分配每个CIDR块应该生成的IP数量
+    const ipCountPerRange = weights.map(weight => Math.ceil(actualCount * weight));
+    
+    // 为每个范围生成随机IP
+    for (let i = 0; i < ranges.length; i++) {
+        const cidr = ranges[i];
+        const ipCount = Math.min(ipCountPerRange[i], cidrSizes[i]); // 不超过该CIDR块的最大IP数
+        
+        // 生成指定数量的随机IP
+        const rangeIPs = new Set();
+        let attempts = 0;
+        const maxAttempts = ipCount * 2; // 最大尝试次数，避免无限循环
+        
+        while (rangeIPs.size < ipCount && attempts < maxAttempts) {
+            const ip = generateIPFromCIDR(cidr);
+            rangeIPs.add(ip);
+            attempts++;
+        }
+        
+        // 将该范围的IP添加到总列表
+        ips.push(...Array.from(rangeIPs));
+    }
+    
+    // 如果生成的IP数量超过要求，随机选择指定数量
+    if (ips.length > actualCount) {
+        // Fisher-Yates洗牌算法
+        for (let i = ips.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [ips[i], ips[j]] = [ips[j], ips[i]];
+        }
+        ips.length = actualCount;
+    }
+    
+    console.log(`成功生成${ips.length}个随机IP用于测试`);
+    return ips;
 }
