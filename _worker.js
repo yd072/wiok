@@ -3753,7 +3753,7 @@ async function 在线优选IP(request, env) {
                                  // 保存测试结果到全局变量
                                  testResults = result.bestIPs;
                                  
-                                 resultList.textContent = result.bestIPs.join('\\n');
+                                 resultList.textContent = result.bestIPs.join('\n');
                                  resultContainer.style.display = 'block';
                                  // 启用按钮
                                  document.getElementById('appendButton').disabled = false;
@@ -4036,17 +4036,22 @@ async function 测试IP连通性(ips, ports, timeout) {
         return results;
     }
     
-    // 为每个IP选择一个端口
-    const testIPs = [];
-    for (const ip of ips) {
-        const port = ports[0]; // 使用第一个端口，简化处理
-        testIPs.push(ip);
+    // 为每个IP和端口组合创建测试任务
+    const allResults = [];
+    
+    // 对每个端口进行测试
+    for (const port of ports) {
+        console.log(`开始测试${ips.length}个IP，端口: ${port}`);
+        
+        // 使用16个并发线程测试，与源码2.js保持一致
+        const portResults = await testIPsWithConcurrency(ips, port, 16);
+        
+        // 将当前端口的结果添加到总结果中
+        allResults.push(...portResults);
     }
     
-    console.log(`开始测试${testIPs.length}个IP，端口: ${ports[0]}`);
-    
-    // 使用16个并发线程测试，与源码2.js保持一致
-    const testResults = await testIPsWithConcurrency(testIPs, ports[0], 16);
+    // 合并所有端口的测试结果
+    const testResults = allResults;
     
     // 按延迟排序
     testResults.sort((a, b) => a.latency - b.latency);
@@ -4056,7 +4061,8 @@ async function 测试IP连通性(ips, ports, timeout) {
         results.push(result.display);
     }
     
-    console.log(`测试完成，共测试了${testIPs.length}个IP，找到${results.length}个可用IP`);
+    const totalTested = ips.length * ports.length;
+    console.log(`测试完成，共测试了${totalTested}个IP端口组合，找到${results.length}个可用IP`);
     
     // 如果没有找到任何可用IP，记录警告信息
     if (results.length === 0) {
