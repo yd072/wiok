@@ -3101,7 +3101,7 @@ async function 在线优选IP(request, env) {
     // 默认端口列表
     const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
     
-    // 从Cloudflare官方网站获取IP范围列表，与源码2完全一样
+    // 从Cloudflare官方网站获取IP范围列表
     async function 获取Cloudflare_IP范围() {
         try {
             // 只使用官方IP范围
@@ -3151,7 +3151,7 @@ async function 在线优选IP(request, env) {
         }
     }
     
-    // 检测VPN状态的函数 - 使用源码2的方式
+    // 检测VPN状态的函数 
     async function 检测VPN状态(request) {
         try {
             // 获取用户IP和国家信息
@@ -3279,10 +3279,10 @@ async function 在线优选IP(request, env) {
                 }
             }
             else if (action === 'test') {
-                // 检测VPN状态 - 与源码2保持一致
+                // 检测VPN状态 
                 const vpnStatus = await 检测VPN状态(request);
                 
-                // 移除调试模式，与源码2保持一致
+                // 移除调试模式
                 const isDebug = false;
                 
                 // 如果检测到VPN，返回提示信息
@@ -3296,14 +3296,13 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 从Cloudflare官方获取IP范围 - 与源码2一致只用官方IP列表
+                // 从Cloudflare官方获取IP范围 
                 const ranges = await 获取Cloudflare_IP范围();
                 console.log(`使用从Cloudflare官方获取的${ranges.length}个IP范围`);
                 
-                // 与源码2一致的参数
                 const count = 15; // 固定优选IP数量为15
                 const portSelection = formData.get('ports') || '443';
-                // 与源码2完全一致，使用900毫秒超时时间
+                // 使用900毫秒超时时间
                 const timeout = 900; 
                 
                 // 处理端口选择
@@ -3318,10 +3317,10 @@ async function 在线优选IP(request, env) {
                     console.log(`使用单一端口: ${portSelection}`);
                 }
                 
-                // 从官方IP范围生成随机IP - 与源码2一致使用轮次生成方式
+                // 从官方IP范围生成随机IP 
                 const ips = await 生成随机IP(ranges, 1000);
                 
-                // 与源码2一样测试每个IP端口组合
+                // 一样测试每个IP端口组合
                 const testIPs = [];
                 for (const ip of ips) {
                     for (const port of ports) {
@@ -3841,9 +3840,8 @@ async function 在线优选IP(request, env) {
     });
 }
 
-// 生成随机IP函数 - 完全与源码2保持一致
+// 生成随机IP函数 
 async function 生成随机IP(cidrs, count) {
-    // 使用与源码2完全相同的实现方式
     const ips = new Set(); // 使用Set去重
     const targetCount = count || 1000; // 默认生成1000个IP
     let round = 1;
@@ -3876,7 +3874,7 @@ async function 生成随机IP(cidrs, count) {
     return Array.from(ips).slice(0, targetCount);
 }
 
-// 添加从源码2复制的generateIPsFromCIDR函数
+//复制的generateIPsFromCIDR函数
 function generateIPsFromCIDR(cidr, count = 1) {
     const [network, prefixLength] = cidr.split('/');
     const prefix = parseInt(prefixLength);
@@ -3924,14 +3922,14 @@ function generateIPsFromCIDR(cidr, count = 1) {
     return Array.from(ips);
 }
 
-// 测试IP连通性函数 - 使用源码2的方法
+// 测试IP连通性函数 
 async function 测试IP连通性(ips, ports, timeout) {
     const results = [];
     const MAX_CONCURRENT = 50; // 最大并发测试数
     const MAX_TEST_DURATION = 30000; // 最长测试时间(毫秒)
     const minResults = 15; // 最少需要的结果数
     
-    // 直接使用传入的超时时间，不做限制，与源码2保持一致
+    // 直接使用传入的超时时间，不做限制
     const actualTimeout = timeout;
     
     console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
@@ -3991,7 +3989,7 @@ async function 测试IP连通性(ips, ports, timeout) {
     
     // 单次测试函数 - 优化的测试算法
     async function singleTest(ip, port, timeout) {
-        // 与源码2完全一致的IP测试函数
+        // IP测试函数
         const startTime = Date.now();
         
         try {
@@ -4041,7 +4039,6 @@ async function 测试IP连通性(ips, ports, timeout) {
             // 确保延迟至少为200ms，以便显示时除以2后至少为100ms
             const adjustedLatency = Math.max(200, latency);
             
-            // 处理证书错误情况 - 这是源码2中最重要的判断
             // 证书错误通常表示IP可以连接但提供的是非目标网站的证书
             // 对于CF优选来说，这类IP是最理想的
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
@@ -4113,11 +4110,8 @@ async function 测试IP连通性(ips, ports, timeout) {
         // 处理结果
         for (const result of batchResults) {
             if (result.success) {
-                // 与源码2完全一样的结果处理方式
-                // 计算显示延迟 - 与源码2完全相同，显示的延迟是实际延迟的一半
                 // 由于我们在singleTest中已经确保了最小延迟为200ms，所以这里除以2后最小为100ms
-                const displayTime = Math.floor(result.time / 2);
-                
+                const displayTime = Math.floor(result.time / 2);               
                 // 移除特殊标记，统一使用CF优选IP作为标识
                 // 不再区分证书错误、直连或其他类型
                 let comment = 'CF优选IP';
