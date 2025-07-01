@@ -3958,7 +3958,7 @@ async function 测试IP连通性(ips, ports, timeout) {
         };
     }
     
-    // 单次测试函数 - 使用源码2的延迟计算方式，但接受更多错误类型
+    // 单次测试函数 - 使用源码2的延迟计算方式，但确保最小延迟为200ms
     async function singleTest(ip, port, timeout) {
         // IP测试函数
         const startTime = Date.now();
@@ -3976,13 +3976,16 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             // 如果延迟较低的成功连接，也可以考虑（有些情况下可能有用）
             const latency = Date.now() - startTime;
+            // 确保延迟至少为200ms
+            const adjustedLatency = Math.max(200, latency);
+            
             if (latency < 300) {
-                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms`);
+                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms，调整后: ${adjustedLatency}ms`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: latency,
+                    time: adjustedLatency,
                     type: 'direct'
                 };
             }
@@ -3998,26 +4001,29 @@ async function 测试IP连通性(ips, ports, timeout) {
                 return null;
             }
             
+            // 确保延迟至少为200ms
+            const adjustedLatency = Math.max(200, latency);
+            
             // 检查是否是 Failed to fetch 错误（通常是SSL/证书错误）
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms`);
+                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms，调整后: ${adjustedLatency}ms`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: latency,
+                    time: adjustedLatency,
                     type: 'cert_error'
                 };
             }
             
             // 其他类型的错误，如果延迟较低也可以接受
             if (latency < 300) {
-                console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，错误: ${error.name}`);
+                console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，调整后: ${adjustedLatency}ms，错误: ${error.name}`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: latency,
+                    time: adjustedLatency,
                     type: 'other_error'
                 };
             }
