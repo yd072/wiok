@@ -4004,7 +4004,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             const latency = endTime - startTime;
             
             // 确保延迟至少为40ms，以便显示时除以2后至少为20ms
-            const adjustedLatency = Math.max(40, latency);
+            const adjustedLatency = Math.max(200, latency);
             
             // 如果延迟不是太高，记录为直连成功的IP
             if (latency < 300) {
