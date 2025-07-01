@@ -4003,14 +4003,17 @@ async function 测试IP连通性(ips, ports, timeout) {
             const endTime = Date.now();
             const latency = endTime - startTime;
             
+            // 确保延迟至少为40ms，以便显示时除以2后至少为20ms
+            const adjustedLatency = Math.max(40, latency);
+            
             // 如果延迟不是太高，记录为直连成功的IP
             if (latency < 300) {
-                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms`);
+                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms，调整后: ${adjustedLatency}ms`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: latency,
+                    time: adjustedLatency,
                     type: 'direct' // 直连类型
                 };
             }
@@ -4028,28 +4031,31 @@ async function 测试IP连通性(ips, ports, timeout) {
                 return null;
             }
             
+            // 确保延迟至少为40ms，以便显示时除以2后至少为20ms
+            const adjustedLatency = Math.max(40, latency);
+            
             // 处理证书错误情况 - 这是源码2中最重要的判断
             // 证书错误通常表示IP可以连接但提供的是非目标网站的证书
             // 对于CF优选来说，这类IP是最理想的
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms`);
+                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms，调整后: ${adjustedLatency}ms`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: latency,
+                    time: adjustedLatency,
                     type: 'cert_error' // 证书错误类型
                 };
             }
             
             // 其他错误类型，如果延迟较低也可以考虑
             if (latency < 300) {
-                console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，错误: ${error.name}`);
+                console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，调整后: ${adjustedLatency}ms，错误: ${error.name}`);
                 return {
                     success: true,
                     ip,
                     port,
-                    time: latency,
+                    time: adjustedLatency,
                     type: 'other_error' // 其他错误类型
                 };
             }
@@ -4101,7 +4107,8 @@ async function 测试IP连通性(ips, ports, timeout) {
         for (const result of batchResults) {
             if (result.success) {
                 // 与源码2完全一样的结果处理方式
-                // 计算显示延迟 - 类似源码2的方法，显示的延迟是实际延迟的一半
+                // 计算显示延迟 - 与源码2完全相同，显示的延迟是实际延迟的一半
+                // 由于我们在singleTest中已经确保了最小延迟为40ms，所以这里除以2后最小为20ms
                 const displayTime = Math.floor(result.time / 2);
                 
                 // 为不同类型的结果添加标记
@@ -4120,7 +4127,8 @@ async function 测试IP连通性(ips, ports, timeout) {
                 const ipText = `${result.ip}:${result.port}`;
                 results.push(`${ipText} #${comment} ${displayTime}ms`);
                 
-                console.log(`找到可用IP: ${ipText} (${result.time}ms, ${result.type || 'unknown'})`);
+                // 修改控制台输出，也显示与前端一致的延迟值
+                console.log(`找到可用IP: ${ipText} (显示:${displayTime}ms, 实际:${result.time}ms, 类型:${result.type || 'unknown'})`);
                 
                 // 如果已找到足够的IP，提前结束
                 if (results.length >= minResults) {
