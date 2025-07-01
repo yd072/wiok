@@ -3995,18 +3995,8 @@ async function 测试IP连通性(ips, ports, timeout) {
                 // 计算显示延迟 - 类似源码2的方法，显示的延迟是实际延迟的一半
                 const displayTime = Math.floor(result.time / 2);
                 
-                // 为不同类型的结果添加标记
-                let resultType = result.type || 'unknown';
+                // 移除特殊标记，统一使用CF优选IP作为标识
                 let comment = 'CF优选IP';
-                
-                // 证书错误的IP加上特殊标记
-                if (resultType === 'cert_error') {
-                    comment = 'CF优选IP-证书';
-                } else if (resultType === 'direct') {
-                    comment = 'CF优选IP-直连';
-                } else if (resultType === 'other_error') {
-                    comment = 'CF优选IP-其他';
-                }
                 
                 results.push({
                     ip: result.ip,
@@ -4014,7 +4004,7 @@ async function 测试IP连通性(ips, ports, timeout) {
                     time: displayTime,
                     originalTime: result.time,
                     status: 'success',
-                    type: resultType,
+                    type: result.type || 'unknown',
                     comment: comment
                 });
                 
