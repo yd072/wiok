@@ -3242,11 +3242,18 @@ async function 在线优选IP(request, env) {
                         if (saveMode === 'replace') {
                             // 替换模式：过滤掉已有的优选IP
                             const existingLines = existingContent.split('\n').filter(line => 
-                                !line.includes('#优选IP') && !line.includes('#CF优选IP'));
+                                !line.includes('#优选IP') && !line.includes('#CF优选IP'))
+                                .filter(line => line.trim() !== ''); // 过滤空行
                             newContent = [...existingLines, ...ips].join('\n');
                         } else {
-                            // 追加模式
-                            newContent = existingContent ? existingContent + '\n' + ips.join('\n') : ips.join('\n');
+                            // 追加模式 - 处理现有内容中的空行
+                            if (existingContent) {
+                                // 移除末尾可能的空行，确保干净的连接
+                                const trimmedContent = existingContent.trim();
+                                newContent = trimmedContent + '\n' + ips.join('\n');
+                            } else {
+                                newContent = ips.join('\n');
+                            }
                         }
                     }
                     
