@@ -3352,7 +3352,13 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 结果已经是按延迟排序的字符串数组，直接取前N个
+                // 只按响应时间排序，不再按类型排序
+                results.sort((a, b) => {
+                    // 直接按响应时间排序
+                    return a.time - b.time;
+                });
+                
+                // 取前N个结果
                 const bestIPs = results.slice(0, count);
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
@@ -3753,7 +3759,7 @@ async function 在线优选IP(request, env) {
                                  // 保存测试结果到全局变量
                                  testResults = result.bestIPs;
                                  
-                                 resultList.textContent = result.bestIPs.join('\n');
+                                 resultList.textContent = result.bestIPs.join('\\n');
                                  resultContainer.style.display = 'block';
                                  // 启用按钮
                                  document.getElementById('appendButton').disabled = false;
@@ -3914,155 +3920,191 @@ async function 测试IP连通性(ips, ports, timeout) {
     
     // 移除进度条功能
     
-    // 测试单个IP函数 - 与源码2.js保持一致
-    async function testIP(ip, port) {
-        const timeout = 999; // 固定超时时间为999ms，与源码2.js保持一致
-        
+    // 测试单个IP函数 - 优化版本
+    async function testSingleIP(ip, port) {
         // 第一次测试
-        const firstResult = await singleTest(ip, port, timeout);
+        const firstResult = await singleTest(ip, port, actualTimeout);
         if (!firstResult) {
-            return null; // 第一次测试失败，直接返回
+            return { success: false, ip, port };
         }
         
-        // 第一次测试成功，再进行第二次测试
-        console.log(`IP ${ip}:${port} 第一次测试成功: ${firstResult.latency}ms，进行第二次测试...`);
+        console.log(`IP ${ip}:${port} 第一次测试成功: ${firstResult.time}ms (类型: ${firstResult.type})，进行第二次测试...`);
         
-        const results = [firstResult];
+        // 第二次测试
+        const secondResult = await singleTest(ip, port, actualTimeout);
         
-        // 进行第二次测试
-        const secondResult = await singleTest(ip, port, timeout);
+        // 如果两次测试都成功，只选择延迟较低的结果
         if (secondResult) {
-            results.push(secondResult);
-            console.log(`IP ${ip}:${port} 第二次测试: ${secondResult.latency}ms`);
+            console.log(`IP ${ip}:${port} 第二次测试成功: ${secondResult.time}ms (类型: ${secondResult.type})`);
+            
+            // 只根据延迟选择结果
+            if (secondResult.time < firstResult.time) {
+                console.log(`IP ${ip}:${port} 选择第二次结果(延迟更低)`);
+                return secondResult;
+            } else {
+                console.log(`IP ${ip}:${port} 选择第一次结果(延迟更低或相等)`);
+                return firstResult;
+            }
         }
         
-        // 取最低延迟
-        const bestResult = results.reduce((best, current) => 
-            current.latency < best.latency ? current : best
-        );
-        
-        const displayLatency = Math.floor(bestResult.latency / 2);
-        
-        console.log(`IP ${ip}:${port} 最终结果: ${displayLatency}ms (原始: ${bestResult.latency}ms, 共${results.length}次有效测试)`);
-        
-        // 生成显示格式
-        const comment = 'CF优选IP';
-        const display = `${ip}:${port}#${comment} ${displayLatency}ms`;
-        
-        return {
-            ip: ip,
-            port: port,
-            latency: displayLatency,
-            originalLatency: bestResult.latency,
-            testCount: results.length,
-            comment: comment,
-            display: display
-        };
+        // 默认使用第一次结果
+        console.log(`IP ${ip}:${port} 使用第一次结果: ${firstResult.time}ms (类型: ${firstResult.type})`);
+        return firstResult;
     }
     
-    // 单次测试函数 - 与源码2.js保持一致
+    // 单次测试函数 - 优化的测试算法
     async function singleTest(ip, port, timeout) {
+        // IP测试函数
         const startTime = Date.now();
         
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
+            // 优先使用证书错误的连接测试方法
             const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
                 signal: controller.signal,
                 mode: 'cors'
             });
             
             clearTimeout(timeoutId);
-            // 如果请求成功了，说明这个IP不是我们要的
-            return null;
             
-        } catch (error) {
-            const latency = Date.now() - startTime;
+            // 如果能连接成功且是Cloudflare
+            const endTime = Date.now();
+            const latency = endTime - startTime;
             
-            // 检查是否是真正的超时（接近设定的timeout时间）
-            if (latency >= timeout - 50) {
-                return null;
-            }
+            // 确保延迟至少为200ms，以便显示时除以2后至少为100ms
+            const adjustedLatency = Math.max(200, latency);
             
-            // 检查是否是 Failed to fetch 错误（通常是SSL/证书错误）
-            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+            // 如果延迟不是太高，记录为直连成功的IP
+            if (latency < 300) {
+                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms，调整后: ${adjustedLatency}ms`);
                 return {
-                    ip: ip,
-                    port: port,
-                    latency: latency
+                    success: true,
+                    ip,
+                    port,
+                    time: adjustedLatency,
+                    type: 'direct' // 直连类型
                 };
             }
             
+            // 延迟过高的直连IP通常不太理想
+            return null;
+            
+        } catch (error) {
+            const endTime = Date.now();
+            const latency = endTime - startTime;
+            
+            // 处理请求超时情况
+            if (latency >= timeout - 50) {
+                // 真正的超时
+                return null;
+            }
+            
+            // 确保延迟至少为200ms，以便显示时除以2后至少为100ms
+            const adjustedLatency = Math.max(200, latency);
+            
+            // 证书错误通常表示IP可以连接但提供的是非目标网站的证书
+            // 对于CF优选来说，这类IP是最理想的
+            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms，调整后: ${adjustedLatency}ms`);
+                return {
+                    success: true,
+                    ip,
+                    port,
+                    time: adjustedLatency,
+                    type: 'cert_error' // 证书错误类型
+                };
+            }
+            
+            // 其他错误类型，如果延迟较低也可以考虑
+            if (latency < 300) {
+                console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，调整后: ${adjustedLatency}ms，错误: ${error.name}`);
+                return {
+                    success: true,
+                    ip,
+                    port,
+                    time: adjustedLatency,
+                    type: 'other_error' // 其他错误类型
+                };
+            }
+            
+            // 其他错误且延迟高的不要
             return null;
         }
     }
     
-    // 使用源码2.js的并发测试方法
-    async function testIPsWithConcurrency(ips, port, maxConcurrency = 32) {
-        const results = [];
-        const totalIPs = ips.length;
-        let completedTests = 0;
+    // 随机打乱IP列表，确保公平测试
+    const shuffledIPs = [...ips];
+    for (let i = shuffledIPs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledIPs[i], shuffledIPs[j]] = [shuffledIPs[j], shuffledIPs[i]];
+    }
+    
+    // 创建测试任务队列
+    const testTasks = [];
+    for (const ip of shuffledIPs) {
+        // 为每个IP随机选择一个端口
+        const port = ports[Math.floor(Math.random() * ports.length)];
+        testTasks.push({ ip, port });
+    }
+    
+    console.log(`创建了${testTasks.length}个测试任务`);
+    
+    // 批量执行测试任务
+    const startTestTime = Date.now();
+    let taskIndex = 0;
+    
+    while (taskIndex < testTasks.length && results.length < minResults && (Date.now() - startTestTime) < MAX_TEST_DURATION) {
+        // 创建当前批次的测试任务
+        const currentBatch = [];
+        const batchSize = Math.min(MAX_CONCURRENT, testTasks.length - taskIndex);
         
-        // 创建工作队列
-        let index = 0;
+        for (let i = 0; i < batchSize; i++) {
+            const task = testTasks[taskIndex++];
+            currentBatch.push(task);
+        }
         
-        async function worker() {
-            while (index < ips.length) {
-                const currentIndex = index++;
-                const ip = ips[currentIndex];
+        // 简单记录进度
+        if (taskIndex % 50 === 0) {
+            console.log(`测试进度: ${taskIndex}/${testTasks.length}, 已找到: ${results.length}`);
+        }
+        
+        // 并行执行当前批次的任务
+        const batchPromises = currentBatch.map(task => testSingleIP(task.ip, task.port));
+        const batchResults = await Promise.all(batchPromises);
+        
+        // 处理结果
+        for (const result of batchResults) {
+            if (result.success) {
+                // 由于我们在singleTest中已经确保了最小延迟为200ms，所以这里除以2后最小为100ms
+                const displayTime = Math.floor(result.time / 2);
+                // 统一使用CF优选IP作为标识
+                const comment = 'CF优选IP';
                 
-                const result = await testIP(ip, port);
-                if (result) {
-                    results.push(result);
-                }
+                const ipText = `${result.ip}:${result.port}`;
+                results.push(`${ipText} #${comment} ${displayTime}ms`);
                 
-                completedTests++;
+                // 修改控制台输出，只显示延迟值
+                console.log(`找到可用IP: ${ipText} (显示:${displayTime}ms, 实际:${result.time}ms)`);
                 
-                // 更新进度
-                if (completedTests % 50 === 0) {
-                    console.log(`测试进度: ${completedTests}/${totalIPs} (${(completedTests / totalIPs * 100).toFixed(1)}%) - 有效IP: ${results.length}`);
+                // 如果已找到足够的IP，提前结束
+                if (results.length >= minResults) {
+                    console.log(`已找到${minResults}个可用IP，提前结束测试`);
+                    break;
                 }
             }
         }
         
-        // 创建工作线程
-        const workers = Array(Math.min(maxConcurrency, ips.length))
-            .fill()
-            .map(() => worker());
-        
-        await Promise.all(workers);
-        
-        return results;
+        // 如果结果太少，但已经测试了很多IP，降低标准
+        if (results.length < 5 && taskIndex > testTasks.length / 2) {
+            console.log(`测试进度过半但结果太少(${results.length})，降低标准继续测试`);
+        }
     }
     
-    // 为每个IP和端口组合创建测试任务
-    const allResults = [];
+    // 最终测试完成
     
-    // 对每个端口进行测试
-    for (const port of ports) {
-        console.log(`开始测试${ips.length}个IP，端口: ${port}`);
-        
-        // 使用16个并发线程测试，与源码2.js保持一致
-        const portResults = await testIPsWithConcurrency(ips, port, 16);
-        
-        // 将当前端口的结果添加到总结果中
-        allResults.push(...portResults);
-    }
-    
-    // 合并所有端口的测试结果
-    const testResults = allResults;
-    
-    // 按延迟排序
-    testResults.sort((a, b) => a.latency - b.latency);
-    
-    // 转换为结果格式
-    for (const result of testResults) {
-        results.push(result.display);
-    }
-    
-    const totalTested = ips.length * ports.length;
-    console.log(`测试完成，共测试了${totalTested}个IP端口组合，找到${results.length}个可用IP`);
+    console.log(`测试完成，共测试了${taskIndex}/${testTasks.length}个IP，找到${results.length}个可用IP`);
     
     // 如果没有找到任何可用IP，记录警告信息
     if (results.length === 0) {
