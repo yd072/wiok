@@ -3992,7 +3992,12 @@ async function 测试IP连通性(ips, ports, timeout) {
                 // 为不同类型的结果添加标记
                 let resultType = result.type || 'unknown';
                 let comment = 'CF优选IP';
-            
+                
+                // 证书错误的IP加上特殊标记
+                if (resultType === 'cert_error') {
+                    comment = 'CF优选IP-证书';
+
+
                 }
                 
                 results.push({
@@ -4032,3 +4037,4 @@ async function 测试IP连通性(ips, ports, timeout) {
     }
     
     return results;
+}
