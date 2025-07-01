@@ -208,6 +208,12 @@ export default {
 				userID = userIDs[0];
 				userIDLow = userIDs[1];
 			}
+			
+			// 处理IP优选工具路径
+			const reqUrl = new URL(request.url);
+			if (reqUrl.pathname.endsWith('/iptest')) {
+				return await bestIP(request, env);
+			}
 
 			if (!userID) {
 				// 生成美化后的系统信息页面
@@ -1997,13 +2003,13 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 							<div id="qrcode_0" class="qrcode-container"></div>
 						</div>
 
-											<div class="subscription-link">
-						Base64订阅地址:<br>
-						<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
-							https://${proxyhost}${hostName}/${uuid}?b64
-						</a>
-						<div id="qrcode_1" class="qrcode-container"></div>
-					</div>
+						<div class="subscription-link">
+							Base64订阅地址:<br>
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
+								https://${proxyhost}${hostName}/${uuid}?b64
+							</a>
+							<div id="qrcode_1" class="qrcode-container"></div>
+						</div>
 					
 					<div style="margin: 20px 0; padding: 15px; background-color: #e8f5e8; border: 1px solid #4CAF50; border-radius: 6px; color: #2e7d32;">
 						<strong>📌 IP优选工具:</strong> <a href="/iptest" style="color:#2196F3; text-decoration:none; font-weight:bold;">点击此处</a> 使用在线IP优选工具，帮助您快速筛选最佳CF节点。
@@ -2929,7 +2935,7 @@ async function handleGetRequest(env, txt) {
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
@@ -3321,6 +3327,20 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             margin: 0 auto;
             font-family: Tahoma, Verdana, Arial, sans-serif;
             padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #4CAF50;
+            text-align: center;
+            margin-bottom: 20px;
         }
         .ip-list {
             background-color: #f5f5f5;
@@ -3328,69 +3348,44 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             border-radius: 5px;
             max-height: 400px;
             overflow-y: auto;
+            border: 1px solid #ddd;
         }
         .ip-item {
             margin: 2px 0;
             font-family: monospace;
         }
-        .proxy-warning {
-            color: #d32f2f !important;
-            font-weight: bold !important;
-            font-size: 1.1em;
-        }
-        .warning-notice {
-            background-color: #ffebee;
-            border: 2px solid #f44336;
-            border-radius: 8px;
+        .instructions {
+            background-color: #f5f5f5;
             padding: 15px;
-            margin: 15px 0;
-            color: #c62828;
-        }
-        .warning-notice h3 {
-            margin: 0 0 10px 0;
-            color: #d32f2f;
-            font-size: 1.2em;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .warning-notice p {
-            margin: 8px 0;
-            line-height: 1.5;
-        }
-        .warning-notice ul {
-            margin: 10px 0 10px 20px;
-            line-height: 1.6;
-        }
-        .test-controls {
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f9f9f9;
             border-radius: 5px;
+            margin: 15px 0;
+        }
+        .instructions p {
+            margin: 5px 0;
         }
         .port-selector {
-            margin: 10px 0;
+            margin: 15px 0;
+            text-align: center;
         }
         .port-selector label {
             font-weight: bold;
             margin-right: 10px;
         }
         .port-selector select {
-            padding: 5px 10px;
+            padding: 8px 12px;
             font-size: 14px;
             border: 1px solid #ccc;
-            border-radius: 3px;
+            border-radius: 4px;
         }
         .button-group {
             display: flex;
-            gap: 10px;
             flex-wrap: wrap;
-            margin-top: 15px;
+            gap: 10px;
+            justify-content: center;
+            margin: 15px 0;
         }
-        .test-button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 15px 32px;
+        .btn {
+            padding: 10px 20px;
             text-align: center;
             text-decoration: none;
             display: inline-block;
@@ -3399,6 +3394,11 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             border: none;
             border-radius: 4px;
             transition: background-color 0.3s;
+            color: white;
+            min-width: 120px;
+        }
+        .test-button {
+            background-color: #4CAF50;
         }
         .test-button:disabled {
             background-color: #cccccc;
@@ -3406,89 +3406,26 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
         }
         .save-button {
             background-color: #2196F3;
-            color: white;
-            padding: 15px 32px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
-            transition: background-color 0.3s;
         }
         .save-button:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
         }
-        .save-button:not(:disabled):hover {
-            background-color: #1976D2;
-        }
         .append-button {
             background-color: #FF9800;
-            color: white;
-            padding: 15px 32px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
-            transition: background-color 0.3s;
         }
         .append-button:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
         }
-        .append-button:not(:disabled):hover {
-            background-color: #F57C00;
-        }
         .edit-button {
             background-color: #9C27B0;
-            color: white;
-            padding: 15px 32px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
-            transition: background-color 0.3s;
         }
-        .edit-button:hover {
-            background-color: #7B1FA2;
+        .optimize-button {
+            background-color: #673AB7;
         }
         .back-button {
             background-color: #607D8B;
-            color: white;
-            padding: 15px 32px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
-            transition: background-color 0.3s;
-        }
-        .back-button:hover {
-            background-color: #455A64;
-        }
-        .save-warning {
-            margin-top: 10px;
-            background-color: #fff3e0;
-            border: 2px solid #ff9800;
-            border-radius: 6px;
-            padding: 12px;
-            color: #e65100;
-            font-weight: bold;
-        }
-        .save-warning small {
-            font-size: 14px;
-            line-height: 1.5;
-            display: block;
         }
         .message {
             padding: 10px;
@@ -3510,7 +3447,7 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             width: 100%;
             background-color: #f0f0f0;
             border-radius: 5px;
-            margin: 10px 0;
+            margin: 15px 0;
             padding: 10px;
             text-align: center;
         }
@@ -3525,60 +3462,26 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
         .good-latency { color: #4CAF50; font-weight: bold; }
         .medium-latency { color: #FF9800; font-weight: bold; }
         .bad-latency { color: #f44336; font-weight: bold; }
-        .show-more-section {
-            text-align: center;
-            margin: 10px 0;
-            padding: 10px;
-            background-color: #f0f0f0;
-            border-radius: 5px;
-        }
-        .show-more-btn {
-            background-color: #607D8B;
-            color: white;
-            padding: 8px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.3s;
-        }
-        .show-more-btn:hover {
-            background-color: #455A64;
-        }
-        .ip-display-info {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-
     </style>
     </head>
     <body>
-    <h1 style="text-align: center; margin-bottom: 20px;">Cloudflare IP优选工具</h1>
-    
-    ${!isChina ? `
-    <div class="warning-notice">
-        <h3>🚨 代理检测警告</h3>
-        <p><strong>检测到您当前很可能处于代理/VPN环境中！</strong></p>
-        <p>在代理状态下进行的IP优选测试结果将不准确，可能导致：</p>
-        <ul>
-            <li>延迟数据失真，无法反映真实网络状况</li>
-            <li>优选出的IP在直连环境下表现不佳</li>
-            <li>测试结果对实际使用场景参考价值有限</li>
-        </ul>
-        <p><strong>建议操作：</strong>请关闭所有代理软件（VPN、科学上网工具等），确保处于直连网络环境后重新访问本页面。</p>
-    </div>
-    ` : ''}
+    <div class="container">
+        <h1>Cloudflare IP优选工具</h1>
+        
+        <div class="instructions">
+            <p>• 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测速</p>
+            <p>• 测试完成后，可以选择"追加"或"覆盖"保存结果到订阅列表</p>
+            <p>• 如果您使用VPN，可能会影响测试结果的准确性</p>
+        </div>
 
-    <div class="progress">
-        <div class="progress-bar" id="progress-bar"></div>
-        <p><span id="progress-text">未开始</span> - 已加载IP: <span id="ip-count">0</span></p>
-    </div>
+        <div class="progress">
+            <div class="progress-bar" id="progress-bar"></div>
+            <p><span id="progress-text">未开始</span> - 已加载IP: <span id="ip-count">0</span></p>
+        </div>
 
-    <div class="test-controls" style="text-align: center; background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <div class="port-selector" style="margin-bottom: 15px;">
-            <label for="port-select" style="font-weight: bold; margin-right: 10px;">端口：</label>
-            <select id="port-select" style="padding: 8px 12px; border-radius: 4px; border: 1px solid #ddd;">
+        <div class="port-selector">
+            <label for="port-select">测试端口：</label>
+            <select id="port-select">
                 <option value="443">443</option>
                 <option value="2053">2053</option>
                 <option value="2083">2083</option>
@@ -3587,33 +3490,30 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
                 <option value="8443">8443</option>
             </select>
         </div>
-        <div class="button-group" style="display: flex; justify-content: center; flex-wrap: wrap; gap: 10px;">
-            <button class="test-button" id="test-btn" onclick="startTest()" style="min-width: 150px;">开始延迟测试</button>
-            <button class="save-button" id="save-btn" onclick="saveIPs()" disabled style="min-width: 150px;">覆盖保存优选IP</button>
-            <button class="append-button" id="append-btn" onclick="appendIPs()" disabled style="min-width: 150px;">追加保存优选IP</button>
-            <button class="edit-button" id="edit-btn" onclick="goEdit()" style="min-width: 150px;">编辑优选列表</button>
-            <button class="back-button" id="back-btn" onclick="goBack()" style="min-width: 150px;">返回配置页</button>
+        
+        <div class="button-group">
+            <button class="btn test-button" id="test-btn" onclick="startTest()">开始延迟测试</button>
+            <button class="btn save-button" id="save-btn" onclick="saveIPs()" disabled>覆盖到列表</button>
+            <button class="btn append-button" id="append-btn" onclick="appendIPs()" disabled>追加到列表</button>
+            <button class="btn edit-button" id="edit-btn" onclick="goEdit()">编辑优选列表</button>
+            <button class="btn optimize-button" id="optimize-btn" onclick="goOptimize()">在线优选IP</button>
+            <button class="btn back-button" id="back-btn" onclick="goBack()">返回配置页</button>
         </div>
 
         <div id="message" class="message"></div>
-    </div>
-    
-    <div class="ip-content" style="margin-top: 20px;">
-        <h2 style="text-align: center; margin-bottom: 15px;">IP列表 <span id="result-count"></span></h2>
-        <div class="ip-display-info" id="ip-display-info" style="text-align: center; margin-bottom: 10px;"></div>
-        <div class="ip-list" id="ip-list" style="max-height: 500px; border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
-            <div class="ip-item" style="text-align: center; color: #666; padding: 30px 0;">请选择端口，然后点击"开始延迟测试"加载IP列表</div>
+        
+        <div class="ip-content">
+            <h2 style="text-align: center; margin: 15px 0;">IP列表 <span id="result-count"></span></h2>
+            <div class="ip-list" id="ip-list">
+                <div class="ip-item" style="text-align: center; color: #666; padding: 30px 0;">请选择端口，然后点击"开始延迟测试"加载IP列表</div>
+            </div>
         </div>
-    </div>
-    <div class="show-more-section" id="show-more-section" style="display: none; text-align: center; margin-top: 15px;">
-        <button class="show-more-btn" id="show-more-btn" onclick="toggleShowMore()" style="padding: 8px 15px; background-color: #f0f0f0; border: none; border-radius: 4px; cursor: pointer;">显示更多</button>
     </div>
     
     <script>
         let originalIPs = []; // 存储加载的IP
         let testResults = []; // 存储测试结果
         let displayedResults = []; // 存储当前显示的结果
-        let showingAll = false; // 标记是否显示全部内容
         let currentDisplayType = 'loading'; // 当前显示类型 'loading' | 'results'
         
         // 本地存储管理
@@ -3644,58 +3544,6 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
         // 页面加载完成后初始化设置
         document.addEventListener('DOMContentLoaded', initializeSettings);
         
-        // 切换显示更多/更少
-        function toggleShowMore() {
-            if (currentDisplayType === 'testing') {
-                return;
-            }
-            
-            showingAll = !showingAll;
-            
-            if (currentDisplayType === 'loading') {
-                displayLoadedIPs();
-            } else if (currentDisplayType === 'results') {
-                displayResults();
-            }
-        }
-        
-        // 显示加载的IP列表
-        function displayLoadedIPs() {
-            const ipList = document.getElementById('ip-list');
-            const showMoreSection = document.getElementById('show-more-section');
-            const showMoreBtn = document.getElementById('show-more-btn');
-            const ipDisplayInfo = document.getElementById('ip-display-info');
-            
-            if (originalIPs.length === 0) {
-                ipList.innerHTML = '<div class="ip-item">加载IP列表失败，请重试</div>';
-                showMoreSection.style.display = 'none';
-                ipDisplayInfo.textContent = '';
-                return;
-            }
-            
-            const displayCount = showingAll ? originalIPs.length : Math.min(originalIPs.length, 16);
-            const displayIPs = originalIPs.slice(0, displayCount);
-            
-            // 更新显示信息
-            if (originalIPs.length <= 16) {
-                ipDisplayInfo.textContent = \`显示全部 \${originalIPs.length} 个IP\`;
-                showMoreSection.style.display = 'none';
-            } else {
-                ipDisplayInfo.textContent = \`显示前 \${displayCount} 个IP，共加载 \${originalIPs.length} 个IP\`;
-                // 只在非测试状态下显示"显示更多"按钮
-                if (currentDisplayType !== 'testing') {
-                    showMoreSection.style.display = 'block';
-                    showMoreBtn.textContent = showingAll ? '显示更少' : '显示更多';
-                    showMoreBtn.disabled = false;
-                } else {
-                    showMoreSection.style.display = 'none';
-                }
-            }
-            
-            // 显示IP列表
-            ipList.innerHTML = displayIPs.map(ip => \`<div class="ip-item">\${ip}</div>\`).join('');
-        }
-        
         function showMessage(text, type = 'success') {
             const messageDiv = document.getElementById('message');
             messageDiv.textContent = text;
@@ -3722,6 +3570,7 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             const saveBtn = document.getElementById('save-btn');
             const appendBtn = document.getElementById('append-btn');
             const editBtn = document.getElementById('edit-btn');
+            const optimizeBtn = document.getElementById('optimize-btn');
             const backBtn = document.getElementById('back-btn');
             const portSelect = document.getElementById('port-select');
             
@@ -3729,6 +3578,7 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             saveBtn.disabled = true;
             appendBtn.disabled = true;
             editBtn.disabled = true;
+            optimizeBtn.disabled = true;
             backBtn.disabled = true;
             portSelect.disabled = true;
         }
@@ -3736,11 +3586,13 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
         function enableButtons() {
             const testBtn = document.getElementById('test-btn');
             const editBtn = document.getElementById('edit-btn');
+            const optimizeBtn = document.getElementById('optimize-btn');
             const backBtn = document.getElementById('back-btn');
             const portSelect = document.getElementById('port-select');
             
             testBtn.disabled = false;
             editBtn.disabled = false;
+            optimizeBtn.disabled = false;
             backBtn.disabled = false;
             portSelect.disabled = false;
             updateButtonStates();
@@ -3846,8 +3698,13 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             }
         }
         
+        function goOptimize() {
+            // 在线优选IP - 保持在当前页面，重新加载
+            window.location.reload();
+        }
+        
         function goBack() {
-            // 重定向到配置页面
+            // 重定向到配置页面 (不带/iptest)
             const userIDMatch = window.location.pathname.match(/\\/([^/]+)\\/iptest/);
             if (userIDMatch) {
                 window.location.href = \`/\${userIDMatch[1]}\`;
@@ -3861,9 +3718,6 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
         // 显示测试结果
         function displayResults() {
             const ipList = document.getElementById('ip-list');
-            const showMoreSection = document.getElementById('show-more-section');
-            const showMoreBtn = document.getElementById('show-more-btn');
-            const ipDisplayInfo = document.getElementById('ip-display-info');
             const resultCount = document.getElementById('result-count');
             
             // 按延迟排序（延迟-1排在最后）
@@ -3878,19 +3732,9 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             const validResults = sortedResults.filter(r => r.latency !== -1);
             resultCount.textContent = \`(成功: \${validResults.length}/\${sortedResults.length})\`;
             
-            // 计算需要显示的结果数量
-            const displayCount = showingAll ? sortedResults.length : Math.min(sortedResults.length, 16);
+            // 计算需要显示的结果数量 - 默认显示16个最佳结果
+            const displayCount = Math.min(sortedResults.length, 16);
             displayedResults = sortedResults.slice(0, displayCount);
-            
-            // 更新显示信息
-            if (sortedResults.length <= 16) {
-                ipDisplayInfo.textContent = \`显示全部 \${sortedResults.length} 个测试结果\`;
-                showMoreSection.style.display = 'none';
-            } else {
-                ipDisplayInfo.textContent = \`显示前 \${displayCount} 个测试结果，共 \${sortedResults.length} 个\`;
-                showMoreSection.style.display = 'block';
-                showMoreBtn.textContent = showingAll ? '显示更少' : '显示更多';
-            }
             
             // 构建IP列表HTML
             const resultsHtml = displayedResults.map(result => {
@@ -3968,17 +3812,13 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             const progressText = document.getElementById('progress-text');
             const ipCount = document.getElementById('ip-count');
             const ipList = document.getElementById('ip-list');
-            const ipDisplayInfo = document.getElementById('ip-display-info');
             const resultCount = document.getElementById('result-count');
-            const showMoreSection = document.getElementById('show-more-section');
             
             testBtn.textContent = '测试中...';
             progressBar.style.width = '0%';
             progressText.textContent = '加载IP列表中...';
             ipCount.textContent = '加载中...';
             resultCount.textContent = '';
-            ipDisplayInfo.textContent = '';
-            showMoreSection.style.display = 'none';
             
             try {
                 // 获取选中的端口
