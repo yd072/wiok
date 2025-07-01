@@ -3333,25 +3333,6 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             margin: 2px 0;
             font-family: monospace;
         }
-        .stats {
-            background-color: #e3f2fd;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-        }
-        .test-info {
-            margin-top: 15px;
-            padding: 12px;
-            background-color: #f3e5f5;
-            border: 1px solid #ce93d8;
-            border-radius: 6px;
-            color: #4a148c;
-        }
-        .test-info p {
-            margin: 0;
-            font-size: 14px;
-            line-height: 1.5;
-        }
         .proxy-warning {
             color: #d32f2f !important;
             font-weight: bold !important;
@@ -3530,6 +3511,8 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             background-color: #f0f0f0;
             border-radius: 5px;
             margin: 10px 0;
+            padding: 10px;
+            text-align: center;
         }
         .progress-bar {
             width: 0%;
@@ -3537,6 +3520,7 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             background-color: #4CAF50;
             border-radius: 5px;
             transition: width 0.3s;
+            margin-bottom: 8px;
         }
         .good-latency { color: #4CAF50; font-weight: bold; }
         .medium-latency { color: #FF9800; font-weight: bold; }
@@ -3566,56 +3550,11 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             color: #666;
             margin-bottom: 5px;
         }
-        .save-tip {
-            margin-top: 15px;
-            padding: 12px;
-            background-color: #e8f5e8;
-            border: 1px solid #4CAF50;
-            border-radius: 6px;
-            color: #2e7d32;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-        .save-tip strong {
-            color: #1b5e20;
-        }
-        .warm-tips {
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #fff3e0;
-            border: 2px solid #ff9800;
-            border-radius: 8px;
-            color: #e65100;
-        }
-        .warm-tips h3 {
-            margin: 0 0 10px 0;
-            color: #f57c00;
-            font-size: 1.1em;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .warm-tips p {
-            margin: 8px 0;
-            line-height: 1.6;
-            font-size: 14px;
-        }
-        .warm-tips ul {
-            margin: 10px 0 10px 20px;
-            line-height: 1.6;
-        }
-        .warm-tips li {
-            margin: 5px 0;
-            font-size: 14px;
-        }
-        .warm-tips strong {
-            color: #e65100;
-            font-weight: bold;
-        }
+
     </style>
     </head>
     <body>
-    <h1>Cloudflare IP优选工具</h1>
+    <h1 style="text-align: center; margin-bottom: 20px;">Cloudflare IP优选工具</h1>
     
     ${!isChina ? `
     <div class="warning-notice">
@@ -3631,34 +3570,15 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
     </div>
     ` : ''}
 
-    <div class="stats">
-        <h2>统计信息</h2>
-        <p><strong>您的国家：</strong><span class="${countryDisplayClass}">${countryDisplayText}</span></p>
-        <p><strong>获取到的IP总数：</strong><span id="ip-count">点击开始测试后加载</span></p>
-        <p><strong>测试进度：</strong><span id="progress-text">未开始</span></p>
-        <div class="progress">
-            <div class="progress-bar" id="progress-bar"></div>
-        </div>
-        <div class="test-info">
-            <p><strong>📊 测试说明：</strong>当前优选方式仅进行网络延迟测试，主要评估连接响应速度，并未包含带宽速度测试。延迟测试可快速筛选出响应最快的IP节点，适合日常使用场景的初步优选。</p>
-        </div>
-    </div>
-    
-    <div class="warm-tips" id="warm-tips">
-        <h3>💡 温馨提示</h3>
-        <p><strong>优选完成但测试"真连接延迟"为 -1？</strong>这很有可能是您的网络运营商对你的请求进行了阻断。</p>
-        <p><strong>建议尝试以下解决方案：</strong></p>
-        <ul>
-            <li><strong>更换端口：</strong>尝试使用其他端口（如 2053、2083、2087、2096、8443）</li>
-            <li><strong>更换自定义域名：</strong>如果您使用的还是免费域名，那么您更应该尝试一下更换自定义域</li>
-        </ul>
-        <p>💡 <strong>小贴士：</strong>不同地区和网络环境对各端口的支持情况可能不同，多尝试几个端口组合通常能找到适合的IP。</p>
+    <div class="progress">
+        <div class="progress-bar" id="progress-bar"></div>
+        <p><span id="progress-text">未开始</span> - 已加载IP: <span id="ip-count">0</span></p>
     </div>
 
-    <div class="test-controls">
-        <div class="port-selector">
-            <label for="port-select">端口：</label>
-            <select id="port-select">
+    <div class="test-controls" style="text-align: center; background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <div class="port-selector" style="margin-bottom: 15px;">
+            <label for="port-select" style="font-weight: bold; margin-right: 10px;">端口：</label>
+            <select id="port-select" style="padding: 8px 12px; border-radius: 4px; border: 1px solid #ddd;">
                 <option value="443">443</option>
                 <option value="2053">2053</option>
                 <option value="2083">2083</option>
@@ -3667,29 +3587,26 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
                 <option value="8443">8443</option>
             </select>
         </div>
-        <div class="button-group">
-            <button class="test-button" id="test-btn" onclick="startTest()">开始延迟测试</button>
-            <button class="save-button" id="save-btn" onclick="saveIPs()" disabled>覆盖保存优选IP</button>
-            <button class="append-button" id="append-btn" onclick="appendIPs()" disabled>追加保存优选IP</button>
-            <button class="edit-button" id="edit-btn" onclick="goEdit()">编辑优选列表</button>
-            <button class="back-button" id="back-btn" onclick="goBack()">返回配置页</button>
+        <div class="button-group" style="display: flex; justify-content: center; flex-wrap: wrap; gap: 10px;">
+            <button class="test-button" id="test-btn" onclick="startTest()" style="min-width: 150px;">开始延迟测试</button>
+            <button class="save-button" id="save-btn" onclick="saveIPs()" disabled style="min-width: 150px;">覆盖保存优选IP</button>
+            <button class="append-button" id="append-btn" onclick="appendIPs()" disabled style="min-width: 150px;">追加保存优选IP</button>
+            <button class="edit-button" id="edit-btn" onclick="goEdit()" style="min-width: 150px;">编辑优选列表</button>
+            <button class="back-button" id="back-btn" onclick="goBack()" style="min-width: 150px;">返回配置页</button>
         </div>
-        <div class="save-warning">
-            <small>⚠️ 重要提醒："覆盖保存优选IP"会完全覆盖当前 addresses/ADD 优选内容，请慎重考虑！建议优先使用"追加保存优选IP"功能。</small>
-        </div>
-        <div class="save-tip">
-            <strong>💡 保存提示：</strong>[<strong>覆盖保存优选IP</strong>] 和 [<strong>追加保存优选IP</strong>] 功能仅会保存延迟最低的<strong>前16个优选IP</strong>。如需添加更多IP或进行自定义编辑，请使用 [<strong>编辑优选列表</strong>] 功能。
-        </div>
+
         <div id="message" class="message"></div>
     </div>
     
-    <h2>IP列表 <span id="result-count"></span></h2>
-    <div class="ip-display-info" id="ip-display-info"></div>
-    <div class="ip-list" id="ip-list">
-        <div class="ip-item">请选择端口，然后点击"开始延迟测试"加载IP列表</div>
+    <div class="ip-content" style="margin-top: 20px;">
+        <h2 style="text-align: center; margin-bottom: 15px;">IP列表 <span id="result-count"></span></h2>
+        <div class="ip-display-info" id="ip-display-info" style="text-align: center; margin-bottom: 10px;"></div>
+        <div class="ip-list" id="ip-list" style="max-height: 500px; border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
+            <div class="ip-item" style="text-align: center; color: #666; padding: 30px 0;">请选择端口，然后点击"开始延迟测试"加载IP列表</div>
+        </div>
     </div>
-    <div class="show-more-section" id="show-more-section" style="display: none;">
-        <button class="show-more-btn" id="show-more-btn" onclick="toggleShowMore()">显示更多</button>
+    <div class="show-more-section" id="show-more-section" style="display: none; text-align: center; margin-top: 15px;">
+        <button class="show-more-btn" id="show-more-btn" onclick="toggleShowMore()" style="padding: 8px 15px; background-color: #f0f0f0; border: none; border-radius: 4px; cursor: pointer;">显示更多</button>
     </div>
     
     <script>
