@@ -657,7 +657,7 @@ export default {
 				} else if (url.pathname == `/${动态UUID}/iptest` || 路径 == `/${userID}/iptest`) {
 					// 添加在线优选Cloudflare IP功能入口
 					return await handleCloudflareIPTest(request, env);
-				} else if (url.pathname == `/api/test-ip`) {
+				} else if (url.pathname == `/${动态UUID}/api/test-ip` || url.pathname == `/${userID}/api/test-ip`) {
 					// 处理IP测试API请求
 					return await handleCloudflareIPTest(request, env);
 				} else if (url.pathname == `/${动态UUID}` || 路径 == `/${userID}`) {
@@ -3466,6 +3466,7 @@ function generateCloudflareIPTestPage() {
                         const cidr = defaultIPs[Math.floor(Math.random() * defaultIPs.length)];
                         ips.push(generateRandomIPFromCIDR(cidr));
                     }
+                    // 确保在所有浏览器中正确处理换行符
                     ipListElem.value = ips.join('\n');
                 });
                 
@@ -3520,12 +3521,40 @@ function generateCloudflareIPTestPage() {
                     // 格式化为文本
                     const text = successResults.map(r => r.ip + ':' + r.port + '#延迟' + r.latency + 'ms').join('\n');
                     
-                    navigator.clipboard.writeText(text).then(() => {
-                        alert('结果已复制到剪贴板');
-                    }).catch(err => {
-                        console.error('复制失败:', err);
-                        alert('复制失败，请手动复制');
-                    });
+                    // 尝试使用clipboard API复制
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(text).then(() => {
+                            alert('结果已复制到剪贴板');
+                        }).catch(err => {
+                            console.error('复制失败:', err);
+                            fallbackCopy(text);
+                        });
+                    } else {
+                        fallbackCopy(text);
+                    }
+                    
+                    // 备用复制方法
+                    function fallbackCopy(text) {
+                        // 创建临时文本区域
+                        const textArea = document.createElement('textarea');
+                        textArea.value = text;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        
+                        try {
+                            const successful = document.execCommand('copy');
+                            if (successful) {
+                                alert('结果已复制到剪贴板');
+                            } else {
+                                alert('复制失败，请手动复制以下内容:\n\n' + text);
+                            }
+                        } catch (err) {
+                            console.error('复制失败:', err);
+                            alert('复制失败，请手动复制以下内容:\n\n' + text);
+                        }
+                        
+                        document.body.removeChild(textArea);
+                    }
                 });
                 
                 // 导出结果
@@ -3631,7 +3660,9 @@ function generateCloudflareIPTestPage() {
                             const ip = queue.shift();
                             
                             try {
-                                const response = await fetch('/api/test-ip', {
+                                // 获取当前URL的路径部分并去掉最后的 "/iptest"
+                                const currentPath = window.location.pathname.replace(/\/iptest$/, '');
+                                const response = await fetch(currentPath + '/api/test-ip', {
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json'
