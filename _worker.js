@@ -3272,10 +3272,10 @@ async function 在线优选IP(request, env) {
                 }
             }
             else if (action === 'test') {
-                // 检测VPN状态
+                // 检测VPN状态 - 与源码2保持一致
                 const vpnStatus = await 检测VPN状态(request);
                 
-                // 调试模式功能已移除，但保留代码结构以便内部使用
+                // 移除调试模式，与源码2保持一致
                 const isDebug = false;
                 
                 // 如果检测到VPN，返回提示信息
@@ -3289,13 +3289,14 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 从Cloudflare官方获取IP范围
+                // 从Cloudflare官方获取IP范围 - 与源码2一致只用官方IP列表
                 const ranges = await 获取Cloudflare_IP范围();
                 console.log(`使用从Cloudflare官方获取的${ranges.length}个IP范围`);
                 
+                // 与源码2一致的参数
                 const count = 15; // 固定优选IP数量为15
                 const portSelection = formData.get('ports') || '443';
-                // 与源码2一致，使用900毫秒超时时间
+                // 与源码2完全一致，使用900毫秒超时时间
                 const timeout = 900; 
                 
                 // 处理端口选择
@@ -3310,12 +3311,21 @@ async function 在线优选IP(request, env) {
                     console.log(`使用单一端口: ${portSelection}`);
                 }
                 
-                // 从官方IP范围生成随机IP
-                const ips = await 生成随机IP(ranges);
+                // 从官方IP范围生成随机IP - 与源码2一致使用轮次生成方式
+                const ips = await 生成随机IP(ranges, 1000);
+                
+                // 与源码2一样测试每个IP端口组合
+                const testIPs = [];
+                for (const ip of ips) {
+                    for (const port of ports) {
+                        testIPs.push({ip, port});
+                    }
+                }
                 
                 // 测试IP连通性
                 let results = [];
                 try {
+                    // 将IP和端口作为数组传递给测试函数
                     results = await 测试IP连通性(ips, ports, timeout);
                     console.log(`获取到 ${results.length} 个测试结果`);
                 } catch (error) {
@@ -3824,11 +3834,11 @@ async function 在线优选IP(request, env) {
     });
 }
 
-// 生成随机IP函数
-// 与源码2保持一致的生成随机IP函数
+// 生成随机IP函数 - 完全与源码2保持一致
 async function 生成随机IP(cidrs, count) {
+    // 使用与源码2完全相同的实现方式
     const ips = new Set(); // 使用Set去重
-    const targetCount = 1000;
+    const targetCount = count || 1000; // 默认生成1000个IP
     let round = 1;
 
     // 不断轮次生成IP直到达到目标数量
@@ -3839,6 +3849,7 @@ async function 生成随机IP(cidrs, count) {
         for (const cidr of cidrs) {
             if (ips.size >= targetCount) break;
 
+            // 每轮生成的IP数量等于轮次数
             const cidrIPs = generateIPsFromCIDR(cidr.trim(), round);
             cidrIPs.forEach(ip => ips.add(ip));
 
@@ -3973,13 +3984,14 @@ async function 测试IP连通性(ips, ports, timeout) {
     
     // 单次测试函数 - 优化的测试算法
     async function singleTest(ip, port, timeout) {
+        // 与源码2完全一致的IP测试函数
         const startTime = Date.now();
         
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
-            // 使用cdn-cgi/trace路径，与源码2类似
+            // 优先使用证书错误的连接测试方法
             const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
                 signal: controller.signal,
                 mode: 'cors'
@@ -3987,11 +3999,11 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             clearTimeout(timeoutId);
             
-            // 连接成功的IP也可能是有用的，但优先级较低
+            // 如果能连接成功且是Cloudflare
             const endTime = Date.now();
             const latency = endTime - startTime;
             
-            // 如果延迟较低，也可以考虑使用
+            // 如果延迟不是太高，记录为直连成功的IP
             if (latency < 300) {
                 console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms`);
                 return {
@@ -3999,24 +4011,26 @@ async function 测试IP连通性(ips, ports, timeout) {
                     ip,
                     port,
                     time: latency,
-                    type: 'direct' // 标记为直连成功的IP
+                    type: 'direct' // 直连类型
                 };
             }
             
-            // 延迟太高的直连IP不要
+            // 延迟过高的直连IP通常不太理想
             return null;
             
         } catch (error) {
             const endTime = Date.now();
             const latency = endTime - startTime;
             
-            // 检查是否是真正的超时（接近设定的timeout时间）
+            // 处理请求超时情况
             if (latency >= timeout - 50) {
-                return null; // 真正的超时，认为测试失败
+                // 真正的超时
+                return null;
             }
             
-            // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
-            // 证书错误的IP是我们优先需要的
+            // 处理证书错误情况 - 这是源码2中最重要的判断
+            // 证书错误通常表示IP可以连接但提供的是非目标网站的证书
+            // 对于CF优选来说，这类IP是最理想的
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
                 console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms`);
                 return {
@@ -4024,11 +4038,11 @@ async function 测试IP连通性(ips, ports, timeout) {
                     ip,
                     port,
                     time: latency,
-                    type: 'cert_error' // 标记为证书错误的IP
+                    type: 'cert_error' // 证书错误类型
                 };
             }
             
-            // 其他类型的错误也可能有用
+            // 其他错误类型，如果延迟较低也可以考虑
             if (latency < 300) {
                 console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，错误: ${error.name}`);
                 return {
@@ -4036,7 +4050,7 @@ async function 测试IP连通性(ips, ports, timeout) {
                     ip,
                     port,
                     time: latency,
-                    type: 'other_error' // 标记为其他错误的IP
+                    type: 'other_error' // 其他错误类型
                 };
             }
             
@@ -4086,10 +4100,25 @@ async function 测试IP连通性(ips, ports, timeout) {
         // 处理结果
         for (const result of batchResults) {
             if (result.success) {
-                // 处理端口和类型显示
+                // 与源码2完全一样的结果处理方式
+                // 计算显示延迟 - 类似源码2的方法，显示的延迟是实际延迟的一半
+                const displayTime = Math.floor(result.time / 2);
+                
+                // 为不同类型的结果添加标记
+                let resultType = result.type || 'unknown';
+                let comment = 'CF优选IP';
+                
+                // 证书错误的IP加上特殊标记
+                if (resultType === 'cert_error') {
+                    comment = 'CF优选IP-证书';
+                } else if (resultType === 'direct') {
+                    comment = 'CF优选IP-直连';
+                } else if (resultType === 'other_error') {
+                    comment = 'CF优选IP-其他';
+                }
+                
                 const ipText = `${result.ip}:${result.port}`;
-                const comment = `#CF优选IP ${result.time}ms ${result.type || ''}`;
-                results.push(`${ipText} ${comment}`);
+                results.push(`${ipText} #${comment} ${displayTime}ms`);
                 
                 console.log(`找到可用IP: ${ipText} (${result.time}ms, ${result.type || 'unknown'})`);
                 
