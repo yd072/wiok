@@ -3108,48 +3108,42 @@ async function 在线优选IP(request, env) {
             console.log('开始从Cloudflare官方网站获取IP范围列表...');
             const response = await fetch('https://www.cloudflare.com/ips-v4/');
             
-            // 提取IP范围
-            const text = response.ok ? await response.text() : `173.245.48.0/20
-103.21.244.0/22
-103.22.200.0/22
-103.31.4.0/22
-141.101.64.0/18
-108.162.192.0/18
-190.93.240.0/20
-188.114.96.0/20
-197.234.240.0/22
-198.41.128.0/17
-162.158.0.0/15
-104.16.0.0/13
-104.24.0.0/14
-172.64.0.0/13
-131.0.72.0/22`;
-            const ranges = text.split('\n').filter(line => line.trim() && !line.startsWith('#'));
+            // 如果请求成功，使用响应内容；否则使用默认列表
+            let ranges;
+            if (response.ok) {
+                const text = await response.text();
+                ranges = text.split('\n').filter(line => line.trim() && !line.startsWith('#'));
+            } else {
+                ranges = defaultRanges;
+            }
             
             console.log(`成功获取到${ranges.length}个Cloudflare IP范围`);
             return ranges;
         } catch (error) {
             console.error('获取Cloudflare IP范围失败:', error);
-            // 返回一些默认值作为备份
-            return [
-                '173.245.48.0/20',
-                '103.21.244.0/22',
-                '103.22.200.0/22',
-                '103.31.4.0/22',
-                '141.101.64.0/18',
-                '108.162.192.0/18',
-                '190.93.240.0/20',
-                '188.114.96.0/20',
-                '197.234.240.0/22',
-                '198.41.128.0/17',
-                '162.158.0.0/15',
-                '104.16.0.0/13',
-                '104.24.0.0/14',
-                '172.64.0.0/13',
-                '131.0.72.0/22'
-            ];
+            // 出错时返回默认值
+            return defaultRanges;
         }
     }
+    
+    // 定义默认IP列表
+    const defaultRanges = [
+        '173.245.48.0/20',
+        '103.21.244.0/22',
+        '103.22.200.0/22',
+        '103.31.4.0/22',
+        '141.101.64.0/18',
+        '108.162.192.0/18',
+        '190.93.240.0/20',
+        '188.114.96.0/20',
+        '197.234.240.0/22',
+        '198.41.128.0/17',
+        '162.158.0.0/15',
+        '104.16.0.0/13',
+        '104.24.0.0/14',
+        '172.64.0.0/13',
+        '131.0.72.0/22'
+    ];
     
     // 检测VPN状态的函数 
     async function 检测VPN状态(request) {
@@ -3569,7 +3563,7 @@ async function 在线优选IP(request, env) {
             
             <form id="testForm">
                                 <div class="form-group">
-                    <label for="port-select">测试端口</label>
+                    <label for="port-select">端口</label>
                     <select id="port-select" name="ports">
                         <option value="443" selected>443</option>
                         <option value="2053">2053</option>
@@ -3581,14 +3575,7 @@ async function 在线优选IP(request, env) {
                     </select>
                 </div>
                 
-                <div class="form-group" style="margin-top: 15px;">
-                    <div style="font-size: 13px; color: #666; background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
-                        <strong>说明：</strong><br>
-                        • 系统将从Cloudflare官方IP范围中随机抽取1000个IP进行测试<br>
-                        • 测试完成后，可以选择"追加"或"替换"将结果保存到订阅列表<br>
-                        • 如果您使用VPN，可能会影响测试结果的准确性
-                    </div>
-                </div>
+
                 
                 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                     <button type="submit" id="testButton" class="btn">开始测试</button>
@@ -3920,7 +3907,7 @@ async function 测试IP连通性(ips, ports, timeout) {
     
     // 移除进度条功能
     
-    // 测试单个IP函数 - 使用源码2的方式
+    // 测试单个IP函数
     async function testSingleIP(ip, port) {
         // 第一次测试
         const firstResult = await singleTest(ip, port, actualTimeout);
@@ -3944,7 +3931,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             current.time < best.time ? current : best
         );
         
-        // 源码2的方式：将延迟除以2作为显示延迟
+        // 将延迟除以2作为显示延迟
         const displayTime = Math.floor(bestResult.time / 2);
         
         console.log(`IP ${ip}:${port} 最终结果: ${displayTime}ms (原始: ${bestResult.time}ms, 共${results.length}次有效测试)`);
@@ -3958,7 +3945,7 @@ async function 测试IP连通性(ips, ports, timeout) {
         };
     }
     
-    // 单次测试函数 - 使用源码2的延迟计算方式，但确保最小延迟为200ms
+    // 单次测试函数 但确保最小延迟为200ms
     async function singleTest(ip, port, timeout) {
         // IP测试函数
         const startTime = Date.now();
@@ -4072,7 +4059,7 @@ async function 测试IP连通性(ips, ports, timeout) {
         const batchPromises = currentBatch.map(task => testSingleIP(task.ip, task.port));
         const batchResults = await Promise.all(batchPromises);
         
-        // 处理结果 - 使用源码2的方式
+        // 处理结果 
         for (const result of batchResults) {
             if (result.success) {
                 // 使用testSingleIP中计算的displayTime
@@ -4083,7 +4070,7 @@ async function 测试IP连通性(ips, ports, timeout) {
                 const ipText = `${result.ip}:${result.port}`;
                 results.push(`${ipText} #${comment} ${displayTime}ms`);
                 
-                // 修改控制台输出，使用源码2的方式
+                // 修改控制台输出
                 console.log(`找到可用IP: ${ipText} (显示:${displayTime}ms, 原始:${result.time}ms)`);
                 
                 // 如果已找到足够的IP，提前结束
