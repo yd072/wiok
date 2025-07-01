@@ -3833,7 +3833,7 @@ async function 测试IP连通性(ips, ports, timeout) {
     const minResults = 15; // 最少需要的结果数
     
     // 强制使用较短的超时时间，这对于证书错误测试方法很重要
-    const actualTimeout = Math.min(timeout, 9999);
+    const actualTimeout = Math.min(timeout, 999);
     
     console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
     
@@ -3896,7 +3896,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             const latency = endTime - startTime;
             
             // 如果延迟较低，也可以考虑使用
-            if (latency < 300) {
+            if (latency) {
                 console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms`);
                 return {
                     success: true,
@@ -3933,7 +3933,7 @@ async function 测试IP连通性(ips, ports, timeout) {
             }
             
             // 其他类型的错误也可能有用
-            if (latency < 300) {
+            if (latency) {
                 console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，错误: ${error.name}`);
                 return {
                     success: true,
