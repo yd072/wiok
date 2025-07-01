@@ -3275,6 +3275,15 @@ async function bestIP(request, env, txt = 'ADD.txt') {
             });
         }
     }
+    
+    // 处理API请求，返回IP列表
+    if (url.search.includes('api=cf-ips')) {
+        const port = url.searchParams.get('port') || '443';
+        const cfIPs = await GetCFIPs(port);
+        return new Response(JSON.stringify(cfIPs), {
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
 
     // GET请求部分
     let content = '';
@@ -3723,13 +3732,17 @@ async function bestIP(request, env, txt = 'ADD.txt') {
             ipList.innerHTML = '<div class="ip-item">正在加载IP列表...</div>';
             
             try {
-                // 加载IP列表
-                const response = await fetch(\`/api/cf-ips?port=\${port}\`);
+                // 加载IP列表 - 修改请求路径
+                const response = await fetch(\`?api=cf-ips&port=\${port}\`);
                 if (!response.ok) {
-                    throw new Error('加载IP列表失败');
+                    throw new Error(\`加载IP列表失败: HTTP \${response.status}\`);
                 }
                 
                 originalIPs = await response.json();
+                if (!originalIPs || !Array.isArray(originalIPs) || originalIPs.length === 0) {
+                    throw new Error('没有获取到可用IP列表');
+                }
+                
                 ipCount.textContent = originalIPs.length;
                 
                 // 随机选择100个IP进行测试
@@ -3767,6 +3780,7 @@ async function bestIP(request, env, txt = 'ADD.txt') {
                 progressText.textContent = '测试完成';
                 
             } catch (error) {
+                console.error('测试失败:', error);
                 ipList.innerHTML = \`<div class="ip-item">测试失败: \${error.message}</div>\`;
                 showMessage('测试失败: ' + error.message, 'error');
             } finally {
@@ -3778,15 +3792,6 @@ async function bestIP(request, env, txt = 'ADD.txt') {
     </body>
     </html>
     `;
-
-    // 处理API请求，返回IP列表
-    if (url.pathname.endsWith('/api/cf-ips')) {
-        const port = url.searchParams.get('port') || '443';
-        const cfIPs = await GetCFIPs(port);
-        return new Response(JSON.stringify(cfIPs), {
-            headers: { 'Content-Type': 'application/json' }
-        });
-    }
 
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
