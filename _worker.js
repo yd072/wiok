@@ -3101,18 +3101,30 @@ async function 在线优选IP(request, env) {
     // 默认端口列表
     const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
     
-    // 从Cloudflare官方网站获取IP范围列表
+    // 从Cloudflare官方网站获取IP范围列表，与源码2完全一样
     async function 获取Cloudflare_IP范围() {
         try {
+            // 只使用官方IP范围
             console.log('开始从Cloudflare官方网站获取IP范围列表...');
             const response = await fetch('https://www.cloudflare.com/ips-v4/');
             
-            if (!response.ok) {
-                throw new Error(`获取失败，状态码: ${response.status}`);
-            }
-            
-            const text = await response.text();
-            const ranges = text.trim().split(/\s+/);
+            // 提取IP范围
+            const text = response.ok ? await response.text() : `173.245.48.0/20
+103.21.244.0/22
+103.22.200.0/22
+103.31.4.0/22
+141.101.64.0/18
+108.162.192.0/18
+190.93.240.0/20
+188.114.96.0/20
+197.234.240.0/22
+198.41.128.0/17
+162.158.0.0/15
+104.16.0.0/13
+104.24.0.0/14
+172.64.0.0/13
+131.0.72.0/22`;
+            const ranges = text.split('\n').filter(line => line.trim() && !line.startsWith('#'));
             
             console.log(`成功获取到${ranges.length}个Cloudflare IP范围`);
             return ranges;
@@ -3283,7 +3295,8 @@ async function 在线优选IP(request, env) {
                 
                 const count = 15; // 固定优选IP数量为15
                 const portSelection = formData.get('ports') || '443';
-                const timeout = 2000; // 固定超时时间为2000毫秒
+                // 与源码2一致，使用900毫秒超时时间
+                const timeout = 900; 
                 
                 // 处理端口选择
                 let ports;
@@ -3297,17 +3310,17 @@ async function 在线优选IP(request, env) {
                     console.log(`使用单一端口: ${portSelection}`);
                 }
                 
-                                 // 从CIDR范围中生成随机IP
-                 const ips = await 生成随机IP(ranges, 1000); // 固定生成1000个IP进行测试
-                 
-                 // 测试IP连通性
-                 let results = [];
-                 try {
-                     results = await 测试IP连通性(ips, ports, timeout);
-                     console.log(`获取到 ${results.length} 个测试结果`);
-                 } catch (error) {
-                     console.error('测试IP连通性时出错:', error);
-                 }
+                // 从官方IP范围生成随机IP
+                const ips = await 生成随机IP(ranges);
+                
+                // 测试IP连通性
+                let results = [];
+                try {
+                    results = await 测试IP连通性(ips, ports, timeout);
+                    console.log(`获取到 ${results.length} 个测试结果`);
+                } catch (error) {
+                    console.error('测试IP连通性时出错:', error);
+                }
                 
                 // 按类型和响应时间排序并取前N个
                 // 检查是否有测试结果
@@ -3814,88 +3827,37 @@ async function 在线优选IP(request, env) {
 }
 
 // 生成随机IP函数
-async function 生成随机IP(ranges, count) {
-    const ips = [];
-    const MAX_SAMPLE_SIZE = 1000; // 最大抽样数量
-    const actualCount = Math.min(count, MAX_SAMPLE_SIZE); // 限制最大数量
-    
-    console.log(`从Cloudflare IP范围中抽取${actualCount}个IP进行测试`);
-    
-    // CIDR转换为IP范围函数
-    function cidrToIPRange(cidr) {
-        const [baseIP, prefixLength] = cidr.split('/');
-        const baseIPNum = baseIP.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0);
-        const mask = ~((1 << (32 - parseInt(prefixLength, 10))) - 1);
-        const networkIP = baseIPNum & mask;
-        const maxHost = (1 << (32 - parseInt(prefixLength, 10))) - 1;
-        return { networkIP, maxHost };
-    }
-    
-    // 生成随机IP函数
-    function generateIPFromCIDR(cidr) {
-        const { networkIP, maxHost } = cidrToIPRange(cidr);
-        
-        // 生成随机主机部分
-        const randomHostPart = Math.floor(Math.random() * maxHost) + 1; // 避免使用网络地址(0)和广播地址(maxHost)
-        const ipNum = networkIP | randomHostPart;
-        
-        // 转换回点分十进制
-        return [
-            (ipNum >> 24) & 255,
-            (ipNum >> 16) & 255,
-            (ipNum >> 8) & 255,
-            ipNum & 255
-        ].join('.');
-    }
-    
-    // 计算每个CIDR块的IP数量
-    const cidrSizes = ranges.map(cidr => {
-        const { maxHost } = cidrToIPRange(cidr);
-        return maxHost;
-    });
-    
-    // 计算总IP数量
-    const totalIPs = cidrSizes.reduce((sum, size) => sum + size, 0);
-    console.log(`Cloudflare IP范围包含约${totalIPs}个IP地址`);
-    
-    // 为每个范围分配权重，确保大范围有更多的抽样
-    const weights = cidrSizes.map(size => size / totalIPs);
-    
-    // 根据权重分配每个CIDR块应该生成的IP数量
-    const ipCountPerRange = weights.map(weight => Math.ceil(actualCount * weight));
-    
-    // 为每个范围生成随机IP
-    for (let i = 0; i < ranges.length; i++) {
-        const cidr = ranges[i];
-        const ipCount = Math.min(ipCountPerRange[i], cidrSizes[i]); // 不超过该CIDR块的最大IP数
-        
-        // 生成指定数量的随机IP
-        const rangeIPs = new Set();
-        let attempts = 0;
-        const maxAttempts = ipCount * 2; // 最大尝试次数，避免无限循环
-        
-        while (rangeIPs.size < ipCount && attempts < maxAttempts) {
-            const ip = generateIPFromCIDR(cidr);
-            rangeIPs.add(ip);
-            attempts++;
+// 与源码2保持一致的生成随机IP函数
+async function 生成随机IP(cidrs, count) {
+    const ips = new Set(); // 使用Set去重
+    const targetCount = 1000;
+    let round = 1;
+
+    // 不断轮次生成IP直到达到目标数量
+    while (ips.size < targetCount) {
+        console.log(`第${round}轮生成IP，当前已有${ips.size}个`);
+
+        // 每轮为每个CIDR生成指定数量的IP
+        for (const cidr of cidrs) {
+            if (ips.size >= targetCount) break;
+
+            const cidrIPs = generateIPsFromCIDR(cidr.trim(), round);
+            cidrIPs.forEach(ip => ips.add(ip));
+
+            console.log(`CIDR ${cidr} 第${round}轮生成${cidrIPs.length}个IP，总计${ips.size}个`);
         }
-        
-        // 将该范围的IP添加到总列表
-        ips.push(...Array.from(rangeIPs));
-    }
-    
-    // 如果生成的IP数量超过要求，随机选择指定数量
-    if (ips.length > actualCount) {
-        // Fisher-Yates洗牌算法
-        for (let i = ips.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [ips[i], ips[j]] = [ips[j], ips[i]];
+
+        round++;
+
+        // 防止无限循环
+        if (round > 100) {
+            console.warn('达到最大轮次限制，停止生成');
+            break;
         }
-        ips.length = actualCount;
     }
-    
-    console.log(`成功生成${ips.length}个随机IP用于测试`);
-    return ips;
+
+    console.log(`最终生成${ips.size}个不重复IP`);
+    return Array.from(ips).slice(0, targetCount);
 }
 
 // 测试IP连通性函数 - 使用源码2的方法
@@ -3905,8 +3867,8 @@ async function 测试IP连通性(ips, ports, timeout) {
     const MAX_TEST_DURATION = 30000; // 最长测试时间(毫秒)
     const minResults = 15; // 最少需要的结果数
     
-    // 强制使用较短的超时时间，这对于证书错误测试方法很重要
-    const actualTimeout = Math.min(timeout, 999);
+    // 直接使用传入的超时时间，不做限制，与源码2保持一致
+    const actualTimeout = timeout;
     
     console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
     
