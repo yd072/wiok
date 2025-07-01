@@ -3684,7 +3684,7 @@ async function 在线优选IP(request, env) {
                                  // 保存测试结果到全局变量
                                  testResults = result.bestIPs;
                                  
-                                 resultList.textContent = result.bestIPs.join('\\n');
+                                 resultList.textContent = result.bestIPs.join('\n');
                                  resultContainer.style.display = 'block';
                                  // 启用按钮
                                  document.getElementById('appendButton').disabled = false;
