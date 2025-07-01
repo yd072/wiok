@@ -3306,27 +3306,8 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 首先按类型排序，优先证书错误类型，然后是其他类型，最后是直连类型
-                // 然后在每个类型内部按响应时间排序
-                results.sort((a, b) => {
-                    // 首先按类型排序
-                    const typeOrder = {
-                        'cert_error': 0,  // 证书错误最优先
-                        'other_error': 1, // 其他错误次之
-                        'direct': 2,      // 直连最后
-                        'unknown': 3      // 未知类型最后
-                    };
-                    
-                    const typeA = a.type || 'unknown';
-                    const typeB = b.type || 'unknown';
-                    
-                    if (typeOrder[typeA] !== typeOrder[typeB]) {
-                        return typeOrder[typeA] - typeOrder[typeB];
-                    }
-                    
-                    // 类型相同时按响应时间排序
-                    return a.time - b.time;
-                });
+                // 只按响应时间排序
+                results.sort((a, b) => a.time - b.time);
                 
                 // 取前N个结果
                 const bestIPs = results
@@ -3850,23 +3831,18 @@ async function 测试IP连通性(ips, ports, timeout) {
         // 第二次测试
         const secondResult = await singleTest(ip, port, actualTimeout);
         
-        // 如果两次测试都成功，优先选择证书错误类型的结果
+        // 如果两次测试都成功，直接选择延迟较低的结果
         if (secondResult) {
             console.log(`IP ${ip}:${port} 第二次测试成功: ${secondResult.time}ms (类型: ${secondResult.type})`);
             
-            // 优先选择证书错误类型的结果
-            if (firstResult.type === 'cert_error' && secondResult.type !== 'cert_error') {
-                console.log(`IP ${ip}:${port} 选择第一次结果(证书错误优先)`);
-                return firstResult;
-            } 
-            else if (firstResult.type !== 'cert_error' && secondResult.type === 'cert_error') {
-                console.log(`IP ${ip}:${port} 选择第二次结果(证书错误优先)`);
-                return secondResult;
-            }
-            // 如果类型相同，选择延迟较低的
-            else if (secondResult.time < firstResult.time) {
+            // 选择延迟较低的结果
+            if (secondResult.time < firstResult.time) {
                 console.log(`IP ${ip}:${port} 选择第二次结果(延迟更低)`);
                 return secondResult;
+            }
+            else {
+                console.log(`IP ${ip}:${port} 选择第一次结果(延迟更低)`);
+                return firstResult;
             }
         }
         
