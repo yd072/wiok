@@ -3825,7 +3825,7 @@ async function 生成随机IP(ranges, count) {
     return ips;
 }
 
-// 测试IP连通性函数 - 使用源码2的方法
+// 测试IP连通性函数
 async function 测试IP连通性(ips, ports, timeout) {
     const results = [];
     const MAX_CONCURRENT = 50; // 最大并发测试数
@@ -3837,7 +3837,7 @@ async function 测试IP连通性(ips, ports, timeout) {
     
     console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
     
-    // 测试单个IP函数 - 优化版本
+    // 测试单个IP函数
     async function testSingleIP(ip, port) {
         // 第一次测试
         const firstResult = await singleTest(ip, port, actualTimeout);
@@ -3854,7 +3854,7 @@ async function 测试IP连通性(ips, ports, timeout) {
         if (secondResult) {
             console.log(`IP ${ip}:${port} 第二次测试成功: ${secondResult.time}ms (类型: ${secondResult.type})`);
             
-            // 如果两次类型相同，选择延迟较低的
+            // 如果延迟较低，选择第二次结果
             if (secondResult.time < firstResult.time) {
                 console.log(`IP ${ip}:${port} 选择第二次结果(延迟更低)`);
                 return secondResult;
@@ -3866,7 +3866,7 @@ async function 测试IP连通性(ips, ports, timeout) {
         return firstResult;
     }
     
-    // 单次测试函数 - 优化的测试算法
+    // 单次测试函数
     async function singleTest(ip, port, timeout) {
         const startTime = Date.now();
         
@@ -3882,11 +3882,10 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             clearTimeout(timeoutId);
             
-            // 连接成功的IP也可能是有用的，但优先级较低
+            // 连接成功的IP也可以是有用的
             const endTime = Date.now();
             const latency = endTime - startTime;
             
-            // 如果连接成功，返回延迟和类型
             console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms`);
             return {
                 success: true,
@@ -3900,37 +3899,20 @@ async function 测试IP连通性(ips, ports, timeout) {
             const endTime = Date.now();
             const latency = endTime - startTime;
             
-            // 处理错误情况
+            // 检查是否是真正的超时（接近设定的timeout时间）
             if (latency >= timeout - 50) {
                 return null; // 真正的超时，认为测试失败
             }
             
-            // 检查是否是证书错误（Failed to fetch）- 源码2的关键判断
-            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms`);
-                return {
-                    success: true,
-                    ip,
-                    port,
-                    time: latency,
-                    type: 'cert_error' // 标记为证书错误的IP
-                };
-            }
-            
             // 其他类型的错误也可能有用
-            if (latency < 300) {
-                console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，错误: ${error.name}`);
-                return {
-                    success: true,
-                    ip,
-                    port,
-                    time: latency,
-                    type: 'other_error' // 标记为其他错误的IP
-                };
-            }
-            
-            // 如果是其他错误且延迟高，不返回
-            return null;
+            console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，错误: ${error.name}`);
+            return {
+                success: true,
+                ip,
+                port,
+                time: latency,
+                type: 'other_error' // 标记为其他错误的IP
+            };
         }
     }
     
@@ -3957,17 +3939,57 @@ async function 测试IP连通性(ips, ports, timeout) {
     
     while (taskIndex < testTasks.length && results.length < minResults && (Date.now() - startTestTime) < MAX_TEST_DURATION) {
         // 创建当前批次的测试任务
-        const currentBatch = testTasks.slice(taskIndex, taskIndex + MAX_CONCURRENT);
-        const batchResults = await Promise.all(currentBatch.map(({ ip, port }) => testSingleIP(ip, port)));
+        const currentBatch = [];
+        const batchSize = Math.min(MAX_CONCURRENT, testTasks.length - taskIndex);
         
-        results.push(...batchResults.filter(result => result.success));
+        for (let i = 0; i < batchSize; i++) {
+            const task = testTasks[taskIndex++];
+            currentBatch.push(testSingleIP(task.ip, task.port));
+        }
         
-        taskIndex += currentBatch.length;
+        // 等待当前批次完成
+        const batchResults = await Promise.all(currentBatch);
         
-        console.log(`当前测试进度: ${taskIndex}/${testTasks.length} 完成，成功结果数: ${results.length}`);
+        // 处理结果
+        for (const result of batchResults) {
+            if (result && result.success) {
+                const displayTime = Math.floor(result.time);
+                
+                results.push({
+                    ip: result.ip,
+                    port: result.port,
+                    time: displayTime,
+                    originalTime: result.time,
+                    status: 'success',
+                    type: result.type,
+                    comment: 'CF优选IP' // 取消特殊标记
+                });
+                
+                // 记录进度
+                if (results.length % 10 === 0) {
+                    console.log(`已找到${results.length}个可用IP，已测试${taskIndex}/${testTasks.length}`);
+                }
+                
+                // 如果已经有足够的结果，可以提前结束
+                if (results.length >= minResults * 2) {
+                    console.log(`已找到足够的可用IP (${results.length})，提前结束测试`);
+                    break;
+                }
+            }
+        }
+        
+        // 如果结果太少，但已经测试了很多IP，降低标准
+        if (results.length < 5 && taskIndex > testTasks.length / 2) {
+            console.log(`测试进度过半但结果太少(${results.length})，降低标准继续测试`);
+        }
     }
     
-    console.log(`测试结束，总共获得 ${results.length} 个有效结果`);
+    console.log(`测试完成，共测试了${taskIndex}/${testTasks.length}个IP，找到${results.length}个可用IP`);
+    
+    // 如果没有找到任何可用IP，记录警告信息
+    if (results.length === 0) {
+        console.log('警告：未找到任何可用的IP，请检查网络连接或尝试其他端口');
+    }
     
     return results;
 }
