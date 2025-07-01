@@ -3080,7 +3080,7 @@ async function handleGetRequest(env, txt) {
     });
 }
 
-async function 在线优选IP(request, env) {
+    async function 在线优选IP(request, env) {
     // 默认端口列表
     const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
 
@@ -3428,7 +3428,7 @@ async function 在线优选IP(request, env) {
             });
         }
     }
-}
+    }
     
     // 生成HTML页面
     const html = `
