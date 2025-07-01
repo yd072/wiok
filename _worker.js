@@ -654,11 +654,10 @@ export default {
 				} else if (url.pathname == `/${动态UUID}/edit` || 路径 == `/${userID}/edit`) {
 					const html = await KV(request, env);
 					return html;
-				} else if (url.pathname == `/${动态UUID}/iptest` || 路径 == `/${userID}/iptest`) {
-					// 添加在线优选Cloudflare IP功能入口
-					return await handleCloudflareIPTest(request, env);
-				} else if (url.pathname == `/${动态UUID}/api/test-ip` || url.pathname == `/${userID}/api/test-ip`) {
-					// 处理IP测试API请求
+				} else if (url.pathname == `/${动态UUID}/iptest` || 路径 == `/${userID}/iptest` || 
+					url.pathname == `/${动态UUID}/api/test-ip` || url.pathname == `/${userID}/api/test-ip`) {
+					// 处理IP测试相关请求（页面和API）
+					console.log(`处理IP测试请求: ${url.pathname}`);
 					return await handleCloudflareIPTest(request, env);
 				} else if (url.pathname == `/${动态UUID}` || 路径 == `/${userID}`) {
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
@@ -3085,30 +3084,71 @@ async function handleCloudflareIPTest(request, env) {
     const url = new URL(request.url);
     
     // 处理API请求
-    if (url.pathname.endsWith('/api/test-ip')) {
+    if (url.pathname.includes('/api/test-ip')) {
         try {
-            const data = await request.json();
+            const contentType = request.headers.get('content-type') || '';
+            
+            // 检查是POST请求并且是JSON内容
+            if (request.method !== 'POST' || !contentType.includes('application/json')) {
+                return new Response(JSON.stringify({ 
+                    error: "请求必须是POST，并且内容类型必须是application/json" 
+                }), {
+                    status: 400,
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*"
+                    }
+                });
+            }
+            
+            // 解析请求体
+            let data;
+            try {
+                data = await request.json();
+            } catch (e) {
+                return new Response(JSON.stringify({ error: "无法解析JSON请求体" }), {
+                    status: 400,
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*"
+                    }
+                });
+            }
+            
             const { ip, port, timeout } = data;
             
             if (!ip) {
                 return new Response(JSON.stringify({ error: "IP参数缺失" }), {
                     status: 400,
-                    headers: { "Content-Type": "application/json" }
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*"
+                    }
                 });
             }
+            
+            console.log(`测试IP: ${ip}, 端口: ${port || 443}, 超时: ${timeout || 3000}ms`);
             
             const testPort = port || 443;
             const testTimeout = timeout || 3000;
             
             const result = await testCloudflareIP(ip, testPort, testTimeout);
+            console.log("测试结果:", result);
             
             return new Response(JSON.stringify(result), {
-                headers: { "Content-Type": "application/json" }
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                }
             });
         } catch (error) {
-            return new Response(JSON.stringify({ error: error.message }), {
+            console.error("IP测试错误:", error);
+            return new Response(JSON.stringify({ error: error.message || "未知错误" }), {
                 status: 500,
-                headers: { "Content-Type": "application/json" }
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                }
             });
         }
     }
@@ -3118,14 +3158,21 @@ async function handleCloudflareIPTest(request, env) {
 }
 
 async function testCloudflareIP(ip, port = 443, timeout = 3000) {
+    console.log(`开始测试 ${ip}:${port}，超时: ${timeout}ms`);
+    
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const timeoutId = setTimeout(() => {
+        console.log(`测试 ${ip}:${port} 超时`);
+        controller.abort('连接超时');
+    }, timeout);
     
     const startTime = Date.now();
     let success = false;
     let latency = 0;
+    let error = null;
     
     try {
+        console.log(`尝试连接到 ${ip}:${port}`);
         const socket = await Promise.race([
             connect({
                 hostname: ip,
@@ -3140,27 +3187,35 @@ async function testCloudflareIP(ip, port = 443, timeout = 3000) {
         // 简单的延迟测试
         latency = Date.now() - startTime;
         success = true;
+        console.log(`连接成功，延迟: ${latency}ms`);
         
         // 关闭连接
         try {
             socket.close();
+            console.log(`关闭连接: ${ip}:${port}`);
         } catch (e) {
-            console.error(`关闭连接出错: ${e.message}`);
+            console.error(`关闭连接出错 ${ip}:${port}: ${e.message}`);
         }
-    } catch (error) {
+    } catch (err) {
         latency = timeout;
         success = false;
+        error = err.message || '连接失败';
+        console.error(`测试失败 ${ip}:${port}: ${error}`);
     } finally {
         clearTimeout(timeoutId);
     }
     
-    return {
+    const result = {
         ip,
         port,
         success,
         latency,
+        error,
         timestamp: new Date().toISOString()
     };
+    
+    console.log(`测试结果 ${ip}:${port}:`, result);
+    return result;
 }
 
 function generateCloudflareIPTestPage() {
@@ -3623,8 +3678,9 @@ function generateCloudflareIPTestPage() {
                             latencyCell.textContent = result.latency;
                             latencyCell.className = latencyClass;
                         } else {
-                            latencyCell.textContent = '超时';
+                            latencyCell.textContent = result.error || '超时';
                             latencyCell.className = 'bad-latency';
+                            latencyCell.title = result.error || '连接超时';
                         }
                         row.appendChild(latencyCell);
                         
@@ -3660,9 +3716,19 @@ function generateCloudflareIPTestPage() {
                             const ip = queue.shift();
                             
                             try {
-                                // 获取当前URL的路径部分并去掉最后的 "/iptest"
-                                const currentPath = window.location.pathname.replace(/\/iptest$/, '');
-                                const response = await fetch(currentPath + '/api/test-ip', {
+                                // 构建API URL
+                                let apiUrl;
+                                if (window.location.pathname.endsWith('/iptest')) {
+                                    // 如果当前在/iptest页面，直接替换为/api/test-ip
+                                    apiUrl = window.location.href.replace('/iptest', '/api/test-ip');
+                                } else {
+                                    // 否则，使用完整的URL
+                                    apiUrl = new URL('/api/test-ip', window.location.origin).href;
+                                }
+                                console.log("发送请求到:", apiUrl);
+                                console.log("测试IP:", ip, "端口:", port, "超时:", timeout);
+                                
+                                const response = await fetch(apiUrl, {
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json'
@@ -3670,28 +3736,41 @@ function generateCloudflareIPTestPage() {
                                     body: JSON.stringify({ ip, port, timeout })
                                 });
                                 
+                                console.log("收到响应状态:", response.status);
+                                
+                                let result;
+                                try {
+                                    const responseText = await response.text();
+                                    console.log("响应内容:", responseText);
+                                    result = JSON.parse(responseText);
+                                } catch (parseError) {
+                                    console.error("解析响应失败:", parseError);
+                                    throw new Error("解析服务器响应失败");
+                                }
+                                
                                 if (response.ok) {
-                                    const result = await response.json();
+                                    console.log("测试成功:", result);
                                     addResult(result);
                                 } else {
-                                    const error = await response.json();
-                                    console.error('测试失败:', error);
+                                    console.error("测试失败:", result);
                                     addResult({
                                         ip,
                                         port,
                                         success: false,
                                         latency: timeout,
-                                        timestamp: new Date().toISOString()
+                                        timestamp: new Date().toISOString(),
+                                        error: result.error || "未知错误"
                                     });
                                 }
                             } catch (error) {
-                                console.error('请求错误:', error);
+                                console.error("请求错误:", error);
                                 addResult({
                                     ip,
                                     port,
                                     success: false,
                                     latency: timeout,
-                                    timestamp: new Date().toISOString()
+                                    timestamp: new Date().toISOString(),
+                                    error: error.message || "网络请求失败"
                                 });
                             }
                             
