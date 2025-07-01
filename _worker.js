@@ -3080,7 +3080,7 @@ async function handleGetRequest(env, txt) {
     });
 }
 
-    async function 在线优选IP(request, env) {
+async function 在线优选IP(request, env) {
     // 默认端口列表
     const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
 
@@ -3120,39 +3120,6 @@ async function handleGetRequest(env, txt) {
                 '131.0.72.0/22'
             ];
         }
-    }
-
-    // 生成随机IP，并计算有效主机地址
-    async function 生成随机IP(ranges, numHosts) {
-        const ips = [];
-        
-        // 添加最大有效主机数量
-        const maxHosts = numHosts - 2; // 排除网络地址和广播地址
-        
-        for (let i = 0; i < maxHosts; i++) {
-            const randomRange = ranges[Math.floor(Math.random() * ranges.length)];
-            const [network, mask] = randomRange.split('/');
-            const networkParts = network.split('.').map(Number);
-            const bitmask = parseInt(mask, 10);
-            const startIp = ipToLong(networkParts);
-            const endIp = startIp + (2 ** (32 - bitmask)) - 1;
-
-            const randomIp = startIp + Math.floor(Math.random() * (endIp - startIp));
-            const randomIpStr = longToIp(randomIp);
-            ips.push(randomIpStr);
-        }
-
-        return ips;
-    }
-
-    // 将IP地址转换为数字
-    function ipToLong(ip) {
-        return ip.reduce((acc, part) => (acc << 8) + part, 0);
-    }
-
-    // 将数字转换为IP地址
-    function longToIp(long) {
-        return [(long >> 24) & 255, (long >> 16) & 255, (long >> 8) & 255, long & 255].join('.');
     }
 
     // 测试IP连通性
@@ -3240,7 +3207,7 @@ async function handleGetRequest(env, txt) {
             return { isVpn: false, details: {} };
         }
     }
-
+    
     // 处理POST请求
     if (request.method === 'POST') {
         try {
@@ -3320,8 +3287,7 @@ async function handleGetRequest(env, txt) {
             else if (action === 'test') {
                 // 检测VPN状态
                 const vpnStatus = await 检测VPN状态(request);
-                
-                // 如果检测到VPN，返回提示信息
+
                 if (vpnStatus.isVpn) {
                     return new Response(JSON.stringify({
                         success: false,
@@ -3332,75 +3298,40 @@ async function handleGetRequest(env, txt) {
                     });
                 }
                 
-                // 从Cloudflare官方获取IP范围
+                // 获取Cloudflare IP范围
                 const ranges = await 获取Cloudflare_IP范围();
-                console.log(`使用从Cloudflare官方获取的${ranges.length}个IP范围`);
                 
                 const count = 15; // 固定优选IP数量为15
                 const portSelection = formData.get('ports') || '443';
+                const timeout = formData.get('timeout') || 2000; // 可以通过请求传递，默认为2000ms
                 
                 // 处理端口选择
                 let ports;
                 if (portSelection === 'all') {
-                    // 使用所有预设端口
                     ports = DEFAULT_PORTS;
-                    console.log(`使用全部端口: ${ports.join(', ')}`);
                 } else {
-                    // 只使用选定的端口
                     ports = [portSelection];
-                    console.log(`使用单一端口: ${portSelection}`);
                 }
-                
-                // 生成随机IP
-                const ips = await 生成随机IP(ranges, 1000); // 固定生成1000个IP进行测试
-                
-                // 测试IP连通性
+
+                // 随机生成 IP 并进行连通性测试
+                const ips = await 生成随机IP(ranges, 1000);
                 let results = [];
+
                 try {
-                    results = await 测试IP连通性(ips, ports, 2000);
+                    results = await 测试IP连通性(ips, ports, timeout);
                     console.log(`获取到 ${results.length} 个测试结果`);
                 } catch (error) {
                     console.error('测试IP连通性时出错:', error);
                 }
-                
-                // 排序并返回最优IP
-                if (results.length === 0) {
-                    return new Response(JSON.stringify({
-                        success: true,
-                        message: '未找到可用IP',
-                        bestIPs: []
-                    }), {
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                }
 
-                results.sort((a, b) => {
-                    // 按类型排序
-                    const typeOrder = {
-                        'cert_error': 0,
-                        'other_error': 1,
-                        'direct': 2,
-                        'unknown': 3
-                    };
-                    
-                    const typeA = a.type || 'unknown';
-                    const typeB = b.type || 'unknown';
-                    
-                    if (typeOrder[typeA] !== typeOrder[typeB]) {
-                        return typeOrder[typeA] - typeOrder[typeB];
-                    }
-                    
-                    // 类型相同，按时间排序
-                    return a.time - b.time;
-                });
+                // 对结果进行排序
+                results.sort((a, b) => a.time - b.time);
 
-                // 返回最优IP
-                const bestIPs = results.slice(0, count).map(item => 
-                    `${item.ip}:${item.port}#${item.comment} ${Math.round(item.time)}ms`
-                );
-                
+                // 取前N个结果
+                const bestIPs = results
+                    .slice(0, count)
+                    .map(item => `${item.ip}:${item.port}#${item.comment} ${Math.round(item.time)}ms`);
+
                 return new Response(JSON.stringify({
                     success: true,
                     message: '优选IP测试完成',
@@ -3428,7 +3359,9 @@ async function handleGetRequest(env, txt) {
             });
         }
     }
-    }
+}
+
+
     
     // 生成HTML页面
     const html = `
