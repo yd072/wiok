@@ -3860,6 +3860,54 @@ async function 生成随机IP(cidrs, count) {
     return Array.from(ips).slice(0, targetCount);
 }
 
+// 添加从源码2复制的generateIPsFromCIDR函数
+function generateIPsFromCIDR(cidr, count = 1) {
+    const [network, prefixLength] = cidr.split('/');
+    const prefix = parseInt(prefixLength);
+
+    // 将IP地址转换为32位整数
+    const ipToInt = (ip) => {
+        return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
+    };
+
+    // 将32位整数转换为IP地址
+    const intToIP = (int) => {
+        return [
+            (int >>> 24) & 255,
+            (int >>> 16) & 255,
+            (int >>> 8) & 255,
+            int & 255
+        ].join('.');
+    };
+
+    const networkInt = ipToInt(network);
+    const hostBits = 32 - prefix;
+    const numHosts = Math.pow(2, hostBits);
+
+    // 限制生成数量不超过该CIDR的可用主机数
+    const maxHosts = numHosts - 2; // -2 排除网络地址和广播地址
+    const actualCount = Math.min(count, maxHosts);
+    const ips = new Set();
+
+    // 如果可用主机数太少，直接返回空数组
+    if (maxHosts <= 0) {
+        return [];
+    }
+
+    // 生成指定数量的随机IP
+    let attempts = 0;
+    const maxAttempts = actualCount * 10; // 防止无限循环
+
+    while (ips.size < actualCount && attempts < maxAttempts) {
+        const randomOffset = Math.floor(Math.random() * maxHosts) + 1; // +1 避免网络地址
+        const randomIP = intToIP(networkInt + randomOffset);
+        ips.add(randomIP);
+        attempts++;
+    }
+
+    return Array.from(ips);
+}
+
 // 测试IP连通性函数 - 使用源码2的方法
 async function 测试IP连通性(ips, ports, timeout) {
     const results = [];
