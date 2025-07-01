@@ -3359,9 +3359,7 @@ async function 在线优选IP(request, env) {
                 });
                 
                 // 取前N个结果
-                const bestIPs = results
-                    .slice(0, count)
-                    .map(item => `${item.ip}:${item.port}#${item.comment} ${Math.round(item.time)}ms`);
+                const bestIPs = results.slice(0, count);
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
