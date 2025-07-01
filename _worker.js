@@ -2510,7 +2510,24 @@ async function 整理(内容) {
 }
 
 async function sendMessage(type, ip, add_data = "") {
-	if (!BotToken || !ChatID) return;
+	if (!BotToken || !ChatID) {
+        try {
+            // 检查是否在Worker环境中
+            if (typeof self !== 'undefined' && self.postMessage) {
+                self.postMessage({
+                    type,
+                    ip,
+                    data: add_data
+                });
+            } else {
+                // 在浏览器环境中，发送消息
+                console.log(`消息: ${type}, IP: ${ip}, 数据: ${add_data}`);
+            }
+        } catch (error) {
+            console.error('发送消息失败:', error);
+        }
+        return;
+    }
 
 	try {
 		let msg = "";
@@ -3087,15 +3104,27 @@ async function 在线优选IP(request, env) {
     // 从Cloudflare官方网站获取IP范围列表
     async function 获取Cloudflare_IP范围() {
         try {
+            // 只使用官方IP范围
             console.log('开始从Cloudflare官方网站获取IP范围列表...');
             const response = await fetch('https://www.cloudflare.com/ips-v4/');
             
-            if (!response.ok) {
-                throw new Error(`获取失败，状态码: ${response.status}`);
-            }
-            
-            const text = await response.text();
-            const ranges = text.trim().split(/\s+/);
+            // 提取IP范围
+            const text = response.ok ? await response.text() : `173.245.48.0/20
+103.21.244.0/22
+103.22.200.0/22
+103.31.4.0/22
+141.101.64.0/18
+108.162.192.0/18
+190.93.240.0/20
+188.114.96.0/20
+197.234.240.0/22
+198.41.128.0/17
+162.158.0.0/15
+104.16.0.0/13
+104.24.0.0/14
+172.64.0.0/13
+131.0.72.0/22`;
+            const ranges = text.split('\n').filter(line => line.trim() && !line.startsWith('#'));
             
             console.log(`成功获取到${ranges.length}个Cloudflare IP范围`);
             return ranges;
@@ -3213,11 +3242,18 @@ async function 在线优选IP(request, env) {
                         if (saveMode === 'replace') {
                             // 替换模式：过滤掉已有的优选IP
                             const existingLines = existingContent.split('\n').filter(line => 
-                                !line.includes('#优选IP') && !line.includes('#CF优选IP'));
+                                !line.includes('#优选IP') && !line.includes('#CF优选IP'))
+                                .filter(line => line.trim() !== ''); // 过滤空行
                             newContent = [...existingLines, ...ips].join('\n');
                         } else {
-                            // 追加模式
-                            newContent = existingContent ? existingContent + '\n' + ips.join('\n') : ips.join('\n');
+                            // 追加模式 - 处理现有内容中的空行
+                            if (existingContent) {
+                                // 移除末尾可能的空行，确保干净的连接
+                                const trimmedContent = existingContent.trim();
+                                newContent = trimmedContent + '\n' + ips.join('\n');
+                            } else {
+                                newContent = ips.join('\n');
+                            }
                         }
                     }
                     
@@ -3243,10 +3279,10 @@ async function 在线优选IP(request, env) {
                 }
             }
             else if (action === 'test') {
-                // 检测VPN状态
+                // 检测VPN状态 
                 const vpnStatus = await 检测VPN状态(request);
                 
-                // 调试模式功能已移除，但保留代码结构以便内部使用
+                // 移除调试模式
                 const isDebug = false;
                 
                 // 如果检测到VPN，返回提示信息
@@ -3260,13 +3296,14 @@ async function 在线优选IP(request, env) {
                     });
                 }
                 
-                // 从Cloudflare官方获取IP范围
+                // 从Cloudflare官方获取IP范围 
                 const ranges = await 获取Cloudflare_IP范围();
                 console.log(`使用从Cloudflare官方获取的${ranges.length}个IP范围`);
                 
                 const count = 15; // 固定优选IP数量为15
                 const portSelection = formData.get('ports') || '443';
-                const timeout = 2000; // 固定超时时间为2000毫秒
+                // 使用900毫秒超时时间
+                const timeout = 900; 
                 
                 // 处理端口选择
                 let ports;
@@ -3280,17 +3317,26 @@ async function 在线优选IP(request, env) {
                     console.log(`使用单一端口: ${portSelection}`);
                 }
                 
-                                 // 从CIDR范围中生成随机IP
-                 const ips = await 生成随机IP(ranges, 1000); // 固定生成1000个IP进行测试
-                 
-                 // 测试IP连通性
-                 let results = [];
-                 try {
-                     results = await 测试IP连通性(ips, ports, timeout);
-                     console.log(`获取到 ${results.length} 个测试结果`);
-                 } catch (error) {
-                     console.error('测试IP连通性时出错:', error);
-                 }
+                // 从官方IP范围生成随机IP 
+                const ips = await 生成随机IP(ranges, 1000);
+                
+                // 一样测试每个IP端口组合
+                const testIPs = [];
+                for (const ip of ips) {
+                    for (const port of ports) {
+                        testIPs.push({ip, port});
+                    }
+                }
+                
+                // 测试IP连通性
+                let results = [];
+                try {
+                    // 将IP和端口作为数组传递给测试函数
+                    results = await 测试IP连通性(ips, ports, timeout);
+                    console.log(`获取到 ${results.length} 个测试结果`);
+                } catch (error) {
+                    console.error('测试IP连通性时出错:', error);
+                }
                 
                 // 按类型和响应时间排序并取前N个
                 // 检查是否有测试结果
@@ -3310,9 +3356,7 @@ async function 在线优选IP(request, env) {
                 results.sort((a, b) => a.time - b.time);
                 
                 // 取前N个结果
-                const bestIPs = results
-                    .slice(0, count)
-                    .map(item => `${item.ip}:${item.port}#${item.comment} ${Math.round(item.time)}ms`);
+                const bestIPs = results.slice(0, count);
                 
                 // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
                 // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
@@ -3640,19 +3684,66 @@ async function 在线优选IP(request, env) {
                  testForm.addEventListener('submit', async function(e) {
                      e.preventDefault();
                      
-                     // 显示加载状态
-                     testButton.disabled = true;
-                     document.getElementById('appendButton').disabled = true;
-                     document.getElementById('replaceButton').disabled = true;
-                     loading.style.display = 'block';
-                     resultContainer.style.display = 'none';
-                     document.getElementById('saveMessage').textContent = '';
-                     vpnWarning.style.display = 'none';
-                     
-                     const formData = new FormData(testForm);
-                     formData.append('action', 'test');
-                     
-                     try {
+                                      // 显示加载状态
+                 testButton.disabled = true;
+                 document.getElementById('appendButton').disabled = true;
+                 document.getElementById('replaceButton').disabled = true;
+                 loading.style.display = 'block';
+                 resultContainer.style.display = 'none';
+                 document.getElementById('saveMessage').textContent = '';
+                 vpnWarning.style.display = 'none';
+                 
+                 // 添加进度显示元素
+                 const progressContainer = document.createElement('div');
+                 progressContainer.id = 'progressContainer';
+                 progressContainer.style.marginTop = '15px';
+                 progressContainer.innerHTML = 
+                     '<div style="display: flex; justify-content: space-between; margin-bottom: 5px;">' +
+                     '<span>测试进度:</span>' +
+                     '<span id="progressText">0%</span>' +
+                     '</div>' +
+                     '<div style="background-color: #f0f0f0; border-radius: 5px; height: 20px; overflow: hidden;">' +
+                     '<div id="progressBar" style="background-color: #4CAF50; height: 100%; width: 0%;"></div>' +
+                     '</div>' +
+                     '<div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 14px; color: #666;">' +
+                     '<span>已测试: <span id="testedCount">0</span>/<span id="totalCount">0</span></span>' +
+                     '<span>找到IP: <span id="foundCount">0</span></span>' +
+                     '</div>';
+                 
+                 // 将进度条添加到loading元素中
+                 loading.appendChild(progressContainer);
+                 
+                 const formData = new FormData(testForm);
+                 formData.append('action', 'test');
+                 
+                 // 设置进度更新的事件监听器
+                 const messageHandler = function(event) {
+                     if (event.data && event.data.type === 'progress') {
+                         try {
+                             const progressData = JSON.parse(event.data.data);
+                             const progressBar = document.getElementById('progressBar');
+                             const progressText = document.getElementById('progressText');
+                             const testedCount = document.getElementById('testedCount');
+                             const totalCount = document.getElementById('totalCount');
+                             const foundCount = document.getElementById('foundCount');
+                             
+                             if (progressBar && progressText && testedCount && totalCount && foundCount) {
+                                 progressBar.style.width = progressData.percent + '%';
+                                 progressText.textContent = progressData.percent + '%';
+                                 testedCount.textContent = progressData.processed;
+                                 totalCount.textContent = progressData.total;
+                                 foundCount.textContent = progressData.found;
+                             }
+                         } catch (e) {
+                             console.error('处理进度消息出错:', e);
+                         }
+                     }
+                 };
+                 
+                 // 添加消息监听器
+                 window.addEventListener('message', messageHandler);
+                 
+                 try {
                          const response = await fetch(window.location.href, {
                              method: 'POST',
                              body: formData
@@ -3665,7 +3756,7 @@ async function 在线优选IP(request, env) {
                                  // 保存测试结果到全局变量
                                  testResults = result.bestIPs;
                                  
-                                 resultList.textContent = result.bestIPs.join('\n');
+                                 resultList.textContent = result.bestIPs.join('\\n');
                                  resultContainer.style.display = 'block';
                                  // 启用按钮
                                  document.getElementById('appendButton').disabled = false;
@@ -3691,6 +3782,15 @@ async function 在线优选IP(request, env) {
                      } catch (error) {
                          alert('请求出错: ' + error.message);
                      } finally {
+                         // 移除消息监听器
+                         window.removeEventListener('message', messageHandler);
+                         
+                         // 移除进度显示元素
+                         const progressElement = document.getElementById('progressContainer');
+                         if (progressElement) {
+                             progressElement.remove();
+                         }
+                         
                          // 隐藏加载状态
                          testButton.disabled = false;
                          loading.style.display = 'none';
@@ -3721,89 +3821,86 @@ async function 在线优选IP(request, env) {
     });
 }
 
-// 生成随机IP函数
-async function 生成随机IP(ranges, count) {
-    const ips = [];
-    const MAX_SAMPLE_SIZE = 1000; // 最大抽样数量
-    const actualCount = Math.min(count, MAX_SAMPLE_SIZE); // 限制最大数量
-    
-    console.log(`从Cloudflare IP范围中抽取${actualCount}个IP进行测试`);
-    
-    // CIDR转换为IP范围函数
-    function cidrToIPRange(cidr) {
-        const [baseIP, prefixLength] = cidr.split('/');
-        const baseIPNum = baseIP.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0);
-        const mask = ~((1 << (32 - parseInt(prefixLength, 10))) - 1);
-        const networkIP = baseIPNum & mask;
-        const maxHost = (1 << (32 - parseInt(prefixLength, 10))) - 1;
-        return { networkIP, maxHost };
+// 生成随机IP函数 
+async function 生成随机IP(cidrs, count) {
+    const ips = new Set(); // 使用Set去重
+    const targetCount = count || 1000; // 默认生成1000个IP
+    let round = 1;
+
+    // 不断轮次生成IP直到达到目标数量
+    while (ips.size < targetCount) {
+        console.log(`第${round}轮生成IP，当前已有${ips.size}个`);
+
+        // 每轮为每个CIDR生成指定数量的IP
+        for (const cidr of cidrs) {
+            if (ips.size >= targetCount) break;
+
+            // 每轮生成的IP数量等于轮次数
+            const cidrIPs = generateIPsFromCIDR(cidr.trim(), round);
+            cidrIPs.forEach(ip => ips.add(ip));
+
+            console.log(`CIDR ${cidr} 第${round}轮生成${cidrIPs.length}个IP，总计${ips.size}个`);
+        }
+
+        round++;
+
+        // 防止无限循环
+        if (round > 100) {
+            console.warn('达到最大轮次限制，停止生成');
+            break;
+        }
     }
-    
-    // 生成随机IP函数
-    function generateIPFromCIDR(cidr) {
-        const { networkIP, maxHost } = cidrToIPRange(cidr);
-        
-        // 生成随机主机部分
-        const randomHostPart = Math.floor(Math.random() * maxHost) + 1; // 避免使用网络地址(0)和广播地址(maxHost)
-        const ipNum = networkIP | randomHostPart;
-        
-        // 转换回点分十进制
+
+    console.log(`最终生成${ips.size}个不重复IP`);
+    return Array.from(ips).slice(0, targetCount);
+}
+
+//复制的generateIPsFromCIDR函数
+function generateIPsFromCIDR(cidr, count = 1) {
+    const [network, prefixLength] = cidr.split('/');
+    const prefix = parseInt(prefixLength);
+
+    // 将IP地址转换为32位整数
+    const ipToInt = (ip) => {
+        return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
+    };
+
+    // 将32位整数转换为IP地址
+    const intToIP = (int) => {
         return [
-            (ipNum >> 24) & 255,
-            (ipNum >> 16) & 255,
-            (ipNum >> 8) & 255,
-            ipNum & 255
+            (int >>> 24) & 255,
+            (int >>> 16) & 255,
+            (int >>> 8) & 255,
+            int & 255
         ].join('.');
+    };
+
+    const networkInt = ipToInt(network);
+    const hostBits = 32 - prefix;
+    const numHosts = Math.pow(2, hostBits);
+
+    // 限制生成数量不超过该CIDR的可用主机数
+    const maxHosts = numHosts - 2; // -2 排除网络地址和广播地址
+    const actualCount = Math.min(count, maxHosts);
+    const ips = new Set();
+
+    // 如果可用主机数太少，直接返回空数组
+    if (maxHosts <= 0) {
+        return [];
     }
-    
-    // 计算每个CIDR块的IP数量
-    const cidrSizes = ranges.map(cidr => {
-        const { maxHost } = cidrToIPRange(cidr);
-        return maxHost;
-    });
-    
-    // 计算总IP数量
-    const totalIPs = cidrSizes.reduce((sum, size) => sum + size, 0);
-    console.log(`Cloudflare IP范围包含约${totalIPs}个IP地址`);
-    
-    // 为每个范围分配权重，确保大范围有更多的抽样
-    const weights = cidrSizes.map(size => size / totalIPs);
-    
-    // 根据权重分配每个CIDR块应该生成的IP数量
-    const ipCountPerRange = weights.map(weight => Math.ceil(actualCount * weight));
-    
-    // 为每个范围生成随机IP
-    for (let i = 0; i < ranges.length; i++) {
-        const cidr = ranges[i];
-        const ipCount = Math.min(ipCountPerRange[i], cidrSizes[i]); // 不超过该CIDR块的最大IP数
-        
-        // 生成指定数量的随机IP
-        const rangeIPs = new Set();
-        let attempts = 0;
-        const maxAttempts = ipCount * 2; // 最大尝试次数，避免无限循环
-        
-        while (rangeIPs.size < ipCount && attempts < maxAttempts) {
-            const ip = generateIPFromCIDR(cidr);
-            rangeIPs.add(ip);
-            attempts++;
-        }
-        
-        // 将该范围的IP添加到总列表
-        ips.push(...Array.from(rangeIPs));
+
+    // 生成指定数量的随机IP
+    let attempts = 0;
+    const maxAttempts = actualCount * 10; // 防止无限循环
+
+    while (ips.size < actualCount && attempts < maxAttempts) {
+        const randomOffset = Math.floor(Math.random() * maxHosts) + 1; // +1 避免网络地址
+        const randomIP = intToIP(networkInt + randomOffset);
+        ips.add(randomIP);
+        attempts++;
     }
-    
-    // 如果生成的IP数量超过要求，随机选择指定数量
-    if (ips.length > actualCount) {
-        // Fisher-Yates洗牌算法
-        for (let i = ips.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [ips[i], ips[j]] = [ips[j], ips[i]];
-        }
-        ips.length = actualCount;
-    }
-    
-    console.log(`成功生成${ips.length}个随机IP用于测试`);
-    return ips;
+
+    return Array.from(ips);
 }
 
 // 测试IP连通性函数 
@@ -3813,11 +3910,13 @@ async function 测试IP连通性(ips, ports, timeout) {
     const MAX_TEST_DURATION = 30000; // 最长测试时间(毫秒)
     const minResults = 15; // 最少需要的结果数
     
-    // 强制使用较短的超时时间，这对于证书错误测试方法很重要
-    const actualTimeout = Math.min(timeout, 999);
+    // 直接使用传入的超时时间，不做限制
+    const actualTimeout = timeout;
     
     console.log(`开始测试${ips.length}个IP，端口列表: ${ports.join(', ')}`);
     
+    // 移除进度条功能
+
     // 测试单个IP函数 - 优化版本
     async function testSingleIP(ip, port) {
         // 第一次测试
@@ -3853,13 +3952,14 @@ async function 测试IP连通性(ips, ports, timeout) {
     
     // 单次测试函数 - 优化的测试算法
     async function singleTest(ip, port, timeout) {
+        // IP测试函数
         const startTime = Date.now();
         
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
             
-            // 使用cdn-cgi/trace路径
+            // 优先使用证书错误的连接测试方法
             const response = await fetch(`https://${ip}:${port}/cdn-cgi/trace`, {
                 signal: controller.signal,
                 mode: 'cors'
@@ -3867,14 +3967,14 @@ async function 测试IP连通性(ips, ports, timeout) {
             
             clearTimeout(timeoutId);
             
-            // 连接成功的IP也可能是有用的，但优先级较低
+            // 如果能连接成功且是Cloudflare
             const endTime = Date.now();
             const latency = endTime - startTime;
             
             // 确保延迟至少为200ms，以便显示时除以2后至少为100ms
             const adjustedLatency = Math.max(200, latency);
             
-            // 如果延迟较低，也可以考虑使用
+            // 如果延迟不是太高，记录为直连成功的IP
             if (latency < 300) {
                 console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms，调整后: ${adjustedLatency}ms`);
                 return {
@@ -3882,27 +3982,28 @@ async function 测试IP连通性(ips, ports, timeout) {
                     ip,
                     port,
                     time: adjustedLatency,
-                    type: 'direct' // 标记为直连成功的IP
+                    type: 'direct' // 直连类型
                 };
             }
             
-            // 延迟太高的直连IP不要
+            // 延迟过高的直连IP通常不太理想
             return null;
             
         } catch (error) {
             const endTime = Date.now();
             const latency = endTime - startTime;
             
-            // 检查是否是真正的超时（接近设定的timeout时间）
+            // 处理请求超时情况
             if (latency >= timeout - 50) {
-                return null; // 真正的超时，认为测试失败
+                // 真正的超时
+                return null;
             }
             
             // 确保延迟至少为200ms，以便显示时除以2后至少为100ms
             const adjustedLatency = Math.max(200, latency);
             
-            // 检查是否是证书错误（Failed to fetch）
-            // 证书错误的IP是我们优先需要的
+            // 证书错误通常表示IP可以连接但提供的是非目标网站的证书
+            // 对于CF优选来说，这类IP是最理想的
             if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
                 console.log(`IP ${ip}:${port} 证书错误，延迟: ${latency}ms，调整后: ${adjustedLatency}ms`);
                 return {
@@ -3910,11 +4011,11 @@ async function 测试IP连通性(ips, ports, timeout) {
                     ip,
                     port,
                     time: adjustedLatency,
-                    type: 'cert_error' // 标记为证书错误的IP
+                    type: 'cert_error' // 证书错误类型
                 };
             }
             
-            // 其他类型的错误也可能有用
+            // 其他错误类型，如果延迟较低也可以考虑
             if (latency < 300) {
                 console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，调整后: ${adjustedLatency}ms，错误: ${error.name}`);
                 return {
@@ -3922,7 +4023,7 @@ async function 测试IP连通性(ips, ports, timeout) {
                     ip,
                     port,
                     time: adjustedLatency,
-                    type: 'other_error' // 标记为其他错误的IP
+                    type: 'other_error' // 其他错误类型
                 };
             }
             
@@ -3959,39 +4060,36 @@ async function 测试IP连通性(ips, ports, timeout) {
         
         for (let i = 0; i < batchSize; i++) {
             const task = testTasks[taskIndex++];
-            currentBatch.push(testSingleIP(task.ip, task.port));
+            currentBatch.push(task);
         }
         
-        // 等待当前批次完成
-        const batchResults = await Promise.all(currentBatch);
+        // 简单记录进度
+        if (taskIndex % 50 === 0) {
+            console.log(`测试进度: ${taskIndex}/${testTasks.length}, 已找到: ${results.length}`);
+        }
+        
+        // 并行执行当前批次的任务
+        const batchPromises = currentBatch.map(task => testSingleIP(task.ip, task.port));
+        const batchResults = await Promise.all(batchPromises);
         
         // 处理结果
         for (const result of batchResults) {
-            if (result && result.success) {
-                // 计算显示延迟 
-                const displayTime = Math.floor(result.time / 2);
-                
+            if (result.success) {
+                // 由于我们在singleTest中已经确保了最小延迟为200ms，所以这里除以2后最小为100ms
+                const displayTime = Math.floor(result.time / 2);               
                 // 移除特殊标记，统一使用CF优选IP作为标识
+                // 不再区分证书错误、直连或其他类型
                 let comment = 'CF优选IP';
                 
-                results.push({
-                    ip: result.ip,
-                    port: result.port,
-                    time: displayTime,
-                    originalTime: result.time,
-                    status: 'success',
-                    type: result.type || 'unknown',
-                    comment: comment
-                });
+                const ipText = `${result.ip}:${result.port}`;
+                results.push(`${ipText} #${comment} ${displayTime}ms`);
                 
-                // 记录进度
-                if (results.length % 10 === 0) {
-                    console.log(`已找到${results.length}个可用IP，已测试${taskIndex}/${testTasks.length}`);
-                }
+                // 修改控制台输出，也显示与前端一致的延迟值
+                console.log(`找到可用IP: ${ipText} (显示:${displayTime}ms, 实际:${result.time}ms, 类型:${result.type || 'unknown'})`);
                 
-                // 如果已经有足够的结果，可以提前结束
-                if (results.length >= minResults * 2) {
-                    console.log(`已找到足够的可用IP (${results.length})，提前结束测试`);
+                // 如果已找到足够的IP，提前结束
+                if (results.length >= minResults) {
+                    console.log(`已找到${minResults}个可用IP，提前结束测试`);
                     break;
                 }
             }
@@ -4002,6 +4100,8 @@ async function 测试IP连通性(ips, ports, timeout) {
             console.log(`测试进度过半但结果太少(${results.length})，降低标准继续测试`);
         }
     }
+    
+    // 最终测试完成
     
     console.log(`测试完成，共测试了${taskIndex}/${testTasks.length}个IP，找到${results.length}个可用IP`);
     
