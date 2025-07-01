@@ -3083,7 +3083,7 @@ async function handleGetRequest(env, txt) {
 async function 在线优选IP(request, env) {
     // 默认端口列表
     const DEFAULT_PORTS = ['443', '2053', '2083', '2087', '2096', '8443'];
-    
+
     // 从Cloudflare官方网站获取IP范围列表
     async function 获取Cloudflare_IP范围() {
         try {
@@ -3121,8 +3121,83 @@ async function 在线优选IP(request, env) {
             ];
         }
     }
-    
-    // 检测VPN状态的函数 - 使用源码2的方式
+
+    // 生成随机IP，并计算有效主机地址
+    async function 生成随机IP(ranges, numHosts) {
+        const ips = [];
+        
+        // 添加最大有效主机数量
+        const maxHosts = numHosts - 2; // 排除网络地址和广播地址
+        
+        for (let i = 0; i < maxHosts; i++) {
+            const randomRange = ranges[Math.floor(Math.random() * ranges.length)];
+            const [network, mask] = randomRange.split('/');
+            const networkParts = network.split('.').map(Number);
+            const bitmask = parseInt(mask, 10);
+            const startIp = ipToLong(networkParts);
+            const endIp = startIp + (2 ** (32 - bitmask)) - 1;
+
+            const randomIp = startIp + Math.floor(Math.random() * (endIp - startIp));
+            const randomIpStr = longToIp(randomIp);
+            ips.push(randomIpStr);
+        }
+
+        return ips;
+    }
+
+    // 将IP地址转换为数字
+    function ipToLong(ip) {
+        return ip.reduce((acc, part) => (acc << 8) + part, 0);
+    }
+
+    // 将数字转换为IP地址
+    function longToIp(long) {
+        return [(long >> 24) & 255, (long >> 16) & 255, (long >> 8) & 255, long & 255].join('.');
+    }
+
+    // 测试IP连通性
+    async function 测试IP连通性(ips, ports, timeout) {
+        const testResults = [];
+
+        for (const ip of ips) {
+            for (const port of ports) {
+                try {
+                    const url = `https://${ip}:${port}`;
+                    const startTime = Date.now();
+                    
+                    // 在 fetch 请求中加入超时控制
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeout);  // 设置超时
+                    
+                    const response = await fetch(url, { signal: controller.signal });
+                    const endTime = Date.now();
+                    
+                    clearTimeout(timeoutId);  // 清除超时
+                    const timeTaken = endTime - startTime;
+                    
+                    // 处理响应状态，这里只是示范
+                    if (response.ok) {
+                        testResults.push({
+                            ip,
+                            port,
+                            time: timeTaken,
+                            type: 'direct', // 假设返回的是直连类型
+                            comment: '直接连接'
+                        });
+                    }
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        console.log(`IP ${ip}:${port} 请求超时`);
+                    } else {
+                        console.log(`IP ${ip}:${port} 请求失败: ${error.message}`);
+                    }
+                }
+            }
+        }
+        return testResults;
+    }
+
+    // 检测VPN状态的函数
     async function 检测VPN状态(request) {
         try {
             // 获取用户IP和国家信息
@@ -3165,7 +3240,7 @@ async function 在线优选IP(request, env) {
             return { isVpn: false, details: {} };
         }
     }
-    
+
     // 处理POST请求
     if (request.method === 'POST') {
         try {
@@ -3246,9 +3321,6 @@ async function 在线优选IP(request, env) {
                 // 检测VPN状态
                 const vpnStatus = await 检测VPN状态(request);
                 
-                // 调试模式功能已移除，但保留代码结构以便内部使用
-                const isDebug = false;
-                
                 // 如果检测到VPN，返回提示信息
                 if (vpnStatus.isVpn) {
                     return new Response(JSON.stringify({
@@ -3266,7 +3338,6 @@ async function 在线优选IP(request, env) {
                 
                 const count = 15; // 固定优选IP数量为15
                 const portSelection = formData.get('ports') || '443';
-                const timeout = 2000; // 固定超时时间为2000毫秒
                 
                 // 处理端口选择
                 let ports;
@@ -3280,20 +3351,19 @@ async function 在线优选IP(request, env) {
                     console.log(`使用单一端口: ${portSelection}`);
                 }
                 
-                                 // 从CIDR范围中生成随机IP
-                 const ips = await 生成随机IP(ranges, 1000); // 固定生成1000个IP进行测试
-                 
-                 // 测试IP连通性
-                 let results = [];
-                 try {
-                     results = await 测试IP连通性(ips, ports, timeout);
-                     console.log(`获取到 ${results.length} 个测试结果`);
-                 } catch (error) {
-                     console.error('测试IP连通性时出错:', error);
-                 }
+                // 生成随机IP
+                const ips = await 生成随机IP(ranges, 1000); // 固定生成1000个IP进行测试
                 
-                // 按类型和响应时间排序并取前N个
-                // 检查是否有测试结果
+                // 测试IP连通性
+                let results = [];
+                try {
+                    results = await 测试IP连通性(ips, ports, 2000);
+                    console.log(`获取到 ${results.length} 个测试结果`);
+                } catch (error) {
+                    console.error('测试IP连通性时出错:', error);
+                }
+                
+                // 排序并返回最优IP
                 if (results.length === 0) {
                     return new Response(JSON.stringify({
                         success: true,
@@ -3305,16 +3375,14 @@ async function 在线优选IP(request, env) {
                         }
                     });
                 }
-                
-                // 首先按类型排序，优先证书错误类型，然后是其他类型，最后是直连类型
-                // 然后在每个类型内部按响应时间排序
+
                 results.sort((a, b) => {
-                    // 首先按类型排序
+                    // 按类型排序
                     const typeOrder = {
-                        'cert_error': 0,  // 证书错误最优先
-                        'other_error': 1, // 其他错误次之
-                        'direct': 2,      // 直连最后
-                        'unknown': 3      // 未知类型最后
+                        'cert_error': 0,
+                        'other_error': 1,
+                        'direct': 2,
+                        'unknown': 3
                     };
                     
                     const typeA = a.type || 'unknown';
@@ -3324,51 +3392,43 @@ async function 在线优选IP(request, env) {
                         return typeOrder[typeA] - typeOrder[typeB];
                     }
                     
-                    // 类型相同时按响应时间排序
+                    // 类型相同，按时间排序
                     return a.time - b.time;
                 });
-                
-                // 取前N个结果
-                const bestIPs = results
-                    .slice(0, count)
-                    .map(item => `${item.ip}:${item.port}#${item.comment} ${Math.round(item.time)}ms`);
-                
-                // 测试完成后不再自动保存到KV，只在用户点击保存按钮时才保存
-                // 保存逻辑移至用户点击"追加到列表"或"替换列表"按钮时
+
+                // 返回最优IP
+                const bestIPs = results.slice(0, count).map(item => 
+                    `${item.ip}:${item.port}#${item.comment} ${Math.round(item.time)}ms`
+                );
                 
                 return new Response(JSON.stringify({
                     success: true,
                     message: '优选IP测试完成',
                     bestIPs
                 }), {
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
+                    headers: { 'Content-Type': 'application/json' }
                 });
             }
-            
+
             return new Response(JSON.stringify({
                 success: false,
                 message: '未知操作'
             }), {
                 status: 400,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Content-Type': 'application/json' }
             });
-            
+
         } catch (error) {
             return new Response(JSON.stringify({
                 success: false,
                 message: '处理请求时出错: ' + error.message
             }), {
                 status: 500,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Content-Type': 'application/json' }
             });
         }
     }
+}
     
     // 生成HTML页面
     const html = `
@@ -3738,7 +3798,7 @@ async function 在线优选IP(request, env) {
             'Content-Type': 'text/html;charset=utf-8'
         }
     });
-}
+
 
 // 生成随机IP函数
 async function 生成随机IP(ranges, count) {
