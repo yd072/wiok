@@ -3694,16 +3694,8 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
 
         
         function goBack() {
-            // 重定向到配置信息页面
-            const userIDMatch = window.location.pathname.match(/\\/([^/]+)\\/iptest/);
-            if (userIDMatch) {
-                window.location.href = \`/\${userIDMatch[1]}/config\`;
-            } else {
-                const pathParts = window.location.pathname.split('/');
-                pathParts.pop(); // 移除 "iptest"
-                const baseUrl = pathParts.join('/') || "/";
-                window.location.href = baseUrl + "/config";
-            }
+            // 重定向到主页面 (UUID输入页)
+            window.location.href = "/";
         }
         
         // 显示测试结果
