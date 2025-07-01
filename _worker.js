@@ -3958,7 +3958,7 @@ async function 测试IP连通性(ips, ports, timeout) {
         };
     }
     
-    // 单次测试函数 - 使用源码2的延迟计算方式
+    // 单次测试函数 - 使用源码2的延迟计算方式，但接受更多错误类型
     async function singleTest(ip, port, timeout) {
         // IP测试函数
         const startTime = Date.now();
@@ -3973,7 +3973,21 @@ async function 测试IP连通性(ips, ports, timeout) {
             });
             
             clearTimeout(timeoutId);
-            // 如果请求成功了，说明这个IP不是我们要的
+            
+            // 如果延迟较低的成功连接，也可以考虑（有些情况下可能有用）
+            const latency = Date.now() - startTime;
+            if (latency < 300) {
+                console.log(`IP ${ip}:${port} 连接成功，延迟: ${latency}ms`);
+                return {
+                    success: true,
+                    ip,
+                    port,
+                    time: latency,
+                    type: 'direct'
+                };
+            }
+            
+            // 延迟高的成功连接通常不是好选择
             return null;
             
         } catch (error) {
@@ -3992,7 +4006,19 @@ async function 测试IP连通性(ips, ports, timeout) {
                     ip,
                     port,
                     time: latency,
-                    type: 'cert_error' // 保留类型信息用于日志
+                    type: 'cert_error'
+                };
+            }
+            
+            // 其他类型的错误，如果延迟较低也可以接受
+            if (latency < 300) {
+                console.log(`IP ${ip}:${port} 其他错误，延迟: ${latency}ms，错误: ${error.name}`);
+                return {
+                    success: true,
+                    ip,
+                    port,
+                    time: latency,
+                    type: 'other_error'
                 };
             }
             
