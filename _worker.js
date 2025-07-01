@@ -3421,9 +3421,7 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
         .edit-button {
             background-color: #9C27B0;
         }
-        .optimize-button {
-            background-color: #673AB7;
-        }
+
         .back-button {
             background-color: #607D8B;
         }
@@ -3496,7 +3494,6 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             <button class="btn save-button" id="save-btn" onclick="saveIPs()" disabled>覆盖到列表</button>
             <button class="btn append-button" id="append-btn" onclick="appendIPs()" disabled>追加到列表</button>
             <button class="btn edit-button" id="edit-btn" onclick="goEdit()">编辑优选列表</button>
-            <button class="btn optimize-button" id="optimize-btn" onclick="goOptimize()">在线优选IP</button>
             <button class="btn back-button" id="back-btn" onclick="goBack()">返回配置页</button>
         </div>
 
@@ -3570,7 +3567,6 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             const saveBtn = document.getElementById('save-btn');
             const appendBtn = document.getElementById('append-btn');
             const editBtn = document.getElementById('edit-btn');
-            const optimizeBtn = document.getElementById('optimize-btn');
             const backBtn = document.getElementById('back-btn');
             const portSelect = document.getElementById('port-select');
             
@@ -3578,7 +3574,6 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             saveBtn.disabled = true;
             appendBtn.disabled = true;
             editBtn.disabled = true;
-            optimizeBtn.disabled = true;
             backBtn.disabled = true;
             portSelect.disabled = true;
         }
@@ -3586,13 +3581,11 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
         function enableButtons() {
             const testBtn = document.getElementById('test-btn');
             const editBtn = document.getElementById('edit-btn');
-            const optimizeBtn = document.getElementById('optimize-btn');
             const backBtn = document.getElementById('back-btn');
             const portSelect = document.getElementById('port-select');
             
             testBtn.disabled = false;
             editBtn.disabled = false;
-            optimizeBtn.disabled = false;
             backBtn.disabled = false;
             portSelect.disabled = false;
             updateButtonStates();
@@ -3698,10 +3691,7 @@ function generateIPTestHTML(isChina, countryDisplayClass, countryDisplayText) {
             }
         }
         
-        function goOptimize() {
-            // 在线优选IP - 保持在当前页面，重新加载
-            window.location.reload();
-        }
+
         
         function goBack() {
             // 重定向到配置页面 (不带/iptest)
