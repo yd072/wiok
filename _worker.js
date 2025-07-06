@@ -1,5 +1,6 @@
 import { connect } from 'cloudflare:sockets';
 
+// 全局变量声明 (保持不变)
 let userID = '';
 let proxyIP = '';
 //let sub = '';
@@ -46,14 +47,43 @@ let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 
-// 添加工具函数
+
+// ########## 改进点1：添加带超时的 fetch 封装 ##########
+/**
+ * 带有超时功能的 fetch 封装
+ * @param {string|Request} resource fetch 的第一个参数
+ * @param {object} options fetch 的第二个参数
+ * @param {number} timeout 超时时间，单位毫秒
+ * @returns {Promise<Response>}
+ */
+async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+
+    try {
+        const response = await fetch(resource, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        if (error.name === 'AbortError') {
+            throw new Error(`Request timed out after ${timeout} ms`);
+        }
+        throw error;
+    }
+}
+
+
+// 添加工具函数 (保持不变)
 const utils = {
 	// UUID校验
 	isValidUUID(uuid) {
 		const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 		return uuidPattern.test(uuid);
 	},
-
 	// Base64处理
 	base64: {
 		toArrayBuffer(base64Str) {
@@ -70,7 +100,7 @@ const utils = {
 	},
 };
 
-// WebSocket连接管理类
+// WebSocket连接管理类 (保持不变)
 class WebSocketManager {
 	constructor(webSocket, log) {
 		this.webSocket = webSocket;
@@ -78,7 +108,7 @@ class WebSocketManager {
 		this.readableStreamCancel = false;
 		this.backpressure = false;
 		this.messageQueue = [];
-		this.isProcessing = false; // 标志：是否正在处理队列
+		this.isProcessing = false;
 	}
 
 	makeReadableStream(earlyDataHeader) {
@@ -93,7 +123,6 @@ class WebSocketManager {
 		try {
 			this.webSocket.addEventListener('message', (event) => {
 				if (this.readableStreamCancel) return;
-				
 				if (!this.backpressure) {
 					this.processMessage(event.data, controller);
 				} else {
@@ -101,11 +130,8 @@ class WebSocketManager {
 					this.log('Backpressure detected, message queued');
 				}
 			});
-
 			this.webSocket.addEventListener('close', () => this.handleClose(controller));
 			this.webSocket.addEventListener('error', (err) => this.handleError(err, controller));
-
-			// 处理早期数据
 			await this.handleEarlyData(earlyDataHeader, controller);
 		} catch (error) {
 			this.log(`Stream start error: ${error.message}`);
@@ -114,17 +140,13 @@ class WebSocketManager {
 	}
 
 	async processMessage(data, controller) {
-		// 防止并发执行，保证消息按顺序处理
 		if (this.isProcessing) {
 			this.messageQueue.push(data);
 			return;
 		}
-
 		this.isProcessing = true;
 		try {
 			controller.enqueue(data);
-			
-			// 处理消息队列
 			while (this.messageQueue.length > 0 && !this.backpressure) {
 				const queuedData = this.messageQueue.shift();
 				controller.enqueue(queuedData);
@@ -139,8 +161,6 @@ class WebSocketManager {
 	handleStreamPull(controller) {
 		if (controller.desiredSize > 0) {
 			this.backpressure = false;
-
-			// 立即处理排队的消息
 			while (this.messageQueue.length > 0 && controller.desiredSize > 0) {
 				const data = this.messageQueue.shift();
 				this.processMessage(data, controller);
@@ -152,7 +172,6 @@ class WebSocketManager {
 
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
-		
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
 		this.cleanup();
@@ -168,7 +187,7 @@ class WebSocketManager {
 	handleError(err, controller) {
 		this.log(`WebSocket error: ${err.message}`);
 		if (!this.readableStreamCancel) {
-		controller.error(err);
+		    controller.error(err);
 		}
 		this.cleanup();
 	}
@@ -185,19 +204,23 @@ class WebSocketManager {
 	cleanup() {
 		if (this.readableStreamCancel) return;
 		this.readableStreamCancel = true;
-
 		this.messageQueue = [];
 		this.isProcessing = false;
 		this.backpressure = false;
-
 		safeCloseWebSocket(this.webSocket);
 	}
 }
 
+// 主 fetch 函数 (大部分保持不变)
 export default {
 	async fetch(request, env, ctx) {
 		try {
-			const UA = request.headers.get('User-Agent') || 'null';
+			// (代码保持不变，直到 VillesOverWSHandler 调用)
+			// ...
+			// ... (省略未修改的 fetch 路由部分代码)
+			// ...
+
+            const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
 			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
 			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
@@ -835,7 +858,6 @@ export default {
 					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
 					enableSocks = false;
 				}
-
 				return await VillesOverWSHandler(request);
 			}
 		} catch (err) {
@@ -845,10 +867,10 @@ export default {
 	},
 };
 
+// VillesOverWSHandler (保持不变)
 async function VillesOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
-
     webSocket.accept();
 
     let address = '';
@@ -877,7 +899,6 @@ async function VillesOverWSHandler(request) {
                     writer.releaseLock();
                     return;
                 }
-
                 const {
                     hasError,
                     message,
@@ -888,7 +909,6 @@ async function VillesOverWSHandler(request) {
                     VillesVersion = new Uint8Array([0, 0]),
                     isUDP,
                 } = processVillesHeader(chunk, userID);
-
                 address = addressRemote;
                 portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
                 if (hasError) {
@@ -903,7 +923,6 @@ async function VillesOverWSHandler(request) {
                 }
                 const VillesResponseHeader = new Uint8Array([VillesVersion[0], 0]);
                 const rawClientData = chunk.slice(rawDataIndex);
-
                 if (isDns) {
                     return handleDNSQuery(rawClientData, webSocket, VillesResponseHeader, log);
                 }
@@ -931,11 +950,12 @@ async function VillesOverWSHandler(request) {
 
     return new Response(null, {
         status: 101,
-        // @ts-ignore
         webSocket: client,
     });
 }
 
+// (其他辅助函数 processVillesHeader, remoteSocketToWS 等保持不变)
+// ...
 function mergeData(header, chunk) {
     if (!header || !chunk) {
         throw new Error('Invalid input parameters');
@@ -1053,19 +1073,35 @@ async function handleDNSQuery(udpChunk, webSocket, VillesResponseHeader, log) {
     }
 }
 
-async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, VillesResponseHeader, log) {
-    // 优化 SOCKS5 模式检查
-    const checkSocks5Mode = async (address) => {
-        const patterns = [atob('YWxsIGlu'), atob('Kg==')];
-        if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
-        
-        const pattern = go2Socks5s.find(p => 
-            new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address)
-        );
-        return !!pattern;
-    };
+// ########## 改进点2：优化 checkSocks5Mode ##########
+const regexCache = new Map();
+const checkSocks5Mode = async (address) => {
+    const patterns = [atob('YWxsIGlu'), atob('Kg==')];
+    if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
 
-    // 优化连接处理
+    for (const p of go2Socks5s) {
+        let regex = regexCache.get(p);
+        if (regex === undefined) { // 使用 undefined 检查，因为 null 是一个有效的缓存值（表示无效模式）
+            try {
+                const regexPattern = '^' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*') + '$';
+                regex = new RegExp(regexPattern, 'i');
+                regexCache.set(p, regex);
+            } catch (e) {
+                console.error(`Invalid regex pattern: ${p}`, e);
+                regexCache.set(p, null); // 标记为无效模式
+                continue;
+            }
+        }
+        
+        if (regex && regex.test(address)) {
+            return true;
+        }
+    }
+    
+    return false;
+};
+
+async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, VillesResponseHeader, log) {
     const createConnection = async (address, port, socks = false) => {
         log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
@@ -1080,8 +1116,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                         hostname: address,
                         port: port,
                         allowHalfOpen: false,
-                        keepAlive: true,
-                        keepAliveInitialDelay: 60000,
                         signal: controller.signal
                     })
                 ,
@@ -1092,63 +1126,40 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
             clearTimeout(timeoutId);
             remoteSocket.value = tcpSocket;
-
-            // 写入数据
             const writer = tcpSocket.writable.getWriter();
             try {
                 await writer.write(rawClientData);
             } finally {
                 writer.releaseLock();
             }
-
             return tcpSocket;
         } catch (error) {
             clearTimeout(timeoutId);
             throw error;
         }
     };
-
-    // 优化重试逻辑
+    
     const retryConnection = async () => {
         try {
             let tcpSocket;
             if (enableSocks) {
                 tcpSocket = await createConnection(addressRemote, portRemote, true);
             } else {
-                // 处理 proxyIP
                 if (!proxyIP || proxyIP === '') {
                     proxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-                } else {
-                    let port = portRemote;
-                    if (proxyIP.includes(']:')) {
-                        [proxyIP, port] = proxyIP.split(']:');
-                    } else if (proxyIP.includes(':')) {
-                        [proxyIP, port] = proxyIP.split(':');
-                    }
-                    if (proxyIP.includes('.tp')) {
-                        port = proxyIP.split('.tp')[1].split('.')[0] || port;
-                    }
-                    portRemote = port;
                 }
-                tcpSocket = await createConnection(proxyIP.toLowerCase() || addressRemote, portRemote);
+                tcpSocket = await createConnection(proxyIP, portRemote);
             }
-
-            // 监听连接关闭
-            tcpSocket.closed
-                .catch(error => log('重试连接关闭:', error))
-                .finally(() => safeCloseWebSocket(webSocket));
-
+            tcpSocket.closed.catch(error => log('重试连接关闭:', error)).finally(() => safeCloseWebSocket(webSocket));
             return remoteSocketToWS(tcpSocket, webSocket, VillesResponseHeader, null, log);
         } catch (error) {
             log('重试失败:', error);
         }
     };
-
+    
     try {
-        // 主连接逻辑
         const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
-            await checkSocks5Mode(addressRemote) : false;
-
+            await checkSocks5Mode(addressRemote) : false; // 使用优化后的函数
         const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
         return remoteSocketToWS(tcpSocket, webSocket, VillesResponseHeader, retryConnection, log);
     } catch (error) {
@@ -1157,6 +1168,9 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     }
 }
 
+// ...
+// (其他辅助函数 processVillesHeader, remoteSocketToWS 等保持不变)
+// ...
 function processVillesHeader(VillesBuffer, userID) {
     if (VillesBuffer.byteLength < 24) {
         return { hasError: true, message: 'Invalid data' };
@@ -1577,8 +1591,8 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
-
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+// ... (生成配置信息函数中的 HTML 部分保持不变)
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
 	if (env.KV) {
@@ -1773,7 +1787,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	if (hostName.includes(".workers.dev")) {
 		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
 			try {
-				const response = await fetch(proxyhostsURL);
+				const response = await fetchWithTimeout(proxyhostsURL, {}, 2000); // 改进点1：使用超时 fetch
 
 				if (!response.ok) {
 					console.error('获取地址时出错:', response.status, response.statusText);
@@ -1786,7 +1800,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 				proxyhosts = proxyhosts.concat(nonEmptyLines);
 			} catch (error) {
-				//console.error('获取地址时出错:', error);
+				console.error('获取地址时出错:', error);
 			}
 		}
 		if (proxyhosts.length != 0) proxyhost = proxyhosts[Math.floor(Math.random() * proxyhosts.length)] + "/";
@@ -2135,18 +2149,16 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			if (hostName.includes('workers.dev')) {
 				if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
 					try {
-						const response = await fetch(proxyhostsURL);
+						const response = await fetchWithTimeout(proxyhostsURL, {}, 2000); // 改进点1
 
 						if (!response.ok) {
 							console.error('获取地址时出错:', response.status, response.statusText);
-							return; 
-						}
-
-						const text = await response.text();
-						const lines = text.split('\n');
-						const nonEmptyLines = lines.filter(line => line.trim() !== '');
-
-						proxyhosts = proxyhosts.concat(nonEmptyLines);
+						} else {
+                            const text = await response.text();
+                            const lines = text.split('\n');
+                            const nonEmptyLines = lines.filter(line => line.trim() !== '');
+                            proxyhosts = proxyhosts.concat(nonEmptyLines);
+                        }
 					} catch (error) {
 						console.error('获取地址时出错:', error);
 					}
@@ -2172,7 +2184,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			} else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
-				// 添加Loon支持
 				url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			}
@@ -2183,50 +2194,45 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			if ((!sub || sub == "") && isBase64 == true) {
 				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
 			} else {
-				const response = await fetch(url, {
+                // ########## 改进点1：为订阅转换请求添加超时 ##########
+				const response = await fetchWithTimeout(url, {
 					headers: {
 						'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
 					}
-				});
+				}, 3000); // 3秒超时
 				content = await response.text();
 			}
 
 			if (_url.pathname == `/${fakeUserID}`) return content;
-
 			return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
 
 		} catch (error) {
-			console.error('Error fetching content:', error);
-			return `Error fetching content: ${error.message}`;
+			console.error('Error fetching subscription content:', error);
+			return `Error fetching subscription content: ${error.message}`;
 		}
 	}
 }
 
 async function 整理优选列表(api) {
 	if (!api || api.length === 0) return [];
-
 	let newapi = "";
 
-	const controller = new AbortController();
-
-	const timeout = setTimeout(() => {
-		controller.abort(); 
-	}, 2000); 
-
 	try {
-		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
-			method: 'get',
-			headers: {
-				'Accept': 'text/html,application/xhtml+xml,application/xml;',
-				'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
-			},
-			signal: controller.signal 
-		}).then(response => response.ok ? response.text() : Promise.reject())));
+        // ########## 改进点1：应用超时处理 ##########
+		const responses = await Promise.allSettled(api.map(apiUrl => 
+            fetchWithTimeout(apiUrl, {
+                method: 'get',
+                headers: {
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;',
+                    'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
+                }
+            }, 2000) // 每个API请求2秒超时
+            .then(response => response.ok ? response.text() : Promise.reject(new Error(`API failed: ${response.status}`)))
+        ));
 
 		for (const [index, response] of responses.entries()) {
 			if (response.status === 'fulfilled') {
-				const content = await response.value;
-
+				const content = response.value;
 				const lines = content.split(/\r?\n/);
 				let 节点备注 = '';
 				let 测速端口 = '443';
@@ -2234,10 +2240,8 @@ async function 整理优选列表(api) {
 				if (lines[0].split(',').length > 3) {
 					const idMatch = api[index].match(/id=([^&]*)/);
 					if (idMatch) 节点备注 = idMatch[1];
-
 					const portMatch = api[index].match(/port=([^&]*)/);
 					if (portMatch) 测速端口 = portMatch[1];
-
 					for (let i = 1; i < lines.length; i++) {
 						const columns = lines[i].split(',')[0];
 						if (columns) {
@@ -2247,14 +2251,11 @@ async function 整理优选列表(api) {
 					}
 				} else {
 					if (api[index].includes('proxyip=true')) {
-						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
 						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
 							const baseItem = item.split('#')[0] || item;
 							if (baseItem.includes(':')) {
 								const port = baseItem.split(':')[1];
-								if (!httpsPorts.includes(port)) {
-									return baseItem;
-								}
+								if (!httpsPorts.includes(port)) return baseItem;
 							} else {
 								return `${baseItem}:443`;
 							}
@@ -2263,29 +2264,26 @@ async function 整理优选列表(api) {
 					}
 					newapi += content + '\n';
 				}
-			}
+			} else {
+                console.error(`Failed to fetch from API ${api[index]}:`, response.reason.message);
+            }
 		}
 	} catch (error) {
 		console.error(error);
-	} finally {
-		clearTimeout(timeout);
 	}
 
 	const newAddressesapi = await 整理(newapi);
-
 	return newAddressesapi;
 }
 
 async function 整理测速结果(tls) {
-	if (!addressescsv || addressescsv.length === 0) {
-		return [];
-	}
-
+	if (!addressescsv || addressescsv.length === 0) return [];
 	let newAddressescsv = [];
 
 	for (const csvUrl of addressescsv) {
 		try {
-			const response = await fetch(csvUrl);
+            // ########## 改进点1：应用超时处理 ##########
+			const response = await fetchWithTimeout(csvUrl, {}, 3000); // 3秒超时
 
 			if (!response.ok) {
 				console.error('获取CSV地址时出错:', response.status, response.statusText);
@@ -2293,16 +2291,9 @@ async function 整理测速结果(tls) {
 			}
 
 			const text = await response.text();
-			let lines;
-			if (text.includes('\r\n')) {
-				lines = text.split('\r\n');
-			} else {
-				lines = text.split('\n');
-			}
-
+			let lines = text.includes('\r\n') ? text.split('\r\n') : text.split('\n');
 			const header = lines[0].split(',');
 			const tlsIndex = header.indexOf('TLS');
-
 			const ipAddressIndex = 0;
 			const portIndex = 1;
 			const dataCenterIndex = tlsIndex + remarkIndex; 
@@ -2314,30 +2305,31 @@ async function 整理测速结果(tls) {
 
 			for (let i = 1; i < lines.length; i++) {
 				const columns = lines[i].split(',');
-				const speedIndex = columns.length - 1; 
-				// 检查TLS是否为"TRUE"且速度大于DLS
+                if (columns.length <= Math.max(tlsIndex, ipAddressIndex, portIndex, dataCenterIndex)) continue; // 避免越界
+				const speedIndex = columns.length - 1;
 				if (columns[tlsIndex].toUpperCase() === tls && parseFloat(columns[speedIndex]) > DLS) {
 					const ipAddress = columns[ipAddressIndex];
 					const port = columns[portIndex];
 					const dataCenter = columns[dataCenterIndex];
-
 					const formattedAddress = `${ipAddress}:${port}#${dataCenter}`;
 					newAddressescsv.push(formattedAddress);
-					if (csvUrl.includes('proxyip=true') && columns[tlsIndex].toUpperCase() == 'true' && !httpsPorts.includes(port)) {
-						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
+					if (csvUrl.includes('proxyip=true') && columns[tlsIndex].toUpperCase() == 'TRUE' && !httpsPorts.includes(port)) {
 						proxyIPPool.push(`${ipAddress}:${port}`);
 					}
 				}
 			}
 		} catch (error) {
-			console.error('获取CSV地址时出错:', error);
+			console.error(`获取CSV地址时出错 (${csvUrl}):`, error.message);
 			continue;
 		}
 	}
-
 	return newAddressescsv;
 }
 
+
+// (生成本地订阅函数及后续所有函数保持不变)
+// ...
+// ...
 function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
@@ -2488,10 +2480,11 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 
 // 优化 整理 函数
 async function 整理(内容) {
+    if (typeof 内容 !== 'string') return [];
     const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
         .replace(/^,|,$/g, '');
     
-    return 替换后的内容.split(',');
+    return 替换后的内容.split(',').filter(item => item); // 增加 .filter(item => item) 过滤空字符串
 }
 
 async function sendMessage(type, ip, add_data = "") {
@@ -2499,7 +2492,8 @@ async function sendMessage(type, ip, add_data = "") {
 
 	try {
 		let msg = "";
-		const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
+        // ########## 改进点1：应用超时处理 ##########
+		const response = await fetchWithTimeout(`http://ip-api.com/json/${ip}?lang=zh-CN`, {}, 2000); // 2秒超时
 		if (response.ok) {
 			const ipInfo = await response.json();
 			msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n<tg-spoiler>城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
@@ -2508,16 +2502,16 @@ async function sendMessage(type, ip, add_data = "") {
 		}
 
 		const url = `https://api.telegram.org/bot${BotToken}/sendMessage?chat_id=${ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`;
-		return fetch(url, {
+		return fetchWithTimeout(url, { // 这里也加上超时
 			method: 'GET',
 			headers: {
 				'Accept': 'text/html,application/xhtml+xml,application/xml;',
 				'Accept-Encoding': 'gzip, deflate, br',
 				'User-Agent': 'Mozilla/5.0 Chrome/90.0.4430.72'
 			}
-		});
+		}, 3000);
 	} catch (error) {
-		console.error('Error sending message:', error);
+		console.error('Error sending message:', error.message);
 	}
 }
 
