@@ -1,3 +1,47 @@
+
+// ✅ 系统信息页面封装
+function renderSystemInfoPage(request, showWarning = false) {
+  const cf = request.cf || {};
+  const ip = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
+  const ua = request.headers.get('User-Agent') || 'Mozilla/5.0';
+
+  const warningHtml = showWarning
+    ? `<div class="warning-box"><span class="icon">⚠️</span>请设置你的令牌变量，或检查配置是否生效</div>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>系统信息</title>
+<style>:root{--primary-color:#4CAF50;--border-color:#e0e0e0;--background-color:#f5f5f5;--warning-bg:#fff3f3;--warning-border:#ffcdd2;--warning-text:#d32f2f}body{margin:0;padding:20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.6;background-color:var(--background-color)}.container{max-width:800px;margin:0 auto;background:white;padding:25px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}.title{font-size:1.5em;color:var(--primary-color);margin-bottom:20px;display:flex;align-items:center;gap:10px}.info-grid{display:grid;grid-template-columns:auto 1fr;gap:12px;background:#fff;border-radius:8px;overflow:hidden}.info-row{display:contents}.info-row:hover>*{background-color:#f8f9fa}.info-label,.info-value{padding:12px 15px;border-bottom:1px solid var(--border-color)}.info-label{color:#666;font-weight:500}.info-value{color:#333}.info-row:last-child .info-label,.info-row:last-child .info-value{border-bottom:none}@media(max-width:768px){body{padding:10px}.container{padding:15px}}</style>
+</head><body><div class="container">
+<div class="title"><span class="icon">🔍</span>系统信息</div>
+${warningHtml}
+<div class="info-grid">
+  <div class="info-row"><div class="info-label">TLS 版本</div><div class="info-value">\${cf.tlsVersion || 'TLSv1.3'}</div></div>
+  <div class="info-row"><div class="info-label">HTTP 协议</div><div class="info-value">\${cf.httpProtocol || 'HTTP/2'}</div></div>
+  <div class="info-row"><div class="info-label">客户端 TCP RTT</div><div class="info-value">\${cf.clientTcpRtt || '3'} ms</div></div>
+  <div class="info-row"><div class="info-label">地理位置</div><div class="info-value">\${cf.continent || 'EU'}</div></div>
+  <div class="info-row"><div class="info-label">时区</div><div class="info-value">\${cf.timezone || 'Europe/Vilnius'}</div></div>
+  <div class="info-row"><div class="info-label">客户端 IP</div><div class="info-value">\${ip}</div></div>
+  <div class="info-row"><div class="info-label">User Agent</div><div class="info-value">\${ua}</div></div>
+</div></div></body></html>`;
+}
+
+// ✅ 通用重试函数封装
+async function retryWithLimit(fn, maxRetries = 3, log = () => {}) {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await fn();
+    } catch (err) {
+      attempt++;
+      log(`重试中(${attempt}/${maxRetries})：${err.message}`);
+      if (attempt >= maxRetries) throw err;
+    }
+  }
+}
+
+
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -898,7 +942,7 @@ async function 维列斯OverWSHandler(request) {
                     if (portRemote === 53) {
                         isDns = true;
                     } else {
-                        throw new Error('UDP 代理仅对 DNS（53 端口）启用');
+                        throw new Error('UDP 代理仅对 DNS（53 targetPort）启用');
                     }
                 }
                 const 维列斯ResponseHeader = new Uint8Array([维列斯Version[0], 0]);
@@ -1546,9 +1590,9 @@ async function 代理URL(代理网址, 目标网址, 调试模式 = false) {
     }
 }
 
-const 啥啥啥_写的这是啥啊 = atob('ZG14bGMzTT0=');
+const protocolEncodedFlag = atob('ZG14bGMzTT0=');
 function 配置信息(UUID, 域名地址) {
-	const 协议类型 = atob(啥啥啥_写的这是啥啊);
+	const 协议类型 = atob(protocolEncodedFlag);
 
 	const 别名 = FileName;
 	let 地址 = 域名地址;
@@ -1571,7 +1615,7 @@ function 配置信息(UUID, 域名地址) {
 		传输层安全 = ['', false];
 	}
 
-	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
+	const proxyURI = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
 	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
 	return [威图瑞, 猫猫猫];
 }
@@ -2393,7 +2437,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			let 伪装域名 = host;
 			let 最终路径 = path;
 			let 节点备注 = '';
-			const 协议类型 = atob(啥啥啥_写的这是啥啊);
+			const 协议类型 = atob(protocolEncodedFlag);
 
             const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
                 `encryption=none&` + 
@@ -2464,7 +2508,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
 		}
 
-		const 协议类型 = atob(啥啥啥_写的这是啥啊);
+		const 协议类型 = atob(protocolEncodedFlag);
 
 		const 维列斯Link = `${协议类型}://${UUID}@${address}:${port}?` + 
 			`encryption=none&` +
