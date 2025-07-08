@@ -2843,7 +2843,7 @@ async function handleGetRequest(env, txt) {
                         <!-- PROXYIP设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="proxyip"><strong>PROXYIP 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:port(可不添加端口)</p>  // 网络端口
+                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
                             <textarea 
                                 id="proxyip" 
                                 class="proxyip-editor" 
@@ -2854,7 +2854,7 @@ async function handleGetRequest(env, txt) {
                         <!-- SOCKS5设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="socks5"><strong>SOCKS5 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:port</p>  
+                            <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
                             <textarea 
                                 id="socks5" 
                                 class="proxyip-editor" 
