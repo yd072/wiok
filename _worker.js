@@ -2036,7 +2036,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 					<div class="section">
 						<div class="section-title">🔧 配置信息</div>
 						<div class="config-info">
-							${动态UUID信息.replace(/\n/g, '<br>')}  // 动态生成的UUID
+							${动态UUID信息.replace(/\n/g, '<br>')}  
 							HOST: ${hostName}<br>
 							UUID: ${userID}<br>
 							FKID: ${fakeUserID}<br>
