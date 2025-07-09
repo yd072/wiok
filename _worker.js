@@ -204,7 +204,7 @@ export default {
 				dynamicUUID = env.KEY || env.TOKEN || userID;  // 动态生成的UUID
 				validTime = Number(env.TIME) || validTime;  // 有效时间（单位：天）
 				updateInterval = Number(env.UPTIME) || updateInterval;  // 更新间隔（单位：天）
-				const userIDs = await 生成动态UUID(dynamicUUID);  // 动态生成的UUID
+				const userIDs = await TranslatedUUID(dynamicUUID);  // 动态生成的UUID
 				userID = userIDs[0];
 				userIDLow = userIDs[1];
 			}
@@ -377,7 +377,7 @@ export default {
 			const currentDate = new Date();
 			currentDate.setHours(0, 0, 0, 0);
 			const timestamp = Math.ceil(currentDate.getTime() / 1000);
-			const fakeUserIDSHA256 = await 双重哈希(`${userID}${timestamp}`);
+			const fakeUserIDSHA256 = await Translated(`${userID}${timestamp}`);
 			const fakeUserID = [
                 fakeUserIDSHA256.slice(0, 8),
                 fakeUserIDSHA256.slice(8, 12),
@@ -397,12 +397,12 @@ export default {
 						proxyIP = customProxyIP;
 					}
 				} catch (error) {
-					console.error('读取自定义PROXYIP时发生错误:', error);
+					console.error('TranslatedPROXYIPTranslated:', error);
 				}
 			}
 			// 如果proxyIP为空，则使用环境变量或默认值
 			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
-			proxyIPs = await 整理(proxyIP);
+			proxyIPs = await Translated(proxyIP);
 			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 
 			// 修改SOCKS5地址初始化逻辑
@@ -414,18 +414,18 @@ export default {
 						socks5Address = kvSocks5.split('\n')[0].trim();
 					}
 				} catch (error) {
-					console.error('读取SOCKS5设置时发生错误:', error);
+					console.error('TranslatedSOCKS5Translated:', error);
 				}
 			}
 			// 如果socks5Address为空，则使用环境变量或默认值
 			socks5Address = socks5Address || env.SOCKS5 || '';
-			socks5s = await 整理(socks5Address);
+			socks5s = await Translated(socks5Address);
 			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 			socks5Address = socks5Address.split('//')[1] || socks5Address;
 
-			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
-			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
-			if (env.BAN) banHosts = await 整理(env.BAN);
+			if (env.GO2SOCKS5) go2Socks5s = await Translated(env.GO2SOCKS5);
+			if (env.CFPORTS) httpsPorts = await Translated(env.CFPORTS);
+			if (env.BAN) banHosts = await Translated(env.BAN);
 			if (socks5Address) {
 				try {
 					parsedSocks5Address = socks5AddressParser(socks5Address);
@@ -444,11 +444,11 @@ export default {
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
-				if (env.ADD) addresses = await 整理(env.ADD);
-				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
-				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
-				if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
-				if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
+				if (env.ADD) addresses = await Translated(env.ADD);
+				if (env.ADDAPI) addressesapi = await Translated(env.ADDAPI);
+				if (env.ADDNOTLS) addressesnotls = await Translated(env.ADDNOTLS);
+				if (env.ADDNOTLSAPI) addressesnotlsapi = await Translated(env.ADDNOTLSAPI);
+				if (env.ADDCSV) addressescsv = await Translated(env.ADDCSV);
 				DLS = Number(env.DLS) || DLS;
 				remarkIndex = Number(env.CSVREMARK) || remarkIndex;
 				BotToken = env.TGTOKEN || BotToken;
@@ -456,7 +456,7 @@ export default {
 				FileName = env.SUBNAME || FileName;
 				subEmoji = env.SUBEMOJI || env.EMOJI || subEmoji;
 				if (subEmoji == '0') subEmoji = 'false';
-				if (env.LINK) link = await 整理(env.LINK);
+				if (env.LINK) link = await Translated(env.LINK);
 				let sub = env.SUB || '';
 				subConverter = env.SUBAPI || subConverter;
 				if (subConverter.includes("http://")) {
@@ -483,7 +483,7 @@ export default {
 				const pathRoute = url.pathname.toLowerCase();  // URL路径
 				if (pathRoute == '/') {  // URL路径
 					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(env.URL, url);
+					else if (env.URL) return await TranslatedURL(env.URL, url);
 					else {
 						// 生成美化后的系统信息页面
 						const html = `
@@ -649,14 +649,14 @@ export default {
 						});
 					}
 				} else if (pathRoute == `/${fakeUserID}`) {  // URL路径
-					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
+					const fakeConfig = await Translated(userID, request.headers.get('Host'), sub, 'CDN-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 					return new Response(`${fakeConfig}`, { status: 200 });
 				} else if (url.pathname == `/${dynamicUUID}/edit` || pathRoute == `/${userID}/edit`) {  // 动态生成的UUID
 					const html = await KV(request, env);
 					return html;
 				} else if (url.pathname == `/${dynamicUUID}` || pathRoute == `/${userID}`) {  // 动态生成的UUID
-					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
-					const secureProtoConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
+					await sendMessage(`#Translated ${FileName}`, request.headers.get('CDN-Connecting-IP'), `UA: ${UA}</tg-spoiler>\nTranslated: ${url.hostname}\n<tg-spoiler>Translated: ${url.pathname + url.search}</tg-spoiler>`);
+					const secureProtoConfig = await Translated(userID, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
 					const now = Date.now();
 					//const timestamp = Math.floor(now / 1000);
 					const today = new Date(now);
@@ -689,7 +689,7 @@ export default {
 					}
 				} else {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(env.URL, url);
+					else if (env.URL) return await TranslatedURL(env.URL, url);
 					else {
 						// 美化错误页面
 						const html = `
@@ -898,7 +898,7 @@ async function secureProtoOverWSHandler(request) {
                     if (portRemote === 53) {
                         isDns = true;
                     } else {
-                        throw new Error('UDP 代理仅对 DNS（53 port）启用');  // 网络端口
+                        throw new Error('UDP Translated DNS（53 port Translated');  //  网络端口
                     }
                 }
                 const secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
@@ -908,25 +908,25 @@ async function secureProtoOverWSHandler(request) {
                     return handleDNSQuery(rawClientData, webSocket, secureProtoResponseHeader, log);
                 }
                 if (!banHostsSet.has(addressRemote)) {
-                    log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
+                    log(`Translated TCP Translated ${addressRemote}:${portRemote}`);
                     handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
                 } else {
-                    throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
+                    throw new Error(`Translated TCP Translated ${addressRemote}:${portRemote}`);
                 }
             } catch (error) {
-                log('处理数据时发生错误', error.message);
-                webSocket.close(1011, '内部错误');
+                log('Translated', error.message);
+                webSocket.close(1011, 'Translated');
             }
         },
         close() {
-            log(`readableWebSocketStream 已关闭`);
+            log(`readableWebSocketStream Translated`);
         },
         abort(reason) {
-            log(`readableWebSocketStream 已中止`, JSON.stringify(reason));
+            log(`readableWebSocketStream Translated`, JSON.stringify(reason));
         },
     })).catch((err) => {
-        log('readableWebSocketStream 管道错误', err);
-        webSocket.close(1011, '管道错误');
+        log('readableWebSocketStream Translated', err);
+        webSocket.close(1011, 'Translated');
     });
 
     return new Response(null, {
@@ -958,14 +958,14 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
     let timeoutId; 
 
     try {
-        // 设置全局超时
+        // Translated
         timeoutId = setTimeout(() => {
             controller.abort('DNS query timeout');
             if (tcpSocket) {
                 try {
                     tcpSocket.close();
                 } catch (e) {
-                    log(`关闭TCP连接出错: ${e.message}`);
+                    log(`TranslatedTCPTranslated: ${e.message}`);
                 }
             }
         }, 5000);
@@ -979,11 +979,11 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
                     signal,
                 }),
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('DNS连接超时')), 1500)
+                    setTimeout(() => reject(new Error('DNSTranslated')), 1500)
                 )
             ]);
 
-            log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
+            log(`TranslatedDNSTranslated ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
             
             // 发送DNS查询
             const writer = tcpSocket.writable.getWriter();
@@ -1003,7 +1003,7 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
                     const { done, value } = await reader.read();
                     
                     if (done) {
-                        log('DNS数据流处理完成');
+                        log('DNSTranslated');
                         break;
                     }
 
@@ -1022,24 +1022,24 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
                             webSocket.send(value);
                         }
                     } catch (error) {
-                        log(`数据处理错误: ${error.message}`);
+                        log(`Translated: ${error.message}`);
                         throw error;
                     }
                 }
             } catch (error) {
-                log(`数据读取错误: ${error.message}`);
+                log(`Translated: ${error.message}`);
                 throw error;
             } finally {
                 reader.releaseLock();
             }
 
         } catch (error) {
-            log(`DNS查询失败: ${error.message}`);
+            log(`DNSTranslated: ${error.message}`);
             throw error;
         }
 
     } catch (error) {
-        log(`DNS查询失败: ${error.message}`);
+        log(`DNSTranslated: ${error.message}`);
         safeCloseWebSocket(webSocket);
     } finally {
         clearTimeout(timeoutId);
@@ -1047,7 +1047,7 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
             try {
                 tcpSocket.close();
             } catch (e) {
-                log(`关闭TCP连接出错: ${e.message}`);
+                log(`TranslatedTCPTranslated: ${e.message}`);
             }
         }
     }
@@ -1067,7 +1067,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
     // 优化连接处理
     const createConnection = async (address, port, socks = false) => {
-        log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
+        log(`Translated: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -1086,7 +1086,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     })
                 ,
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('连接超时')), 3000)
+                    setTimeout(() => reject(new Error('Translated')), 3000)
                 )
             ]);
 
@@ -1135,12 +1135,12 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
             // 监听连接关闭
             tcpSocket.closed
-                .catch(error => log('重试连接关闭:', error))
+                .catch(error => log('Translated:', error))
                 .finally(() => safeCloseWebSocket(webSocket));
 
             return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
         } catch (error) {
-            log('重试失败:', error);
+            log('Translated:', error);
         }
     };
 
@@ -1152,7 +1152,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
         return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
     } catch (error) {
-        log('主连接失败，尝试重试:', error);
+        log('Translated，Translated:', error);
         return retryConnection();
     }
 }
@@ -1244,7 +1244,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     // 设置全局超时
     const timeout = setTimeout(() => {
         if (!hasIncomingData) {
-            controller.abort('连接超时');
+            controller.abort('Translated');
         }
     }, 5000);
 
@@ -1252,7 +1252,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
     const writeData = async (chunk) => {
         if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                throw new Error('WebSocket 未连接');
+                throw new Error('WebSocket Translated');
         }
 
         if (header) {
@@ -1276,27 +1276,27 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                         try {
                             await writeData(chunk);
                         } catch (error) {
-                            log(`数据写入错误: ${error.message}`);
+                            log(`Translated: ${error.message}`);
                             controller.error(error);
                         }
                     },
                     close() {
                         isSocketClosed = true;
                         clearTimeout(timeout);
-                        log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
+                        log(`Translated, Translated: ${hasIncomingData}`);
                         
                         // 仅在没有数据时尝试重试，且不超过最大重试次数
                         if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
                             retryAttempted = true;
                             retryCount++;
-                            log(`未收到数据, 正在进行第 ${retryCount} 次重试...`);
+                            log(`Translated, Translated ${retryCount} Translated...`);
                             retry();
                         }
                     },
                     abort(reason) {
                         isSocketClosed = true;
                         clearTimeout(timeout);
-                        log(`远程连接被中断: ${reason}`);
+                        log(`Translated: ${reason}`);
                     }
                 }),
                 {
@@ -1305,7 +1305,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 }
             )
             .catch((error) => {
-                log(`数据传输异常: ${error.message}`);
+                log(`Translated: ${error.message}`);
                 if (!isSocketClosed) {
                     safeCloseWebSocket(webSocket);
                 }
@@ -1314,14 +1314,14 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
                     retryAttempted = true;
                     retryCount++;
-                    log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
+                    log(`Translated, Translated ${retryCount} Translated...`);
                     retry();
                 }
             });
 
     } catch (error) {
         clearTimeout(timeout);
-        log(`连接处理异常: ${error.message}`);
+        log(`Translated: ${error.message}`);
         if (!isSocketClosed) {
             safeCloseWebSocket(webSocket);
         }
@@ -1330,7 +1330,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
             retryAttempted = true;
             retryCount++;
-            log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
+            log(`Translated, Translated ${retryCount} Translated...`);
             retry();
         }
         
@@ -1482,7 +1482,7 @@ function socks5AddressParser(address) {
     }
 }
 
-function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64) {
+function Translated(content, userID, hostName, fakeUserID, fakeHostName, isBase64) {
     if (isBase64) {
         content = atob(content);
     }
@@ -1497,226 +1497,226 @@ function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName,
     return isBase64 ? btoa(content) : content;
 }
 
-async function 双重哈希(文本) {
-    const 编码器 = new TextEncoder();
+async function Translated(Translated) {
+    const Translated = new TextEncoder();
 
-    // 计算第一次哈希 (SHA-256)
-    const 第一次哈希 = await crypto.subtle.digest('SHA-256', 编码器.encode(文本));
-    const 第一次十六进制 = [...new Uint8Array(第一次哈希)]
+     // 计算第一次哈希 (SHA-256)
+    const Translated = await crypto.subtle.digest('SHA-256', Translated.encode(Translated));
+    const Translated = [...new Uint8Array(Translated)]
         .map(byte => byte.toString(16).padStart(2, '0'))
         .join('');
 
-    // 截取部分哈希值，并进行二次哈希
-    const 截取部分 = 第一次十六进制.substring(7, 27);
-    const 第二次哈希 = await crypto.subtle.digest('SHA-256', 编码器.encode(截取部分));
-    const 第二次十六进制 = [...new Uint8Array(第二次哈希)]
+    // Translated，Translated
+    const Translated = Translated.substring(7, 27);
+    const Translated = await crypto.subtle.digest('SHA-256', Translated.encode(Translated));
+    const Translated = [...new Uint8Array(Translated)]
         .map(byte => byte.toString(16).padStart(2, '0'))
         .join('');
 
-    return 第二次十六进制.toLowerCase();
+    return Translated.toLowerCase();
 }
 
-async function 代理URL(代理网址, 目标网址, 调试模式 = false) {
+async function TranslatedURL(Translated, Translated, Translated = false) {
     try {
-    const 网址列表 = await 整理(代理网址);
-        if (!网址列表 || 网址列表.length === 0) {
-            throw new Error('代理网址列表为空');
+    const Translate = await Translated(Translated);
+        if (!Translated || Translated.length === 0) {
+            throw new Error('Translated');
         }
-    const 完整网址 = 网址列表[Math.floor(Math.random() * 网址列表.length)];
+    const Translat = Translated[Math.floor(Math.random() * Translated.length)];
 
-    const 解析后的网址 = new URL(完整网址);
-        if (调试模式) console.log(`代理 URL: ${解析后的网址}`);
+    const Transla = new URL(Translated);
+        if (Translated) console.log(`Translated URL: ${Translated}`);
 
-        const 目标URL = new URL(目标网址, 解析后的网址);
+        const TranslatedURL = new URL(Translated, Translated);
 
-        const 响应 = await fetch(目标URL.toString(), { method: 'GET' });
+        const Transl = await fetch(TranslatedURL.toString(), { method: 'GET' });
 
-    const 新响应 = new Response(响应.body, {
-        status: 响应.status,
-        statusText: 响应.statusText,
-            headers: new Headers(响应.headers)
+    const Translated = new Response(Translated.body, {
+        status: Translated.status,
+        statusText: Translated.statusText,
+            headers: new Headers(Translated.headers)
     });
 
-        新响应.headers.set('X-New-URL', 目标URL.toString());
+        Translated.headers.set('X-New-URL', TranslatedURL.toString());
 
-    return 新响应;
+    return Translated;
     } catch (error) {
-        console.error(`代理请求失败: ${error.message}`);
-        return new Response(`代理请求失败: ${error.message}`, { status: 500 });
+        console.error(`Translated: ${error.message}`);
+        return new Response(`Translated: ${error.message}`, { status: 500 });
     }
 }
 
 const protocolEncodedFlag = atob('ZG14bGMzTT0=');
-function 配置信息(UUID, 域名地址) {  
-	const protocolType = atob(protocolEncodedFlag);  // 代理协议类型
+function Translated(UUID, Translated) {  
+	const protocolType = atob(protocolEncodedFlag);  // Translated
 
-	const aliasName = FileName;  // 配置别名
-	let address = 域名地址;  
-	let port = 443;  // 网络端口
+	const aliasName = FileName;  // Translated
+	let address = Translated;  
+	let port = 443;  // Translated
 
-	const userId = UUID;  // 用户唯一标识
-	const encryptionMethod = 'none';  // 加密方式
+	const userId = UUID;  // Translated
+	const encryptionMethod = 'none';  // Translated
 
-	const transportProtocol = 'ws';  // 网络传输协议
-	const fakeDomain = 域名地址;  // 用于伪装的域名
-	const pathRoute = path;  // URL路径
+	const transportProtocol = 'ws';  // Translated
+	const fakeDomain = Translated;  // Translated
+	const pathRoute = path;  // URLTranslated
 
-	let tlsSetting = ['tls', true];  // TLS设置
-	const sniHost = 域名地址;  
-	const fingerprint = 'randomized';  // 浏览器指纹或TLS指纹
+	let tlsSetting = ['tls', true];  // TLSTranslated
+	const sniHost = Translated;  
+	const fingerprint = 'randomized';  // TranslatedTLSTranslated
 
-	if (域名地址.includes('.workers.dev')) {  
+	if (Translated.includes('.workers.dev')) {  
 		address = atob('dmlzYS5jbg==');  
-		port = 80;  // 网络端口
-		tlsSetting = ['', false];  // TLS设置
+		port = 80;  // Translated
+		tlsSetting = ['', false];  // TLSTranslated
 	}
 
-	const 威图瑞 = `${protocolType}://${userId}@${address}:${port}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + encryptionMethod}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${tlsSetting[0]}&sni=${sniHost}&fp=${fingerprint}&type=${transportProtocol}&host=${fakeDomain}&path=${encodeURIComponent(pathRoute)}#${encodeURIComponent(aliasName)}`;
-	const 猫猫猫 = `- {name: ${FileName}, server: ${address}, port: ${port}, type: ${protocolType}, uuid: ${userId}, tls: ${tlsSetting[1]}, alpn: [h3], udp: false, sni: ${sniHost}, tfo: false, skip-cert-verify: true, servername: ${fakeDomain}, client-fingerprint: ${fingerprint}, network: ${transportProtocol}, ws-opts: {path: "${pathRoute}", headers: {${fakeDomain}}}}`;  // URL路径
-	return [威图瑞, 猫猫猫];
+	const Translated = `${protocolType}://${userId}@${address}:${port}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + encryptionMethod}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${tlsSetting[0]}&sni=${sniHost}&fp=${fingerprint}&type=${transportProtocol}&host=${fakeDomain}&path=${encodeURIComponent(pathRoute)}#${encodeURIComponent(aliasName)}`;
+	const Translated = `- {name: ${FileName}, server: ${address}, port: ${port}, type: ${protocolType}, uuid: ${userId}, tls: ${tlsSetting[1]}, alpn: [h3], udp: false, sni: ${sniHost}, tfo: false, skip-cert-verify: true, servername: ${fakeDomain}, client-fingerprint: ${fingerprint}, network: ${transportProtocol}, ws-opts: {path: "${pathRoute}", headers: {${fakeDomain}}}}`;  // URLTranslated
+	return [Translated, Translated];
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-	// 在获取其他配置前,先尝试读取自定义的设置
+async function Translated(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+	// Translated,Translated
 	if (env.KV) {
 		try {
-			// 修改PROXYIP设置逻辑
+			// TranslatedPROXYIPTranslated
 			const customProxyIP = await env.KV.get('PROXYIP.txt');
 			if (customProxyIP && customProxyIP.trim()) {
-				// 如果KV中有PROXYIP设置，使用KV中的设置
+				// TranslatedKVTranslatedPROXYIPTranslated，TranslatedKVTranslated
 				proxyIP = customProxyIP;
-				proxyIPs = await 整理(proxyIP);
+				proxyIPs = await Translated(proxyIP);
 				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-				console.log('使用KV中的PROXYIP:', proxyIP);
+				console.log('TranslatedKVTranslatedPROXYIP:', proxyIP);
 				RproxyIP = 'false';
 			} else if (env.PROXYIP) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				// TranslatedKVTranslated，Translated
 				proxyIP = env.PROXYIP;
-				proxyIPs = await 整理(proxyIP);
+				proxyIPs = await Translated(proxyIP);
 				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-				console.log('使用环境变量中的PROXYIP:', proxyIP);
+				console.log('TranslatedPROXYIP:', proxyIP);
 				RproxyIP = 'false';
 			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				console.log('使用默认PROXYIP设置');
+				// TranslatedKVTranslated，Translated
+				console.log('TranslatedPROXYIPTranslated');
 				proxyIP = '';
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 
-			// 修改SOCKS5设置逻辑
+			// TranslatedSOCKS5Translated
 			const customSocks5 = await env.KV.get('SOCKS5.txt');
 			if (customSocks5 && customSocks5.trim()) {
-				// 如果KV中有SOCKS5设置，使用KV中的设置
+				// TranslatedKVTranslatedSOCKS5Translated，TranslatedKVTranslated
 				socks5Address = customSocks5.trim().split('\n')[0];
-				socks5s = await 整理(socks5Address);
+				socks5s = await Translated(socks5Address);
 				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
-				console.log('使用KV中的SOCKS5:', socks5Address);
+				console.log('TranslatedKVTranslatedSOCKS5:', socks5Address);
 				enableSocks = true; 
 			} else if (env.SOCKS5) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				// TranslatedKVTranslated，Translated
 				socks5Address = env.SOCKS5;
-				socks5s = await 整理(socks5Address);
+				socks5s = await Translated(socks5Address);
 				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
-				console.log('使用环境变量中的SOCKS5:', socks5Address);
+				console.log('TranslatedSOCKS5:', socks5Address);
 				enableSocks = true; 
 			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				console.log('使用默认SOCKS5设置');
+				// TranslatedKVTranslated，Translated
+				console.log('TranslatedSOCKS5Translated');
 				enableSocks = false;
 				socks5Address = '';
 			}
 
-			// 读取自定义SUB设置
+			// TranslatedSUBTranslated
 			const customSub = await env.KV.get('SUB.txt');
-			// 明确检查是否为null或空字符串
+			// TranslatednullTranslated
 			if (customSub !== null && customSub.trim() !== '') {
-				// 如果KV中有SUB设置，使用KV中的设置
+				// TranslatedKVTranslatedSUBTranslated，TranslatedKVTranslated
 				sub = customSub.trim().split('\n')[0];
-				console.log('使用KV中的SUB:', sub);
+				console.log('TranslatedKVTranslatedSUB:', sub);
 			} else if (env.SUB) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				// TranslatedKVTranslated，Translated
 				sub = env.SUB;
-				console.log('使用环境变量中的SUB:', sub);
+				console.log('TranslatedSUB:', sub);
 			} else {
-				// 如果KV和环境变量中都没有设置，使用默认值
+				// TranslatedKVTranslated，Translated
 				sub = '';
-				console.log('使用默认SUB设置:', sub);
+				console.log('TranslatedSUBTranslated:', sub);
 			}
 
-			// 读取自定义SUBAPI设置
+			// TranslatedSUBAPITranslated
 			const customSubAPI = await env.KV.get('SUBAPI.txt');
-			// 明确检查是否为null或空字符串
+			// TranslatednullTranslated
 			if (customSubAPI !== null && customSubAPI.trim() !== '') {
-				// 如果KV中有SUBAPI设置，使用KV中的设置
+				// TranslatedKVTranslatedSUBAPITranslated，TranslatedKVTranslated
 				subConverter = customSubAPI.trim().split('\n')[0];
-				console.log('使用KV中的SUBAPI:', subConverter);
+				console.log('TranslatedKVTranslatedSUBAPI:', subConverter);
 			} else if (env.SUBAPI) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				// TranslatedKVTranslated，Translated
 				subConverter = env.SUBAPI;
-				console.log('使用环境变量中的SUBAPI:', subConverter);
+				console.log('TranslatedSUBAPI:', subConverter);
 			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
+				// TranslatedKVTranslated，Translated
 				subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
-				console.log('使用默认SUBAPI设置:', subConverter);
+				console.log('TranslatedSUBAPITranslated:', subConverter);
 			}
 
-			// 读取自定义SUBCONFIG设置
+			// TranslatedSUBCONFIGTranslated
 			const customSubConfig = await env.KV.get('SUBCONFIG.txt');
-			// 明确检查是否为null或空字符串
+			// TranslatednullTranslated
 			if (customSubConfig !== null && customSubConfig.trim() !== '') {
-				// 如果KV中有SUBCONFIG设置，使用KV中的设置
+				// TranslatedKVTranslatedSUBCONFIGTranslated，TranslatedKVTranslated
 				subConfig = customSubConfig.trim().split('\n')[0];
-				console.log('使用KV中的SUBCONFIG:', subConfig);
+				console.log('TranslatedKVTranslatedSUBCONFIG:', subConfig);
 			} else if (env.SUBCONFIG) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				// TranslatedKVTranslated，Translated
 				subConfig = env.SUBCONFIG;
-				console.log('使用环境变量中的SUBCONFIG:', subConfig);
+				console.log('TranslatedSUBCONFIG:', subConfig);
 			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
+				// TranslatedKVTranslated，Translated
 				subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
-				console.log('使用默认SUBCONFIG设置:', subConfig);
+				console.log('TranslatedSUBCONFIGTranslated:', subConfig);
 			}
 		} catch (error) {
-			console.error('读取自定义设置时发生错误:', error);
+			console.error('Translated:', error);
 		}
 	}
 
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
-		const subs = await 整理(sub);
+		const subs = await Translated(sub);
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
 	
 	if (env.KV) {
-		await 迁移地址列表(env);  
-		const 优选地址列表 = await env.KV.get('ADD.txt');  
-		if (优选地址列表) {  
-				const 优选地址数组 = await 整理(优选地址列表);  
-				const 分类地址 = {  
-					接口地址: new Set(),  
-					链接地址: new Set(),  
-					优选地址: new Set()  
+		await Translated(env);  
+		const Translated = await env.KV.get('ADD.txt');  
+		if (Translated) {  
+				const Translat = await Translated(Translated);  
+				const Translate = {  
+					Translated: new Set(),  
+					Translated: new Set(),  
+					Translated: new Set()  
 				};
 
-				for (const 元素 of 优选地址数组) {  
-					if (元素.startsWith('https://')) {
-						分类地址.接口地址.add(元素);  
-					} else if (元素.includes('://')) {
-						分类地址.链接地址.add(元素);  
+				for (const Translated of Translated) {  
+					if (Translated.startsWith('https://')) {
+						Translated.Translated.add(Translated);  
+					} else if (Translated.includes('://')) {
+						Translated.Translated.add(Translated);  
 					} else {
-						分类地址.优选地址.add(元素);  
+						Translated.Translated.add(Translated);  
 					}
 				}
 
-			addressesapi = [...分类地址.接口地址];  
-			link = [...分类地址.链接地址];  
-			addresses = [...分类地址.优选地址];  
+			addressesapi = [...Translated.Translated];  
+			link = [...Translated.Translated];  
+			addresses = [...Translated.Translated];  
 		}
 	}
 
@@ -1751,7 +1751,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
 			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
 			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-			    addressesnotls.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
+			    addressesnotls.push(`${randomIP}:${port}#CFTranslated${String(counter++).padStart(2, '0')}`);
 		    }
 	    } else {
 		    const randomPorts = httpsPorts.concat('443');
@@ -1759,14 +1759,14 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
 			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
 			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-			    addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
+			    addresses.push(`${randomIP}:${port}#CFTranslated${String(counter++).padStart(2, '0')}`);
 		    }
 	    }
     }
 
-	const uuid = (_url.pathname == `/${dynamicUUID}`) ? dynamicUUID : userID;  // 动态生成的UUID
+	const uuid = (_url.pathname == `/${dynamicUUID}`) ? dynamicUUID : userID;  // TranslatedUUID
 	const userAgent = UA.toLowerCase();
-	const Config = 配置信息(userID, hostName);
+	const Config = Translated(userID, hostName);
 	const proxyConfig = Config[0];
 	const clash = Config[1];
 	let proxyhost = "";
@@ -1776,7 +1776,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 				const response = await fetch(proxyhostsURL);
 
 				if (!response.ok) {
-					console.error('获取地址时出错:', response.status, response.statusText);  
+					console.error('Translated:', response.status, response.statusText);  
 					return; 
 				}
 
@@ -1786,7 +1786,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 				proxyhosts = proxyhosts.concat(nonEmptyLines);
 			} catch (error) {
-				//console.error('获取地址时出错:', error);
+				//console.error('Translated:', error);
 			}
 		}
 		if (proxyhosts.length != 0) proxyhost = proxyhosts[Math.floor(Math.random() * proxyhosts.length)] + "/";
@@ -1807,31 +1807,31 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 			else socks5List += `<br>&nbsp;&nbsp;${go2Socks5s.join('<br>&nbsp;&nbsp;')}<br>`;
 		}
 
-		let 订阅器 = '<br>';
-		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
+		let Translate = '<br>';
+		let TranslatedKVTranslated = env.KV ? ` <a href='${_url.pathname}/edit'>Translated</a>` : '';
 		
 		if (sub) {
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
-			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
-			else if (RproxyIP == 'true') 订阅器 += `CFCDN（访问方式）: 自动获取ProxyIP<br>`;
-			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`
-			订阅器 += `<br>SUB（优选订阅生成器）: ${sub}${判断是否绑定KV空间}<br>`;
+			if (enableSocks) Translated += `CFCDN（Translated）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+			else if (proxyIP && proxyIP != '') Translated += `CFCDN（Translated）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
+			else if (RproxyIP == 'true') Translated += `CFCDN（Translated）: TranslatedProxyIP<br>`;
+			else Translated += `CFCDN（Translated）: Translated, Translated proxyIP/PROXYIP ！！！<br>`
+			Translated += `<br>SUB（Translated）: ${sub}${TranslatedKVTranslated}<br>`;
 		} else {
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
-			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
-			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
-			订阅器 += `<br>您的订阅内容由 内置 addresses/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
-			if (addresses.length > 0) 订阅器 += `ADD（TLS优选域名&IP）: <br>&nbsp;&nbsp;${addresses.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesnotls.length > 0) 订阅器 += `ADDNOTLS（noTLS优选域名&IP）: <br>&nbsp;&nbsp;${addressesnotls.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesapi.length > 0) 订阅器 += `ADDAPI（TLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesapi.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLSAPI（noTLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesnotlsapi.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressescsv.length > 0) 订阅器 += `ADDCSV（IPTest测速csv文件 限速 ${DLS} ）: <br>&nbsp;&nbsp;${addressescsv.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (enableSocks) Translated += `CFCDN（Translated）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+			else if (proxyIP && proxyIP != '') Translated += `CFCDN（Translated）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
+			else Translated += `CFCDN（Translated）: Translated, Translated proxyIP/PROXYIP ！！！<br>`;
+			Translated += `<br>Translated Translated addresses/ADD* Translated${TranslatedKVTranslated}<br>`;
+			if (addresses.length > 0) Translated += `ADD（TLSTranslated&IP）: <br>&nbsp;&nbsp;${addresses.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressesnotls.length > 0) Translated += `ADDNOTLS（noTLSTranslated&IP）: <br>&nbsp;&nbsp;${addressesnotls.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressesapi.length > 0) Translated += `ADDAPI（TLSTranslated&IP Translated API）: <br>&nbsp;&nbsp;${addressesapi.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressesnotlsapi.length > 0) Translated += `ADDNOTLSAPI（noTLSTranslated&IP Translated API）: <br>&nbsp;&nbsp;${addressesnotlsapi.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressescsv.length > 0) Translated += `ADDCSV（IPTestTranslatedcsvTranslated Translated ${DLS} ）: <br>&nbsp;&nbsp;${addressescsv.join('<br>&nbsp;&nbsp;')}<br>`;
 		}
 
-		if (dynamicUUID && _url.pathname !== `/${dynamicUUID}`) 订阅器 = '';  // 动态生成的UUID
-		else 订阅器 += `<br>SUBAPI（订阅转换后端）: ${subProtocol}://${subConverter}<br>SUBCONFIG（订阅转换配置文件）: ${subConfig}`;
-		const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${validTime} 天<br>UPTIME（动态UUID更新时间）: ${updateInterval} 时（北京时间）<br><br>` : `${userIDTime}`;  // 有效时间（单位：天）
-		const 节点配置页 = `
+		if (dynamicUUID && _url.pathname !== `/${dynamicUUID}`) Translated = '';  // TranslatedUUID
+		else Translated += `<br>SUBAPI（Translated）: ${subProtocol}://${subConverter}<br>SUBCONFIG（Translated）: ${subConfig}`;
+		const TranslatedUUIDTranslated = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（TranslatedUUIDTranslated）: ${validTime} Translated<br>UPTIME（TranslatedUUIDTranslated）: ${updateInterval} Translated（Translated）<br><br>` : `${userIDTime}`;  // Translated（Translated：Translated）
+		const Translated = `
 			<!DOCTYPE html>
 			<html>
 			<head>
@@ -2115,19 +2115,19 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		if (hostName.includes(".workers.dev")) {
 			noTLS = 'true';
 			fakeHostName = `${fakeHostName}.workers.dev`;
-			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-			newAddressesnotlscsv = await 整理测速结果('FALSE');
+			newAddressesnotlsapi = await Translated(addressesnotlsapi);
+			newAddressesnotlscsv = await Translated('FALSE');
 		} else if (hostName.includes(".pages.dev")) {
 			fakeHostName = `${fakeHostName}.pages.dev`;
 		} else if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
 			noTLS = 'true';
 			fakeHostName = `notls${fakeHostName}.net`;
-			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-			newAddressesnotlscsv = await 整理测速结果('FALSE');
+			newAddressesnotlsapi = await Translated(addressesnotlsapi);
+			newAddressesnotlscsv = await Translated('FALSE');
 		} else {
 			fakeHostName = `${fakeHostName}.xyz`
 		}
-		console.log(`虚假HOST: ${fakeHostName}`);
+		console.log(`TranslatedHOST: ${fakeHostName}`);
 		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}`;
 		let isBase64 = true;
 
@@ -2138,7 +2138,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 						const response = await fetch(proxyhostsURL);
 
 						if (!response.ok) {
-							console.error('获取地址时出错:', response.status, response.statusText);  
+							console.error('Translated:', response.status, response.statusText);  
 							return; 
 						}
 
@@ -2148,23 +2148,23 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 						proxyhosts = proxyhosts.concat(nonEmptyLines);
 					} catch (error) {
-						console.error('获取地址时出错:', error);  
+						console.error('Translated:', error);  
 					}
 				}
 				proxyhosts = [...new Set(proxyhosts)];
 			}
 
-			newAddressesapi = await 整理优选列表(addressesapi);
-			newAddressescsv = await 整理测速结果('TRUE');
+			newAddressesapi = await Translated(addressesapi);
+			newAddressescsv = await Translated('TRUE');
 			url = `https://${hostName}/${fakeUserID + _url.search}`;
 			if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
 				if (_url.search) url += '&notls';
 				else url += '?notls';
 			}
-			console.log(`虚假订阅: ${url}`);
+			console.log(`Translated: ${url}`);
 		}
 
-		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
+		if (!userAgent.includes(('CDN-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
 			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
 				url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
@@ -2181,7 +2181,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		try {
 			let content;
 			if ((!sub || sub == "") && isBase64 == true) {
-				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
+				content = await Translated(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
 			} else {
 				const response = await fetch(url, {
 					headers: {
@@ -2193,7 +2193,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 			if (_url.pathname == `/${fakeUserID}`) return content;
 
-			return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
+			return Translated(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
 
 		} catch (error) {
 			console.error('Error fetching content:', error);
@@ -2202,7 +2202,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 }
 
-async function 整理优选列表(api) {
+async function Translated(api) {
 	if (!api || api.length === 0) return [];
 
 	let newapi = "";
@@ -2228,27 +2228,27 @@ async function 整理优选列表(api) {
 				const content = await response.value;
 
 				const lines = content.split(/\r?\n/);
-				let 节点备注 = '';
-				let 测速端口 = '443';  
+				let Translate = '';
+				let Translated = '443';  
 
 				if (lines[0].split(',').length > 3) {
 					const idMatch = api[index].match(/id=([^&]*)/);
-					if (idMatch) 节点备注 = idMatch[1];
+					if (idMatch) Translated = idMatch[1];
 
 					const portMatch = api[index].match(/port=([^&]*)/);
-					if (portMatch) 测速端口 = portMatch[1];  
+					if (portMatch) Translated = portMatch[1];  
 
 					for (let i = 1; i < lines.length; i++) {
 						const columns = lines[i].split(',')[0];
 						if (columns) {
-							newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;  
-							if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);  
+							newapi += `${columns}:${Translated}${Translated ? `#${Translated}` : ''}\n`;  
+							if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${Translated}`);  
 						}
 					}
 				} else {
 					if (api[index].includes('proxyip=true')) {
-						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
-						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
+						// TranslatedURLTranslated'proxyip=true'，TranslatedproxyIPPool
+						proxyIPPool = proxyIPPool.concat((await Translated(content)).map(item => {
 							const baseItem = item.split('#')[0] || item;
 							if (baseItem.includes(':')) {
 								const port = baseItem.split(':')[1];
@@ -2271,12 +2271,12 @@ async function 整理优选列表(api) {
 		clearTimeout(timeout);
 	}
 
-	const newAddressesapi = await 整理(newapi);
+	const newAddressesapi = await Translated(newapi);
 
 	return newAddressesapi;
 }
 
-async function 整理测速结果(tls) {
+async function Translated(tls) {
 	if (!addressescsv || addressescsv.length === 0) {
 		return [];
 	}
@@ -2288,7 +2288,7 @@ async function 整理测速结果(tls) {
 			const response = await fetch(csvUrl);
 
 			if (!response.ok) {
-				console.error('获取CSV地址时出错:', response.status, response.statusText);  
+				console.error('TranslatedCSVTranslated:', response.status, response.statusText);  
 				continue;
 			}
 
@@ -2308,14 +2308,14 @@ async function 整理测速结果(tls) {
 			const dataCenterIndex = tlsIndex + remarkIndex; 
 
 			if (tlsIndex === -1) {
-				console.error('CSV文件缺少必需的字段');
+				console.error('CSVTranslated');
 				continue;
 			}
 
 			for (let i = 1; i < lines.length; i++) {
 				const columns = lines[i].split(',');
 				const speedIndex = columns.length - 1; 
-				// 检查TLS是否为"TRUE"且速度大于DLS
+				// TranslatedTLSTranslated"TRUE"TranslatedDLS
 				if (columns[tlsIndex].toUpperCase() === tls && parseFloat(columns[speedIndex]) > DLS) {
 					const ipAddress = columns[ipAddressIndex];
 					const port = columns[portIndex];
@@ -2324,13 +2324,13 @@ async function 整理测速结果(tls) {
 					const formattedAddress = `${ipAddress}:${port}#${dataCenter}`;
 					newAddressescsv.push(formattedAddress);
 					if (csvUrl.includes('proxyip=true') && columns[tlsIndex].toUpperCase() == 'true' && !httpsPorts.includes(port)) {
-						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
+						// TranslatedURLTranslated'proxyip=true'，TranslatedproxyIPPool
 						proxyIPPool.push(`${ipAddress}:${port}`);
 					}
 				}
 			}
 		} catch (error) {
-			console.error('获取CSV地址时出错:', error);  
+			console.error('TranslatedCSVTranslated:', error);  
 			continue;
 		}
 	}
@@ -2338,7 +2338,7 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
+function Translated(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
@@ -2390,18 +2390,18 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			}
 			if (port == "-1") port = "80";
 
-			let fakeDomain = host;  // 用于伪装的域名
-			let 最终路径 = path;  // URL路径
-			let 节点备注 = '';
-			const protocolType = atob(protocolEncodedFlag);  // 代理协议类型
+			let fakeDomain = host;  // Translated
+			let Translate = path;  // URLTranslated
+			let Translated = '';
+			const protocolType = atob(protocolEncodedFlag);  // Translated
 
             const secureProtoLink = `${protocolType}://${UUID}@${address}:${port}?` + 
                 `encryption=none&` + 
                 `security=none&` + 
                 `type=ws&` + 
-                `host=${fakeDomain}&` +  // 用于伪装的域名
-                `path=${encodeURIComponent(最终路径)}` +  // URL路径
-                `#${encodeURIComponent(addressid + 节点备注)}`;
+                `host=${fakeDomain}&` +  // Translated
+                `path=${encodeURIComponent(Translated)}` +  // URLTranslated
+                `#${encodeURIComponent(addressid + Translated)}`;
 
 			return secureProtoLink;
 
@@ -2452,30 +2452,30 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		}
 		if (port == "-1") port = "443";
 
-		let fakeDomain = host;  // 用于伪装的域名
-		let 最终路径 = path;  // URL路径
-		let 节点备注 = '';
+		let fakeDomain = host;  // Translated
+		let Translate = path;  // URLTranslated
+		let Translated = '';
 		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;  // URL路径
+		if (matchingProxyIP) Translated = `/?proxyip=${matchingProxyIP}`;  // URLTranslated
 
-		if (proxyhosts.length > 0 && (fakeDomain.includes('.workers.dev'))) {  // 用于伪装的域名
-			最终路径 = `/${fakeDomain}${最终路径}`;  // URL路径
-			fakeDomain = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];  // 用于伪装的域名
-			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
+		if (proxyhosts.length > 0 && (fakeDomain.includes('.workers.dev'))) {  // Translated
+			Translated = `/${fakeDomain}${Translated}`;  // URLTranslated
+			fakeDomain = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];  // Translated
+			Translated = ` Translated，Translated！`;
 		}
 
-		const protocolType = atob(protocolEncodedFlag);  // 代理协议类型
+		const protocolType = atob(protocolEncodedFlag);  // Translated
 
 		const secureProtoLink = `${protocolType}://${UUID}@${address}:${port}?` + 
 			`encryption=none&` +
 			`security=tls&` +
-			`sni=${fakeDomain}&` +  // 用于伪装的域名
+			`sni=${fakeDomain}&` +  // Translated
 			`fp=randomized&` +
 			`alpn=h3&` + 
 			`type=ws&` +
-			`host=${fakeDomain}&` +  // 用于伪装的域名
-                        `path=${encodeURIComponent(最终路径)}` +  // URL路径
-			`#${encodeURIComponent(addressid + 节点备注)}`;
+			`host=${fakeDomain}&` +  // Translated
+                        `path=${encodeURIComponent(Translated)}` +  // URLTranslated
+			`#${encodeURIComponent(addressid + Translated)}`;
 
 		return secureProtoLink;
 	}).join('\n');
@@ -2486,12 +2486,12 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	return btoa(base64Response);
 }
 
-// 优化 整理 函数
-async function 整理(内容) {
-    const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
+// Translated Translated Translated
+async function Translated(Translated) {
+    const Translated = Translated.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
         .replace(/^,|,$/g, '');
     
-    return 替换后的内容.split(',');
+    return Translated.split(',');
 }
 
 async function sendMessage(type, ip, add_data = "") {
@@ -2526,45 +2526,45 @@ function isValidIPv4(address) {
 	return ipv4Regex.test(address);
 }
 
-function 生成动态UUID(密钥) {  // 动态生成的UUID
-	const 时区偏移 = 8; 
-	const 起始日期 = new Date(2007, 6, 7, updateInterval, 0, 0);  // 更新间隔（单位：天）
-	const 一周的毫秒数 = 1000 * 60 * 60 * 24 * validTime;  // 有效时间（单位：天）
+function TranslatedUUID(Translated) {  // TranslatedUUID
+	const Translated = 8; 
+	const Translated = new Date(2007, 6, 7, updateInterval, 0, 0);  // Translated（Translated：Translated）
+	const Translated = 1000 * 60 * 60 * 24 * validTime;  // Translated（Translated：Translated）
 
-	function 获取当前周数() {
-		const 现在 = new Date();
-		const 调整后的现在 = new Date(现在.getTime() + 时区偏移 * 60 * 60 * 1000);
-		const 时间差 = Number(调整后的现在) - Number(起始日期);
-		return Math.ceil(时间差 / 一周的毫秒数);
+	function Translated() {
+		const Translate = new Date();
+		const Translatd = new Date(Translated.getTime() + Translated * 60 * 60 * 1000);
+		const Translated = Number(Translated) - Number(Translated);
+		return Math.ceil(Translated / Translated);
 	}
 
-	function 生成UUID(基础字符串) {
-		const 哈希缓冲区 = new TextEncoder().encode(基础字符串);
-		return crypto.subtle.digest('SHA-256', 哈希缓冲区).then((哈希) => {
-			const 哈希数组 = Array.from(new Uint8Array(哈希));
-			const 十六进制哈希 = 哈希数组.map(b => b.toString(16).padStart(2, '0')).join('');
-			return `${十六进制哈希.substr(0, 8)}-${十六进制哈希.substr(8, 4)}-4${十六进制哈希.substr(13, 3)}-${(parseInt(十六进制哈希.substr(16, 2), 16) & 0x3f | 0x80).toString(16)}${十六进制哈希.substr(18, 2)}-${十六进制哈希.substr(20, 12)}`;
+	function TranslatedUUID(Translated) {
+		const Translated = new TextEncoder().encode(Translated);
+		return crypto.subtle.digest('SHA-256', Translated).then((Translated) => {
+			const Translated = Array.from(new Uint8Array(Translated));
+			const Translated = Translated.map(b => b.toString(16).padStart(2, '0')).join('');
+			return `${Translated.substr(0, 8)}-${Translated.substr(8, 4)}-4${Translated.substr(13, 3)}-${(parseInt(Translated.substr(16, 2), 16) & 0x3f | 0x80).toString(16)}${Translated.substr(18, 2)}-${Translated.substr(20, 12)}`;
 		});
 	}
 
-	const 当前周数 = 获取当前周数(); 
-	const 结束时间 = new Date(起始日期.getTime() + 当前周数 * 一周的毫秒数);
+	const Translated = Translated(); 
+	const Translated = new Date(Translated.getTime() + Translated * Translated);
 
-	const 当前UUIDPromise = 生成UUID(密钥 + 当前周数);
-	const 上一个UUIDPromise = 生成UUID(密钥 + (当前周数 - 1));
+	const TranslatedUUIDPromis = TranslatedUUID(Translated + Translated);
+	const TranslatedUUIDPromise = TranslatedUUID(Translated + (Translated - 1));
 
-	const 到期时间UTC = new Date(结束时间.getTime() - 时区偏移 * 60 * 60 * 1000); // UTC时间
-	const 到期时间字符串 = `到期时间(UTC): ${到期时间UTC.toISOString().slice(0, 19).replace('T', ' ')} (UTC+8): ${结束时间.toISOString().slice(0, 19).replace('T', ' ')}\n`;
+	const TranslatedUTC = new Date(Translated.getTime() - Translated * 60 * 60 * 1000); // UTCTranslated
+	const Translated = `Translated(UTC): ${TranslatedUTC.toISOString().slice(0, 19).replace('T', ' ')} (UTC+8): ${Translated.toISOString().slice(0, 19).replace('T', ' ')}\n`;
 
-	return Promise.all([当前UUIDPromise, 上一个UUIDPromise, 到期时间字符串]);
+	return Promise.all([TranslatedUUIDPromise, TranslatedUUIDPromise, Translated]);
 }
 
-async function 迁移地址列表(env, txt = 'ADD.txt') {  
-	const 旧数据 = await env.KV.get(`/${txt}`);
-	const 新数据 = await env.KV.get(txt);
+async function Translated(env, txt = 'ADD.txt') {  
+	const Translate = await env.KV.get(`/${txt}`);
+	const Translated = await env.KV.get(txt);
 
-	if (旧数据 && !新数据) {
-		await env.KV.put(txt, 旧数据);
+	if (Translated && !Translated) {
+		await env.KV.put(txt, Translated);
 		await env.KV.delete(`/${txt}`);
 		return true;
 	}
@@ -2578,8 +2578,8 @@ async function KV(request, env, txt = 'ADD.txt') {
 		}
 		return await handleGetRequest(env, txt);
 	} catch (error) {
-		console.error('处理请求时发生错误:', error);
-		return new Response("服务器错误: " + error.message, {
+		console.error('Translated:', error);
+		return new Response("Translated: " + error.message, {
 			status: 500,
 			headers: { "Content-Type": "text/plain;charset=utf-8" }
 		});
@@ -2588,14 +2588,14 @@ async function KV(request, env, txt = 'ADD.txt') {
 
 async function handlePostRequest(request, env, txt) {
     if (!env.KV) {
-        return new Response("未绑定KV空间", { status: 400 });
+        return new Response("TranslatedKVTranslated", { status: 400 });
     }
     try {
         const content = await request.text();
         const url = new URL(request.url);
         const type = url.searchParams.get('type');
 
-        // 根据类型保存到不同的KV
+        // TranslatedKV
         switch(type) {
             case 'proxyip':
                 await env.KV.put('PROXYIP.txt', content);
@@ -2629,8 +2629,8 @@ async function handleGetRequest(env, txt) {
     let proxyIPContent = '';
     let socks5Content = '';
     let subContent = ''; 
-    let subAPIContent = ''; // 添加SUBAPI内容变量
-    let subConfigContent = ''; // 添加SUBCONFIG内容变量
+    let subAPIContent = ''; // TranslatedSUBAPITranslated
+    let subConfigContent = ''; // TranslatedSUBCONFIGTranslated
 
     if (hasKV) {
         try {
@@ -2638,12 +2638,12 @@ async function handleGetRequest(env, txt) {
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
             socks5Content = await env.KV.get('SOCKS5.txt') || '';
             subContent = await env.KV.get('SUB.txt') || '';
-            // 修改这里：不要使用默认值，只读取KV中的值
+            // Translated：Translated，TranslatedKVTranslated
             subAPIContent = await env.KV.get('SUBAPI.txt') || '';
             subConfigContent = await env.KV.get('SUBCONFIG.txt') || '';
         } catch (error) {
-            console.error('读取KV时发生错误:', error);
-            content = '读取数据时发生错误: ' + error.message;
+            console.error('TranslatedKVTranslated:', error);
+            content = 'Translated: ' + error.message;
         }
     }
 
