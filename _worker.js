@@ -1,10 +1,10 @@
 import { connect } from 'cloudflare:sockets';
 
+// 全局变量定义
 let userID = '';
 let proxyIP = '';
-//let sub = '';
-let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
-let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ='); // 默认订阅转换后端
+let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='); // 默认订阅转换配置文件
 let subProtocol = 'https';
 let subEmoji = 'true';
 let socks5Address = '';
@@ -15,7 +15,7 @@ let noTLS = 'false';
 const expire = -1;
 let proxyIPs;
 let socks5s;
-let go2Socks5s = [
+let go2Socks5s = [ // 强制走SOCKS5代理的域名列表
 	'*ttvnw.net',
 	'*tapecontent.net',
 	'*cloudatacdn.com',
@@ -26,9 +26,9 @@ let addressesapi = [];
 let addressesnotls = [];
 let addressesnotlsapi = [];
 let addressescsv = [];
-let DLS = 8;
-let remarkIndex = 1;
-let FileName = atob('ZWRnZXR1bm5lbA==');
+let DLS = 8; // 从CSV测速结果中筛选的最低速度（DLS）
+let remarkIndex = 1; // CSV备注的索引
+let FileName = atob('ZWRnZXR1bm5lbA=='); // 默认订阅文件名
 let BotToken;
 let ChatID;
 let proxyhosts = [];
@@ -36,15 +36,15 @@ let proxyhostsURL = '';
 let RproxyIP = 'false';
 let httpsPorts = ["2053", "2083", "2087", "2096", "8443"];
 let httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
-let 有效时间 = 7;
-let 更新时间 = 3;
+let 有效时间 = 7; // 动态UUID有效天数
+let 更新时间 = 3; // 动态UUID更新时间（北京时间小时）
 let userIDLow;
 let userIDTime = "";
 let proxyIPPool = [];
 let path = '/?ed=2560';
 let 动态UUID;
 let link = [];
-let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
+let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')]; // 默认禁止访问的域名
 let DNS64Server = '';
 
 // 添加工具函数
@@ -99,7 +99,7 @@ class WebSocketManager {
 					this.processMessage(event.data, controller);
 				} else {
 					this.messageQueue.push(event.data);
-					this.log('Backpressure detected, message queued');
+					this.log('检测到背压，消息已入队');
 				}
 			});
 
@@ -109,7 +109,7 @@ class WebSocketManager {
 			// 处理早期数据
 			await this.handleEarlyData(earlyDataHeader, controller);
 		} catch (error) {
-			this.log(`Stream start error: ${error.message}`);
+			this.log(`流启动错误: ${error.message}`);
 			controller.error(error);
 		}
 	}
@@ -131,7 +131,7 @@ class WebSocketManager {
 				controller.enqueue(queuedData);
 			}
 		} catch (error) {
-			this.log(`Message processing error: ${error.message}`);
+			this.log(`消息处理错误: ${error.message}`);
 		} finally {
 			this.isProcessing = false;
 		}
@@ -154,7 +154,7 @@ class WebSocketManager {
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
 		
-		this.log(`Readable stream canceled, reason: ${reason}`);
+		this.log(`可读流已取消，原因: ${reason}`);
 		this.readableStreamCancel = true;
 		this.cleanup();
 	}
@@ -167,7 +167,7 @@ class WebSocketManager {
 	}
 
 	handleError(err, controller) {
-		this.log(`WebSocket error: ${err.message}`);
+		this.log(`WebSocket 错误: ${err.message}`);
 		if (!this.readableStreamCancel) {
 		controller.error(err);
 		}
@@ -624,7 +624,16 @@ export default {
 			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
 			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
 			if (env.BAN) banHosts = await 整理(env.BAN);
-			DNS64Server = env.DNS64 || env.NAT64 || atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+			
+            // --- NAT64/DNS64 设置加载逻辑 ---
+            // 优先从KV读取，然后是环境变量，最后是默认值
+            if (env.KV) {
+                const kv_dns64 = await env.KV.get('NAT64.txt');
+                if (kv_dns64 && kv_dns64.trim()) {
+                    DNS64Server = kv_dns64.trim().split('\n')[0]; // 读取并去除多余空格和换行
+                }
+            }
+			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
 
 			if (socks5Address) {
 				try {
@@ -1359,7 +1368,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
-        return { hasError: true, message: 'Invalid data' };
+        return { hasError: true, message: '数据无效' };
     }
 
     const version = new Uint8Array(secureProtoBuffer.slice(0, 1));
@@ -1368,7 +1377,7 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     const isValidUser = userIDString === userID || userIDString === userIDLow;
 
     if (!isValidUser) {
-        return { hasError: true, message: 'Invalid user' };
+        return { hasError: true, message: '用户无效' };
     }
 
     const optLength = new Uint8Array(secureProtoBuffer.slice(17, 18))[0];
@@ -1379,7 +1388,7 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
         case 1: break;
         case 2: isUDP = true; break;
         default:
-            return { hasError: true, message: 'Unsupported command' };
+            return { hasError: true, message: '不支持的命令' };
     }
 
     const portIndex = 18 + optLength + 1;
@@ -1411,11 +1420,11 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
             addressValue = ipv6.join(':');
             break;
         default:
-            return { hasError: true, message: 'Invalid address type' };
+            return { hasError: true, message: '无效的地址类型' };
     }
 
     if (!addressValue) {
-        return { hasError: true, message: 'Empty address value' };
+        return { hasError: true, message: '地址值为空' };
     }
 
     return {
@@ -1570,7 +1579,7 @@ function unsafeStringify(arr, offset = 0) {
 function stringify(arr, offset = 0) {
     const uuid = unsafeStringify(arr, offset);
     if (!utils.isValidUUID(uuid)) {
-        throw new TypeError(`Invalid UUID: ${uuid}`);
+        throw new TypeError(`无效的 UUID: ${uuid}`);
     }
     return uuid;
 }
@@ -1582,25 +1591,25 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
     const socksGreeting = new Uint8Array([5, 2, 0, 2]);
     const writer = socket.writable.getWriter();
     await writer.write(socksGreeting);
-    log('SOCKS5 greeting sent');
+    log('SOCKS5 问候已发送');
 
     const reader = socket.readable.getReader();
     const encoder = new TextEncoder();
     let res = (await reader.read()).value;
 
     if (res[0] !== 0x05) {
-        log(`SOCKS5 version error: received ${res[0]}, expected 5`);
+        log(`SOCKS5 版本错误: 收到 ${res[0]}, 期望 5`);
         return;
     }
     if (res[1] === 0xff) {
-        log("No acceptable authentication methods");
+        log("无可用认证方法");
         return;
     }
 
     if (res[1] === 0x02) {
-        log("SOCKS5 requires authentication");
+        log("SOCKS5 需要认证");
         if (!username || !password) {
-            log("Username and password required");
+            log("需要用户名和密码");
             return;
         }
         const authRequest = new Uint8Array([
@@ -1613,7 +1622,7 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
         await writer.write(authRequest);
         res = (await reader.read()).value;
         if (res[0] !== 0x01 || res[1] !== 0x00) {
-            log("SOCKS5 authentication failed");
+            log("SOCKS5 认证失败");
             return;
         }
     }
@@ -1630,18 +1639,18 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
             DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
             break;
         default:
-            log(`Invalid address type: ${addressType}`);
+            log(`无效的地址类型: ${addressType}`);
             return;
     }
     const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
     await writer.write(socksRequest);
-    log('SOCKS5 request sent');
+    log('SOCKS5 请求已发送');
 
     res = (await reader.read()).value;
     if (res[1] === 0x00) {
-        log("SOCKS5 connection established");
+        log("SOCKS5 连接已建立");
     } else {
-        log("SOCKS5 connection failed");
+        log("SOCKS5 连接失败");
         return;
     }
     writer.releaseLock();
@@ -1656,7 +1665,7 @@ function socks5AddressParser(address) {
     if (former) {
         const formers = former.split(":");
         if (formers.length !== 2) {
-            throw new Error('Invalid SOCKS address format: "username:password" required');
+            throw new Error('无效的SOCKS地址格式: 需要 "username:password"');
         }
         [username, password] = formers;
     }
@@ -1664,14 +1673,14 @@ function socks5AddressParser(address) {
     const latters = latter.split(":");
     port = Number(latters.pop());
     if (isNaN(port)) {
-        throw new Error('Invalid SOCKS address format: port must be a number');
+        throw new Error('无效的SOCKS地址格式: 端口必须是数字');
     }
 
     hostname = latters.join(":");
 
     const regex = /^\[.*\]$/;
     if (hostname.includes(":") && !regex.test(hostname)) {
-        throw new Error('Invalid SOCKS address format: IPv6 must be in brackets');
+        throw new Error('无效的SOCKS地址格式: IPv6必须用方括号括起来');
     }
 
     return {
@@ -1777,7 +1786,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
@@ -2810,6 +2819,9 @@ async function handlePostRequest(request, env, txt) {
             case 'subconfig':
                 await env.KV.put('SUBCONFIG.txt', content);
                 break;
+            case 'nat64': // 新增：处理NAT64设置的保存
+                await env.KV.put('NAT64.txt', content);
+                break;
             default:
                 await env.KV.put(txt, content);
         }
@@ -2827,8 +2839,9 @@ async function handleGetRequest(env, txt) {
     let proxyIPContent = '';
     let socks5Content = '';
     let subContent = ''; 
-    let subAPIContent = ''; // 添加SUBAPI内容变量
-    let subConfigContent = ''; // 添加SUBCONFIG内容变量
+    let subAPIContent = '';
+    let subConfigContent = '';
+    let nat64Content = ''; // 新增：NAT64内容变量
 
     if (hasKV) {
         try {
@@ -2836,9 +2849,9 @@ async function handleGetRequest(env, txt) {
             proxyIPContent = await env.KV.get('PROXYIP.txt') || '';
             socks5Content = await env.KV.get('SOCKS5.txt') || '';
             subContent = await env.KV.get('SUB.txt') || '';
-            // 修改这里：不要使用默认值，只读取KV中的值
             subAPIContent = await env.KV.get('SUBAPI.txt') || '';
             subConfigContent = await env.KV.get('SUBCONFIG.txt') || '';
+            nat64Content = await env.KV.get('NAT64.txt') || ''; // 新增：读取NAT64设置
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -3031,7 +3044,6 @@ async function handleGetRequest(env, txt) {
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
-                <!-- 修改高级设置部分 -->
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
                         <h3 style="margin: 0;">⚙️ 高级设置</h3>
@@ -3045,7 +3057,7 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="proxyip" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}"
+                                placeholder="例如：\n1.2.3.4:443\nproxy.example.com:8443"
                             >${proxyIPContent}</textarea>
                         </div>
 
@@ -3056,7 +3068,7 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="socks5" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}"
+                                placeholder="例如：\nuser:pass@127.0.0.1:1080\n127.0.0.1:1080"
                             >${socks5Content}</textarea>
                         </div>
 
@@ -3067,7 +3079,7 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="sub" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}"
+                                placeholder="例如：\nsub.google.com\nsub.example.com"
                             >${subContent}</textarea>
                         </div>
                         
@@ -3078,7 +3090,7 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="subapi" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}"
+                                placeholder="例如：\napi.v1.mk\nsub.xeton.dev"
                             >${subAPIContent}</textarea>
                         </div>
                         
@@ -3089,35 +3101,52 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="subconfig" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}"
+                                placeholder="例如：\nhttps://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Mini_MultiMode.ini"
                             >${subConfigContent}</textarea>
+                        </div>
+
+                        <!-- 新增：NAT64/DNS64 设置 -->
+                        <div style="margin-bottom: 20px;">
+                            <label for="nat64"><strong>NAT64/DNS64 服务器设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">用于IPv4到IPv6的转换，填写您的DNS64服务器地址</p>
+                            <textarea 
+                                id="nat64" 
+                                class="proxyip-editor" 
+                                placeholder="例如：\ndns64.cloudflare.com\n2a01:4f8:c2c:123f::1"
+                            >${nat64Content}</textarea>
                         </div>
 
                         <!-- 统一的保存按钮 -->
                         <div>
-                            <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                            <button class="btn btn-primary" onclick="saveSettings()">保存所有高级设置</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
                 </div>
 
-                <!-- 保持现有内容 -->
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                     ℹ️ 注意事项 ∨
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    <strong>1.</strong> ADD 优选IP列表格式为一行一个，IP:端口#备注，IPv6地址需用[]括起来，例如：<br>
+				     127.0.0.1:2053#本地IP<br>
+				     域名:2053#本地域名<br>
+				     [2606:4700::]:2053#本地IPv6<br><br>
+				    <strong>2.</strong> ADDAPI 可用于订阅第三方IP，或通过"?proxyip=true"参数将其作为ProxyIP源，例如：<br>
+				     https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt?proxyip=true<br><br>
+				    <strong>3.</strong> ADDAPI 可用 <a href='https://github.com/XIU2/CloudflareSpeedTest'>CloudflareSpeedTest</a> 的csv 结果文件，例如：<br>
+				     https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/CloudflareSpeedTest.csv
                 </div>
 
                 <div class="editor-container">
                     ${hasKV ? `
                         <textarea class="editor" 
-                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+                            placeholder="ADD 优选IP列表:\nvisa.cn#本地域名\n127.0.0.1:1234#CFnat\n[2606:4700::]:2053#IPv6\n\n说明:\n优选IP列表格式为一行一个，IP:端口#备注\nIPv6地址需要用[]括起来，例如[2606:4700::]:2052\n端口不填时，TLS端口默认为 443 ，noTLS端口默认为80，例如visa.cn#本地域名\n\nADDAPI 优选IP接口:\nhttps://raw.githubusercontent.com/cmliu/WorkerVless2sub/refs/heads/main/addressesapi.txt\n\n说明:ADDAPI用于订阅第三方优选IP"
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存优选列表</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                         <div class="divider"></div>
@@ -3188,55 +3217,29 @@ async function handleGetRequest(env, txt) {
                 }
             }
 
-            // 修改保存设置函数
             async function saveSettings() {
                 const saveStatus = document.getElementById('settings-save-status');
                 saveStatus.textContent = '保存中...';
                 
                 try {
-                    // 保存PROXYIP设置
-                    const proxyipContent = document.getElementById('proxyip').value;
-                    const proxyipResponse = await fetch(window.location.href + '?type=proxyip', {
-                        method: 'POST',
-                        body: proxyipContent
-                    });
+                    const promises = [
+                        fetch(window.location.href + '?type=proxyip', { method: 'POST', body: document.getElementById('proxyip').value }),
+                        fetch(window.location.href + '?type=socks5', { method: 'POST', body: document.getElementById('socks5').value }),
+                        fetch(window.location.href + '?type=sub', { method: 'POST', body: document.getElementById('sub').value }),
+                        fetch(window.location.href + '?type=subapi', { method: 'POST', body: document.getElementById('subapi').value }),
+                        fetch(window.location.href + '?type=subconfig', { method: 'POST', body: document.getElementById('subconfig').value }),
+                        fetch(window.location.href + '?type=nat64', { method: 'POST', body: document.getElementById('nat64').value })
+                    ];
 
-                    // 保存SOCKS5设置
-                    const socks5Content = document.getElementById('socks5').value;
-                    const socks5Response = await fetch(window.location.href + '?type=socks5', {
-                        method: 'POST',
-                        body: socks5Content
-                    });
+                    const responses = await Promise.all(promises);
 
-                    // 保存SUB设置
-                    const subContent = document.getElementById('sub').value;
-                    const subResponse = await fetch(window.location.href + '?type=sub', {
-                        method: 'POST',
-                        body: subContent
-                    });
-                    
-                    // 保存SUBAPI设置
-                    const subapiContent = document.getElementById('subapi').value;
-                    const subapiResponse = await fetch(window.location.href + '?type=subapi', {
-                        method: 'POST',
-                        body: subapiContent
-                    });
-                    
-                    // 保存SUBCONFIG设置
-                    const subconfigContent = document.getElementById('subconfig').value;
-                    const subconfigResponse = await fetch(window.location.href + '?type=subconfig', {
-                        method: 'POST',
-                        body: subconfigContent // 即使是空字符串也会被保存
-                    });
-
-                    if (proxyipResponse.ok && socks5Response.ok && subResponse.ok && 
-                        subapiResponse.ok && subconfigResponse.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
+                    if (responses.every(res => res.ok)) {
+                        saveStatus.textContent = '✅ 所有设置保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
                         }, 3000);
                     } else {
-                        throw new Error('保存失败');
+                        throw new Error('部分或全部设置保存失败');
                     }
                 } catch (error) {
                     saveStatus.textContent = '❌ ' + error.message;
