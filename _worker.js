@@ -1726,7 +1726,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
         			'104.16.0.0/12',
         			'162.159.0.0/16',
    		 ];
-
+		console.log("准备生成IP，地址数组总数=", addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length); 	
     		function ipToInt(ip) {
         			return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
     		}
