@@ -1722,39 +1722,38 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-    	let cfips = [
-        			'104.16.0.0/12',
-        			'162.159.0.0/16',
-   		 ];
-		console.log("准备生成IP，地址数组总数=", addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length); 	
-    		function ipToInt(ip) {
-        			return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
-    		}
+    console.log("开始生成 IP");
 
-    			function intToIp(int) {
-        			return [
-            			(int >>> 24) & 255,
-            			(int >>> 16) & 255,
-            			(int >>> 8) & 255,
-            			int & 255
-        				].join('.');
-    				}
+    let cfips = ['104.16.0.0/12', '162.159.0.0/16'];
 
-    		function generateRandomIPFromCIDR(cidr) {
-        		const [base, mask] = cidr.split('/');
-        		const baseInt = ipToInt(base);
-        		const maskBits = parseInt(mask, 10);
-        		const hostBits = 32 - maskBits;
-        		const maxHosts = Math.pow(2, hostBits);
-        		const randomOffset = Math.floor(Math.random() * maxHosts);
+    function ipToInt(ip) {
+        return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+    }
 
-        		const randomIPInt = baseInt + randomOffset;
-        	return intToIp(randomIPInt);
-    		}
+    function intToIp(int) {
+        return [
+            (int >>> 24) & 255,
+            (int >>> 16) & 255,
+            (int >>> 8) & 255,
+            int & 255
+        ].join('.');
+    }
+
+    function generateRandomIPFromCIDR(cidr) {
+        const [base, mask] = cidr.split('/');
+        const baseInt = ipToInt(base);
+        const maskBits = parseInt(mask, 10);
+        const hostBits = 32 - maskBits;
+        const maxHosts = Math.pow(2, hostBits);
+        const randomOffset = Math.floor(Math.random() * maxHosts);
+        const randomIPInt = baseInt + randomOffset;
+        return intToIp(randomIPInt);
+    }
 
     let counter = 1;
     const totalIPsToGenerate = 10;
-			console.log("开始生成IP地址");
+
+    console.log("hostName:", hostName);
 
     if (hostName.includes("worker") || hostName.includes("notls")) {
         const randomPorts = httpPorts.concat('80');
@@ -1762,7 +1761,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
             const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
             const randomIP = generateRandomIPFromCIDR(randomCIDR);
             const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-            addressesnotls.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
+            const result = `${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`;
+            addressesnotls.push(result);
+            console.log("生成 notls 地址:", result);
         }
     } else {
         const randomPorts = httpsPorts.concat('443');
@@ -1770,11 +1771,13 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
             const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
             const randomIP = generateRandomIPFromCIDR(randomCIDR);
             const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-            addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
-        console.log("最终生成的addressesnotls:", addressesnotls);
-		}
+            const result = `${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`;
+            addresses.push(result);
+            console.log("生成 tls 地址:", result);
+        }
     }
 }
+
 
 
 	const uuid = (_url.pathname == `/${dynamicUUID}`) ? dynamicUUID : userID;  // 动态生成的UUID
