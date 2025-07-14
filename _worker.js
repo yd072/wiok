@@ -36,7 +36,6 @@ let proxyhostsURL = '';
 let RproxyIP = 'false';
 let httpsPorts = ["2053", "2083", "2087", "2096", "8443"];
 let httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
-let hostName = "worker-123";
 let validTime = 7;  // 有效时间（单位：天）
 let updateInterval = 3;  // 更新间隔（单位：天）
 let userIDLow;
@@ -1722,38 +1721,68 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-    console.log("开始生成 IP");
+    let cfips = [
+        '104.16.0.0/12',
+        '162.159.0.0/16',
+    ];
 
-    let cfips = ['104.16.0.0/12', '162.159.0.0/16'];
-
+    /**
+     * 将点分十进制的IP地址字符串转换为32位整数。
+     * @param {string} ip - IP地址字符串, e.g., "104.16.0.0"
+     * @returns {number} 32位整数表示
+     */
     function ipToInt(ip) {
-        return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+        return ip.split('.').reduce((int, octet) => (int << 8) + parseInt(octet, 10), 0) >>> 0;
     }
 
+    /**
+     * 将32位整数转换为点分十进制的IP地址字符串。
+     * @param {number} int - 32位整数
+     * @returns {string} IP地址字符串
+     */
     function intToIp(int) {
-        return [
-            (int >>> 24) & 255,
-            (int >>> 16) & 255,
-            (int >>> 8) & 255,
-            int & 255
-        ].join('.');
+        return `${(int >>> 24)}.${(int >>> 16) & 255}.${(int >>> 8) & 255}.${int & 255}`;
     }
 
+    /**
+     * 从一个CIDR块中随机生成一个IP地址。
+     * 这个版本可以正确处理任意长度的子网掩码。
+     * @param {string} cidr - CIDR块字符串, e.g., "104.16.0.0/12"
+     * @returns {string} 随机生成的IP地址
+     */
     function generateRandomIPFromCIDR(cidr) {
-        const [base, mask] = cidr.split('/');
+        const [base, maskStr] = cidr.split('/');
+        const mask = parseInt(maskStr, 10);
+
+        // 如果掩码是/32，只有一个IP，直接返回
+        if (mask === 32) {
+            return base;
+        }
+
+        // 1. 将起始IP转换为32位整数
         const baseInt = ipToInt(base);
-        const maskBits = parseInt(mask, 10);
-        const hostBits = 32 - maskBits;
+        
+        // 2. 计算主机位的数量
+        const hostBits = 32 - mask;
+        
+        // 3. 计算这个CIDR块中可用主机的总数
+        // 使用 Math.pow(2, hostBits)
         const maxHosts = Math.pow(2, hostBits);
-        const randomOffset = Math.floor(Math.random() * maxHosts);
-        const randomIPInt = baseInt + randomOffset;
-        return intToIp(randomIPInt);
+
+        // 4. 生成一个在主机范围内的随机偏移量
+        const randomHostOffset = Math.floor(Math.random() * maxHosts);
+
+        // 5. 计算出随机IP的整数表示
+        // 注意：要确保起始IP确实是该网络的第一个地址，对于Cloudflare的例子这是成立的。
+        const randomIpInt = baseInt + randomHostOffset;
+        
+        // 6. 将整数转换回IP字符串并返回
+        return intToIp(randomIpInt);
     }
+
 
     let counter = 1;
     const totalIPsToGenerate = 10;
-
-    console.log("hostName:", hostName);
 
     if (hostName.includes("worker") || hostName.includes("notls")) {
         const randomPorts = httpPorts.concat('80');
@@ -1761,9 +1790,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
             const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
             const randomIP = generateRandomIPFromCIDR(randomCIDR);
             const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-            const result = `${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`;
-            addressesnotls.push(result);
-            console.log("生成 notls 地址:", result);
+            addressesnotls.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
         }
     } else {
         const randomPorts = httpsPorts.concat('443');
@@ -1771,15 +1798,10 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
             const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
             const randomIP = generateRandomIPFromCIDR(randomCIDR);
             const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-            const result = `${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`;
-            addresses.push(result);
-            console.log("生成 tls 地址:", result);
+            addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
         }
     }
 }
-
-
-
 	const uuid = (_url.pathname == `/${dynamicUUID}`) ? dynamicUUID : userID;  // 动态生成的UUID
 	const userAgent = UA.toLowerCase();
 	const Config = 配置信息(userID, hostName);
