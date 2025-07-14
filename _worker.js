@@ -45,7 +45,7 @@ let path = '/?ed=2560';
 let 动态UUID;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
-let DNS64Server = '';
+let DNS64Server = '2001:67c:2960:6464::/96';
 
 // 添加工具函数
 const utils = {
