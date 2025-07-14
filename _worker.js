@@ -36,6 +36,7 @@ let proxyhostsURL = '';
 let RproxyIP = 'false';
 let httpsPorts = ["2053", "2083", "2087", "2096", "8443"];
 let httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
+let hostName = "worker-123";
 let validTime = 7;  // 有效时间（单位：天）
 let updateInterval = 3;  // 更新间隔（单位：天）
 let userIDLow;
