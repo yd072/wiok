@@ -624,7 +624,7 @@ export default {
 			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
 			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
 			if (env.BAN) banHosts = await 整理(env.BAN);
-			DNS64Server = env.DNS64 || env.NAT64 || '2001:67c:2960:6464';
+			DNS64Server = env.DNS64 || env.NAT64 || '2001:67c:2960:6464' || atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
 
 			if (socks5Address) {
 				try {
