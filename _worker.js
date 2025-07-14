@@ -1754,6 +1754,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
     let counter = 1;
     const totalIPsToGenerate = 10;
+			console.log("开始生成IP地址");
 
     if (hostName.includes("worker") || hostName.includes("notls")) {
         const randomPorts = httpPorts.concat('80');
@@ -1770,7 +1771,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
             const randomIP = generateRandomIPFromCIDR(randomCIDR);
             const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
             addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
-        }
+        console.log("最终生成的addressesnotls:", addressesnotls);
+		}
     }
 }
 
