@@ -1267,7 +1267,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
     // 优化连接处理
     const createConnection = async (address, port, socks = false) => {
-        log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
+        log(`[DNS64-CHECK] 准备建立连接到 (最终地址): ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
