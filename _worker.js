@@ -1721,46 +1721,58 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-	    let cfips = [
-		             '104.16.0.0/12',
-		             '162.159.0.0/16',
-	    ];
+    	let cfips = [
+        			'104.16.0.0/12',
+        			'162.159.0.0/16',
+   		 ];
 
-	    function generateRandomIPFromCIDR(cidr) {
-		    const [base, mask] = cidr.split('/');
-		    const baseIP = base.split('.').map(Number);
-		    const subnetBits = 32 - parseInt(mask, 10);
-		    const maxHosts = Math.pow(2, subnetBits) - 1;
-		    const randomHost = Math.floor(Math.random() * maxHosts);
+    		function ipToInt(ip) {
+        			return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+    		}
 
-		    return baseIP.map((octet, index) => {
-			    if (index < 2) return octet;
-			    if (index === 2) return (octet & (255 << (subnetBits - 8))) + ((randomHost >> 8) & 255);
-			    return (octet & (255 << subnetBits)) + (randomHost & 255);
-		    }).join('.');
-	    }
+    			function intToIp(int) {
+        			return [
+            			(int >>> 24) & 255,
+            			(int >>> 16) & 255,
+            			(int >>> 8) & 255,
+            			int & 255
+        				].join('.');
+    				}
 
-	    let counter = 1;
-	    const totalIPsToGenerate = 10;
+    		function generateRandomIPFromCIDR(cidr) {
+        		const [base, mask] = cidr.split('/');
+        		const baseInt = ipToInt(base);
+        		const maskBits = parseInt(mask, 10);
+        		const hostBits = 32 - maskBits;
+        		const maxHosts = Math.pow(2, hostBits);
+        		const randomOffset = Math.floor(Math.random() * maxHosts);
 
-	    if (hostName.includes("worker") || hostName.includes("notls")) {
-		    const randomPorts = httpPorts.concat('80');
-		    for (let i = 0; i < totalIPsToGenerate; i++) {
-			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
-			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
-			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-			    addressesnotls.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
-		    }
-	    } else {
-		    const randomPorts = httpsPorts.concat('443');
-		        for (let i = 0; i < totalIPsToGenerate; i++) {
-			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
-			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
-			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-			    addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
-		    }
-	    }
+        		const randomIPInt = baseInt + randomOffset;
+        	return intToIp(randomIPInt);
+    		}
+
+    let counter = 1;
+    const totalIPsToGenerate = 10;
+
+    if (hostName.includes("worker") || hostName.includes("notls")) {
+        const randomPorts = httpPorts.concat('80');
+        for (let i = 0; i < totalIPsToGenerate; i++) {
+            const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
+            const randomIP = generateRandomIPFromCIDR(randomCIDR);
+            const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
+            addressesnotls.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
+        }
+    } else {
+        const randomPorts = httpsPorts.concat('443');
+        for (let i = 0; i < totalIPsToGenerate; i++) {
+            const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
+            const randomIP = generateRandomIPFromCIDR(randomCIDR);
+            const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
+            addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
+        }
     }
+}
+
 
 	const uuid = (_url.pathname == `/${dynamicUUID}`) ? dynamicUUID : userID;  // 动态生成的UUID
 	const userAgent = UA.toLowerCase();
