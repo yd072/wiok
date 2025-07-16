@@ -1323,38 +1323,43 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             let tcpSocket;
             if (enableSocks) {
                 tcpSocket = await createConnection(addressRemote, portRemote, true);
-            } /*else {
-                // 处理 proxyIP
-                
-				if (!proxyIP || proxyIP === '') {
-                    proxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-                } */
-					
-				 else {
-        // 新逻辑：只有当用户通过 KV 或环境变量配置了 PROXYIP 时，才执行
-        if (proxyIP && proxyIP.trim() !== '') {
-            // 解析用户提供的 PROXYIP，这部分逻辑保持不变
-            let port = portRemote;
-            if (proxyIP.includes(']:')) {
-                [proxyIP, port] = proxyIP.split(']:');
-            } else if (proxyIP.includes(':')) {
-                [proxyIP, port] = proxyIP.split(':');
-            }
-            if (proxyIP.includes('.tp')) {
-                port = proxyIP.split('.tp')[1].split('.')[0] || port;
-            }
-            portRemote = port;
+            } else {
+                // ##################################################
+                // ### START OF MODIFICATION ###
+                // ##################################################
+                // 新逻辑：只有当用户通过 KV 或环境变量配置了 PROXYIP 时，才执行
+                if (proxyIP && proxyIP.trim() !== '') {
+                    // 解析用户提供的 PROXYIP，这部分逻辑保持不变
+                    let port = portRemote;
+                    if (proxyIP.includes(']:')) {
+                        [proxyIP, port] = proxyIP.split(']:');
+                    } else if (proxyIP.includes(':')) {
+                        [proxyIP, port] = proxyIP.split(':');
+                    }
+                    if (proxyIP.includes('.tp')) {
+                        port = proxyIP.split('.tp')[1].split('.')[0] || port;
+                    }
+                    portRemote = port;
 
-            // 使用用户配置的 PROXYIP 尝试连接
-            log(`重试：尝试使用用户配置的 PROXYIP: ${proxyIP}:${portRemote}`);
-            tcpSocket = await createConnection(proxyIP.toLowerCase(), portRemote);
-        } else {
-            // 如果没有配置 PROXYIP，则直接抛出错误以模拟重试失败
-            // 这使得连接流程可以继续到下一个回退机制（如果存在）
-            log('重试：未配置 PROXYIP，跳过 PROXYIP 重试逻辑。');
-            throw new Error("No PROXYIP configured for retry, proceeding to next fallback.");
-        }
-    }
+                    // 使用用户配置的 PROXYIP 尝试连接
+                    log(`重试：尝试使用用户配置的 PROXYIP: ${proxyIP}:${portRemote}`);
+                    tcpSocket = await createConnection(proxyIP.toLowerCase(), portRemote);
+                } else {
+                    // 如果没有配置 PROXYIP，则直接抛出错误以模拟重试失败
+                    // 这使得连接流程可以继续到下一个回退机制（如果存在）
+                    log('重试：未配置 PROXYIP，跳过 PROXYIP 重试逻辑。');
+                    // 如果这里您想测试NAT64，可以让流程继续，而不是抛错后就终止。
+                    // 比如，直接调用nat64的逻辑
+                    log('重试：尝试使用NAT64进行连接。');
+                    const nat64Proxyip = `[${await resolveToIPv6(addressRemote)}]`;
+                    log(`NAT64 代理连接到 ${nat64Proxyip}:443`);
+                    tcpSocket = await createConnection(nat64Proxyip, '443');
+                }
+                // ##################################################
+                // ### END OF MODIFICATION ###
+                // ##################################################
+            }
+
             // 监听连接关闭
             tcpSocket.closed
                 .catch(error => log('重试连接关闭:', error))
@@ -1363,6 +1368,8 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
         } catch (error) {
             log('重试失败:', error);
+            // 在重试也失败后，可以考虑关闭WebSocket
+            safeCloseWebSocket(webSocket);
         }
     };
 
@@ -3308,5 +3315,5 @@ async function handleGetRequest(env, txt) {
 
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
-    });
-}
+    })
+}	
