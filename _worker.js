@@ -1335,7 +1335,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 log('重试：第一阶段 - 尝试 PROXYIP...');
                 let usedProxyIP = proxyIP; // 使用从全局/用户配置加载的 proxyIP
                 if (!usedProxyIP || usedProxyIP.trim() === '') {
-                    usedProxyIP = kodi.tv;
+                    usedProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
                     log(`...未配置 PROXYIP，使用内置默认值: ${usedProxyIP}`);
                 } else {
                     log(`...使用用户配置的 PROXYIP: ${usedProxyIP}`);
@@ -1354,10 +1354,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 }
                 
                 tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
-                log('✅ PROXYIP 连接成功！');
+                log(' PROXYIP 连接成功！');
 
             } catch (proxyError) {
-                log(`❌ PROXYIP 连接失败: ${proxyError.message}`);
+                log(` PROXYIP 连接失败: ${proxyError.message}`);
                 
                 // **回退第2步：当 PROXYIP 失败时，尝试 NAT64**
                 try {
@@ -1370,10 +1370,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     log(`...NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
                     
                     tcpSocket = await createConnection(nat64Proxyip, 443);
-                    log('✅ NAT64 连接成功！');
+                    log(' NAT64 连接成功！');
 
                 } catch (nat64Error) {
-                    log(`❌ NAT64 连接也失败了: ${nat64Error.message}`);
+                    log(` NAT64 连接也失败了: ${nat64Error.message}`);
                     log('所有重试尝试均已失败，关闭连接。');
                     safeCloseWebSocket(webSocket);
                     return; // 明确结束重试过程
@@ -3164,7 +3164,9 @@ async function handleGetRequest(env, txt) {
                         <!-- NAT64/DNS64 设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="nat64"><strong>NAT64/DNS64</strong></label>
-                            <p style="margin: 5px 0; color: #666;"></p>
+    					<p style="margin: 5px 0; color: #666;">
+        				<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
+    					</p>
                             <textarea 
                                 id="nat64" 
                                 class="proxyip-editor" 
@@ -3172,6 +3174,11 @@ async function handleGetRequest(env, txt) {
                             >${nat64Content}</textarea>
                         </div>
 
+						<script>
+  						const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
+  						const decodedURL = atob(encodedURL);
+  						document.getElementById('nat64-link').setAttribute('href', decodedURL);
+						</script>
                         <!-- 统一的保存按钮 -->
                         <div>
                             <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
