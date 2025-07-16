@@ -1263,7 +1263,6 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
-    // 优化 SOCKS5 模式检查
     const checkSocks5Mode = async (address) => {
         const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
@@ -1274,7 +1273,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return !!pattern;
     };
 
-    // 优化连接处理
     const createConnection = async (address, port, socks = false) => {
         log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
@@ -1302,7 +1300,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             clearTimeout(timeoutId);
             remoteSocket.value = tcpSocket;
 
-            // 写入数据
             const writer = tcpSocket.writable.getWriter();
             try {
                 await writer.write(rawClientData);
@@ -1317,42 +1314,70 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     };
 
-    // 优化重试逻辑
     const retryConnection = async () => {
+        // 在单个函数中处理所有重试逻辑，以实现清晰的 PROXYIP -> NAT64 回退链
+        let tcpSocket;
         try {
-            let tcpSocket;
             if (enableSocks) {
+                // SOCKS5 逻辑是独立的，不参与 PROXYIP/NAT64 回退
+                log('重试：尝试使用 SOCKS5...');
                 tcpSocket = await createConnection(addressRemote, portRemote, true);
+                log('SOCKS5 连接成功');
             } else {
-                // ##################################################
-                // ### START OF MODIFICATION ###
-                // ##################################################
-                // 新逻辑：只有当用户通过 KV 或环境变量配置了 PROXYIP 时，才执行
-                if (!proxyIP || proxyIP === '') {
-                    proxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                // 非 SOCKS5 时的回退逻辑 (PROXYIP -> NAT64)
+                let usedProxyIP = proxyIP; // 从全局/用户配置开始
+
+                if (!usedProxyIP || usedProxyIP.trim() === '') {
+                    usedProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                    log(`重试：未配置 PROXYIP，使用内置 PROXYIP: ${usedProxyIP}`);
                 } else {
-                    let port = portRemote;
-                    if (proxyIP.includes(']:')) {
-                        [proxyIP, port] = proxyIP.split(']:');
-                    } else if (proxyIP.includes(':')) {
-                        [proxyIP, port] = proxyIP.split(':');
-                    }
-                    if (proxyIP.includes('.tp')) {
-                        port = proxyIP.split('.tp')[1].split('.')[0] || port;
-                    }
-                    portRemote = port;
+                    log(`重试：使用用户配置的 PROXYIP: ${usedProxyIP}`);
                 }
-                tcpSocket = await createConnection(proxyIP.toLowerCase() || addressRemote, portRemote);
+
+                try {
+                    // **回退第1步：尝试 PROXYIP**
+                    let port = portRemote;
+                    let parsedIP = usedProxyIP;
+
+                    if (parsedIP.includes(']:')) {
+                        [parsedIP, port] = parsedIP.split(']:');
+                        parsedIP += ']';
+                    } else if (parsedIP.includes(':')) {
+                        [parsedIP, port] = parsedIP.split(':');
+                    }
+                     if (parsedIP.includes('.tp')) {
+                        port = parsedIP.split('.tp')[1].split('.')[0] || port;
+                    }
+
+                    tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
+                    log(`使用 PROXYIP (${parsedIP}:${port}) 连接成功`);
+
+                } catch (proxyError) {
+                    // **回退第2步：当 PROXYIP 失败时，尝试 NAT64**
+                    log(`使用 PROXYIP 连接失败: ${proxyError.message}。正在尝试 NAT64...`);
+                    try {
+                        const nat64Proxyip = `[${await resolveToIPv6(addressRemote)}]`;
+                        log(`NAT64 代理连接到 ${nat64Proxyip}:443`);
+                        tcpSocket = await createConnection(nat64Proxyip, '443'); // 注意：createConnection 是我们自己的辅助函数
+                        log('使用 NAT64 连接成功');
+                    } catch (nat64Error) {
+                        log(`最终备选 NAT64 连接也失败了: ${nat64Error.message}`);
+                        // 抛出错误，让最外层的 catch 块来处理
+                        throw nat64Error;
+                    }
+                }
             }
 
-            // 监听连接关闭
+            // 如果任何一个重试成功，则建立数据管道
             tcpSocket.closed
                 .catch(error => log('重试连接关闭:', error))
                 .finally(() => safeCloseWebSocket(webSocket));
-
+            
             return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
+
         } catch (error) {
-            log('重试失败:', error);
+            log(`所有重试尝试均失败: ${error.message}`);
+            safeCloseWebSocket(webSocket); // 所有方法都失败后，关闭连接
         }
     };
 
@@ -3278,7 +3303,7 @@ async function handleGetRequest(env, txt) {
                     });
 
                     if (proxyipResponse.ok && socks5Response.ok && subResponse.ok && 
-                        subapiResponse.ok && subconfigResponse.ok) {
+                        subapiResponse.ok && subconfigResponse.ok && nat64Response.ok) {
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
