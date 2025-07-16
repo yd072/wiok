@@ -3149,16 +3149,23 @@ async function handleGetRequest(env, txt) {
                         </div>
 
                         <!-- NAT64/DNS64 设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="nat64"><strong>NAT64/DNS64</strong></label>
-                            <p style="margin: 5px 0; color: #666;"></p>
-                            <textarea 
-                                id="nat64" 
-                                class="proxyip-editor" 
-                                placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1"
-                            >${nat64Content}</textarea>
-                        </div>
+  						<div style="margin-bottom: 20px;">
+    					<label for="nat64"><strong>NAT64/DNS64</strong></label>
+    					<p style="margin: 5px 0; color: #666;">
+        				<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
+    					</p>
+    						<textarea 
+        					id="nat64" 
+        				class="proxyip-editor" 
+        						placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1"
+    						>${nat64Content}</textarea>
+						</div>
 
+						<script>
+  						const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
+  						const decodedURL = atob(encodedURL);
+  						document.getElementById('nat64-link').setAttribute('href', decodedURL);
+						</script>
                         <!-- 统一的保存按钮 -->
                         <div>
                             <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
