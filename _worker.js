@@ -1343,11 +1343,18 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             if (proxyIP.includes('.tp')) {
                 port = proxyIP.split('.tp')[1].split('.')[0] || port;
             }
-                    portRemote = port;
-                }
-                tcpSocket = await createConnection(proxyIP.toLowerCase() || addressRemote, portRemote);
-            }
+            portRemote = port;
 
+            // 使用用户配置的 PROXYIP 尝试连接
+            log(`重试：尝试使用用户配置的 PROXYIP: ${proxyIP}:${portRemote}`);
+            tcpSocket = await createConnection(proxyIP.toLowerCase(), portRemote);
+        } else {
+            // 如果没有配置 PROXYIP，则直接抛出错误以模拟重试失败
+            // 这使得连接流程可以继续到下一个回退机制（如果存在）
+            log('重试：未配置 PROXYIP，跳过 PROXYIP 重试逻辑。');
+            throw new Error("No PROXYIP configured for retry, proceeding to next fallback.");
+        }
+    }
             // 监听连接关闭
             tcpSocket.closed
                 .catch(error => log('重试连接关闭:', error))
