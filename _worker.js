@@ -3123,11 +3123,11 @@ async function handleGetRequest(env, txt) {
                         <!-- NAT64/DNS64 设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="nat64"><strong>NAT64/DNS64</strong></label>
-                            <p style="margin: 5px 0; color: #666;">用于IPv4到IPv6的转换，填写您的DNS64服务器地址</p>
+                            <p style="margin: 5px 0; color: #666;"></p>
                             <textarea 
                                 id="nat64" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTAwYGRuczY0LmV4YW1wbGUuY29tJTAwYTJhMDElM0E0ZjglM0FjMmMlM0ExMjNmJTNBJTNBJTJGMQ=='))}"
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTIwZG5zNjQuZXhhbXBsZS5jb20lMDIyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjE='))}"
                             >${nat64Content}</textarea>
                         </div>
 
