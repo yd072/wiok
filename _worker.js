@@ -3127,7 +3127,7 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="nat64" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTI5JTAKZG5zNjQuZXhhbXBsZS5jb20lMAoyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQTE='))}"
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTIwJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQTE='))}"
                             >${nat64Content}</textarea>
                         </div>
 
