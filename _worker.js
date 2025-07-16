@@ -1323,20 +1323,26 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             let tcpSocket;
             if (enableSocks) {
                 tcpSocket = await createConnection(addressRemote, portRemote, true);
-            } else {
+            } /*else {
                 // 处理 proxyIP
-                if (!proxyIP || proxyIP === '') {
+                
+				if (!proxyIP || proxyIP === '') {
                     proxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-                } else {
-                    let port = portRemote;
-                    if (proxyIP.includes(']:')) {
-                        [proxyIP, port] = proxyIP.split(']:');
-                    } else if (proxyIP.includes(':')) {
-                        [proxyIP, port] = proxyIP.split(':');
-                    }
-                    if (proxyIP.includes('.tp')) {
-                        port = proxyIP.split('.tp')[1].split('.')[0] || port;
-                    }
+                } */
+					
+				 else {
+        // 新逻辑：只有当用户通过 KV 或环境变量配置了 PROXYIP 时，才执行
+        if (proxyIP && proxyIP.trim() !== '') {
+            // 解析用户提供的 PROXYIP，这部分逻辑保持不变
+            let port = portRemote;
+            if (proxyIP.includes(']:')) {
+                [proxyIP, port] = proxyIP.split(']:');
+            } else if (proxyIP.includes(':')) {
+                [proxyIP, port] = proxyIP.split(':');
+            }
+            if (proxyIP.includes('.tp')) {
+                port = proxyIP.split('.tp')[1].split('.')[0] || port;
+            }
                     portRemote = port;
                 }
                 tcpSocket = await createConnection(proxyIP.toLowerCase() || addressRemote, portRemote);
