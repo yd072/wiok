@@ -3127,7 +3127,7 @@ async function handleGetRequest(env, txt) {
                             <textarea 
                                 id="nat64" 
                                 class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJUUxJUJCJUFDJTAKZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQTE='))}"
+                                placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1"
                             >${nat64Content}</textarea>
                         </div>
 
