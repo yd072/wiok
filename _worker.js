@@ -1359,22 +1359,21 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 
                 // **回退第2步：当 PROXYIP 失败时，尝试 NAT64**
                 try {
-                    log('重试：第二阶段 - 尝试 NAT64...');
-                    const nat64Address = await resolveToIPv6(addressRemote);
-                    if (!nat64Address || !nat64Address.includes(':')) {
-                        throw new Error(`NAT64 解析失败，返回了无效地址: ${nat64Address}`);
-                    }
-                    const nat64Proxyip = `[${nat64Address}]`;
-                    log(`...NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
-                    
-                    tcpSocket = await createConnection(nat64Proxyip, 443);
-                    log(' NAT64 连接成功！');
+    const nat64Address = await resolveToIPv6(addressRemote);
 
-                } catch (nat64Error) {
-                    log(` NAT64 连接也失败了: ${nat64Error.message}`);
-                    log('所有重试尝试均已失败，关闭连接。');
-                    safeCloseWebSocket(webSocket);
-                    return; // 明确结束重试过程
+    const nat64Proxyip = isIPv6(nat64Address)
+        ? `[${nat64Address}]`
+        : nat64Address;
+
+    log(`...NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
+    
+    tcpSocket = await createConnection(nat64Proxyip, 443);
+    log(' NAT64 连接成功！');
+} catch (nat64Error) {
+    log(` NAT64 连接也失败了: ${nat64Error.message}`);
+    log('所有重试尝试均已失败，关闭连接。');
+    safeCloseWebSocket(webSocket);
+    return; // 明确结束重试过程
                 }
             }
         }
