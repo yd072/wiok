@@ -565,7 +565,7 @@ export default {
 			// 修改PROXYIP初始化逻辑
 			if (env.KV) {
 				try {
-					const advancedSettingsJSON = await env.KV.get('ADVANCED_SETTINGS.txt');
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
 					if (advancedSettingsJSON) {
 						const settings = JSON.parse(advancedSettingsJSON);
 						if (settings.proxyip && settings.proxyip.trim()) {
@@ -584,7 +584,7 @@ export default {
 			// 修改SOCKS5地址初始化逻辑
 			if (env.KV) {
 				try {
-					const advancedSettingsJSON = await env.KV.get('ADVANCED_SETTINGS.txt');
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
 					if (advancedSettingsJSON) {
 						const settings = JSON.parse(advancedSettingsJSON);
 						if (settings.socks5 && settings.socks5.trim()) {
@@ -608,7 +608,7 @@ export default {
 			// --- NAT64/DNS64 设置加载逻辑 ---
 			if (env.KV) {
 				try {
-					const advancedSettingsJSON = await env.KV.get('ADVANCED_SETTINGS.txt');
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
 					if (advancedSettingsJSON) {
 						const settings = JSON.parse(advancedSettingsJSON);
 						if (settings.nat64 && settings.nat64.trim()) {
@@ -1833,13 +1833,13 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	// 在获取其他配置前,先尝试读取自定义的设置
 	if (env.KV) {
 		try {
-			const advancedSettingsJSON = await env.KV.get('ADVANCED_SETTINGS.txt');
+			const advancedSettingsJSON = await env.KV.get('settinggs.txt');
 			let settings = {};
 			if (advancedSettingsJSON) {
 				try {
 					settings = JSON.parse(advancedSettingsJSON);
 				} catch (e) {
-					console.error("解析ADVANCED_SETTINGS.txt失败:", e);
+					console.error("解析settinggs.txt失败:", e);
 				}
 			}
 
@@ -2853,7 +2853,7 @@ async function handlePostRequest(request, env, txt) {
         // 根据类型保存到不同的KV
         switch(type) {
             case 'advanced':
-                await env.KV.put('ADVANCED_SETTINGS.txt', content);
+                await env.KV.put('settinggs.txt', content);
                 break;
             default: // 主列表内容保存到ADD.txt
                 await env.KV.put(txt, content);
@@ -2880,7 +2880,7 @@ async function handleGetRequest(env, txt) {
         try {
             content = await env.KV.get(txt) || '';
 			
-            const advancedSettingsJSON = await env.KV.get('ADVANCED_SETTINGS.txt');
+            const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
                 proxyIPContent = settings.proxyip || '';
@@ -3170,6 +3170,7 @@ async function handleGetRequest(env, txt) {
                     </div>
                 </div>
 
+                <!-- 保持现有内容 -->
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                     ℹ️ 注意事项 ∨
                 </a>
