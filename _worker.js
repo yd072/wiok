@@ -1334,7 +1334,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 log('重试：第一阶段 - 尝试 PROXYIP...');
                 let usedProxyIP = proxyIP; // 使用从全局/用户配置加载的 proxyIP
                 if (!usedProxyIP || usedProxyIP.trim() === '') {
-                    usedProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                    usedProxyIP = kodi.tv;
                     log(`...未配置 PROXYIP，使用内置默认值: ${usedProxyIP}`);
                 } else {
                     log(`...使用用户配置的 PROXYIP: ${usedProxyIP}`);
