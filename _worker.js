@@ -1328,69 +1328,81 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 return;
             }
         } else {
-            // --- 最终修正版的回退逻辑 ---
+            // --- 最终版回退逻辑 ---
 
-            let connectionEstablished = false;
+            // **第一层：尝试所有用户配置的选项**
+            // 只有当所有用户配置的选项都失败后，才会进入catch块，尝试默认选项。
+            try {
+                let connectionEstablished = false;
+                log('--- 开始尝试用户自定义配置 ---');
 
-            // 优先级 1: 尝试用户配置的 PROXYIP
-            if (proxyIP && proxyIP.trim() !== '') {
-                try {
-                    log('重试：第一阶段 - 尝试用户配置的 PROXYIP...');
-                    let usedProxyIP = proxyIP;
-                    log(`...使用用户配置的 PROXYIP: ${usedProxyIP}`);
-
-                    let port = portRemote;
-                    let parsedIP = usedProxyIP;
-                    if (parsedIP.includes(']:')) {
-                        [parsedIP, port] = parsedIP.split(']:');
-                        parsedIP += ']';
-                    } else if (parsedIP.includes(':')) {
-                        [parsedIP, port] = parsedIP.split(':');
+                // 优先级 1: 尝试用户配置的 PROXYIP
+                if (proxyIP && proxyIP.trim() !== '') {
+                    try {
+                        log('重试：(1/2) 尝试用户配置的 PROXYIP...');
+                        let usedProxyIP = proxyIP;
+                        log(`...使用: ${usedProxyIP}`);
+                        
+                        let port = portRemote;
+                        let parsedIP = usedProxyIP;
+                        if (parsedIP.includes(']:')) {
+                            [parsedIP, port] = parsedIP.split(']:');
+                            parsedIP += ']';
+                        } else if (parsedIP.includes(':')) {
+                            [parsedIP, port] = parsedIP.split(':');
+                        }
+                        if (parsedIP.includes('.tp')) {
+                            port = parsedIP.split('.tp')[1].split('.')[0] || port;
+                        }
+                        
+                        tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
+                        log('✅ 用户 PROXYIP 连接成功！');
+                        connectionEstablished = true;
+                    } catch (userProxyError) {
+                        log(`❌ 用户 PROXYIP 连接失败: ${userProxyError.message}`);
                     }
-                    if (parsedIP.includes('.tp')) {
-                        port = parsedIP.split('.tp')[1].split('.')[0] || port;
-                    }
-                    
-                    tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
-                    log('✅ 用户配置的 PROXYIP 连接成功！');
-                    connectionEstablished = true;
-                } catch (userProxyError) {
-                    log(`❌ 用户配置的 PROXYIP 连接失败: ${userProxyError.message}`);
                 }
-            }
 
-            // 优先级 2: 尝试用户配置的 NAT64
-            const defaultNat64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
-            if (!connectionEstablished && DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== defaultNat64Server) {
-                try {
-                    log('重试：第二阶段 - 尝试用户配置的 NAT64...');
-                    const nat64Address = await resolveToIPv6(addressRemote);
-                    if (!nat64Address || !nat64Address.includes(':')) {
-                        throw new Error(`NAT64 解析失败，返回了无效地址: ${nat64Address}`);
+                // 优先级 2: 尝试用户配置的 NAT64
+                const defaultNat64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+                if (!connectionEstablished && DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== defaultNat64Server) {
+                    try {
+                        log('重试：(2/2) 尝试用户配置的 NAT64...');
+                        const nat64Address = await resolveToIPv6(addressRemote);
+                        if (!nat64Address || !nat64Address.includes(':')) {
+                            throw new Error(`NAT64 解析失败，返回无效地址: ${nat64Address}`);
+                        }
+                        const nat64Proxyip = `[${nat64Address}]`;
+                        log(`...NAT64 解析到 ${nat64Proxyip}，尝试连接...`);
+                        
+                        tcpSocket = await createConnection(nat64Proxyip, 443);
+                        log('✅ 用户 NAT64 连接成功！');
+                        connectionEstablished = true;
+                    } catch (userNat64Error) {
+                        log(`❌ 用户 NAT64 连接失败: ${userNat64Error.message}`);
                     }
-                    const nat64Proxyip = `[${nat64Address}]`;
-                    log(`...NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
-                    
-                    tcpSocket = await createConnection(nat64Proxyip, 443);
-                    log('✅ 用户配置的 NAT64 连接成功！');
-                    connectionEstablished = true;
-                } catch (userNat64Error) {
-                    log(`❌ 用户配置的 NAT64 连接失败: ${userNat64Error.message}`);
                 }
-            }
 
-            // 优先级 3 & 4: 统一的默认回退机制
-            if (!connectionEstablished) {
-                log('进入默认回退机制...');
-                // 优先级 3: 尝试内置的默认 PROXYIP
+                // 如果没有任何用户配置的选项成功，则手动抛出错误，以触发默认回退机制。
+                if (!connectionEstablished) {
+                    throw new Error("所有用户配置选项均失败，转入默认回退机制。");
+                }
+
+            } catch (userOptionsError) {
+                // **第二层：默认回退机制（仅在第一层完全失败时进入）**
+                log(userOptionsError.message);
+                log('--- 开始尝试默认回退配置 ---');
+
+                // 这个结构与原始代码完全相同，保证了回退的可靠性
                 try {
-                    log('重试：第三阶段 - 尝试内置的默认 PROXYIP...');
+                    // 优先级 3: 尝试内置的默认 PROXYIP
+                    log('重试：(3/4) 尝试内置的默认 PROXYIP...');
                     const defaultProxyIP = kodi.tv;
-                    log(`...使用内置默认值: ${defaultProxyIP}`);
+                    log(`...使用: ${defaultProxyIP}`);
 
                     let port = portRemote;
                     let parsedIP = defaultProxyIP;
-                     if (parsedIP.includes(']:')) {
+                    if (parsedIP.includes(']:')) {
                         [parsedIP, port] = parsedIP.split(']:');
                         parsedIP += ']';
                     } else if (parsedIP.includes(':')) {
@@ -1406,17 +1418,16 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 } catch (defaultProxyError) {
                     log(`❌ 内置 PROXYIP 连接失败: ${defaultProxyError.message}`);
                     
-                    // !!! 关键修改 !!!
-                    // 只有在内置 PROXYIP 失败后，才在其 catch 块内部尝试最终的 NAT64
-                    // 优先级 4: 尝试最终回退 (包括默认 NAT64)
+                    // 优先级 4: 尝试最终的 NAT64 (包括默认值)
+                    // **此逻辑在内置PROXYIP失败的catch块中，确保了必定会执行**
                     try {
-                        log('重试：第四阶段 - 尝试最终回退 (NAT64)...');
+                        log('重试：(4/4) 尝试最终回退 (NAT64)...');
                         const nat64Address = await resolveToIPv6(addressRemote);
                         if (!nat64Address || !nat64Address.includes(':')) {
-                            throw new Error(`NAT64 解析失败，返回了无效地址: ${nat64Address}`);
+                            throw new Error(`NAT64 解析失败，返回无效地址: ${nat64Address}`);
                         }
                         const nat64Proxyip = `[${nat64Address}]`;
-                        log(`...最终 NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
+                        log(`...最终 NAT64 解析到 ${nat64Proxyip}，尝试连接...`);
                         
                         tcpSocket = await createConnection(nat64Proxyip, 443);
                         log('✅ 最终回退 (NAT64) 连接成功！');
@@ -1427,13 +1438,12 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             }
         }
         
-        // 最终检查连接是否成功
+        // 最终检查所有尝试的结果
         if (tcpSocket) {
-            log('建立从远程服务器到客户端的数据流...');
+            log('连接已建立，开始转发数据...');
             remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
         } else {
-            // 如果所有尝试都失败了
-            log('所有重试尝试均已失败，关闭连接。');
+            log('所有连接尝试均已失败，关闭连接。');
             safeCloseWebSocket(webSocket);
         }
     };
