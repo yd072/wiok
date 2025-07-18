@@ -388,7 +388,9 @@ async function resolveToIPv6(target) {
         return isIPv6(nat64) ? nat64 : atob('cHJveHlpcC5jbWxpdXNzc3MubmV0');
     } catch (error) {
         console.error('解析错误:', error);
-        return atob('cHJveHlpcC5jbWxpdXNzc3MubmV0');;
+        // --- 修改在这里 ---
+        // 将错误向上抛出，而不是返回一个无效的值
+        throw error;
     }
 }
 
@@ -633,7 +635,7 @@ export default {
                     DNS64Server = kv_dns64.trim().split('\n')[0]; // 读取并去除多余空格和换行
                 }
             }
-			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : 2001:67c:2960::6464;
+			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
 
 			if (socks5Address) {
 				try {
@@ -1315,81 +1317,138 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     };
 
     const retryConnection = async () => {
-        // 在单个函数中处理所有重试逻辑，以实现清晰的 PROXYIP -> NAT64 回退链
         let tcpSocket;
-        try {
-            if (enableSocks) {
-                // SOCKS5 逻辑是独立的，不参与 PROXYIP/NAT64 回退
+
+        if (enableSocks) {
+            try {
                 log('重试：尝试使用 SOCKS5...');
                 tcpSocket = await createConnection(addressRemote, portRemote, true);
-                log('SOCKS5 连接成功');
-            } else {
-                // 非 SOCKS5 时的回退逻辑 (PROXYIP -> NAT64)
-                let usedProxyIP = proxyIP; // 从全局/用户配置开始
+                log('✅ SOCKS5 连接成功！');
+            } catch (socksError) {
+                log(`❌ SOCKS5 连接失败: ${socksError.message}`);
+                safeCloseWebSocket(webSocket);
+                return;
+            }
+        } else {
+            // --- 新的回退逻辑开始 ---
 
-                if (!usedProxyIP || usedProxyIP.trim() === '') {
-                    usedProxyIP = kodi.tv;
-                    log(`重试：未配置 PROXYIP，使用内置 PROXYIP: ${usedProxyIP}`);
-                } else {
-                    log(`重试：使用用户配置的 PROXYIP: ${usedProxyIP}`);
-                }
-
+            // 优先级 1: 尝试用户配置的 PROXYIP
+            if (proxyIP && proxyIP.trim() !== '') {
                 try {
-                    // **回退第1步：尝试 PROXYIP**
+                    log('重试：第一阶段 - 尝试用户配置的 PROXYIP...');
+                    let usedProxyIP = proxyIP;
+                    log(`...使用用户配置的 PROXYIP: ${usedProxyIP}`);
+                    
                     let port = portRemote;
                     let parsedIP = usedProxyIP;
-
                     if (parsedIP.includes(']:')) {
                         [parsedIP, port] = parsedIP.split(']:');
                         parsedIP += ']';
                     } else if (parsedIP.includes(':')) {
                         [parsedIP, port] = parsedIP.split(':');
                     }
-                     if (parsedIP.includes('.tp')) {
+                    if (parsedIP.includes('.tp')) {
+                        port = parsedIP.split('.tp')[1].split('.')[0] || port;
+                    }
+                    
+                    tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
+                    log('✅ 用户配置的 PROXYIP 连接成功！');
+                } catch (userProxyError) {
+                    log(`❌ 用户配置的 PROXYIP 连接失败: ${userProxyError.message}`);
+                    // 失败了也没关系，继续尝试下一个优先级
+                }
+            }
+
+            // 优先级 2: 尝试用户配置的 NAT64
+            // 仅在前面的尝试失败，并且用户配置了 NAT64 时执行
+            const defaultNat64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+            if (!tcpSocket && DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== defaultNat64Server) {
+                try {
+                    log('重试：第二阶段 - 尝试用户配置的 NAT64...');
+                    const nat64Address = await resolveToIPv6(addressRemote);
+                    if (!nat64Address || !nat64Address.includes(':')) {
+                        throw new Error(`NAT64 解析失败，返回了无效地址: ${nat64Address}`);
+                    }
+                    const nat64Proxyip = `[${nat64Address}]`;
+                    log(`...NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
+                    
+                    tcpSocket = await createConnection(nat64Proxyip, 443);
+                    log('✅ 用户配置的 NAT64 连接成功！');
+                } catch (userNat64Error) {
+                    log(`❌ 用户配置的 NAT64 连接失败: ${userNat64Error.message}`);
+                    // 失败了也没关系，继续尝试下一个优先级
+                }
+            }
+
+            // 优先级 3: 尝试代码内置的默认 PROXYIP
+            // 仅在前面的所有尝试都失败时执行
+            if (!tcpSocket) {
+                try {
+                    log('重试：第三阶段 - 尝试内置的默认 PROXYIP...');
+                    const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                    log(`...使用内置默认值: ${defaultProxyIP}`);
+
+                    let port = portRemote;
+                    let parsedIP = defaultProxyIP;
+                    if (parsedIP.includes(']:')) {
+                        [parsedIP, port] = parsedIP.split(']:');
+                        parsedIP += ']';
+                    } else if (parsedIP.includes(':')) {
+                        [parsedIP, port] = parsedIP.split(':');
+                    }
+                    if (parsedIP.includes('.tp')) {
                         port = parsedIP.split('.tp')[1].split('.')[0] || port;
                     }
 
                     tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
-                    log(`使用 PROXYIP (${parsedIP}:${port}) 连接成功`);
-
-                } catch (proxyError) {
-                    // **回退第2步：当 PROXYIP 失败时，尝试 NAT64**
-                    log(`使用 PROXYIP 连接失败: ${proxyError.message}。正在尝试 NAT64...`);
-                    try {
-                        const nat64Proxyip = `[${await resolveToIPv6(addressRemote)}]`;
-                        log(`NAT64 代理连接到 ${nat64Proxyip}:443`);
-                        tcpSocket = await createConnection(nat64Proxyip, '443'); // 注意：createConnection 是我们自己的辅助函数
-                        log('使用 NAT64 连接成功');
-                    } catch (nat64Error) {
-                        log(`最终备选 NAT64 连接也失败了: ${nat64Error.message}`);
-                        // 抛出错误，让最外层的 catch 块来处理
-                        throw nat64Error;
-                    }
+                    log('✅ 内置 PROXYIP 连接成功！');
+                } catch (defaultProxyError) {
+                    log(`❌ 内置 PROXYIP 连接失败: ${defaultProxyError.message}`);
+                    // 失败了也没关系，继续尝试最后的优先级
                 }
             }
-
-            // 如果任何一个重试成功，则建立数据管道
-            tcpSocket.closed
-                .catch(error => log('重试连接关闭:', error))
-                .finally(() => safeCloseWebSocket(webSocket));
             
-            return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
-
-        } catch (error) {
-            log(`所有重试尝试均失败: ${error.message}`);
-            safeCloseWebSocket(webSocket); // 所有方法都失败后，关闭连接
+            // 优先级 4: 尝试最终回退 (包括默认 NAT64)
+            // 仅在前面的所有尝试都失败时执行
+            if (!tcpSocket) {
+                try {
+                    log('重试：第四阶段 - 尝试最终回退 (NAT64)...');
+                    const nat64Address = await resolveToIPv6(addressRemote);
+                    if (!nat64Address || !nat64Address.includes(':')) {
+                        throw new Error(`NAT64 解析失败，返回了无效地址: ${nat64Address}`);
+                    }
+                    const nat64Proxyip = `[${nat64Address}]`;
+                    log(`...最终 NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
+                    
+                    tcpSocket = await createConnection(nat64Proxyip, 443);
+                    log('✅ 最终回退 (NAT64) 连接成功！');
+                } catch (finalError) {
+                    log(`❌ 最终回退连接也失败了: ${finalError.message}`);
+                    log('所有重试尝试均已失败，关闭连接。');
+                    safeCloseWebSocket(webSocket);
+                    return; // 明确结束重试过程
+                }
+            }
+            // --- 新的回退逻辑结束 ---
+        }
+        
+        if (tcpSocket) {
+            log('建立从远程服务器到客户端的数据流...');
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
         }
     };
 
     try {
         // 主连接逻辑
+        log('主流程：第一阶段 - 尝试直接连接...');
         const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
             await checkSocks5Mode(addressRemote) : false;
 
         const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
+        log('✅ 直接连接成功！');
         return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
     } catch (error) {
-        log('主连接失败，尝试重试:', error);
+        log(`❌ 主连接失败 (${error.message})，将启动重试流程...`);
         return retryConnection();
     }
 }
@@ -1958,11 +2017,11 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-	    let cfips = [
-        			'104.16.0.0/14',
-		            '162.159.0.0/16',
-				    '104.21.0.0/16',
-				    '188.114.96.0/20',
+	    	let cfips = [
+        		'104.16.0.0/14',
+		        '104.21.0.0/16',
+		        '188.114.96.0/20',
+
     			];
 
     		function ipToInt(ip) {
@@ -3149,17 +3208,17 @@ async function handleGetRequest(env, txt) {
                         </div>
 
                         <!-- NAT64/DNS64 设置 -->
-  						<div style="margin-bottom: 20px;">
-    					<label for="nat64"><strong>NAT64/DNS64</strong></label>
+                        <div style="margin-bottom: 20px;">
+                            <label for="nat64"><strong>NAT64/DNS64</strong></label>
     					<p style="margin: 5px 0; color: #666;">
         				<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
     					</p>
-    						<textarea 
-        					id="nat64" 
-        				class="proxyip-editor" 
-        						placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1"
-    						>${nat64Content}</textarea>
-						</div>
+                            <textarea 
+                                id="nat64" 
+                                class="proxyip-editor" 
+                                placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1"
+                            >${nat64Content}</textarea>
+                        </div>
 
 						<script>
   						const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
@@ -3302,7 +3361,7 @@ async function handleGetRequest(env, txt) {
                         body: subconfigContent // 即使是空字符串也会被保存
                     });
 
-					// 保存NAT64/DNS64设置
+		    // 保存NAT64/DNS64设置
                     const nat64Content = document.getElementById('nat64').value;
                     const nat64Response = await fetch(window.location.href + '?type=nat64', {
                         method: 'POST',
