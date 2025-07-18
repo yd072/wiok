@@ -1,12 +1,5 @@
 import { connect } from 'cloudflare:sockets';
 
-// ... (代码顶部的大量变量和函数定义保持不变, 这里省略) ...
-// ... (isValidUUID, WebSocketManager, resolveToIPv6 等函数都无需修改) ...
-
-// ##############################################################################
-// ### 您可以从这里开始复制，直到文件末尾 ###
-// ##############################################################################
-
 let userID = '';
 let proxyIP = '';
 //let sub = '';
@@ -1321,11 +1314,9 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     };
 
-    // **最终修正版的回调函数**
     const retryConnection = async () => {
         let tcpSocket;
 
-        // 如果启用了 SOCKS5，它有自己的逻辑，不参与 PROXYIP/NAT64 回退
         if (enableSocks) {
             try {
                 log('重试：尝试使用 SOCKS5...');
@@ -1337,13 +1328,12 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 return;
             }
         } else {
-            // **非SOCKS5时的回退链: PROXYIP -> NAT64**
             try {
                 // **回退第1步：尝试 PROXYIP**
                 log('重试：第一阶段 - 尝试 PROXYIP...');
                 let usedProxyIP = proxyIP; // 使用从全局/用户配置加载的 proxyIP
                 if (!usedProxyIP || usedProxyIP.trim() === '') {
-                    usedProxyIP = kodi.tv;
+                    usedProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
                     log(`...未配置 PROXYIP，使用内置默认值: ${usedProxyIP}`);
                 } else {
                     log(`...使用用户配置的 PROXYIP: ${usedProxyIP}`);
@@ -1362,10 +1352,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 }
                 
                 tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
-                log('✅ PROXYIP 连接成功！');
+                log(' PROXYIP 连接成功！');
 
             } catch (proxyError) {
-                log(`❌ PROXYIP 连接失败: ${proxyError.message}`);
+                log(` PROXYIP 连接失败: ${proxyError.message}`);
                 
                 // **回退第2步：当 PROXYIP 失败时，尝试 NAT64**
                 try {
@@ -1378,10 +1368,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     log(`...NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
                     
                     tcpSocket = await createConnection(nat64Proxyip, 443);
-                    log('✅ NAT64 连接成功！');
+                    log(' NAT64 连接成功！');
 
                 } catch (nat64Error) {
-                    log(`❌ NAT64 连接也失败了: ${nat64Error.message}`);
+                    log(` NAT64 连接也失败了: ${nat64Error.message}`);
                     log('所有重试尝试均已失败，关闭连接。');
                     safeCloseWebSocket(webSocket);
                     return; // 明确结束重试过程
@@ -1389,7 +1379,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             }
         }
         
-        // 如果我们能到达这里，说明某个重试步骤成功了
         if (tcpSocket) {
             log('建立从远程服务器到客户端的数据流...');
             remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
@@ -1975,10 +1964,11 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-	    let cfips = [
-        			'104.16.0.0/14',
-				    '104.21.0.0/16',
-				    '188.114.96.0/20',
+	    	let cfips = [
+        		'104.16.0.0/14',
+		        '104.21.0.0/16',
+		        '188.114.96.0/20',
+
     			];
 
     		function ipToInt(ip) {
@@ -3318,7 +3308,7 @@ async function handleGetRequest(env, txt) {
                         body: subconfigContent // 即使是空字符串也会被保存
                     });
 
-					// 保存NAT64/DNS64设置
+		    // 保存NAT64/DNS64设置
                     const nat64Content = document.getElementById('nat64').value;
                     const nat64Response = await fetch(window.location.href + '?type=nat64', {
                         method: 'POST',
