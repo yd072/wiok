@@ -384,6 +384,7 @@ export default {
 			}
 
 			if (!userID) {
+				// 生成美化后的系统信息页面
 				const html = `
 				<!DOCTYPE html>
 						<html>
@@ -889,6 +890,7 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
+						// 美化错误页面
 						const html = `
 						<!DOCTYPE html>
 						<html>
