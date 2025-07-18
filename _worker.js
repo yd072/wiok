@@ -1322,44 +1322,47 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 log('重试：尝试使用 SOCKS5...');
                 tcpSocket = await createConnection(addressRemote, portRemote, true);
                 log('SOCKS5 连接成功！');
-            } catch(socksError) {
+            } catch (socksError) {
                 log(`SOCKS5 连接失败: ${socksError.message}`);
                 safeCloseWebSocket(webSocket);
                 return;
             }
         } else {
-            try {
-                // **回退第1步：尝试 PROXYIP**
-                log('重试：第一阶段 - 尝试 PROXYIP...');
-                let usedProxyIP = proxyIP; // 使用从全局/用户配置加载的 proxyIP
-                if (!usedProxyIP || usedProxyIP.trim() === '') {
-                    usedProxyIP = kodi.tv;
-                    log(`...未配置 PROXYIP，使用内置默认值: ${usedProxyIP}`);
-                } else {
-                    log(`...使用用户配置的 PROXYIP: ${usedProxyIP}`);
-                }
+            // --- 新的回退逻辑开始 ---
 
-                let port = portRemote;
-                let parsedIP = usedProxyIP;
-                if (parsedIP.includes(']:')) {
-                    [parsedIP, port] = parsedIP.split(']:');
-                    parsedIP += ']';
-                } else if (parsedIP.includes(':')) {
-                    [parsedIP, port] = parsedIP.split(':');
-                }
-                if (parsedIP.includes('.tp')) {
-                    port = parsedIP.split('.tp')[1].split('.')[0] || port;
-                }
-                
-                tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
-                log('PROXYIP 连接成功！');
-
-            } catch (proxyError) {
-                log(`PROXYIP 连接失败: ${proxyError.message}`);
-                
-                // **回退第2步：当 PROXYIP 失败时，尝试 NAT64**
+            // 优先级 1: 尝试用户配置的 PROXYIP
+            if (proxyIP && proxyIP.trim() !== '') {
                 try {
-                    log('重试：第二阶段 - 尝试 NAT64...');
+                    log('重试：第一阶段 - 尝试用户配置的 PROXYIP...');
+                    let usedProxyIP = proxyIP;
+                    log(`...使用用户配置的 PROXYIP: ${usedProxyIP}`);
+                    
+                    let port = portRemote;
+                    let parsedIP = usedProxyIP;
+                    if (parsedIP.includes(']:')) {
+                        [parsedIP, port] = parsedIP.split(']:');
+                        parsedIP += ']';
+                    } else if (parsedIP.includes(':')) {
+                        [parsedIP, port] = parsedIP.split(':');
+                    }
+                    if (parsedIP.includes('.tp')) {
+                        port = parsedIP.split('.tp')[1].split('.')[0] || port;
+                    }
+                    
+                    tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
+                    log('用户配置的 PROXYIP 连接成功！');
+                } catch (userProxyError) {
+                    log(`用户配置的 PROXYIP 连接失败: ${userProxyError.message}`);
+                    // 失败了也没关系，继续尝试下一个优先级
+                }
+            }
+
+            // 优先级 2: 尝试用户配置的 NAT64
+            // 仅在前面的尝试失败，并且用户配置了 NAT64 时执行
+            const defaultNat64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+            if (!tcpSocket && DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== defaultNat64Server) {
+                try {
+                    log('重试：第二阶段 - 尝试用户配置的 NAT64...');
                     const nat64Address = await resolveToIPv6(addressRemote);
                     if (!nat64Address || !nat64Address.includes(':')) {
                         throw new Error(`NAT64 解析失败，返回了无效地址: ${nat64Address}`);
@@ -1368,10 +1371,57 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     log(`...NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
                     
                     tcpSocket = await createConnection(nat64Proxyip, 443);
-                    log('NAT64 连接成功！');
+                    log('用户配置的 NAT64 连接成功！');
+                } catch (userNat64Error) {
+                    log(`用户配置的 NAT64 连接失败: ${userNat64Error.message}`);
+                    // 失败了也没关系，继续尝试下一个优先级
+                }
+            }
 
-                } catch (nat64Error) {
-                    log(`NAT64 连接也失败了: ${nat64Error.message}`);
+            // 优先级 3: 尝试代码内置的默认 PROXYIP
+            // 仅在前面的所有尝试都失败时执行
+            if (!tcpSocket) {
+                try {
+                    log('重试：第三阶段 - 尝试内置的默认 PROXYIP...');
+                    const defaultProxyIP = kodi.tv;
+                    log(`...使用内置默认值: ${defaultProxyIP}`);
+
+                    let port = portRemote;
+                    let parsedIP = defaultProxyIP;
+                    if (parsedIP.includes(']:')) {
+                        [parsedIP, port] = parsedIP.split(']:');
+                        parsedIP += ']';
+                    } else if (parsedIP.includes(':')) {
+                        [parsedIP, port] = parsedIP.split(':');
+                    }
+                    if (parsedIP.includes('.tp')) {
+                        port = parsedIP.split('.tp')[1].split('.')[0] || port;
+                    }
+
+                    tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
+                    log('内置 PROXYIP 连接成功！');
+                } catch (defaultProxyError) {
+                    log(`内置 PROXYIP 连接失败: ${defaultProxyError.message}`);
+                    // 失败了也没关系，继续尝试最后的优先级
+                }
+            }
+            
+            // 优先级 4: 尝试最终回退 (包括默认 NAT64)
+            // 仅在前面的所有尝试都失败时执行
+            if (!tcpSocket) {
+                try {
+                    log('重试：第四阶段 - 尝试最终回退 (NAT64)...');
+                    const nat64Address = await resolveToIPv6(addressRemote);
+                    if (!nat64Address || !nat64Address.includes(':')) {
+                        throw new Error(`NAT64 解析失败，返回了无效地址: ${nat64Address}`);
+                    }
+                    const nat64Proxyip = `[${nat64Address}]`;
+                    log(`...最终 NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
+                    
+                    tcpSocket = await createConnection(nat64Proxyip, 443);
+                    log('最终回退 (NAT64) 连接成功！');
+                } catch (finalError) {
+                    log(`最终回退连接也失败了: ${finalError.message}`);
                     log('所有重试尝试均已失败，关闭连接。');
                     safeCloseWebSocket(webSocket);
                     return; // 明确结束重试过程
@@ -1392,10 +1442,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             await checkSocks5Mode(addressRemote) : false;
 
         const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
-        log('直接连接成功！');
+        log('✅ 直接连接成功！');
         return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
     } catch (error) {
-        log(`主连接失败 (${error.message})，将启动重试流程...`);
+        log(`❌ 主连接失败 (${error.message})，将启动重试流程...`);
         return retryConnection();
     }
 }
@@ -1964,10 +2014,10 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-	    	let cfips = [
-        		'104.16.0.0/14',
-		        '104.21.0.0/16',
-		        '188.114.96.0/20',
+	    let cfips = [
+        			'104.16.0.0/14',
+				    '104.21.0.0/16',
+				    '188.114.96.0/20',
 
     			];
 
@@ -3308,7 +3358,7 @@ async function handleGetRequest(env, txt) {
                         body: subconfigContent // 即使是空字符串也会被保存
                     });
 
-		    // 保存NAT64/DNS64设置
+					// 保存NAT64/DNS64设置
                     const nat64Content = document.getElementById('nat64').value;
                     const nat64Response = await fetch(window.location.href + '?type=nat64', {
                         method: 'POST',
