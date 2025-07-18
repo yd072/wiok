@@ -385,10 +385,18 @@ async function resolveToIPv6(target) {
         if (isIPv6(target)) return target; // IPv6直接返回
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
         const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
-        return isIPv6(nat64) ? nat64 : atob('cHJveHlpcC5jbWxpdXNzc3MubmV0');
+        
+        if (isIPv6(nat64)) {
+            return nat64;
+        } else {
+            // 如果解析结果不是有效的IPv6，也视为失败
+            throw new Error(`NAT64 returned an invalid IPv6 address: ${nat64}`);
+        }
     } catch (error) {
-        console.error('解析错误:', error);
-        return atob('cHJveHlpcC5jbWxpdXNzc3MubmV0');;
+        // --- 修改在这里 ---
+        // 将原始错误向上抛出，而不是返回一个固定的值
+        console.error('resolveToIPv6 failed:', error);
+        throw error; 
     }
 }
 
