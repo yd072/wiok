@@ -2760,12 +2760,6 @@ async function handleGetRequest(env) {
     // --- 修复：重新生成所有占位符和提示内容的Base64字符串 ---
     const noticeContentBase64 = 'JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjAlRTQlQkMlOUElRTglQTclQTElRTUlODglOTclRTUlOEMlODElMkYlRTUlOUQlODAlRTUlOTAlODQlMkYlRTclQkIlQjQlRTklOTQlQjAlMkZBUEklMkMlMjAlRTYlQUMlOEYlRTglQjAlODElRTQlQjglODAlRTQlQjglQUElMkMlMjAlMjMlRTUlOEYlOUYlRTUlQTQlQjQlRTUlQTQlQjQlRTclOUQlODQlRTQlQjglQkElRTglQTklQjQlRUYlQkMlOEMlMjAlRTQlQkIlOEIlRTUlQTYlODIlM0ElM0NiciUzRSUyMCUyMDEyNy4wLjAuMSUzQTIwNTMlMjMlRTUlQTQlODclRTYlQjMlQTglRTklODAlODlJUCUzQ2JyJTNFJTIwJUU1JTlEJTgwJUU1JTkwJODQlM0EyMDUzJTIzJUU1QTQlODclRTYlQjMlQTglRTUlOUQlODAlRTUlOTAlODQlM0NiciUzRSUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBNDA0MyUyMyVFNSVBNCU4NyVFNkIzJTg4SVB2NiUzQ2JyJTNFJTNDYnIlM0UlM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFQSVglRTQlQkQlOTElRTklODAlODlJUCUzRnByb3h5aXAlM0R0cnVlJUU1QjAlODglRTglOUQlQjQlRTUlOEYlQTAlRTclQkQlQjQlRTUlODUlQTMlRUYlQkMlOEMlMjAlRTQlQkIlQTMlRTUlQUYlQUYlRTUlQjAlODYlRTUlOEQlQjQlRTUlOTMlN0ElRTUlOTAlOTUlRTUlODglQUIlRUYlQkMlOEMlMjAlRTQlQkIlQTMlRTUlQUYlQUYlRTUlQjAlODYlM0ElM0NiciUzRSUyMCUyMGh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQlM0Zwcm94eXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRSUzQ3N0cm9uZyUzRTMuJTNDJTJGc3Ryb25nJTNFJTIwJUU4JUE0JUIwJUU5JTk4JTkxJUU5JTkzJUJFJUU2JThGJTQ1JTJDJTIwJUU0JUJEJTkxJUU5JTgwJTg5JTNBJTNDYnIlM0UlMjAlMjBodHRwcyUzQSUyRiUyRmV4YW1wbGUuY29tJTJGc3Vic2NyaXB0aW9u';
     const addContentPlaceholderBase64 = 'QUREJUU0JUJEJTkxJUU5JTgwJTg5JTNBJTBBdmlzYS5jbiUyMyVFNSVBNCU4NyVFNkIzJTg4JUU1JTlEJTgwJUU1JTkwJODQlMEExMjcuMC4wLjElM0ExMjM0JTIzQ0ZuYXQlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjNJUHY2JTBBJTBBJUU4JThGJUJGJUU2JTk4JThFJTNBCiVFNCVCRCU5MSVFOSU4MCU4OSUyRiVFNSU5RCU4MCVFNSU5MCU4NCUyRiVFNSU5MyVCRSVFOCU4QSVBRiVFNSU5QyVBQyUyRkFQSVAsJTIwJUU2JUM5JThGJUVEJTkxJThDJUU0JUI4JTgwJUU0JUI4JTgwJTJDJTIwJTIzJUU1JThGJTlGJUVEJTkxJThGJUVEJTkxJThDJUU0JUJDJTkxJUU0JUI4JUIwJUU2JUIzJUE4JUU4JUE5JUI0JTJDJTIwJUU1JTlEJTgwJUU1JTkwJODQlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglMEFJWHY2JUU5JTgwJTkxJUU3JTk0JUE4JUU1JUIxJUI3JUU1JUIzJUI2JUU2JThDJUFDJUU1JUIxJTg3JUU2JTlEJTkwJTJDJTIwJUU0JUJEJTkxJUU5JTgwJTg5JTNBJTVCMjYwNiUzQTQ3MDAlM0EzMDMyJTNBJTNBJTVEJTNBMjA1MyUwQSVFNSVBQiVBRiVFNSVCMCU4NiVFNCVCOCU4RCVFNSVBNiU4QiUyQyUyMCVFOSU4MCU5MiVFOCVBRSU4RCVFNCVCOCU4QSVFNCVBOEUlMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlMkMlMjAlRTQlQkIlOEIlRTUlQTYlODIlM0F2aXNhLmNuJTIzJUU1JUE0JTg3JUU2JUIzJTg4JUU1JTlEJTgwJUU1JTkwJODQlMEElMEFBUEklRTQlQkQlOTElRTklODAlODklM0ElMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZhZGRyZXNzZXNhcGkudHh0';
-    const proxyipPlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBMS4yLjMuNCUzQTQ0MyUwQXByb3h5LmV4YW1wbGUuY29t';
-    const socks5PlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBdXNlciUzQXBhc3MlNDAxMjcuMC4wLjElM0ExMDgwJTBBMTI3LjAuMC4xJTNBMTgwODA=';
-    const subPlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBc3ViLmdvb2dsZS5jb20=';
-    const subapiPlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBYXBpLnYxLm1rJTBBc3ViLnhldG9uLmRldg==';
-    const subconfigPlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZBY2w0U1NSJTJGZGV2JTJGQ2xhc2glMkZjb25maWclMkZBQ0w0U1NSX09ubGluZV9NaW5pX011bHRpTW9kZS5pbmk=';
-    const nat64PlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2';
 
     const html = `
         <!DOCTYPE html>
@@ -2971,37 +2965,37 @@ async function handleGetRequest(env) {
                         <!-- PROXYIP设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="proxyip"><strong>PROXYIP 设置</strong> (每行一个)</label>
-                            <textarea id="proxyip" class="proxyip-editor" placeholder="${atob(proxyipPlaceholderBase64)}">${advancedSettings.proxyip || ''}</textarea>
+                            <textarea id="proxyip" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${advancedSettings.proxyip || ''}</textarea>
                         </div>
 
                         <!-- SOCKS5设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="socks5"><strong>SOCKS5 设置</strong> (每行一个)</label>
-                            <textarea id="socks5" class="proxyip-editor" placeholder="${atob(socks5PlaceholderBase64)}">${advancedSettings.socks5 || ''}</textarea>
+                            <textarea id="socks5" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${advancedSettings.socks5 || ''}</textarea>
                         </div>
 
                         <!-- SUB设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="sub"><strong>SUB 设置</strong> (仅支持单个地址)</label>
-                            <textarea id="sub" class="proxyip-editor" placeholder="${atob(subPlaceholderBase64)}">${advancedSettings.sub || ''}</textarea>
+                            <textarea id="sub" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${advancedSettings.sub || ''}</textarea>
                         </div>
                         
                         <!-- SUBAPI设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="subapi"><strong>SUBAPI 设置</strong> (订阅转换后端)</label>
-                            <textarea id="subapi" class="proxyip-editor" placeholder="${atob(subapiPlaceholderBase64)}">${advancedSettings.subapi || ''}</textarea>
+                            <textarea id="subapi" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${advancedSettings.subapi || ''}</textarea>
                         </div>
                         
                         <!-- SUBCONFIG设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="subconfig"><strong>SUBCONFIG 设置</strong> (订阅转换配置文件)</label>
-                            <textarea id="subconfig" class="proxyip-editor" placeholder="${atob(subconfigPlaceholderBase64)}">${advancedSettings.subconfig || ''}</textarea>
+                            <textarea id="subconfig" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${advancedSettings.subconfig || ''}</textarea>
                         </div>
 
                         <!-- NAT64/DNS64 设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="nat64"><strong>NAT64/DNS64 设置</strong> (<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">可在此查询</a>)</label>
-                            <textarea id="nat64" class="proxyip-editor" placeholder="${atob(nat64PlaceholderBase64)}">${advancedSettings.nat64 || ''}</textarea>
+                            <textarea id="nat64" class="proxyip-editor" placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1">${advancedSettings.nat64 || ''}</textarea>
                         </div>
 						<script>
   						    document.getElementById('nat64-link').setAttribute('href', atob('aHR0cHM6Ly9uYXQ2NC54eXo='));
