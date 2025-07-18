@@ -2994,7 +2994,7 @@ async function handleGetRequest(env) {
                         <!-- NAT64/DNS64 设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="nat64"><strong>NAT64/DNS64 设置</strong> (<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">可在此查询</a>)</label>
-                            <textarea id="nat64" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmRuczY0LmV4YW1wbGUuY29tCjJhMDElM0E0ZjglM0FjMmMLMTIzZiUzQSUzQS8x'))}">${advancedSettings.nat64 || ''}</textarea>
+                            <textarea id="nat64" class="proxyip-editor" placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1">${advancedSettings.nat64 || ''}</textarea>
                         </div>
 						<script>
   						    const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
