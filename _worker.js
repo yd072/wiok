@@ -1383,7 +1383,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             if (!tcpSocket) {
                 try {
                     log('重试：第三阶段 - 尝试内置的默认 PROXYIP...');
-                    const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                    const defaultProxyIP = kodi.tv;
                     log(`...使用内置默认值: ${defaultProxyIP}`);
 
                     let port = portRemote;
