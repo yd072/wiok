@@ -210,7 +210,7 @@ async function resolveToIPv6(target) {
         return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
     }
 
-    // 获取域名的IPv4地址
+    // 获取域名的IPv4地址 (保持不变)
     async function fetchIPv4(domain) {
         const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
         const response = await fetch(url, {
@@ -228,7 +228,7 @@ async function resolveToIPv6(target) {
         return ipv4s[Math.floor(Math.random() * ipv4s.length)];
     }
 
-    // 查询NAT64 IPv6地址
+    // 查询NAT64 IPv6地址 (保持不变)
     async function queryNAT64(domain) {
         const socket = connect({
             hostname: isIPv6(DNS64Server) ? `[${DNS64Server}]` : DNS64Server,
@@ -239,7 +239,6 @@ async function resolveToIPv6(target) {
         const reader = socket.readable.getReader();
 
         try {
-            // 发送DNS查询
             const query = buildDNSQuery(domain);
             const queryWithLength = new Uint8Array(query.length + 2);
             queryWithLength[0] = query.length >> 8;
@@ -247,46 +246,43 @@ async function resolveToIPv6(target) {
             queryWithLength.set(query, 2);
             await writer.write(queryWithLength);
 
-            // 读取响应
             const response = await readDNSResponse(reader);
             const ipv6s = parseIPv6(response);
 
-            return ipv6s.length > 0 ? ipv6s[0] : '未找到IPv6地址';
+            // --- 修改 ---: 如果找到多个IPv6，随机返回一个
+            return ipv6s.length > 0 ? ipv6s[Math.floor(Math.random() * ipv6s.length)] : '未找到IPv6地址';
         } finally {
             await writer.close();
             await reader.cancel();
         }
     }
 
-    // 构建DNS查询包
+    // 构建DNS查询包 (保持不变)
     function buildDNSQuery(domain) {
         const buffer = new ArrayBuffer(512);
         const view = new DataView(buffer);
         let offset = 0;
 
-        // DNS头部
-        view.setUint16(offset, Math.floor(Math.random() * 65536)); offset += 2; // ID
-        view.setUint16(offset, 0x0100); offset += 2; // 标志
-        view.setUint16(offset, 1); offset += 2; // 问题数
-        view.setUint16(offset, 0); offset += 6; // 答案数/权威数/附加数
+        view.setUint16(offset, Math.floor(Math.random() * 65536)); offset += 2;
+        view.setUint16(offset, 0x0100); offset += 2;
+        view.setUint16(offset, 1); offset += 2;
+        view.setUint16(offset, 0); offset += 6;
 
-        // 域名编码
         for (const label of domain.split('.')) {
             view.setUint8(offset++, label.length);
             for (let i = 0; i < label.length; i++) {
                 view.setUint8(offset++, label.charCodeAt(i));
             }
         }
-        view.setUint8(offset++, 0); // 结束标记
+        view.setUint8(offset++, 0);
 
-        // 查询类型和类
-        view.setUint16(offset, 28); offset += 2; // AAAA记录
-        view.setUint16(offset, 1); offset += 2; // IN类
+        view.setUint16(offset, 28); offset += 2; // AAAA
+        view.setUint16(offset, 1); offset += 2; // IN
 
         return new Uint8Array(buffer, 0, offset);
     }
 
-    // 读取DNS响应
+    // 读取DNS响应 (保持不变)
     async function readDNSResponse(reader) {
         const chunks = [];
         let totalLength = 0;
@@ -308,7 +304,6 @@ async function resolveToIPv6(target) {
             }
         }
 
-        // 合并数据并跳过长度前缀
         const fullResponse = new Uint8Array(totalLength);
         let offset = 0;
         for (const chunk of chunks) {
@@ -319,22 +314,20 @@ async function resolveToIPv6(target) {
         return fullResponse.slice(2);
     }
 
-    // 解析IPv6地址
+    // 解析IPv6地址 (保持不变)
     function parseIPv6(response) {
         const view = new DataView(response.buffer);
-        let offset = 12; // 跳过DNS头部
+        let offset = 12;
 
-        // 跳过问题部分
         while (view.getUint8(offset) !== 0) {
             offset += view.getUint8(offset) + 1;
         }
         offset += 5;
 
         const answers = [];
-        const answerCount = view.getUint16(6); // 答案数量
+        const answerCount = view.getUint16(6);
 
         for (let i = 0; i < answerCount; i++) {
-            // 跳过名称
             if ((view.getUint8(offset) & 0xC0) === 0xC0) {
                 offset += 2;
             } else {
@@ -345,10 +338,10 @@ async function resolveToIPv6(target) {
             }
 
             const type = view.getUint16(offset); offset += 2;
-            offset += 6; // 跳过类和TTL
+            offset += 6;
             const dataLength = view.getUint16(offset); offset += 2;
 
-            if (type === 28 && dataLength === 16) { // AAAA记录
+            if (type === 28 && dataLength === 16) { // AAAA
                 const parts = [];
                 for (let j = 0; j < 8; j++) {
                     parts.push(view.getUint16(offset + j * 2).toString(16));
@@ -361,6 +354,7 @@ async function resolveToIPv6(target) {
         return answers;
     }
 
+    // 转换IPv4到NAT64地址 (保持不变)
     function convertToNAT64IPv6(ipv4Address) {
         const parts = ipv4Address.split('.');
         if (parts.length !== 4) {
@@ -380,23 +374,32 @@ async function resolveToIPv6(target) {
         return DNS64Server.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
     }
 
+    // --- !!! 全新的核心逻辑 !!! ---
     try {
-        // 判断输入类型并处理
-        if (isIPv6(target)) return target; // IPv6直接返回
-        const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
-        const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
-        
+        // 如果目标本身就是IPv6，直接返回
+        if (isIPv6(target)) return target;
+
+        // 如果配置的是带 /96 后缀的前缀，则使用旧的拼接逻辑
+        if (DNS64Server.endsWith('/96')) {
+            const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
+            const nat64 = convertToNAT64IPv6(ipv4);
+            return nat64;
+        }
+
+        const nat64 = await queryNAT64(target);
+
+        // 如果成功获取到IPv6地址，则返回它
         if (isIPv6(nat64)) {
             return nat64;
-        } else {
-            // 如果解析结果不是有效的IPv6，也视为失败
-            throw new Error(`NAT64 returned an invalid IPv6 address: ${nat64}`);
         }
+        
+        // 如果查询失败，则返回一个备用地址，而不是让程序崩溃
+        return atob('cHJveHlpcC5jbWxpdXNzc3MubmV0');
+
     } catch (error) {
-        // --- 修改在这里 ---
-        // 将原始错误向上抛出，而不是返回一个固定的值
-        console.error('resolveToIPv6 failed:', error);
-        throw error; 
+        console.error('解析IPv6时发生错误:', error);
+        // 如果发生任何异常，也返回备用地址
+        return atob('cHJveHlpcC5jbWxpdXNzc3MubmV0');
     }
 }
 
@@ -1391,7 +1394,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             if (!tcpSocket) {
                 try {
                     log('重试：第三阶段 - 尝试内置的默认 PROXYIP...');
-                    const defaultProxyIP = kodi.tv;
+                    const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
                     log(`...使用内置默认值: ${defaultProxyIP}`);
 
                     let port = portRemote;
