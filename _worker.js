@@ -5,7 +5,6 @@ import { connect } from 'cloudflare:sockets';
 // ... (全局变量定义保持不变)
 let userID = '';
 let proxyIP = '';
-//let sub = '';
 let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
@@ -13,7 +12,6 @@ let subEmoji = 'true';
 let socks5Address = '';
 let parsedSocks5Address = {};
 let enableSocks = false;
-
 let noTLS = 'false';
 const expire = -1;
 let proxyIPs;
@@ -54,7 +52,7 @@ let DNS64Server = '';
 // ... (utils, WebSocketManager, resolveToIPv6 函数保持不变)
 const utils = {
 	isValidUUID(uuid) {
-		const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+		const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 		return uuidPattern.test(uuid);
 	},
 	base64: {
@@ -205,14 +203,14 @@ async function resolveToIPv6(target) {
         try {
             const query = buildDNSQuery(domain);
             const queryWithLength = new Uint8Array(query.length + 2);
-            queryWithLength[0] = query.length >> 8;
-            queryWithLength[1] = query.length & 0xFF;
+            queryWithLength = query.length >> 8;
+            queryWithLength = query.length & 0xFF;
             queryWithLength.set(query, 2);
             await writer.write(queryWithLength);
             const response = await readDNSResponse(reader);
             const ipv6s = parseIPv6(response);
             if (ipv6s.length > 0) {
-                return ipv6s[0];
+                return ipv6s;
             } else {
                 throw new Error('No IPv6 address found in DNS response from NAT64 server');
             }
@@ -250,7 +248,7 @@ async function resolveToIPv6(target) {
             chunks.push(value);
             totalLength += value.length;
             if (expectedLength === null && totalLength >= 2) {
-                expectedLength = (chunks[0][0] << 8) | chunks[0][1];
+                expectedLength = (chunks << 8) | chunks;
             }
             if (expectedLength !== null && totalLength >= expectedLength + 2) {
                 break;
@@ -300,7 +298,7 @@ async function resolveToIPv6(target) {
         const parts = ipv4Address.split('.');
         if (parts.length !== 4) throw new Error('Invalid IPv4 address for NAT64 conversion');
         const hex = parts.map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
-        return DNS64Server.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
+        return DNS64Server.split('/96') + hex + hex + ":" + hex + hex;
     }
     try {
         if (isIPv6(target)) return target;
@@ -359,8 +357,8 @@ export default {
 				validTime = Number(env.TIME) || validTime;
 				updateInterval = Number(env.UPTIME) || updateInterval;
 				const userIDs = await 生成动态UUID(dynamicUUID);
-				userID = userIDs[0];
-				userIDLow = userIDs[1];
+				userID = userIDs;
+				userIDLow = userIDs;
 			}
 
 			if (!userID) {
@@ -547,7 +545,7 @@ export default {
             socks5Address = kvSettings.socks5 || env.SOCKS5 || '';
 			socks5s = await 整理(socks5Address);
 			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-			socks5Address = socks5Address.split('//')[1] || socks5Address;
+			socks5Address = socks5Address.split('//') || socks5Address;
             
             DNS64Server = kvSettings.nat64 || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
 
@@ -583,10 +581,10 @@ export default {
                 let sub = kvSettings.sub || env.SUB || '';
                 subConverter = kvSettings.subapi || env.SUBAPI || subConverter;
 				if (subConverter.includes("http://")) {
-					subConverter = subConverter.split("//")[1];
+					subConverter = subConverter.split("//");
 					subProtocol = 'http';
 				} else {
-					subConverter = subConverter.split("//")[1] || subConverter;
+					subConverter = subConverter.split("//") || subConverter;
 				}
                 subConfig = kvSettings.subconfig || env.SUBCONFIG || subConfig;
 
@@ -916,11 +914,11 @@ export default {
 			} else {
 				// ... (WebSocket处理逻辑保持不变)
 				socks5Address = url.searchParams.get('socks5') || socks5Address;
-				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
+				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=');
 				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
-					socks5Address = url.pathname.split('://')[1].split('#')[0];
+					socks5Address = url.pathname.split('://').split('#');
 					if (socks5Address.includes('@')) {
-						let userPassword = socks5Address.split('@')[0];
+						let userPassword = socks5Address.split('@');
 						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
 						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
 						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
@@ -941,13 +939,13 @@ export default {
 					proxyIP = url.searchParams.get('proxyip');
 					enableSocks = false;
 				} else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
-					proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
+					proxyIP = url.pathname.toLowerCase().split('/proxyip=');
 					enableSocks = false;
 				} else if (new RegExp('/proxyip.', 'i').test(url.pathname)) {
 					proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
 					enableSocks = false;
 				} else if (new RegExp('/pyip=', 'i').test(url.pathname)) {
-					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
+					proxyIP = url.pathname.toLowerCase().split('/pyip=');
 					enableSocks = false;
 				}
 				return await secureProtoOverWSHandler(request);
@@ -993,7 +991,7 @@ async function secureProtoOverWSHandler(request) {
                     portRemote = 443,
                     addressRemote = '',
                     rawDataIndex,
-                    secureProtoVersion = new Uint8Array([0, 0]),
+                    secureProtoVersion = new Uint8Array(),
                     isUDP,
                 } = processsecureProtoHeader(chunk, userID);
                 address = addressRemote;
@@ -1008,7 +1006,7 @@ async function secureProtoOverWSHandler(request) {
                         throw new Error('UDP 代理仅对 DNS（53 port）启用');
                     }
                 }
-                const secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
+                const secureProtoResponseHeader = new Uint8Array([secureProtoVersion, 0]);
                 const rawClientData = chunk.slice(rawDataIndex);
                 if (isDns) {
                     return handleDNSQuery(rawClientData, webSocket, secureProtoResponseHeader, log);
@@ -1199,7 +1197,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                         let parsedIP = proxyIP;
                         if (parsedIP.includes(']:')) { [parsedIP, port] = parsedIP.split(']:'); parsedIP += ']'; }
                         else if (parsedIP.includes(':')) { [parsedIP, port] = parsedIP.split(':'); }
-                        if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp')[1].split('.')[0] || port; }
+                        if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp').split('.') || port; }
                         return createConnection(parsedIP.toLowerCase(), port);
                     }
                 },
@@ -1221,7 +1219,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                         let parsedIP = defaultProxyIP;
                         if (parsedIP.includes(']:')) { [parsedIP, port] = parsedIP.split(']:'); parsedIP += ']'; }
                         else if (parsedIP.includes(':')) { [parsedIP, port] = parsedIP.split(':'); }
-                        if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp')[1].split('.')[0] || port; }
+                        if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp').split('.') || port; }
                         return createConnection(parsedIP.toLowerCase(), port);
                     }
                 },
@@ -1283,8 +1281,8 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (!isValidUser) {
         return { hasError: true, message: 'Invalid user' };
     }
-    const optLength = new Uint8Array(secureProtoBuffer.slice(17, 18))[0];
-    const command = new Uint8Array(secureProtoBuffer.slice(18 + optLength, 18 + optLength + 1))[0];
+    const optLength = new Uint8Array(secureProtoBuffer.slice(17, 18));
+    const command = new Uint8Array(secureProtoBuffer.slice(18 + optLength, 18 + optLength + 1));
     let isUDP = false;
     switch (command) {
         case 1: break;
@@ -1295,7 +1293,7 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     const portIndex = 18 + optLength + 1;
     const portRemote = new DataView(secureProtoBuffer).getUint16(portIndex);
     const addressIndex = portIndex + 2;
-    const addressType = new Uint8Array(secureProtoBuffer.slice(addressIndex, addressIndex + 1))[0];
+    const addressType = new Uint8Array(secureProtoBuffer.slice(addressIndex, addressIndex + 1));
     let addressValue = '';
     let addressLength = 0;
     let addressValueIndex = addressIndex + 1;
@@ -1305,7 +1303,7 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
             addressValue = new Uint8Array(secureProtoBuffer.slice(addressValueIndex, addressValueIndex + addressLength)).join('.');
             break;
         case 2:
-            addressLength = new Uint8Array(secureProtoBuffer.slice(addressValueIndex, addressValueIndex + 1))[0];
+            addressLength = new Uint8Array(secureProtoBuffer.slice(addressValueIndex, addressValueIndex + 1));
             addressValueIndex += 1;
             addressValue = new TextDecoder().decode(secureProtoBuffer.slice(addressValueIndex, addressValueIndex + addressLength));
             break;
@@ -1459,22 +1457,22 @@ function stringify(arr, offset = 0) {
 async function socks5Connect(addressType, addressRemote, portRemote, log) {
     const { username, password, hostname, port } = parsedSocks5Address;
     const socket = connect({ hostname, port });
-    const socksGreeting = new Uint8Array([5, 2, 0, 2]);
+    const socksGreeting = new Uint8Array();
     const writer = socket.writable.getWriter();
     await writer.write(socksGreeting);
     log('SOCKS5 greeting sent');
     const reader = socket.readable.getReader();
     const encoder = new TextEncoder();
     let res = (await reader.read()).value;
-    if (res[0] !== 0x05) {
+    if (res !== 0x05) {
         log(`SOCKS5 version error: received ${res[0]}, expected 5`);
         return;
     }
-    if (res[1] === 0xff) {
+    if (res === 0xff) {
         log("No acceptable authentication methods");
         return;
     }
-    if (res[1] === 0x02) {
+    if (res === 0x02) {
         log("SOCKS5 requires authentication");
         if (!username || !password) {
             log("Username and password required");
@@ -1489,7 +1487,7 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
         ]);
         await writer.write(authRequest);
         res = (await reader.read()).value;
-        if (res[0] !== 0x01 || res[1] !== 0x00) {
+        if (res !== 0x01 || res !== 0x00) {
             log("SOCKS5 authentication failed");
             return;
         }
@@ -1513,7 +1511,7 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
     await writer.write(socksRequest);
     log('SOCKS5 request sent');
     res = (await reader.read()).value;
-    if (res[1] === 0x00) {
+    if (res === 0x00) {
         log("SOCKS5 connection established");
     } else {
         log("SOCKS5 connection failed");
@@ -1632,9 +1630,9 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 	if (currentSub) {
 		const match = currentSub.match(/^(?:https?:\/\/)?([^\/]+)/);
-		currentSub = match ? match[1] : currentSub;
+		currentSub = match ? match : currentSub;
 		const subs = await 整理(currentSub);
-		currentSub = subs.length > 1 ? subs[0] : currentSub;
+		currentSub = subs.length > 1 ? subs : currentSub;
 	}
 	
 	// --- 修改：从独立的 ADD.txt 加载优选列表 ---
@@ -1710,8 +1708,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	const uuid = (_url.pathname == `/${dynamicUUID}`) ? dynamicUUID : userID;
 	const userAgent = UA.toLowerCase();
 	const Config = 配置信息(userID, hostName);
-	const proxyConfig = Config[0];
-	const clash = Config[1];
+	const proxyConfig = Config;
+	const clash = Config;
 	let proxyhost = "";
 	if (hostName.includes(".workers.dev")) {
 		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
@@ -1729,8 +1727,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	const isUserAgentMozilla = userAgent.includes('mozilla');
 	if (isUserAgentMozilla && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
 		const newSocks5s = socks5s.map(socks5Address => {
-			if (socks5Address.includes('@')) return socks5Address.split('@')[1];
-			else if (socks5Address.includes('//')) return socks5Address.split('//')[1];
+			if (socks5Address.includes('@')) return socks5Address.split('@');
+			else if (socks5Address.includes('//')) return socks5Address.split('//');
 			else return socks5Address;
 		});
 		let socks5List = '';
@@ -2131,13 +2129,13 @@ async function 整理优选列表(api) {
 				const lines = content.split(/\r?\n/);
 				let 节点备注 = '';
 				let 测速端口 = '443';
-				if (lines[0].split(',').length > 3) {
+				if (lines.split(',').length > 3) {
 					const idMatch = api[index].match(/id=([^&]*)/);
-					if (idMatch) 节点备注 = idMatch[1];
+					if (idMatch) 节点备注 = idMatch;
 					const portMatch = api[index].match(/port=([^&]*)/);
-					if (portMatch) 测速端口 = portMatch[1];
+					if (portMatch) 测速端口 = portMatch;
 					for (let i = 1; i < lines.length; i++) {
-						const columns = lines[i].split(',')[0];
+						const columns = lines[i].split(',');
 						if (columns) {
 							newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
 							if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
@@ -2146,9 +2144,9 @@ async function 整理优选列表(api) {
 				} else {
 					if (api[index].includes('proxyip=true')) {
 						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
-							const baseItem = item.split('#')[0] || item;
+							const baseItem = item.split('#') || item;
 							if (baseItem.includes(':')) {
-								const port = baseItem.split(':')[1];
+								const port = baseItem.split(':');
 								if (!httpsPorts.includes(port)) {
 									return baseItem;
 								}
@@ -2189,7 +2187,7 @@ async function 整理测速结果(tls) {
 			} else {
 				lines = text.split('\n');
 			}
-			const header = lines[0].split(',');
+			const header = lines.split(',');
 			const tlsIndex = header.indexOf('TLS');
 			const ipAddressIndex = 0;
 			const portIndex = 1;
@@ -2235,26 +2233,26 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			if (!match) {
 				if (address.includes(':') && address.includes('#')) {
 					const parts = address.split(':');
-					address = parts[0];
-					const subParts = parts[1].split('#');
-					port = subParts[0];
-					addressid = subParts[1];
+					address = parts;
+					const subParts = parts.split('#');
+					port = subParts;
+					addressid = subParts;
 				} else if (address.includes(':')) {
 					const parts = address.split(':');
-					address = parts[0];
-					port = parts[1];
+					address = parts;
+					port = parts;
 				} else if (address.includes('#')) {
 					const parts = address.split('#');
-					address = parts[0];
-					addressid = parts[1];
+					address = parts;
+					addressid = parts;
 				}
 				if (addressid.includes(':')) {
-					addressid = addressid.split(':')[0];
+					addressid = addressid.split(':');
 				}
 			} else {
-				address = match[1];
-				port = match[2] || port;
-				addressid = match[3] || address;
+				address = match;
+				port = match || port;
+				addressid = match || address;
 			}
 			const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
 			if (!isValidIPv4(address) && port == "-1") {
@@ -2288,26 +2286,26 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		if (!match) {
 			if (address.includes(':') && address.includes('#')) {
 				const parts = address.split(':');
-				address = parts[0];
-				const subParts = parts[1].split('#');
-				port = subParts[0];
-				addressid = subParts[1];
+				address = parts;
+				const subParts = parts.split('#');
+				port = subParts;
+				addressid = subParts;
 			} else if (address.includes(':')) {
 				const parts = address.split(':');
-				address = parts[0];
-				port = parts[1];
+				address = parts;
+				port = parts;
 			} else if (address.includes('#')) {
 				const parts = address.split('#');
-				address = parts[0];
-				addressid = parts[1];
+				address = parts;
+				addressid = parts;
 			}
 			if (addressid.includes(':')) {
-				addressid = addressid.split(':')[0];
+				addressid = addressid.split(':');
 			}
 		} else {
-			address = match[1];
-			port = match[2] || port;
-			addressid = match[3] || address;
+			address = match;
+			port = match || port;
+			addressid = match || address;
 		}
 		if (!isValidIPv4(address) && port == "-1") {
 			for (let httpsPort of httpsPorts) {
@@ -2377,7 +2375,7 @@ async function sendMessage(type, ip, add_data = "") {
 	}
 }
 function isValidIPv4(address) {
-	const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+	const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|?[0-9][0-9]?)$/;
 	return ipv4Regex.test(address);
 }
 function 生成动态UUID(密钥) {
@@ -2464,9 +2462,46 @@ async function handleGetRequest(env) {
             settingsContent = '读取[高级设置]时发生错误: ' + error.message;
         }
     }
+	
+	// --- 修改：直接使用字符串模板，不再使用Base64 ---
+    const settingsTemplate = `[PROXYIP]
+# PROXYIP: 回源IP
+# 每行一个IP，格式：IP:端口 (端口可选)
+# 例如:
+# 1.2.3.4:443
+# proxyip.example.com
 
-    // Base64编码的设置模板
-    const settingsTemplateBase64 = 'W1BST1hZSVBdCiMgUFJPWFlJUDog5Zue5YqbSVAKIyD姣e琛屼竴涓猣UC格式：IP:端口 (端口可选)CiMg5L2/5b6F OgoxLjIuMy40OjQ0Mwpwcm94eWlwLmZ4eGsuZGVkeW4uaW8KCltTT0NLUzVdCiMgU09DS1M1OiBTT0NLUzX浠ｇ悊CiMg姣e琛屼竴涓地址，格式：[用户名:密码@]主机:端口CiMg5L2/5b6F Ogp1c2VyOnBhc3NAMTI3LjAuMC4xOjEwODAKMTI3LjAuMC4xOjEwODAKCltTVUJdCiMgU1VCOiDlpKflrozkvY3nqIvovpPlvIDlpKflrbjnlJ8KIyDlj7DmloLovazkuIDkuKroprAKIyDlvd/lvoY6CnN1Yi5nb29nbGUuY29tCgpbU1VCQVBJXQojIFNVQkFQSTog6K6k6L6T6L2s5o2i5Zyo56GuQVBJCmMjIOi3v+W+hjoKYXBpLnYxLm1rCnN1Yi54ZXRvbi5kZXYKCltTVUJDT05GSUddCiMgU1VCQ09ORklHOiDoqLrpvpPorazmjbtnlZnluIjpsojlhYgKIyDlvd/lvoY6Cmh0dHBzOi8vcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbS9BQ0w0U1NSL0FDTHRJU1IvbWFzdGVyL0NsYXNoL2NvbmZpZy9BQ0w0U1NfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQoKW05BVDY0XQojIE5BVDY0L0ROUzY0IOacu+mxvOagoQojIOi3v+W+hjoKZG5zNjQuY21saXVzc3NzLm5ldA==';
+[SOCKS5]
+# SOCKS5: SOCKS5代理
+# 每行一个地址，格式：[用户名:密码@]主机:端口
+# 例如:
+# user:pass@127.0.0.1:1080
+# 127.0.0.1:1080
+
+[SUB]
+# SUB: 外部优选订阅生成器
+# 只支持单个地址
+# 例如:
+# sub.google.com
+
+[SUBAPI]
+# SUBAPI: 订阅转换后端API
+# 例如:
+# api.v1.mk
+# sub.xeton.dev
+
+[SUBCONFIG]
+# SUBCONFIG: 订阅转换配置文件
+
+
+[NAT64]
+# NAT64/DNS64 服务器
+
+`;
+
+    if (settingsContent.trim() === '' && hasKV) {
+        settingsContent = settingsTemplate;
+    }
 
     const html = `
         <!DOCTYPE html>
@@ -2487,13 +2522,15 @@ async function handleGetRequest(env) {
                 .container { max-width: 1000px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
                 .title { font-size: 1.5em; color: var(--text-color); margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid var(--border-color); }
                 .editor-section { margin-bottom: 30px; }
-                .editor { width: 100%; height: 300px; padding: 15px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 8px; font-family: Monaco, Consolas, "Courier New", monospace; font-size: 14px; line-height: 1.5; resize: vertical; }
-                .button-group { display: flex; gap: 12px; margin-top: 15px; }
-                .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; }
+                .editor { width: 100%; min-height: 300px; padding: 15px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 8px; font-family: Monaco, Consolas, "Courier New", monospace; font-size: 14px; line-height: 1.5; resize: vertical; }
+                .button-group { display: flex; gap: 12px; margin-top: 15px; align-items: center;}
+                .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.2s; }
                 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
                 .btn-primary { background: var(--primary-color); color: white; }
+                .btn-primary:hover:not(:disabled) { background: var(--secondary-color); }
                 .btn-secondary { background: #666; color: white; }
-                .save-status { margin-left: 10px; font-size: 14px; color: #666; }
+                .btn-secondary:hover:not(:disabled) { background: #555; }
+                .save-status { font-size: 14px; color: #666; }
                 .divider { height: 1px; background: var(--border-color); margin: 30px 0; }
             </style>
         </head>
@@ -2517,7 +2554,7 @@ async function handleGetRequest(env) {
                     <div class="editor-section">
                         <h3>高级设置 (settings.txt)</h3>
                          <p style="color: #666;">请遵循INI文件格式，即 <code>[SECTION]</code>。</p>
-                        <textarea class="editor" id="settings_content" placeholder="${decodeURIComponent(atob(settingsTemplateBase64))}">${settingsContent}</textarea>
+                        <textarea class="editor" id="settings_content">${settingsContent}</textarea>
                         <div class="button-group">
                             <button class="btn btn-primary" onclick="saveContent('settings', this)">保存高级设置</button>
                              <span class="save-status" id="settings_status"></span>
