@@ -210,7 +210,7 @@ async function resolveToIPv6(target) {
         return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
     }
 
-    // 获取域名的IPv4地址 (保持不变)
+    // 获取域名的IPv4地址
     async function fetchIPv4(domain) {
         const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
         const response = await fetch(url, {
@@ -228,7 +228,7 @@ async function resolveToIPv6(target) {
         return ipv4s[Math.floor(Math.random() * ipv4s.length)];
     }
 
-    // 查询NAT64 IPv6地址 (保持不变)
+    // 查询NAT64 IPv6地址
     async function queryNAT64(domain) {
         const socket = connect({
             hostname: isIPv6(DNS64Server) ? `[${DNS64Server}]` : DNS64Server,
@@ -239,6 +239,7 @@ async function resolveToIPv6(target) {
         const reader = socket.readable.getReader();
 
         try {
+            // 发送DNS查询
             const query = buildDNSQuery(domain);
             const queryWithLength = new Uint8Array(query.length + 2);
             queryWithLength[0] = query.length >> 8;
@@ -246,43 +247,46 @@ async function resolveToIPv6(target) {
             queryWithLength.set(query, 2);
             await writer.write(queryWithLength);
 
+            // 读取响应
             const response = await readDNSResponse(reader);
             const ipv6s = parseIPv6(response);
 
-            // --- 修改 ---: 如果找到多个IPv6，随机返回一个
-            return ipv6s.length > 0 ? ipv6s[Math.floor(Math.random() * ipv6s.length)] : '未找到IPv6地址';
+            return ipv6s.length > 0 ? ipv6s[0] : '未找到IPv6地址';
         } finally {
             await writer.close();
             await reader.cancel();
         }
     }
 
-    // 构建DNS查询包 (保持不变)
+    // 构建DNS查询包
     function buildDNSQuery(domain) {
         const buffer = new ArrayBuffer(512);
         const view = new DataView(buffer);
         let offset = 0;
 
-        view.setUint16(offset, Math.floor(Math.random() * 65536)); offset += 2;
-        view.setUint16(offset, 0x0100); offset += 2;
-        view.setUint16(offset, 1); offset += 2;
-        view.setUint16(offset, 0); offset += 6;
+        // DNS头部
+        view.setUint16(offset, Math.floor(Math.random() * 65536)); offset += 2; // ID
+        view.setUint16(offset, 0x0100); offset += 2; // 标志
+        view.setUint16(offset, 1); offset += 2; // 问题数
+        view.setUint16(offset, 0); offset += 6; // 答案数/权威数/附加数
 
+        // 域名编码
         for (const label of domain.split('.')) {
             view.setUint8(offset++, label.length);
             for (let i = 0; i < label.length; i++) {
                 view.setUint8(offset++, label.charCodeAt(i));
             }
         }
-        view.setUint8(offset++, 0);
+        view.setUint8(offset++, 0); // 结束标记
 
-        view.setUint16(offset, 28); offset += 2; // AAAA
-        view.setUint16(offset, 1); offset += 2; // IN
+        // 查询类型和类
+        view.setUint16(offset, 28); offset += 2; // AAAA记录
+        view.setUint16(offset, 1); offset += 2; // IN类
 
         return new Uint8Array(buffer, 0, offset);
     }
 
-    // 读取DNS响应 (保持不变)
+    // 读取DNS响应
     async function readDNSResponse(reader) {
         const chunks = [];
         let totalLength = 0;
@@ -304,6 +308,7 @@ async function resolveToIPv6(target) {
             }
         }
 
+        // 合并数据并跳过长度前缀
         const fullResponse = new Uint8Array(totalLength);
         let offset = 0;
         for (const chunk of chunks) {
@@ -314,20 +319,22 @@ async function resolveToIPv6(target) {
         return fullResponse.slice(2);
     }
 
-    // 解析IPv6地址 (保持不变)
+    // 解析IPv6地址
     function parseIPv6(response) {
         const view = new DataView(response.buffer);
-        let offset = 12;
+        let offset = 12; // 跳过DNS头部
 
+        // 跳过问题部分
         while (view.getUint8(offset) !== 0) {
             offset += view.getUint8(offset) + 1;
         }
         offset += 5;
 
         const answers = [];
-        const answerCount = view.getUint16(6);
+        const answerCount = view.getUint16(6); // 答案数量
 
         for (let i = 0; i < answerCount; i++) {
+            // 跳过名称
             if ((view.getUint8(offset) & 0xC0) === 0xC0) {
                 offset += 2;
             } else {
@@ -338,10 +345,10 @@ async function resolveToIPv6(target) {
             }
 
             const type = view.getUint16(offset); offset += 2;
-            offset += 6;
+            offset += 6; // 跳过类和TTL
             const dataLength = view.getUint16(offset); offset += 2;
 
-            if (type === 28 && dataLength === 16) { // AAAA
+            if (type === 28 && dataLength === 16) { // AAAA记录
                 const parts = [];
                 for (let j = 0; j < 8; j++) {
                     parts.push(view.getUint16(offset + j * 2).toString(16));
@@ -354,7 +361,6 @@ async function resolveToIPv6(target) {
         return answers;
     }
 
-    // 转换IPv4到NAT64地址 (保持不变)
     function convertToNAT64IPv6(ipv4Address) {
         const parts = ipv4Address.split('.');
         if (parts.length !== 4) {
@@ -374,32 +380,15 @@ async function resolveToIPv6(target) {
         return DNS64Server.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
     }
 
-    // --- !!! 全新的核心逻辑 !!! ---
     try {
-        // 如果目标本身就是IPv6，直接返回
-        if (isIPv6(target)) return target;
-
-        // 如果配置的是带 /96 后缀的前缀，则使用旧的拼接逻辑
-        if (DNS64Server.endsWith('/96')) {
+        // 判断输入类型并处理
+        if (isIPv6(target)) return target; // IPv6直接返回
             const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
-            const nat64 = convertToNAT64IPv6(ipv4);
-            return nat64;
-        }
-
-        const nat64 = await queryNAT64(target);
-
-        // 如果成功获取到IPv6地址，则返回它
-        if (isIPv6(nat64)) {
-            return nat64;
-        }
-        
-        // 如果查询失败，则返回一个备用地址，而不是让程序崩溃
-        return atob('cHJveHlpcC5jbWxpdXNzc3MubmV0');
-
+        const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
+        return isIPv6(nat64) ? nat64 : atob('cHJveHlpcC5jbWxpdXNzc3MubmV0');
     } catch (error) {
-        console.error('解析IPv6时发生错误:', error);
-        // 如果发生任何异常，也返回备用地址
-        return atob('cHJveHlpcC5jbWxpdXNzc3MubmV0');
+        console.error('解析错误:', error);
+        return atob('cHJveHlpcC5jbWxpdXNzc3MubmV0');;
     }
 }
 
@@ -1339,7 +1328,9 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 return;
             }
         } else {
-            // --- 新的回退逻辑开始 ---
+            // --- 最终修正版的回退逻辑 ---
+
+            let connectionEstablished = false;
 
             // 优先级 1: 尝试用户配置的 PROXYIP
             if (proxyIP && proxyIP.trim() !== '') {
@@ -1347,7 +1338,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     log('重试：第一阶段 - 尝试用户配置的 PROXYIP...');
                     let usedProxyIP = proxyIP;
                     log(`...使用用户配置的 PROXYIP: ${usedProxyIP}`);
-                    
+
                     let port = portRemote;
                     let parsedIP = usedProxyIP;
                     if (parsedIP.includes(']:')) {
@@ -1362,16 +1353,15 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     
                     tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
                     log('✅ 用户配置的 PROXYIP 连接成功！');
+                    connectionEstablished = true;
                 } catch (userProxyError) {
                     log(`❌ 用户配置的 PROXYIP 连接失败: ${userProxyError.message}`);
-                    // 失败了也没关系，继续尝试下一个优先级
                 }
             }
 
             // 优先级 2: 尝试用户配置的 NAT64
-            // 仅在前面的尝试失败，并且用户配置了 NAT64 时执行
             const defaultNat64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
-            if (!tcpSocket && DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== defaultNat64Server) {
+            if (!connectionEstablished && DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== defaultNat64Server) {
                 try {
                     log('重试：第二阶段 - 尝试用户配置的 NAT64...');
                     const nat64Address = await resolveToIPv6(addressRemote);
@@ -1383,15 +1373,16 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     
                     tcpSocket = await createConnection(nat64Proxyip, 443);
                     log('✅ 用户配置的 NAT64 连接成功！');
+                    connectionEstablished = true;
                 } catch (userNat64Error) {
                     log(`❌ 用户配置的 NAT64 连接失败: ${userNat64Error.message}`);
-                    // 失败了也没关系，继续尝试下一个优先级
                 }
             }
 
-            // 优先级 3: 尝试代码内置的默认 PROXYIP
-            // 仅在前面的所有尝试都失败时执行
-            if (!tcpSocket) {
+            // 优先级 3 & 4: 统一的默认回退机制
+            if (!connectionEstablished) {
+                log('进入默认回退机制...');
+                // 优先级 3: 尝试内置的默认 PROXYIP
                 try {
                     log('重试：第三阶段 - 尝试内置的默认 PROXYIP...');
                     const defaultProxyIP = kodi.tv;
@@ -1399,7 +1390,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
                     let port = portRemote;
                     let parsedIP = defaultProxyIP;
-                    if (parsedIP.includes(']:')) {
+                     if (parsedIP.includes(']:')) {
                         [parsedIP, port] = parsedIP.split(']:');
                         parsedIP += ']';
                     } else if (parsedIP.includes(':')) {
@@ -1411,39 +1402,39 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
                     tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
                     log('✅ 内置 PROXYIP 连接成功！');
+
                 } catch (defaultProxyError) {
                     log(`❌ 内置 PROXYIP 连接失败: ${defaultProxyError.message}`);
-                    // 失败了也没关系，继续尝试最后的优先级
-                }
-            }
-            
-            // 优先级 4: 尝试最终回退 (包括默认 NAT64)
-            // 仅在前面的所有尝试都失败时执行
-            if (!tcpSocket) {
-                try {
-                    log('重试：第四阶段 - 尝试最终回退 (NAT64)...');
-                    const nat64Address = await resolveToIPv6(addressRemote);
-                    if (!nat64Address || !nat64Address.includes(':')) {
-                        throw new Error(`NAT64 解析失败，返回了无效地址: ${nat64Address}`);
-                    }
-                    const nat64Proxyip = `[${nat64Address}]`;
-                    log(`...最终 NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
                     
-                    tcpSocket = await createConnection(nat64Proxyip, 443);
-                    log('✅ 最终回退 (NAT64) 连接成功！');
-                } catch (finalError) {
-                    log(`❌ 最终回退连接也失败了: ${finalError.message}`);
-                    log('所有重试尝试均已失败，关闭连接。');
-                    safeCloseWebSocket(webSocket);
-                    return; // 明确结束重试过程
+                    // !!! 关键修改 !!!
+                    // 只有在内置 PROXYIP 失败后，才在其 catch 块内部尝试最终的 NAT64
+                    // 优先级 4: 尝试最终回退 (包括默认 NAT64)
+                    try {
+                        log('重试：第四阶段 - 尝试最终回退 (NAT64)...');
+                        const nat64Address = await resolveToIPv6(addressRemote);
+                        if (!nat64Address || !nat64Address.includes(':')) {
+                            throw new Error(`NAT64 解析失败，返回了无效地址: ${nat64Address}`);
+                        }
+                        const nat64Proxyip = `[${nat64Address}]`;
+                        log(`...最终 NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
+                        
+                        tcpSocket = await createConnection(nat64Proxyip, 443);
+                        log('✅ 最终回退 (NAT64) 连接成功！');
+                    } catch (finalError) {
+                        log(`❌ 最终回退连接也失败了: ${finalError.message}`);
+                    }
                 }
             }
-            // --- 新的回退逻辑结束 ---
         }
         
+        // 最终检查连接是否成功
         if (tcpSocket) {
             log('建立从远程服务器到客户端的数据流...');
             remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
+        } else {
+            // 如果所有尝试都失败了
+            log('所有重试尝试均已失败，关闭连接。');
+            safeCloseWebSocket(webSocket);
         }
     };
 
