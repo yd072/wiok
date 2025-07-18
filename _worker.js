@@ -42,7 +42,7 @@ let userIDLow;
 let userIDTime = "";
 let proxyIPPool = [];
 let path = '/?ed=2560';
-let dynamicUUID;  // 动态生成的UUID
+let dynamicUUID = null;  // 【方案二 修复】初始化变量
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 let DNS64Server = '';
@@ -358,12 +358,9 @@ async function resolveToIPv6(target) {
         if (isIPv6(nat64)) {
             return nat64;
         } else {
-            // 如果没得到合法的IPv6，就抛出错误
             throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
         }
     } catch (error) {
-        // --- 关键修改 ---
-        // 将底层的错误继续向上抛出，而不是返回一个默认值
         throw new Error(`NAT64 resolution failed: ${error.message}`);
     }
 }
@@ -375,16 +372,16 @@ export default {
 			const userAgent = UA.toLowerCase();
 			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
 			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
-				dynamicUUID = env.KEY || env.TOKEN || userID;  // 动态生成的UUID
-				validTime = Number(env.TIME) || validTime;  // 有效时间（单位：天）
-				updateInterval = Number(env.UPTIME) || updateInterval;  // 更新间隔（单位：天）
-				const userIDs = await 生成动态UUID(dynamicUUID);  // 动态生成的UUID
+				dynamicUUID = env.KEY || env.TOKEN || userID;
+				validTime = Number(env.TIME) || validTime;
+				updateInterval = Number(env.UPTIME) || updateInterval;
+				const userIDs = await 生成动态UUID(dynamicUUID);
 				userID = userIDs[0];
 				userIDLow = userIDs[1];
+				userIDTime = userIDs[2];
 			}
 
 			if (!userID) {
-				// 生成美化后的系统信息页面
 				const html = `
 				<!DOCTYPE html>
 						<html>
@@ -675,8 +672,8 @@ export default {
 					RproxyIP = 'false';
 				}
 
-				const pathRoute = url.pathname.toLowerCase();  // URL路径
-				if (pathRoute == '/') {  // URL路径
+				const pathRoute = url.pathname.toLowerCase();
+				if (pathRoute == '/') {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
@@ -843,17 +840,21 @@ export default {
 							},
 						});
 					}
-				} else if (pathRoute == `/${fakeUserID}`) {  // URL路径
+				} else if (pathRoute === `/${fakeUserID}`) {
 					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 					return new Response(`${fakeConfig}`, { status: 200 });
-				} else if (url.pathname == `/${dynamicUUID}/edit` || pathRoute == `/${userID}/edit`) {  // 动态生成的UUID
+				} 
+				// 【方案一：核心安全修复】在这里修改了判断逻辑
+				else if ((dynamicUUID && url.pathname === `/${dynamicUUID}/edit`) || pathRoute === `/${userID}/edit`) {
 					const html = await KV(request, env);
 					return html;
-				} else if (url.pathname == `/${dynamicUUID}` || pathRoute == `/${userID}`) {  // 动态生成的UUID
+				} else if ((dynamicUUID && url.pathname === `/${dynamicUUID}`) || pathRoute === `/${userID}`) {
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
-					const secureProtoConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
+					
+					const uuid_to_use = (dynamicUUID && url.pathname === `/${dynamicUUID}`) ? dynamicUUID : userID;
+					const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
+
 					const now = Date.now();
-					//const timestamp = Math.floor(now / 1000);
 					const today = new Date(now);
 					today.setHours(0, 0, 0, 0);
 					const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
@@ -886,7 +887,6 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
-						// 美化错误页面
 						const html = `
 						<!DOCTYPE html>
 						<html>
@@ -1829,7 +1829,13 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+// =================================================================================================
+// 【最终修复】
+// 1. 将函数第一个参数从 userID 重命名为 uuid，以接收从 fetch 函数传递过来的正确 UUID
+// 2. 删除了函数内部错误的 `const uuid = ...` 声明行
+// 3. 确保了调用 `配置信息` 函数时，使用的是传入的 `uuid`
+// =================================================================================================
+async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
 	if (env.KV) {
 		try {
@@ -2018,9 +2024,8 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	    }
     }
 
-	const uuid = (_url.pathname == `/${dynamicUUID}`) ? dynamicUUID : userID;  // 动态生成的UUID
 	const userAgent = UA.toLowerCase();
-	const Config = 配置信息(userID, hostName);
+	const Config = 配置信息(uuid, hostName);
 	const proxyConfig = Config[0];
 	const clash = Config[1];
 	let proxyhost = "";
