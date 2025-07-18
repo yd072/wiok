@@ -354,51 +354,23 @@ async function resolveToIPv6(target) {
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
         const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
         
+        // --- 关键修改 ---
         if (isIPv6(nat64)) {
             return nat64;
         } else {
+            // 如果没得到合法的IPv6，就抛出错误
             throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
         }
     } catch (error) {
+        // --- 关键修改 ---
+        // 将底层的错误继续向上抛出，而不是返回一个默认值
         throw new Error(`NAT64 resolution failed: ${error.message}`);
     }
-}
-
-
-/**
- * 从KV中读取并解析高级设置 (advanced_settings.txt)
- * @param {object} env - Cloudflare environment object
- * @returns {object} - 一个包含高级设置的对象
- */
-async function getAdvancedSettingsFromKV(env) {
-    if (!env.KV) {
-        return {};
-    }
-
-    const settingsText = await env.KV.get('advanced_settings.txt') || '';
-    if (!settingsText) {
-        return {};
-    }
-
-    const settings = {};
-    const sections = settingsText.split(/\[(.*?)\]/);
-
-    for (let i = 1; i < sections.length; i += 2) {
-        const sectionName = sections[i].trim().toLowerCase();
-        const content = sections[i + 1].trim();
-        settings[sectionName] = content;
-    }
-
-    return settings;
 }
 
 export default {
 	async fetch(request, env, ctx) {
 		try {
-			// --- 修改：一次性加载所有高级设置, 并单独加载优选列表 ---
-            const kvAdvancedSettings = await getAdvancedSettingsFromKV(env);
-            const kvAddContent = env.KV ? (await env.KV.get('ADD.txt') || '') : '';
-
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
 			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
@@ -590,21 +562,64 @@ export default {
 
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
-			// --- 修改：从kvAdvancedSettings对象或环境变量中加载配置 ---
-            proxyIP = kvAdvancedSettings.proxyip || env.PROXYIP || env.proxyip || '';
+			// 修改PROXYIP初始化逻辑
+			if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('ADVANCED_SETTINGS.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.proxyip && settings.proxyip.trim()) {
+							proxyIP = settings.proxyip;
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取PROXYIP时发生错误:', error);
+				}
+			}
+			// 如果proxyIP为空，则使用环境变量或默认值
+			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
 			proxyIPs = await 整理(proxyIP);
 			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 
-            socks5Address = kvAdvancedSettings.socks5 || env.SOCKS5 || '';
+			// 修改SOCKS5地址初始化逻辑
+			if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('ADVANCED_SETTINGS.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.socks5 && settings.socks5.trim()) {
+							socks5Address = settings.socks5.split('\n')[0].trim();
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取SOCKS5时发生错误:', error);
+				}
+			}
+			// 如果socks5Address为空，则使用环境变量或默认值
+			socks5Address = socks5Address || env.SOCKS5 || '';
 			socks5s = await 整理(socks5Address);
 			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 			socks5Address = socks5Address.split('//')[1] || socks5Address;
             
-            DNS64Server = kvAdvancedSettings.nat64 || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
-
 			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
 			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
 			if (env.BAN) banHosts = await 整理(env.BAN);
+			
+			// --- NAT64/DNS64 设置加载逻辑 ---
+			if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('ADVANCED_SETTINGS.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.nat64 && settings.nat64.trim()) {
+							DNS64Server = settings.nat64.trim().split('\n')[0];
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取NAT64时发生错误:', error);
+				}
+			}
+			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
 
 			if (socks5Address) {
 				try {
@@ -612,7 +627,8 @@ export default {
 					RproxyIP = env.RPROXYIP || 'false';
 					enableSocks = true;
 				} catch (err) {
-					console.log(err.toString());
+					let e = err;
+					console.log(e.toString());
 					RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 					enableSocks = false;
 				}
@@ -623,7 +639,11 @@ export default {
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
-				// ADD*系列变量现在从kvAddContent或环境变量中获取，在`生成配置信息`函数中处理
+				if (env.ADD) addresses = await 整理(env.ADD);
+				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
+				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
+				if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
+				if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
 				DLS = Number(env.DLS) || DLS;
 				remarkIndex = Number(env.CSVREMARK) || remarkIndex;
 				BotToken = env.TGTOKEN || BotToken;
@@ -631,18 +651,16 @@ export default {
 				FileName = env.SUBNAME || FileName;
 				subEmoji = env.SUBEMOJI || env.EMOJI || subEmoji;
 				if (subEmoji == '0') subEmoji = 'false';
-				
-				// --- 修改：SUB, SUBAPI, SUBCONFIG的加载 ---
-                let sub = kvAdvancedSettings.sub || env.SUB || '';
-                subConverter = kvAdvancedSettings.subapi || env.SUBAPI || subConverter;
+				if (env.LINK) link = await 整理(env.LINK);
+				let sub = env.SUB || '';
+				subConverter = env.SUBAPI || subConverter;
 				if (subConverter.includes("http://")) {
 					subConverter = subConverter.split("//")[1];
 					subProtocol = 'http';
 				} else {
 					subConverter = subConverter.split("//")[1] || subConverter;
 				}
-                subConfig = kvAdvancedSettings.subconfig || env.SUBCONFIG || subConfig;
-
+				subConfig = env.SUBCONFIG || subConfig;
 				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
 				if (url.searchParams.has('notls')) noTLS = 'true';
 
@@ -657,12 +675,12 @@ export default {
 					RproxyIP = 'false';
 				}
 
-				const pathRoute = url.pathname.toLowerCase();
-				if (pathRoute == '/') {
+				const pathRoute = url.pathname.toLowerCase();  // URL路径
+				if (pathRoute == '/') {  // URL路径
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
-						// ... 系统信息首页HTML ...
+						// 生成美化后的系统信息页面
 						const html = `
 						<!DOCTYPE html>
 						<html>
@@ -825,15 +843,17 @@ export default {
 							},
 						});
 					}
-				} else if (pathRoute == `/${fakeUserID}`) {
-					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env, kvAdvancedSettings, kvAddContent);
+				} else if (pathRoute == `/${fakeUserID}`) {  // URL路径
+					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 					return new Response(`${fakeConfig}`, { status: 200 });
-				} else if (url.pathname == `/${dynamicUUID}/edit` || pathRoute == `/${userID}/edit`) {
-					return KV(request, env);
-				} else if (url.pathname == `/${dynamicUUID}` || pathRoute == `/${userID}`) {
+				} else if (url.pathname == `/${dynamicUUID}/edit` || pathRoute == `/${userID}/edit`) {  // 动态生成的UUID
+					const html = await KV(request, env);
+					return html;
+				} else if (url.pathname == `/${dynamicUUID}` || pathRoute == `/${userID}`) {  // 动态生成的UUID
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
-					const secureProtoConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env, kvAdvancedSettings, kvAddContent);
+					const secureProtoConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
 					const now = Date.now();
+					//const timestamp = Math.floor(now / 1000);
 					const today = new Date(now);
 					today.setHours(0, 0, 0, 0);
 					const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
@@ -866,7 +886,7 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
-						// ... 404错误页面HTML ...
+						// 美化错误页面
 						const html = `
 						<!DOCTYPE html>
 						<html>
@@ -972,7 +992,6 @@ export default {
 					}
 				}
 			} else {
-				// ... WebSocket处理逻辑 (无变化) ...
 				socks5Address = url.searchParams.get('socks5') || socks5Address;
 				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
 				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
@@ -990,7 +1009,8 @@ export default {
 						parsedSocks5Address = socks5AddressParser(socks5Address);
 						enableSocks = true;
 					} catch (err) {
-						console.log(err.toString());
+						let e = err;
+						console.log(e.toString());
 						enableSocks = false;
 					}
 				} else {
@@ -1020,7 +1040,6 @@ export default {
 	},
 };
 
-// ... secureProtoOverWSHandler 和其他网络核心函数 (无变化) ...
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
@@ -1808,49 +1827,140 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-// --- 修复：重新生成了cmad的Base64字符串以避免URI Malformed错误 ---
-const cmad = atob('dGVsZWdyYW0g5LqL5rWL576OIOS7o+ihqOWIhuS9le+8n+Wwj+WIhuWMl+S/ruihjO+8jDxiciA+PGEgaHJlZj0naHR0cHM6Ly90Lm1lL0NNTGl1c3NzCyclM0VodHRwczovL3QubWUvQ01MaXVzc3NzPC9hPjxiciA+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tPGJyID5naXRodWIg6aG155u+5Z2d5Z2HIFN0YXIhU3RhciFTdGFyISEhPGJyID48YSBocmVmPSdodHRwczovL2dpdGh1Yi5jb20vY21saXUvZWRnZXR1bm5lbCc+aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L2VkZ2V0dW5uZWw8L2E+PGJyID4tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS08YnIgPiMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyM=');
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
-async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env, kvAdvancedSettings, kvAddContent) {
-	let currentSub = sub; 
-    if (!currentSub) {
-        currentSub = kvAdvancedSettings.sub || env.SUB || '';
-    }
+async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+	// 在获取其他配置前,先尝试读取自定义的设置
+	if (env.KV) {
+		try {
+			const advancedSettingsJSON = await env.KV.get('ADVANCED_SETTINGS.txt');
+			let settings = {};
+			if (advancedSettingsJSON) {
+				try {
+					settings = JSON.parse(advancedSettingsJSON);
+				} catch (e) {
+					console.error("解析ADVANCED_SETTINGS.txt失败:", e);
+				}
+			}
 
-	if (currentSub) {
-		const match = currentSub.match(/^(?:https?:\/\/)?([^\/]+)/);
-		currentSub = match ? match[1] : currentSub;
-		const subs = await 整理(currentSub);
-		currentSub = subs.length > 1 ? subs[0] : currentSub;
-	}
-	
-	const allAddresses = await 整理(kvAddContent);
-	const 分类地址 = {
-		接口地址: new Set(),
-		链接地址: new Set(),
-		优选地址: new Set()
-	};
+			// 修改PROXYIP设置逻辑
+			const customProxyIP = settings.proxyip;
+			if (customProxyIP && customProxyIP.trim()) {
+				proxyIP = customProxyIP;
+				proxyIPs = await 整理(proxyIP);
+				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+				console.log('使用KV中的PROXYIP:', proxyIP);
+				RproxyIP = 'false';
+			} else if (env.PROXYIP) {
+				proxyIP = env.PROXYIP;
+				proxyIPs = await 整理(proxyIP);
+				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+				console.log('使用环境变量中的PROXYIP:', proxyIP);
+				RproxyIP = 'false';
+			} else {
+				console.log('使用默认PROXYIP设置');
+				proxyIP = '';
+				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+			}
 
-	for (const 元素 of allAddresses) {
-		if (元素.startsWith('https://')) {
-			分类地址.接口地址.add(元素);
-		} else if (元素.includes('://')) {
-			分类地址.链接地址.add(元素);
-		} else {
-			分类地址.优选地址.add(元素);
+			// 修改SOCKS5设置逻辑
+			const customSocks5 = settings.socks5;
+			if (customSocks5 && customSocks5.trim()) {
+				socks5Address = customSocks5.trim().split('\n')[0];
+				socks5s = await 整理(socks5Address);
+				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+				socks5Address = socks5Address.split('//')[1] || socks5Address;
+				console.log('使用KV中的SOCKS5:', socks5Address);
+				enableSocks = true;
+			} else if (env.SOCKS5) {
+				socks5Address = env.SOCKS5;
+				socks5s = await 整理(socks5Address);
+				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+				socks5Address = socks5Address.split('//')[1] || socks5Address;
+				console.log('使用环境变量中的SOCKS5:', socks5Address);
+				enableSocks = true;
+			} else {
+				console.log('使用默认SOCKS5设置');
+				enableSocks = false;
+				socks5Address = '';
+			}
+
+			// 读取自定义SUB设置
+			const customSub = settings.sub;
+			if (customSub !== null && customSub.trim() !== '') {
+				sub = customSub.trim().split('\n')[0];
+				console.log('使用KV中的SUB:', sub);
+			} else if (env.SUB) {
+				sub = env.SUB;
+				console.log('使用环境变量中的SUB:', sub);
+			} else {
+				sub = '';
+				console.log('使用默认SUB设置:', sub);
+			}
+
+			// 读取自定义SUBAPI设置
+			const customSubAPI = settings.subapi;
+			if (customSubAPI !== null && customSubAPI.trim() !== '') {
+				subConverter = customSubAPI.trim().split('\n')[0];
+				console.log('使用KV中的SUBAPI:', subConverter);
+			} else if (env.SUBAPI) {
+				subConverter = env.SUBAPI;
+				console.log('使用环境变量中的SUBAPI:', subConverter);
+			} else {
+				subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
+				console.log('使用默认SUBAPI设置:', subConverter);
+			}
+
+			// 读取自定义SUBCONFIG设置
+			const customSubConfig = settings.subconfig;
+			if (customSubConfig !== null && customSubConfig.trim() !== '') {
+				subConfig = customSubConfig.trim().split('\n')[0];
+				console.log('使用KV中的SUBCONFIG:', subConfig);
+			} else if (env.SUBCONFIG) {
+				subConfig = env.SUBCONFIG;
+				console.log('使用环境变量中的SUBCONFIG:', subConfig);
+			} else {
+				subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
+				console.log('使用默认SUBCONFIG设置:', subConfig);
+			}
+		} catch (error) {
+			console.error('读取自定义设置时发生错误:', error);
 		}
 	}
-	addressesapi = [...分类地址.接口地址];
-	link = [...分类地址.链接地址];
-	addresses = [...分类地址.优选地址];
+
+
+	if (sub) {
+		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
+		sub = match ? match[1] : sub;
+		const subs = await 整理(sub);
+		sub = subs.length > 1 ? subs[0] : sub;
+	}
 	
-	if (addresses.length === 0 && addressesapi.length === 0) {
-		if (env.ADD) addresses = await 整理(env.ADD);
-		if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
-		if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
-		if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
-		if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
-        if (env.LINK) link = await 整理(env.LINK);
+	if (env.KV) {
+		await 迁移地址列表(env);
+		const 优选地址列表 = await env.KV.get('ADD.txt');
+		if (优选地址列表) {
+				const 优选地址数组 = await 整理(优选地址列表);
+				const 分类地址 = {
+					接口地址: new Set(),
+					链接地址: new Set(),
+					优选地址: new Set()
+				};
+
+				for (const 元素 of 优选地址数组) {
+					if (元素.startsWith('https://')) {
+						分类地址.接口地址.add(元素);
+					} else if (元素.includes('://')) {
+						分类地址.链接地址.add(元素);
+					} else {
+						分类地址.优选地址.add(元素);
+					}
+				}
+
+			addressesapi = [...分类地址.接口地址];
+			link = [...分类地址.链接地址];
+			addresses = [...分类地址.优选地址];
+		}
 	}
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
@@ -1858,6 +1968,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
         			'104.16.0.0/14',
 				    '104.21.0.0/16',
 				    '188.114.96.0/20',
+
     			];
 
     		function ipToInt(ip) {
@@ -1907,7 +2018,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	    }
     }
 
-	const uuid = (_url.pathname == `/${dynamicUUID}`) ? dynamicUUID : userID;
+	const uuid = (_url.pathname == `/${dynamicUUID}`) ? dynamicUUID : userID;  // 动态生成的UUID
 	const userAgent = UA.toLowerCase();
 	const Config = 配置信息(userID, hostName);
 	const proxyConfig = Config[0];
@@ -1951,28 +2062,29 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		}
 
 		let 订阅器 = '<br>';
-		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表与设置</a>` : '';
+		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
 		
-		if (currentSub) {
+		if (sub) {
 			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			else if (RproxyIP == 'true') 订阅器 += `CFCDN（访问方式）: 自动获取ProxyIP<br>`;
 			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`
-			订阅器 += `<br>SUB（优选订阅生成器）: ${currentSub}${判断是否绑定KV空间}<br>`;
+			订阅器 += `<br>SUB（优选订阅生成器）: ${sub}${判断是否绑定KV空间}<br>`;
 		} else {
 			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
-			订阅器 += `<br>您的订阅内容由 内置优选地址列表提供${判断是否绑定KV空间}<br>`;
-			if (addresses.length > 0 || addressesapi.length > 0) {
-				订阅器 += `优选地址/API: <br>&nbsp;&nbsp;${[...new Set(addresses.concat(addressesapi))].join('<br>&nbsp;&nbsp;')}<br>`;
-			}
+			订阅器 += `<br>您的订阅内容由 内置 addresses/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
+			if (addresses.length > 0) 订阅器 += `ADD（TLS优选域名&IP）: <br>&nbsp;&nbsp;${addresses.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressesnotls.length > 0) 订阅器 += `ADDNOTLS（noTLS优选域名&IP）: <br>&nbsp;&nbsp;${addressesnotls.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressesapi.length > 0) 订阅器 += `ADDAPI（TLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesapi.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLSAPI（noTLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesnotlsapi.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressescsv.length > 0) 订阅器 += `ADDCSV（IPTest测速csv文件 限速 ${DLS} ）: <br>&nbsp;&nbsp;${addressescsv.join('<br>&nbsp;&nbsp;')}<br>`;
 		}
 
-		if (dynamicUUID && _url.pathname !== `/${dynamicUUID}`) 订阅器 = '';
+		if (dynamicUUID && _url.pathname !== `/${dynamicUUID}`) 订阅器 = '';  // 动态生成的UUID
 		else 订阅器 += `<br>SUBAPI（订阅转换后端）: ${subProtocol}://${subConverter}<br>SUBCONFIG（订阅转换配置文件）: ${subConfig}`;
-		const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${validTime} 天<br>UPTIME（动态UUID更新时间）: ${updateInterval} 时（北京时间）<br><br>` : `${userIDTime}`;
-		// ... 订阅信息页面HTML (无变化) ...
+		const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${validTime} 天<br>UPTIME（动态UUID更新时间）: ${updateInterval} 时（北京时间）<br><br>` : `${userIDTime}`;  // 有效时间（单位：天）
 		const 节点配置页 = `
 			<!DOCTYPE html>
 			<html>
@@ -2273,7 +2385,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}`;
 		let isBase64 = true;
 
-		if (!currentSub || currentSub == "") {
+		if (!sub || sub == "") {
 			if (hostName.includes('workers.dev')) {
 				if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
 					try {
@@ -2322,7 +2434,7 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 
 		try {
 			let content;
-			if ((!currentSub || currentSub == "") && isBase64 == true) {
+			if ((!sub || sub == "") && isBase64 == true) {
 				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
 			} else {
 				const response = await fetch(url, {
@@ -2344,7 +2456,6 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 }
 
-// ... 整理优选列表, 整理测速结果, 生成本地订阅 等辅助函数 (无变化) ...
 async function 整理优选列表(api) {
 	if (!api || api.length === 0) return [];
 
@@ -2629,13 +2740,13 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	return btoa(base64Response);
 }
 
-// ... 整理, sendMessage, isValidIPv4, 生成动态UUID 等函数 (无变化) ...
+// 优化 整理 函数
 async function 整理(内容) {
     if (!内容) return [];
     const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
         .replace(/^,|,$/g, '');
     
-    return 替换后的内容.split(',').filter(item => item.trim() !== '');
+    return 替换后的内容.split(',');
 }
 
 async function sendMessage(type, ip, add_data = "") {
@@ -2703,13 +2814,24 @@ function 生成动态UUID(密钥) {  // 动态生成的UUID
 	return Promise.all([当前UUIDPromise, 上一个UUIDPromise, 到期时间字符串]);
 }
 
-// --- 修改：KV编辑页面的处理逻辑 ---
-async function KV(request, env) {
+async function 迁移地址列表(env, txt = 'ADD.txt') {
+	const 旧数据 = await env.KV.get(`/${txt}`);
+	const 新数据 = await env.KV.get(txt);
+
+	if (旧数据 && !新数据) {
+		await env.KV.put(txt, 旧数据);
+		await env.KV.delete(`/${txt}`);
+		return true;
+	}
+	return false;
+}
+
+async function KV(request, env, txt = 'ADD.txt') {
 	try {
 		if (request.method === "POST") {
-			return await handlePostRequest(request, env);
+			return await handlePostRequest(request, env, txt);
 		}
-		return await handleGetRequest(env);
+		return await handleGetRequest(env, txt);
 	} catch (error) {
 		console.error('处理请求时发生错误:', error);
 		return new Response("服务器错误: " + error.message, {
@@ -2719,7 +2841,7 @@ async function KV(request, env) {
 	}
 }
 
-async function handlePostRequest(request, env) {
+async function handlePostRequest(request, env, txt) {
     if (!env.KV) {
         return new Response("未绑定KV空间", { status: 400 });
     }
@@ -2728,11 +2850,13 @@ async function handlePostRequest(request, env) {
         const url = new URL(request.url);
         const type = url.searchParams.get('type');
 
-        if (type === 'advanced') {
-            await env.KV.put('advanced_settings.txt', content);
-        } else {
-            // 默认为保存优选列表
-            await env.KV.put('ADD.txt', content);
+        // 根据类型保存到不同的KV
+        switch(type) {
+            case 'advanced':
+                await env.KV.put('ADVANCED_SETTINGS.txt', content);
+                break;
+            default: // 主列表内容保存到ADD.txt
+                await env.KV.put(txt, content);
         }
         
         return new Response("保存成功");
@@ -2742,30 +2866,41 @@ async function handlePostRequest(request, env) {
     }
 }
 
-async function handleGetRequest(env) {
+async function handleGetRequest(env, txt) {
+    let content = '';
     let hasKV = !!env.KV;
-    let addContent = '';
-    let advancedSettings = {};
+    let proxyIPContent = '';
+    let socks5Content = '';
+    let subContent = ''; 
+    let subAPIContent = '';
+    let subConfigContent = '';
+    let nat64Content = '';
 
     if (hasKV) {
         try {
-            addContent = await env.KV.get('ADD.txt') || '';
-            advancedSettings = await getAdvancedSettingsFromKV(env);
+            content = await env.KV.get(txt) || '';
+			
+            const advancedSettingsJSON = await env.KV.get('ADVANCED_SETTINGS.txt');
+            if (advancedSettingsJSON) {
+                const settings = JSON.parse(advancedSettingsJSON);
+                proxyIPContent = settings.proxyip || '';
+                socks5Content = settings.socks5 || '';
+                subContent = settings.sub || '';
+                subAPIContent = settings.subapi || '';
+                subConfigContent = settings.subconfig || '';
+                nat64Content = settings.nat64 || '';
+            }
         } catch (error) {
             console.error('读取KV时发生错误:', error);
-            addContent = '读取优选列表时发生错误: ' + error.message;
+            content = '读取数据时发生错误: ' + error.message;
         }
     }
-    
-    // --- 修复：重新生成所有占位符和提示内容的Base64字符串 ---
-    const noticeContentBase64 = 'JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjAlRTQlQkMlOUElRTglQTclQTElRTUlODglOTclRTUlOEMlODElMkYlRTUlOUQlODAlRTUlOTAlODQlMkYlRTclQkIlQjQlRTklOTQlQjAlMkZBUEklMkMlMjAlRTYlQUMlOEYlRTglQjAlODElRTQlQjglODAlRTQlQjglQUElMkMlMjAlMjMlRTUlOEYlOUYlRTUlQTQlQjQlRTUlQTQlQjQlRTclOUQlODQlRTQlQjglQkElRTglQTklQjQlRUYlQkMlOEMlMjAlRTQlQkIlOEIlRTUlQTYlODIlM0ElM0NiciUzRSUyMCUyMDEyNy4wLjAuMSUzQTIwNTMlMjMlRTUlQTQlODclRTYlQjMlQTglRTklODAlODlJUCUzQ2JyJTNFJTIwJUU1JTlEJTgwJUU1JTkwJODQlM0EyMDUzJTIzJUU1QTQlODclRTYlQjMlQTglRTUlOUQlODAlRTUlOTAlODQlM0NiciUzRSUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBNDA0MyUyMyVFNSVBNCU4NyVFNkIzJTg4SVB2NiUzQ2JyJTNFJTNDYnIlM0UlM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFQSVglRTQlQkQlOTElRTklODAlODlJUCUzRnByb3h5aXAlM0R0cnVlJUU1QjAlODglRTglOUQlQjQlRTUlOEYlQTAlRTclQkQlQjQlRTUlODUlQTMlRUYlQkMlOEMlMjAlRTQlQkIlQTMlRTUlQUYlQUYlRTUlQjAlODYlRTUlOEQlQjQlRTUlOTMlN0ElRTUlOTAlOTUlRTUlODglQUIlRUYlQkMlOEMlMjAlRTQlQkIlQTMlRTUlQUYlQUYlRTUlQjAlODYlM0ElM0NiciUzRSUyMCUyMGh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQlM0Zwcm94eXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRSUzQ3N0cm9uZyUzRTMuJTNDJTJGc3Ryb25nJTNFJTIwJUU4JUE0JUIwJUU5JTk4JTkxJUU5JTkzJUJFJUU2JThGJTQ1JTJDJTIwJUU0JUJEJTkxJUU5JTgwJTg5JTNBJTNDYnIlM0UlMjAlMjBodHRwcyUzQSUyRiUyRmV4YW1wbGUuY29tJTJGc3Vic2NyaXB0aW9u';
-    const addContentPlaceholderBase64 = 'QUREJUU0JUJEJTkxJUU5JTgwJTg5JTNBJTBBdmlzYS5jbiUyMyVFNSVBNCU4NyVFNkIzJTg4JUU1JTlEJTgwJUU1JTkwJODQlMEExMjcuMC4wLjElM0ExMjM0JTIzQ0ZuYXQlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjNJUHY2JTBBJTBBJUU4JThGJUJGJUU2JTk4JThFJTNBCiVFNCVCRCU5MSVFOSU4MCU4OSUyRiVFNSU5RCU4MCVFNSU5MCU4NCUyRiVFNSU5MyVCRSVFOCU4QSVBRiVFNSU5QyVBQyUyRkFQSVAsJTIwJUU2JUM5JThGJUVEJTkxJThDJUU0JUI4JTgwJUU0JUI4JTgwJTJDJTIwJTIzJUU1JThGJTlGJUVEJTkxJThGJUVEJTkxJThDJUU0JUJDJTkxJUU0JUI4JUIwJUU2JUIzJUE4JUU4JUE5JUI0JTJDJTIwJUU1JTlEJTgwJUU1JTkwJODQlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglMEFJWHY2JUU5JTgwJTkxJUU3JTk0JUE4JUU1JUIxJUI3JUU1JUIzJUI2JUU2JThDJUFDJUU1JUIxJTg3JUU2JTlEJTkwJTJDJTIwJUU0JUJEJTkxJUU5JTgwJTg5JTNBJTVCMjYwNiUzQTQ3MDAlM0EzMDMyJTNBJTNBJTVEJTNBMjA1MyUwQSVFNSVBQiVBRiVFNSVCMCU4NiVFNCVCOCU4RCVFNSVBNiU4QiUyQyUyMCVFOSU4MCU5MiVFOCVBRSU4RCVFNCVCOCU4QSVFNCVBOEUlMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlMkMlMjAlRTQlQkIlOEIlRTUlQTYlODIlM0F2aXNhLmNuJTIzJUU1JUE0JTg3JUU2JUIzJTg4JUU1JTlEJTgwJUU1JTkwJODQlMEElMEFBUEklRTQlQkQlOTElRTklODAlODklM0ElMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZhZGRyZXNzZXNhcGkudHh0';
 
     const html = `
         <!DOCTYPE html>
         <html>
         <head>
-            <title>优选订阅列表与高级设置</title>
+            <title>优选订阅列表</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
@@ -2896,6 +3031,20 @@ async function handleGetRequest(env) {
                     margin: 20px 0;
                 }
 
+                @media (max-width: 768px) {
+                    body {
+                        padding: 10px;
+                    }
+                    
+                    .container {
+                        padding: 15px;
+                    }
+                    
+                    .editor {
+                        height: 400px;
+                    }
+                }
+
                 .advanced-settings {
                     margin: 20px 0;
                     padding: 20px;
@@ -2933,29 +3082,7 @@ async function handleGetRequest(env) {
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
-                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
-                    ℹ️ 优选列表格式说明 ∨
-                </a>
-                
-                <div id="noticeContent" class="notice-content" style="display: none">
-				    ${atob(noticeContentBase64)}
-                </div>
-
-                <div class="editor-container">
-                    ${hasKV ? `
-                        <textarea class="editor" 
-                            placeholder="${atob(addContentPlaceholderBase64)}"
-                            id="add_content">${addContent}</textarea>
-                        <div class="button-group">
-                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveAddContent(this)">保存优选列表</button>
-                            <span class="save-status" id="addSaveStatus"></span>
-                        </div>
-                    ` : ''}
-                </div>
-                
-                <div class="divider"></div>
-
+                <!-- 修改高级设置部分 -->
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
                         <h3 style="margin: 0;">⚙️ 高级设置</h3>
@@ -2964,65 +3091,122 @@ async function handleGetRequest(env) {
                     <div id="advanced-settings-content" class="advanced-settings-content">
                         <!-- PROXYIP设置 -->
                         <div style="margin-bottom: 20px;">
-                            <label for="proxyip"><strong>PROXYIP 设置</strong> (每行一个)</label>
-                            <textarea id="proxyip" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${advancedSettings.proxyip || ''}</textarea>
+                            <label for="proxyip"><strong>PROXYIP 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
+                            <textarea 
+                                id="proxyip" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}"
+                            >${proxyIPContent}</textarea>
                         </div>
 
                         <!-- SOCKS5设置 -->
                         <div style="margin-bottom: 20px;">
-                            <label for="socks5"><strong>SOCKS5 设置</strong> (每行一个)</label>
-                            <textarea id="socks5" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${advancedSettings.socks5 || ''}</textarea>
+                            <label for="socks5"><strong>SOCKS5 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                            <textarea 
+                                id="socks5" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}"
+                            >${socks5Content}</textarea>
                         </div>
 
                         <!-- SUB设置 -->
                         <div style="margin-bottom: 20px;">
-                            <label for="sub"><strong>SUB 设置</strong> (仅支持单个地址)</label>
-                            <textarea id="sub" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${advancedSettings.sub || ''}</textarea>
+                            <label for="sub"><strong>SUB 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
+                            <textarea 
+                                id="sub" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}"
+                            >${subContent}</textarea>
                         </div>
                         
                         <!-- SUBAPI设置 -->
                         <div style="margin-bottom: 20px;">
-                            <label for="subapi"><strong>SUBAPI 设置</strong> (订阅转换后端)</label>
-                            <textarea id="subapi" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${advancedSettings.subapi || ''}</textarea>
+                            <label for="subapi"><strong>SUBAPI 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
+                            <textarea 
+                                id="subapi" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}"
+                            >${subAPIContent}</textarea>
                         </div>
                         
                         <!-- SUBCONFIG设置 -->
                         <div style="margin-bottom: 20px;">
-                            <label for="subconfig"><strong>SUBCONFIG 设置</strong> (订阅转换配置文件)</label>
-                            <textarea id="subconfig" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${advancedSettings.subconfig || ''}</textarea>
+                            <label for="subconfig"><strong>SUBCONFIG 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
+                            <textarea 
+                                id="subconfig" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}"
+                            >${subConfigContent}</textarea>
                         </div>
 
                         <!-- NAT64/DNS64 设置 -->
                         <div style="margin-bottom: 20px;">
-                            <label for="nat64"><strong>NAT64/DNS64 设置</strong> (<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">可在此查询</a>)</label>
-                            <textarea id="nat64" class="proxyip-editor" placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1">${advancedSettings.nat64 || ''}</textarea>
+                            <label for="nat64"><strong>NAT64/DNS64</strong></label>
+    					<p style="margin: 5px 0; color: #666;">
+        				<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
+    					</p>
+                            <textarea 
+                                id="nat64" 
+                                class="proxyip-editor" 
+                                placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1"
+                            >${nat64Content}</textarea>
                         </div>
+
 						<script>
-  						    document.getElementById('nat64-link').setAttribute('href', atob('aHR0cHM6Ly9uYXQ2NC54eXo='));
+  						const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
+  						const decodedURL = atob(encodedURL);
+  						document.getElementById('nat64-link').setAttribute('href', decodedURL);
 						</script>
-                        
+                        <!-- 统一的保存按钮 -->
                         <div>
-                            <button class="btn btn-primary" onclick="saveAdvancedSettings(this)">保存高级设置</button>
+                            <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
                 </div>
-                ${cmad}
+
+                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                    ℹ️ 注意事项 ∨
+                </a>
+                
+                <div id="noticeContent" class="notice-content" style="display: none">
+				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                </div>
+
+                <div class="editor-container">
+                    ${hasKV ? `
+                        <textarea class="editor" 
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+                            id="content">${content}</textarea>
+                        <div class="button-group">
+                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <span class="save-status" id="saveStatus"></span>
+                        </div>
+                        <div class="divider"></div>
+                        ${cmad}
+                    ` : '<p>未绑定KV空间</p>'}
+                </div>
             </div>
 
             <script>
             function goBack() {
                 const pathParts = window.location.pathname.split('/');
-                pathParts.pop();
+                pathParts.pop(); // 移除 "edit"
                 const newPath = pathParts.join('/');
                 window.location.href = newPath;
             }
 
-            async function saveAddContent(button) {
+            async function saveContent(button) {
                 try {
                     button.disabled = true;
-                    const content = document.getElementById('add_content').value;
-                    const saveStatus = document.getElementById('addSaveStatus');
+                    const content = document.getElementById('content').value;
+                    const saveStatus = document.getElementById('saveStatus');
                     
                     saveStatus.textContent = '保存中...';
                     
@@ -3033,61 +3217,30 @@ async function handleGetRequest(env) {
 
                     if (response.ok) {
                         saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => { saveStatus.textContent = ''; }, 3000);
-                    } else { throw new Error('保存失败'); }
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败');
+                    }
                 } catch (error) {
-                    document.getElementById('addSaveStatus').textContent = '❌ ' + error.message;
-                } finally {
-                    button.disabled = false;
-                }
-            }
-
-            async function saveAdvancedSettings(button) {
-                const saveStatus = document.getElementById('settings-save-status');
-                try {
-                    button.disabled = true;
-                    saveStatus.textContent = '保存中...';
-
-                    const proxyip = document.getElementById('proxyip').value;
-                    const socks5 = document.getElementById('socks5').value;
-                    const sub = document.getElementById('sub').value;
-                    const subapi = document.getElementById('subapi').value;
-                    const subconfig = document.getElementById('subconfig').value;
-                    const nat64 = document.getElementById('nat64').value;
-
-                    // 构建INI格式的字符串
-                    let settingsString = \`[PROXYIP]\\n\${proxyip}\\n\\n\`;
-                    settingsString += \`[SOCKS5]\\n\${socks5}\\n\\n\`;
-                    settingsString += \`[SUB]\\n\${sub}\\n\\n\`;
-                    settingsString += \`[SUBAPI]\\n\${subapi}\\n\\n\`;
-                    settingsString += \`[SUBCONFIG]\\n\${subconfig}\\n\\n\`;
-                    settingsString += \`[NAT64]\\n\${nat64}\\n\`;
-                    
-                    const response = await fetch(window.location.href + '?type=advanced', {
-                        method: 'POST',
-                        body: settingsString
-                    });
-
-                    if (response.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => { saveStatus.textContent = ''; }, 3000);
-                    } else { throw new Error('保存失败'); }
-                } catch (error) {
+                    const saveStatus = document.getElementById('saveStatus');
                     saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存时发生错误:', error);
                 } finally {
                     button.disabled = false;
                 }
             }
-            
+
             function toggleNotice() {
                 const noticeContent = document.getElementById('noticeContent');
                 const noticeToggle = document.getElementById('noticeToggle');
                 if (noticeContent.style.display === 'none') {
                     noticeContent.style.display = 'block';
-                    noticeToggle.textContent = 'ℹ️ 优选列表格式说明 ∧';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
                 } else {
                     noticeContent.style.display = 'none';
-                    noticeToggle.textContent = 'ℹ️ 优选列表格式说明 ∨';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
                 }
             }
 
@@ -3100,6 +3253,42 @@ async function handleGetRequest(env) {
                 } else {
                     content.style.display = 'none';
                     toggle.textContent = '∨';
+                }
+            }
+			
+            async function saveSettings() {
+                const saveStatus = document.getElementById('settings-save-status');
+                saveStatus.textContent = '保存中...';
+                
+                try {
+                    const advancedSettings = {
+                        proxyip: document.getElementById('proxyip').value,
+                        socks5: document.getElementById('socks5').value,
+                        sub: document.getElementById('sub').value,
+                        subapi: document.getElementById('subapi').value,
+                        subconfig: document.getElementById('subconfig').value,
+                        nat64: document.getElementById('nat64').value
+                    };
+
+                    const response = await fetch(window.location.href + '?type=advanced', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(advancedSettings)
+                    });
+
+                    if (response.ok) {
+                        saveStatus.textContent = '✅ 保存成功';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败: ' + await response.text());
+                    }
+                } catch (error) {
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存设置时发生错误:', error);
                 }
             }
             </script>
