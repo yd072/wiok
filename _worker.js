@@ -1317,6 +1317,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     const retryConnection = async () => {
         let tcpSocket;
 
+        // 如果启用了 SOCKS5，它有自己的逻辑，不参与 PROXYIP/NAT64 回退
         if (enableSocks) {
             try {
                 log('重试：尝试使用 SOCKS5...');
@@ -1328,6 +1329,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 return;
             }
         } else {
+            // **非SOCKS5时的回退链: PROXYIP -> NAT64**
             try {
                 // **回退第1步：尝试 PROXYIP**
                 log('重试：第一阶段 - 尝试 PROXYIP...');
@@ -1379,6 +1381,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             }
         }
         
+        // 如果我们能到达这里，说明某个重试步骤成功了
         if (tcpSocket) {
             log('建立从远程服务器到客户端的数据流...');
             remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
@@ -1399,6 +1402,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return retryConnection();
     }
 }
+
+// ... (文件剩余部分的代码保持不变, 这里省略) ...
+// ... (processsecureProtoHeader, remoteSocketToWS, stringify, 等等) ...
+// ... (所有与订阅页面、KV存储、API调用相关的函数都无需修改) ...
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
@@ -1964,11 +1971,11 @@ async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fak
 	}
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-	    	let cfips = [
-        		'104.16.0.0/14',
-		        '104.21.0.0/16',
-		        '188.114.96.0/20',
-
+	    let cfips = [
+        			'104.16.0.0/14',
+		            '162.159.0.0/16',
+				    '104.21.0.0/16',
+				    '188.114.96.0/20',
     			];
 
     		function ipToInt(ip) {
@@ -3308,7 +3315,7 @@ async function handleGetRequest(env, txt) {
                         body: subconfigContent // 即使是空字符串也会被保存
                     });
 
-		    // 保存NAT64/DNS64设置
+					// 保存NAT64/DNS64设置
                     const nat64Content = document.getElementById('nat64').value;
                     const nat64Response = await fetch(window.location.href + '?type=nat64', {
                         method: 'POST',
