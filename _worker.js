@@ -1263,6 +1263,7 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
+    // 优化 SOCKS5 模式检查
     const checkSocks5Mode = async (address) => {
         const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
@@ -1273,6 +1274,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return !!pattern;
     };
 
+    // 优化连接处理
     const createConnection = async (address, port, socks = false) => {
         log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
@@ -1300,6 +1302,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             clearTimeout(timeoutId);
             remoteSocket.value = tcpSocket;
 
+            // 写入数据
             const writer = tcpSocket.writable.getWriter();
             try {
                 await writer.write(rawClientData);
@@ -1314,98 +1317,74 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     };
 
+    // 优化重试逻辑
     const retryConnection = async () => {
-        let tcpSocket;
-
-        // 如果启用了 SOCKS5，它有自己的逻辑，不参与 PROXYIP/NAT64 回退
-        if (enableSocks) {
-            try {
-                log('重试：尝试使用 SOCKS5...');
+        try {
+            let tcpSocket;
+            if (enableSocks) {
                 tcpSocket = await createConnection(addressRemote, portRemote, true);
-                log('✅ SOCKS5 连接成功！');
-            } catch(socksError) {
-                log(`❌ SOCKS5 连接失败: ${socksError.message}`);
-                safeCloseWebSocket(webSocket);
-                return;
-            }
-        } else {
-            // **非SOCKS5时的回退链: PROXYIP -> NAT64**
-            try {
-                // **回退第1步：尝试 PROXYIP**
-                log('重试：第一阶段 - 尝试 PROXYIP...');
-                let usedProxyIP = proxyIP; // 使用从全局/用户配置加载的 proxyIP
-                if (!usedProxyIP || usedProxyIP.trim() === '') {
-                    usedProxyIP = kodi.tv;
-                    log(`...未配置 PROXYIP，使用内置默认值: ${usedProxyIP}`);
-                } else {
-                    log(`...使用用户配置的 PROXYIP: ${usedProxyIP}`);
-                }
-
-                let port = portRemote;
-                let parsedIP = usedProxyIP;
-                if (parsedIP.includes(']:')) {
-                    [parsedIP, port] = parsedIP.split(']:');
-                    parsedIP += ']';
-                } else if (parsedIP.includes(':')) {
-                    [parsedIP, port] = parsedIP.split(':');
-                }
-                if (parsedIP.includes('.tp')) {
-                    port = parsedIP.split('.tp')[1].split('.')[0] || port;
-                }
-                
-                tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
-                log('✅ PROXYIP 连接成功！');
-
-            } catch (proxyError) {
-                log(`❌ PROXYIP 连接失败: ${proxyError.message}`);
-                
-                // **回退第2步：当 PROXYIP 失败时，尝试 NAT64**
-                try {
-                    log('重试：第二阶段 - 尝试 NAT64...');
-                    const nat64Address = await resolveToIPv6(addressRemote);
-                    if (!nat64Address || !nat64Address.includes(':')) {
-                        throw new Error(`NAT64 解析失败，返回了无效地址: ${nat64Address}`);
+            } else {
+                // ##################################################
+                // ### START OF MODIFICATION ###
+                // ##################################################
+                // 新逻辑：只有当用户通过 KV 或环境变量配置了 PROXYIP 时，才执行
+                if (proxyIP && proxyIP.trim() !== '') {
+                    // 解析用户提供的 PROXYIP，这部分逻辑保持不变
+                    let port = portRemote;
+                    if (proxyIP.includes(']:')) {
+                        [proxyIP, port] = proxyIP.split(']:');
+                    } else if (proxyIP.includes(':')) {
+                        [proxyIP, port] = proxyIP.split(':');
                     }
-                    const nat64Proxyip = `[${nat64Address}]`;
-                    log(`...NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
-                    
-                    tcpSocket = await createConnection(nat64Proxyip, 443);
-                    log('✅ NAT64 连接成功！');
+                    if (proxyIP.includes('.tp')) {
+                        port = proxyIP.split('.tp')[1].split('.')[0] || port;
+                    }
+                    portRemote = port;
 
-                } catch (nat64Error) {
-                    log(`❌ NAT64 连接也失败了: ${nat64Error.message}`);
-                    log('所有重试尝试均已失败，关闭连接。');
-                    safeCloseWebSocket(webSocket);
-                    return; // 明确结束重试过程
+                    // 使用用户配置的 PROXYIP 尝试连接
+                    log(`重试：尝试使用用户配置的 PROXYIP: ${proxyIP}:${portRemote}`);
+                    tcpSocket = await createConnection(proxyIP.toLowerCase(), portRemote);
+                } else {
+                    // 如果没有配置 PROXYIP，则直接抛出错误以模拟重试失败
+                    // 这使得连接流程可以继续到下一个回退机制（如果存在）
+                    log('重试：未配置 PROXYIP，跳过 PROXYIP 重试逻辑。');
+                    // 如果这里您想测试NAT64，可以让流程继续，而不是抛错后就终止。
+                    // 比如，直接调用nat64的逻辑
+                    log('重试：尝试使用NAT64进行连接。');
+                    const nat64Proxyip = `[${await resolveToIPv6(addressRemote)}]`;
+                    log(`NAT64 代理连接到 ${nat64Proxyip}:443`);
+                    tcpSocket = await createConnection(nat64Proxyip, '443');
                 }
+                // ##################################################
+                // ### END OF MODIFICATION ###
+                // ##################################################
             }
-        }
-        
-        // 如果我们能到达这里，说明某个重试步骤成功了
-        if (tcpSocket) {
-            log('建立从远程服务器到客户端的数据流...');
-            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
+
+            // 监听连接关闭
+            tcpSocket.closed
+                .catch(error => log('重试连接关闭:', error))
+                .finally(() => safeCloseWebSocket(webSocket));
+
+            return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
+        } catch (error) {
+            log('重试失败:', error);
+            // 在重试也失败后，可以考虑关闭WebSocket
+            safeCloseWebSocket(webSocket);
         }
     };
 
     try {
         // 主连接逻辑
-        log('主流程：第一阶段 - 尝试直接连接...');
         const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
             await checkSocks5Mode(addressRemote) : false;
 
         const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
-        log('✅ 直接连接成功！');
         return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
     } catch (error) {
-        log(`❌ 主连接失败 (${error.message})，将启动重试流程...`);
+        log('主连接失败，尝试重试:', error);
         return retryConnection();
     }
 }
-
-// ... (文件剩余部分的代码保持不变, 这里省略) ...
-// ... (processsecureProtoHeader, remoteSocketToWS, stringify, 等等) ...
-// ... (所有与订阅页面、KV存储、API调用相关的函数都无需修改) ...
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
@@ -3316,7 +3295,7 @@ async function handleGetRequest(env, txt) {
                     });
 
                     if (proxyipResponse.ok && socks5Response.ok && subResponse.ok && 
-                        subapiResponse.ok && subconfigResponse.ok && nat64Response.ok) {
+                        subapiResponse.ok && subconfigResponse.ok) {
                         saveStatus.textContent = '✅ 保存成功';
                         setTimeout(() => {
                             saveStatus.textContent = '';
@@ -3336,5 +3315,5 @@ async function handleGetRequest(env, txt) {
 
     return new Response(html, {
         headers: { "Content-Type": "text/html;charset=utf-8" }
-    });
-}
+    })
+}	
