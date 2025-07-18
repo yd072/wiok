@@ -354,16 +354,12 @@ async function resolveToIPv6(target) {
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
         const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
         
-        // --- 关键修改 ---
         if (isIPv6(nat64)) {
             return nat64;
         } else {
-            // 如果没得到合法的IPv6，就抛出错误
             throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
         }
     } catch (error) {
-        // --- 关键修改 ---
-        // 将底层的错误继续向上抛出，而不是返回一个默认值
         throw new Error(`NAT64 resolution failed: ${error.message}`);
     }
 }
@@ -1812,7 +1808,8 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+// --- 修复：重新生成了cmad的Base64字符串以避免URI Malformed错误 ---
+const cmad = atob('dGVsZWdyYW0g5LqL5rWL576OIOS7o+ihqOWIhuS9le+8n+Wwj+WIhuWMl+S/ruihjO+8jDxiciA+PGEgaHJlZj0naHR0cHM6Ly90Lm1lL0NNTGl1c3NzCyclM0VodHRwczovL3QubWUvQ01MaXVzc3NzPC9hPjxiciA+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tPGJyID5naXRodWIg6aG155u+5Z2d5Z2HIFN0YXIhU3RhciFTdGFyISEhPGJyID48YSBocmVmPSdodHRwczovL2dpdGh1Yi5jb20vY21saXUvZWRnZXR1bm5lbCc+aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L2VkZ2V0dW5uZWw8L2E+PGJyID4tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS08YnIgPiMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyM=');
 
 async function 生成配置信息(userID, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env, kvAdvancedSettings, kvAddContent) {
 	let currentSub = sub; 
@@ -2759,6 +2756,16 @@ async function handleGetRequest(env) {
             addContent = '读取优选列表时发生错误: ' + error.message;
         }
     }
+    
+    // --- 修复：重新生成所有占位符和提示内容的Base64字符串 ---
+    const noticeContentBase64 = 'JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjAlRTQlQkMlOUElRTglQTclQTElRTUlODglOTclRTUlOEMlODElMkYlRTUlOUQlODAlRTUlOTAlODQlMkYlRTclQkIlQjQlRTklOTQlQjAlMkZBUEklMkMlMjAlRTYlQUMlOEYlRTglQjAlODElRTQlQjglODAlRTQlQjglQUElMkMlMjAlMjMlRTUlOEYlOUYlRTUlQTQlQjQlRTUlQTQlQjQlRTclOUQlODQlRTQlQjglQkElRTglQTklQjQlRUYlQkMlOEMlMjAlRTQlQkIlOEIlRTUlQTYlODIlM0ElM0NiciUzRSUyMCUyMDEyNy4wLjAuMSUzQTIwNTMlMjMlRTUlQTQlODclRTYlQjMlQTglRTklODAlODlJUCUzQ2JyJTNFJTIwJUU1JTlEJTgwJUU1JTkwJODQlM0EyMDUzJTIzJUU1QTQlODclRTYlQjMlQTglRTUlOUQlODAlRTUlOTAlODQlM0NiciUzRSUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBNDA0MyUyMyVFNSVBNCU4NyVFNkIzJTg4SVB2NiUzQ2JyJTNFJTNDYnIlM0UlM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFQSVglRTQlQkQlOTElRTklODAlODlJUCUzRnByb3h5aXAlM0R0cnVlJUU1QjAlODglRTglOUQlQjQlRTUlOEYlQTAlRTclQkQlQjQlRTUlODUlQTMlRUYlQkMlOEMlMjAlRTQlQkIlQTMlRTUlQUYlQUYlRTUlQjAlODYlRTUlOEQlQjQlRTUlOTMlN0ElRTUlOTAlOTUlRTUlODglQUIlRUYlQkMlOEMlMjAlRTQlQkIlQTMlRTUlQUYlQUYlRTUlQjAlODYlM0ElM0NiciUzRSUyMCUyMGh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQlM0Zwcm94eXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRSUzQ3N0cm9uZyUzRTMuJTNDJTJGc3Ryb25nJTNFJTIwJUU4JUE0JUIwJUU5JTk4JTkxJUU5JTkzJUJFJUU2JThGJTQ1JTJDJTIwJUU0JUJEJTkxJUU5JTgwJTg5JTNBJTNDYnIlM0UlMjAlMjBodHRwcyUzQSUyRiUyRmV4YW1wbGUuY29tJTJGc3Vic2NyaXB0aW9u';
+    const addContentPlaceholderBase64 = 'QUREJUU0JUJEJTkxJUU5JTgwJTg5JTNBJTBBdmlzYS5jbiUyMyVFNSVBNCU4NyVFNkIzJTg4JUU1JTlEJTgwJUU1JTkwJODQlMEExMjcuMC4wLjElM0ExMjM0JTIzQ0ZuYXQlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjNJUHY2JTBBJTBBJUU4JThGJUJGJUU2JTk4JThFJTNBCiVFNCVCRCU5MSVFOSU4MCU4OSUyRiVFNSU5RCU4MCVFNSU5MCU4NCUyRiVFNSU5MyVCRSVFOCU4QSVBRiVFNSU5QyVBQyUyRkFQSVAsJTIwJUU2JUM5JThGJUVEJTkxJThDJUU0JUI4JTgwJUU0JUI4JTgwJTJDJTIwJTIzJUU1JThGJTlGJUVEJTkxJThGJUVEJTkxJThDJUU0JUJDJTkxJUU0JUI4JUIwJUU2JUIzJUE4JUU4JUE5JUI0JTJDJTIwJUU1JTlEJTgwJUU1JTkwJODQlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglMEFJWHY2JUU5JTgwJTkxJUU3JTk0JUE4JUU1JUIxJUI3JUU1JUIzJUI2JUU2JThDJUFDJUU1JUIxJTg3JUU2JTlEJTkwJTJDJTIwJUU0JUJEJTkxJUU5JTgwJTg5JTNBJTVCMjYwNiUzQTQ3MDAlM0EzMDMyJTNBJTNBJTVEJTNBMjA1MyUwQSVFNSVBQiVBRiVFNSVCMCU4NiVFNCVCOCU4RCVFNSVBNiU4QiUyQyUyMCVFOSU4MCU5MiVFOCVBRSU4RCVFNCVCOCU4QSVFNCVBOEUlMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlMkMlMjAlRTQlQkIlOEIlRTUlQTYlODIlM0F2aXNhLmNuJTIzJUU1JUE0JTg3JUU2JUIzJTg4JUU1JTlEJTgwJUU1JTkwJODQlMEElMEFBUEklRTQlQkQlOTElRTklODAlODklM0ElMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZhZGRyZXNzZXNhcGkudHh0';
+    const proxyipPlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBMS4yLjMuNCUzQTQ0MyUwQXByb3h5LmV4YW1wbGUuY29t';
+    const socks5PlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBdXNlciUzQXBhc3MlNDAxMjcuMC4wLjElM0ExMDgwJTBBMTI3LjAuMC4xJTNBMTgwODA=';
+    const subPlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBc3ViLmdvb2dsZS5jb20=';
+    const subapiPlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBYXBpLnYxLm1rJTBBc3ViLnhldG9uLmRldg==';
+    const subconfigPlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZBY2w0U1NSJTJGZGV2JTJGQ2xhc2glMkZjb25maWclMkZBQ0w0U1NSX09ubGluZV9NaW5pX011bHRpTW9kZS5pbmk=';
+    const nat64PlaceholderBase64 = 'JUU0JUJEJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2';
 
     const html = `
         <!DOCTYPE html>
@@ -2937,13 +2944,13 @@ async function handleGetRequest(env) {
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjAlRTQlQkMlOUElRTglQTclQTElRTUlODglOTclRTUlOEMlODElRTMlODAlODElRTUlOUMlQjAlRTUlOUQlODAlRTYlQjAlQTIlRTUlOEYlODIlRTglQjAlODElRTYlOUMlQUMlRTUlOEYlODklRTclQkIlOTklRTQlQkIlQjclRTMlODAlODElRTUlQkMlOEYlRTglQUYlQjclRTUlOEYlODklRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOEMlM0NiciUzRQolMjAlMjAxMjcuMC4wLjElM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5SVAlM0NiciUzRQolMjAlMjAlRTUlOTAlOEQlRTUlQjElOTUlM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThEJTNQYnIlM0UKJTIwJTIwJTVCMjYwNiUzQTQ3MDAlM0ElM0ElNUQlM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5SVB2NiUzQ2JyJTNFJTNDYnIlM0UKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMi4lM0MlMkZzdHJvbmclM0UlMjBBUEklRTUlQTYlODIlRTYlOTglQUYlRTYlOTglQUYlRTQlQkIlQTMlRTQlQkQlOUNJUCVFRiVCQyU4QyVFNSU4RiVBRiVFNCVCRCU5QyVFNCVCOEJBJTIyJTNGenByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZleGFtcGxlLmNvbSUyRmFkZHJlc3Nlcy50eHQlM0Zwcm94eXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UzLiUzQyUyRnN0cm9uZyUzRSUyMCVFNSVBRiVBRiVFNSVCMCU4NiVFOSU5MyVCRSVFOCU4QSVBRiVFNSU5QyVBQyVFNSU4RiU4OSVFRiVCQyU5QSUzQ2JyJTNFJTIwJTIwaHR0cHMlM0ElMkYlMkZleGFtcGxlLmNvbSUyRnN1YnNjcmlwdGlvbg=='))}
+				    ${atob(noticeContentBase64)}
                 </div>
 
                 <div class="editor-container">
                     ${hasKV ? `
                         <textarea class="editor" 
-                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUUzJTgwJTgydmlzYS5jbiUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSU5RiU5RiVFNSU5MCU4RCVBRQpBUEklRTclQTRCJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQK'))}"
+                            placeholder="${atob(addContentPlaceholderBase64)}"
                             id="add_content">${addContent}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
@@ -2964,41 +2971,40 @@ async function handleGetRequest(env) {
                         <!-- PROXYIP设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="proxyip"><strong>PROXYIP 设置</strong> (每行一个)</label>
-                            <textarea id="proxyip" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20='))}">${advancedSettings.proxyip || ''}</textarea>
+                            <textarea id="proxyip" class="proxyip-editor" placeholder="${atob(proxyipPlaceholderBase64)}">${advancedSettings.proxyip || ''}</textarea>
                         </div>
 
                         <!-- SOCKS5设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="socks5"><strong>SOCKS5 设置</strong> (每行一个)</label>
-                            <textarea id="socks5" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${advancedSettings.socks5 || ''}</textarea>
+                            <textarea id="socks5" class="proxyip-editor" placeholder="${atob(socks5PlaceholderBase64)}">${advancedSettings.socks5 || ''}</textarea>
                         </div>
 
                         <!-- SUB设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="sub"><strong>SUB 设置</strong> (仅支持单个地址)</label>
-                            <textarea id="sub" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29t'))}">${advancedSettings.sub || ''}</textarea>
+                            <textarea id="sub" class="proxyip-editor" placeholder="${atob(subPlaceholderBase64)}">${advancedSettings.sub || ''}</textarea>
                         </div>
                         
                         <!-- SUBAPI设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="subapi"><strong>SUBAPI 设置</strong> (订阅转换后端)</label>
-                            <textarea id="subapi" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${advancedSettings.subapi || ''}</textarea>
+                            <textarea id="subapi" class="proxyip-editor" placeholder="${atob(subapiPlaceholderBase64)}">${advancedSettings.subapi || ''}</textarea>
                         </div>
                         
                         <!-- SUBCONFIG设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="subconfig"><strong>SUBCONFIG 设置</strong> (订阅转换配置文件)</label>
-                            <textarea id="subconfig" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTJGZGV2JTJGQ2xhc2glMkZjb25maWclMkZBQ0w0U1NSX09ubGluZV9NaW5pX011bHRpTW9kZS5pbmk='))}">${advancedSettings.subconfig || ''}</textarea>
+                            <textarea id="subconfig" class="proxyip-editor" placeholder="${atob(subconfigPlaceholderBase64)}">${advancedSettings.subconfig || ''}</textarea>
                         </div>
 
                         <!-- NAT64/DNS64 设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="nat64"><strong>NAT64/DNS64 设置</strong> (<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">可在此查询</a>)</label>
-                            <textarea id="nat64" class="proxyip-editor" placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1">${advancedSettings.nat64 || ''}</textarea>
+                            <textarea id="nat64" class="proxyip-editor" placeholder="${atob(nat64PlaceholderBase64)}">${advancedSettings.nat64 || ''}</textarea>
                         </div>
 						<script>
-  						    const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
-  						    document.getElementById('nat64-link').setAttribute('href', atob(encodedURL));
+  						    document.getElementById('nat64-link').setAttribute('href', atob('aHR0cHM6Ly9uYXQ2NC54eXo='));
 						</script>
                         
                         <div>
