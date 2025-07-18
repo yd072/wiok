@@ -1352,10 +1352,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 }
                 
                 tcpSocket = await createConnection(parsedIP.toLowerCase(), port);
-                log(' PROXYIP 连接成功！');
+                log('✅ PROXYIP 连接成功！');
 
             } catch (proxyError) {
-                log(` PROXYIP 连接失败: ${proxyError.message}`);
+                log(`❌ PROXYIP 连接失败: ${proxyError.message}`);
                 
                 // **回退第2步：当 PROXYIP 失败时，尝试 NAT64**
                 try {
@@ -1368,10 +1368,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     log(`...NAT64 解析成功，尝试连接到 ${nat64Proxyip}:443`);
                     
                     tcpSocket = await createConnection(nat64Proxyip, 443);
-                    log(' NAT64 连接成功！');
+                    log('✅ NAT64 连接成功！');
 
                 } catch (nat64Error) {
-                    log(` NAT64 连接也失败了: ${nat64Error.message}`);
+                    log(`❌ NAT64 连接也失败了: ${nat64Error.message}`);
                     log('所有重试尝试均已失败，关闭连接。');
                     safeCloseWebSocket(webSocket);
                     return; // 明确结束重试过程
