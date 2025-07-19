@@ -1076,90 +1076,72 @@ async function vlessOverGRPCHandler(request) {
         console.log(`[${timestamp}] [gRPC] ${info}`, event);
     };
 
+    log('Received a gRPC request.');
+
     if (request.method !== 'POST' || !request.body) {
+        log('Request method is not POST or body is missing.');
         return new Response('Method Not Allowed', { status: 405 });
     }
 
-    // 使用 TransformStream 来处理响应流
     const { readable, writable } = new TransformStream();
     const responseWriter = writable.getWriter();
 
     let remoteSocketWrapper = { value: null };
-    let isDns = false;
     let unprocessedData = new Uint8Array(0);
 
-    // 异步处理请求体，不阻塞响应返回
     (async () => {
         const reader = request.body.getReader();
         try {
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    log('Client stream finished.');
+                    break;
+                }
 
-                // 将新收到的数据块与之前未处理完的数据合并
                 const newData = new Uint8Array(unprocessedData.length + value.length);
                 newData.set(unprocessedData, 0);
                 newData.set(value, unprocessedData.length);
                 unprocessedData = newData;
 
-                // 循环处理 gRPC 数据帧
                 while (unprocessedData.length >= GRPC_DATA_FRAME_HEADER_LENGTH) {
-                    const dataView = new DataView(unprocessedData.buffer, unprocessedData.byteOffset, unprocessedData.byteLength);
+                    const dataView = new DataView(unprocessedData.buffer, 0, GRPC_DATA_FRAME_HEADER_LENGTH);
                     const messageLength = dataView.getUint32(1, false);
 
                     if (unprocessedData.length < GRPC_DATA_FRAME_HEADER_LENGTH + messageLength) {
-                        // 数据不完整，等待下一个数据块
-                        break;
+                        break; 
                     }
 
                     const message = unprocessedData.slice(GRPC_DATA_FRAME_HEADER_LENGTH, GRPC_DATA_FRAME_HEADER_LENGTH + messageLength);
                     unprocessedData = unprocessedData.slice(GRPC_DATA_FRAME_HEADER_LENGTH + messageLength);
+					
+                    log(`Processing a gRPC frame with length: ${message.byteLength}`);
 
-                    // 如果远程连接还未建立（即处理第一个 gRPC 消息）
                     if (!remoteSocketWrapper.value) {
+						log('First gRPC frame, processing VLESS header...');
                         const {
-                            hasError,
-                            addressRemote,
-                            portRemote,
-                            rawDataIndex,
-                            addressType,
-                            isUDP,
+                            hasError, addressRemote, portRemote, rawDataIndex, addressType, isUDP
                         } = processsecureProtoHeader(message, userID);
 
-                        if (hasError) throw new Error('gRPC VLESS header processing failed');
-                        if (isUDP) throw new Error('gRPC transport does not support UDP');
+                        if (hasError) {
+                            throw new Error('gRPC VLESS header processing failed');
+                        }
+                        if (isUDP) {
+                            throw new Error('gRPC transport does not support UDP');
+                        }
+						log(`VLESS header parsed. Target: ${addressRemote}:${portRemote}`);
 
-						log(`处理 gRPC 出站连接 ${addressRemote}:${portRemote}`);
-                        // 建立远程连接，复用现有的 handleTCPOutBound 逻辑
-						// 创建一个模拟的 WebSocket 对象用于传递给 remoteSocketToWS
 						const mockWebSocket = {
-							readyState: 1, // 模拟 OPEN 状态
-							close: () => {
-								// 关闭 gRPC 响应流
-								responseWriter.close().catch(err => log('Error closing gRPC response writer', err.message));
-							},
-							send: (data) => {
-								// 将数据打包成 gRPC 帧并发送
-								try {
-									responseWriter.write(prependGRPCFrame(data));
-								} catch (err) {
-									log('Error writing to gRPC response stream', err.message);
-								}
-							}
+							readyState: 1,
+							close: () => responseWriter.close().catch(() => {}),
+							send: (data) => responseWriter.write(prependGRPCFrame(data)).catch(err => log('Error writing to gRPC response stream', err.message))
 						};
-
-                        await handleTCPOutBound(
-                            remoteSocketWrapper,
-                            addressType,
-                            addressRemote,
-                            portRemote,
-                            message.slice(rawDataIndex), // VLESS header 之后的数据
-                            mockWebSocket, // 传递模拟的 WebSocket 对象
-                            null, // gRPC 不需要 VLESS 响应头
-                            log
-                        );
-                    } else {
-                        // 如果远程连接已建立，直接写入数据
+						
+						// 使用 handleTCPOutBound 建立连接并处理数据流
+						await handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, message.slice(rawDataIndex), mockWebSocket, null, log);
+						log('Remote connection established and stream piped.');
+                    
+					} else {
                         const writer = remoteSocketWrapper.value.writable.getWriter();
                         await writer.write(message);
                         writer.releaseLock();
@@ -1167,31 +1149,22 @@ async function vlessOverGRPCHandler(request) {
                 }
             }
         } catch (error) {
-            log('gRPC stream processing error', error.message);
-            responseWriter.close().catch(() => {});
-            if (remoteSocketWrapper.value) {
-                remoteSocketWrapper.value.close().catch(() => {});
-            }
+            log('FATAL: gRPC stream processing error', error.stack);
         } finally {
-			// 确保所有资源都被关闭
-			reader.cancel().catch(() => {});
-			responseWriter.close().catch(() => {});
-			if (remoteSocketWrapper.value) {
-				remoteSocketWrapper.value.close().catch(() => {});
-			}
-		}
+            log('gRPC handler background task finished. Closing resources.');
+            responseWriter.close().catch(() => {});
+            if (remoteSocketWrapper.value) remoteSocketWrapper.value.close().catch(() => {});
+        }
     })().catch(err => {
-        log('Error in gRPC handler background task', err);
+        log('FATAL: Unhandled exception in gRPC handler background task', err.stack);
     });
 
     return new Response(readable, {
         status: 200,
-        headers: {
-            'Content-Type': 'application/grpc',
-            'grpc-encoding': 'identity',
-        },
+        headers: { 'Content-Type': 'application/grpc', 'grpc-encoding': 'identity' },
     });
 }
+
 
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
