@@ -1,6 +1,3 @@
-
-// --- START OF FILE 源码.js ---
-
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -375,236 +372,8 @@ async function resolveToIPv6(target) {
 	}
 }
 
-/**
- * =================================================================
- *  START: 优选IP自动更新功能模块
- * =================================================================
- */
-
-// 将IP地址字符串转换为整数
-function ipToInt(ip) {
-	return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
-}
-
-// 将整数转换回IP地址字符串
-function intToIp(int) {
-	return [(int >>> 24) & 255, (int >>> 16) & 255, (int >>> 8) & 255, int & 255].join('.');
-}
-
-// 从CIDR地址块中生成一个随机IP
-function generateRandomIPFromCIDR(cidr) {
-	const [base, mask] = cidr.split('/');
-	const baseInt = ipToInt(base);
-	const maskBits = parseInt(mask, 10);
-	const hostBits = 32 - maskBits;
-	// 避免生成网络地址和广播地址
-	const maxHosts = Math.pow(2, hostBits) - 2;
-	if (maxHosts <= 0) {
-		return intToIp(baseInt); // 如果是 /31 或 /32，直接返回
-	}
-	const randomOffset = Math.floor(Math.random() * maxHosts) + 1;
-	return intToIp(baseInt + randomOffset);
-}
-
-/**
- * 测试单个IP的TCP连接延迟
- * @param {string} ip - 要测试的IP地址
- * @param {number} port - 要测试的端口
- * @param {number} timeout - 超时时间 (毫秒)
- * @returns {Promise<object|null>} - 返回包含ip, port和latency的对象，或在失败/超时时返回null
- */
-async function testIPSpeed(ip, port = 443, timeout = 2000) {
-	const startTime = performance.now();
-	try {
-		const socket = await Promise.race([
-			connect({ hostname: ip, port: port }),
-			new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), timeout))
-		]);
-		// 连接成功后立即关闭
-		await socket.close();
-		const latency = performance.now() - startTime;
-		return { ip, port, latency: Math.round(latency) };
-	} catch (error) {
-		// 超时或连接失败
-		return null;
-	}
-}
-
-/**
- * 自动优选Cloudflare IP并更新到KV
- * @param {object} env - Cloudflare Worker 的环境变量
- */
-async function updateOptimizedIPs(env) {
-	console.log("开始执行Cloudflare IP自动优选任务...");
-
-	// --- 可配置参数 ---
-	const CIDR_BLOCKS = ['104.16.0.0/14', '104.21.0.0/16', '188.114.96.0/20'];
-	const IP_SAMPLE_COUNT = 60; // 从每个CIDR块中随机抽取多少个IP进行测试
-	const TOP_N_RESULTS = 10; // 最终保留多少个最快的IP
-	const TEST_PORT = 443;    // 优选测试端口
-	// --- 配置结束 ---
-
-	// 1. 生成待测试的IP池
-	const ipsToTest = new Set();
-	CIDR_BLOCKS.forEach(cidr => {
-		for (let i = 0; i < IP_SAMPLE_COUNT; i++) {
-			ipsToTest.add(generateRandomIPFromCIDR(cidr));
-		}
-	});
-	console.log(`已生成 ${ipsToTest.size} 个唯一的IP地址待测试。`);
-
-	// 2. 并发测试所有IP
-	const testPromises = [...ipsToTest].map(ip => testIPSpeed(ip, TEST_PORT));
-	const testResults = await Promise.allSettled(testPromises);
-
-	// 3. 处理并排序结果
-	const successfulResults = testResults
-		.filter(result => result.status === 'fulfilled' && result.value !== null)
-		.map(result => result.value);
-
-	if (successfulResults.length === 0) {
-		console.warn("警告：所有IP测试均失败或超时，本次不更新优选IP。");
-		return;
-	}
-
-	successfulResults.sort((a, b) => a.latency - b.latency);
-
-	// 4. 选取最快的 Top N
-	const topIPs = successfulResults.slice(0, TOP_N_RESULTS);
-	console.log(`测试完成！最快的 ${topIPs.length} 个IP地址:`, topIPs.map(ip => `${ip.ip} (${ip.latency}ms)`).join(', '));
-	
-	// 5. 格式化并准备写入KV
-	const newContentBlock = topIPs.map((ip, index) => {
-		// 格式: IP:端口#备注
-		return `${ip.ip}:${ip.port}#CF自动优选IP-${String(index + 1).padStart(2, '0')} (${ip.latency}ms)`;
-	}).join('\n');
-
-	const finalBlock = `# START Cloudflare Auto-Optimized IPs\n# Last updated on: ${new Date().toUTCString()}\n${newContentBlock}\n# END Cloudflare Auto-Optimized IPs`;
-
-	// 6. 更新KV中的ADD.txt文件
-	try {
-		let existingContent = await env.KV.get('ADD.txt') || '';
-		const blockRegex = /# START Cloudflare Auto-Optimized IPs[\s\S]*?# END Cloudflare Auto-Optimized IPs/g;
-		
-		if (blockRegex.test(existingContent)) {
-			// 如果已存在旧的区块，则替换它
-			existingContent = existingContent.replace(blockRegex, finalBlock);
-		} else {
-			// 否则，在文件末尾添加新区块
-			existingContent = existingContent.trim() + '\n\n' + finalBlock;
-		}
-		
-		await env.KV.put('ADD.txt', existingContent.trim());
-		console.log("成功将优选的Cloudflare IP更新到KV (ADD.txt)。");
-		
-        // (可选) 发送Telegram通知
-		await sendMessage(
-			'CF自动优选IP完成',
-			'Cron Job',
-			`成功获取 ${topIPs.length} 个最快IP并写入ADD.txt`
-		);
-
-	} catch (error) {
-		console.error("更新KV (ADD.txt) 时发生错误:", error);
-	}
-}
-
-
-/**
- * @description 执行从外部源（API, CSV）更新优选IP的任务
- * @param {object} env - Cloudflare Worker 的环境变量
- */
-async function performIPUpdate(env) {
-	console.log("触发定时任务：开始从外部源更新优选IP...");
-
-	if (!env.KV) {
-		console.error("错误：未绑定KV空间，无法执行自动更新任务。");
-		return;
-	}
-
-	try {
-		const addressesapi = await 整理(env.ADDAPI || '');
-		const addressesnotlsapi = await 整理(env.ADDNOTLSAPI || '');
-		const addressescsv = await 整理(env.ADDCSV || '');
-
-		if (addressesapi.length === 0 && addressesnotlsapi.length === 0 && addressescsv.length === 0) {
-			console.log("未配置任何外部优选IP源 (ADDAPI, ADDNOTLSAPI, ADDCSV)，跳过此更新步骤。");
-			return;
-		}
-
-		const [
-			tlsIPsFromApi,
-			noTlsIPsFromApi,
-			tlsIPsFromCsv,
-			noTlsIPsFromCsv
-		] = await Promise.all([
-			整理优选列表(addressesapi),
-			整理优选列表(addressesnotlsapi),
-			整理测速结果('TRUE'),
-			整理测速结果('FALSE')
-		]);
-
-		const allIPs = [
-			...tlsIPsFromApi,
-			...noTlsIPsFromApi,
-			...tlsIPsFromCsv,
-			...noTlsIPsFromCsv
-		];
-		const uniqueIPs = [...new Set(allIPs)];
-
-		if (uniqueIPs.length > 0) {
-			const content = uniqueIPs.join('\n');
-			// 注意：这里是直接覆盖，内置优选IP的功能会在此基础上再追加或替换
-			await env.KV.put('ADD.txt', content);
-			
-			console.log(`成功从外部源更新IP列表！共找到并存储了 ${uniqueIPs.length} 个地址。`);
-
-			await sendMessage(
-				'外部源IP更新完成',
-				'Cron Job',
-				`本次共从外部源更新 ${uniqueIPs.length} 个地址到 ADD.txt`
-			);
-		} else {
-			console.warn("警告：本次自动更新未从任何外部源获取到有效的IP地址。");
-		}
-
-	} catch (error) {
-		console.error("从外部源更新优选IP时发生严重错误:", error);
-		await sendMessage(
-			'外部源IP更新失败',
-			'Cron Job',
-			`错误详情: ${error.message}`
-		);
-	}
-}
-
-/**
- * =================================================================
- *  END: 优选IP自动更新功能模块
- * =================================================================
- */
-
-
+// --- 关键修改：在主 fetch 函数中增加 gRPC 路由 ---
 export default {
-	/**
-	 * 处理 Cron 触发器事件的入口
-	 */
-	async scheduled(event, env, ctx) {
-		// 使用 ctx.waitUntil 来确保即使函数返回，后台任务也能执行完毕
-		ctx.waitUntil(
-			(async () => {
-				// 任务一：从外部API和CSV更新优选IP列表 (如果配置了)
-				await performIPUpdate(env);
-
-				// 任务二：从指定CIDR块中优选IP并更新
-				await updateOptimizedIPs(env);
-			})()
-		);
-	},
-
-	/**
-	 * 处理 HTTP 请求的主入口
-	 */
 	async fetch(request, env, ctx) {
 		try {
 			const UA = request.headers.get('User-Agent') || 'null';
@@ -875,7 +644,54 @@ export default {
 
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
-			if (!upgradeHeader || upgradeHeader !== 'websocket') {
+
+			// --- 路由逻辑 ---
+			if (upgradeHeader && upgradeHeader === 'websocket') {
+				// 保持原有的 WebSocket 逻辑不变
+				socks5Address = url.searchParams.get('socks5') || socks5Address;
+				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
+				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
+					socks5Address = url.pathname.split('://')[1].split('#')[0];
+					if (socks5Address.includes('@')) {
+						let userPassword = socks5Address.split('@')[0];
+						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
+						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
+						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
+					}
+				}
+
+				if (socks5Address) {
+					try {
+						parsedSocks5Address = socks5AddressParser(socks5Address);
+						enableSocks = true;
+					} catch (err) {
+						console.log(err.toString());
+						enableSocks = false;
+					}
+				} else {
+					enableSocks = false;
+				}
+
+				if (url.searchParams.has('proxyip')) {
+					proxyIP = url.searchParams.get('proxyip');
+					enableSocks = false;
+				} else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
+					proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
+					enableSocks = false;
+				} else if (new RegExp('/proxyip.', 'i').test(url.pathname)) {
+					proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
+					enableSocks = false;
+				} else if (new RegExp('/pyip=', 'i').test(url.pathname)) {
+					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
+					enableSocks = false;
+				}
+				return await secureProtoOverWSHandler(request);
+
+			} else if (url.pathname.startsWith("/grpc")) {
+				// 【新增】处理 gRPC 请求的逻辑
+				return await vlessOverGRPCHandler(request);
+			} else {
+				// --- 保持原有的订阅和页面处理逻辑不变 ---
 				if (env.ADD) addresses = await 整理(env.ADD);
 				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
 				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
@@ -1232,54 +1048,150 @@ export default {
 						});
 					}
 				}
-			} else {
-				socks5Address = url.searchParams.get('socks5') || socks5Address;
-				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
-				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
-					socks5Address = url.pathname.split('://')[1].split('#')[0];
-					if (socks5Address.includes('@')) {
-						let userPassword = socks5Address.split('@')[0];
-						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
-						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
-						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
-					}
-				}
-
-				if (socks5Address) {
-					try {
-						parsedSocks5Address = socks5AddressParser(socks5Address);
-						enableSocks = true;
-					} catch (err) {
-						let e = err;
-						console.log(e.toString());
-						enableSocks = false;
-					}
-				} else {
-					enableSocks = false;
-				}
-
-				if (url.searchParams.has('proxyip')) {
-					proxyIP = url.searchParams.get('proxyip');
-					enableSocks = false;
-				} else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
-					proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
-					enableSocks = false;
-				} else if (new RegExp('/proxyip.', 'i').test(url.pathname)) {
-					proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
-					enableSocks = false;
-				} else if (new RegExp('/pyip=', 'i').test(url.pathname)) {
-					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
-					enableSocks = false;
-				}
-
-				return await secureProtoOverWSHandler(request);
 			}
 		} catch (err) {
 			let e = err;
 			return new Response(e.toString());
 		}
-	}
+	},
 };
+
+// 【新增】gRPC 数据帧头部长度
+const GRPC_DATA_FRAME_HEADER_LENGTH = 5;
+
+// 【新增】为数据块添加 gRPC 数据帧头部
+function prependGRPCFrame(data) {
+	const frame = new Uint8Array(GRPC_DATA_FRAME_HEADER_LENGTH + data.byteLength);
+	// gRPC 数据帧头部：第一个字节为 0（未压缩），后四个字节为数据长度（大端序）
+	frame[0] = 0x00;
+	new DataView(frame.buffer).setUint32(1, data.byteLength, false);
+	frame.set(data, GRPC_DATA_FRAME_HEADER_LENGTH);
+	return frame;
+}
+
+// 【新增】处理 gRPC 请求的主函数
+async function vlessOverGRPCHandler(request) {
+    const log = (info, event = '') => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] [gRPC] ${info}`, event);
+    };
+
+    if (request.method !== 'POST' || !request.body) {
+        return new Response('Method Not Allowed', { status: 405 });
+    }
+
+    // 使用 TransformStream 来处理响应流
+    const { readable, writable } = new TransformStream();
+    const responseWriter = writable.getWriter();
+
+    let remoteSocketWrapper = { value: null };
+    let isDns = false;
+    let unprocessedData = new Uint8Array(0);
+
+    // 异步处理请求体，不阻塞响应返回
+    (async () => {
+        const reader = request.body.getReader();
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                // 将新收到的数据块与之前未处理完的数据合并
+                const newData = new Uint8Array(unprocessedData.length + value.length);
+                newData.set(unprocessedData, 0);
+                newData.set(value, unprocessedData.length);
+                unprocessedData = newData;
+
+                // 循环处理 gRPC 数据帧
+                while (unprocessedData.length >= GRPC_DATA_FRAME_HEADER_LENGTH) {
+                    const dataView = new DataView(unprocessedData.buffer, unprocessedData.byteOffset, unprocessedData.byteLength);
+                    const messageLength = dataView.getUint32(1, false);
+
+                    if (unprocessedData.length < GRPC_DATA_FRAME_HEADER_LENGTH + messageLength) {
+                        // 数据不完整，等待下一个数据块
+                        break;
+                    }
+
+                    const message = unprocessedData.slice(GRPC_DATA_FRAME_HEADER_LENGTH, GRPC_DATA_FRAME_HEADER_LENGTH + messageLength);
+                    unprocessedData = unprocessedData.slice(GRPC_DATA_FRAME_HEADER_LENGTH + messageLength);
+
+                    // 如果远程连接还未建立（即处理第一个 gRPC 消息）
+                    if (!remoteSocketWrapper.value) {
+                        const {
+                            hasError,
+                            addressRemote,
+                            portRemote,
+                            rawDataIndex,
+                            addressType,
+                            isUDP,
+                        } = processsecureProtoHeader(message, userID);
+
+                        if (hasError) throw new Error('gRPC VLESS header processing failed');
+                        if (isUDP) throw new Error('gRPC transport does not support UDP');
+
+						log(`处理 gRPC 出站连接 ${addressRemote}:${portRemote}`);
+                        // 建立远程连接，复用现有的 handleTCPOutBound 逻辑
+						// 创建一个模拟的 WebSocket 对象用于传递给 remoteSocketToWS
+						const mockWebSocket = {
+							readyState: 1, // 模拟 OPEN 状态
+							close: () => {
+								// 关闭 gRPC 响应流
+								responseWriter.close().catch(err => log('Error closing gRPC response writer', err.message));
+							},
+							send: (data) => {
+								// 将数据打包成 gRPC 帧并发送
+								try {
+									responseWriter.write(prependGRPCFrame(data));
+								} catch (err) {
+									log('Error writing to gRPC response stream', err.message);
+								}
+							}
+						};
+
+                        await handleTCPOutBound(
+                            remoteSocketWrapper,
+                            addressType,
+                            addressRemote,
+                            portRemote,
+                            message.slice(rawDataIndex), // VLESS header 之后的数据
+                            mockWebSocket, // 传递模拟的 WebSocket 对象
+                            null, // gRPC 不需要 VLESS 响应头
+                            log
+                        );
+                    } else {
+                        // 如果远程连接已建立，直接写入数据
+                        const writer = remoteSocketWrapper.value.writable.getWriter();
+                        await writer.write(message);
+                        writer.releaseLock();
+                    }
+                }
+            }
+        } catch (error) {
+            log('gRPC stream processing error', error.message);
+            responseWriter.close().catch(() => {});
+            if (remoteSocketWrapper.value) {
+                remoteSocketWrapper.value.close().catch(() => {});
+            }
+        } finally {
+			// 确保所有资源都被关闭
+			reader.cancel().catch(() => {});
+			responseWriter.close().catch(() => {});
+			if (remoteSocketWrapper.value) {
+				remoteSocketWrapper.value.close().catch(() => {});
+			}
+		}
+    })().catch(err => {
+        log('Error in gRPC handler background task', err);
+    });
+
+    return new Response(readable, {
+        status: 200,
+        headers: {
+            'Content-Type': 'application/grpc',
+            'grpc-encoding': 'identity',
+        },
+    });
+}
 
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
@@ -2041,6 +1953,7 @@ async function 代理URL(代理网址, 目标网址, 调试模式 = false) {
     }
 }
 
+// --- 关键修改：配置信息函数，增加 gRPC 配置 ---
 const protocolEncodedFlag = atob('ZG14bGMzTT0=');
 function 配置信息(UUID, 域名地址) {
 	const 协议类型 = atob(protocolEncodedFlag);
@@ -2048,11 +1961,13 @@ function 配置信息(UUID, 域名地址) {
 	const 别名 = FileName;
 	let 地址 = 域名地址;
 	let 端口 = 443;
+	let grpcServiceName = 'grpc'; // 约定的 gRPC 服务名（路径前缀）
 
 	const 用户ID = UUID;
 	const 加密方式 = 'none';
 
-	const 传输层协议 = 'ws';
+	const 传输层协议_ws = 'ws';
+	const 传输层协议_grpc = 'grpc';
 	const 伪装域名 = 域名地址;
 	const 路径 = path;
 
@@ -2066,9 +1981,18 @@ function 配置信息(UUID, 域名地址) {
 		传输层安全 = ['', false];
 	}
 
-	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
-	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
-	return [威图瑞, 猫猫猫];
+	
+	const 威图瑞_ws = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议_ws}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名 + "-WS")}`;
+	
+
+	const 猫猫猫_ws = `- {name: ${FileName}-WS, server: ${地址}, port: ${端口}, type: ${协议类型.toLowerCase()}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h2,http/1.1], udp: false, sni: ${SNI}, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议_ws}, ws-opts: {path: "${路径}", headers: {Host: "${伪装域名}"}}}`;
+	
+
+	const 猫猫猫_grpc = `- {name: ${FileName}-gRPC, server: ${地址}, port: ${端口}, type: ${协议类型.toLowerCase()}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h2], udp: false, sni: ${SNI}, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议_grpc}, grpc-opts: {grpc-service-name: "${grpcServiceName}"}}`;
+
+	const 猫猫猫 = `${猫猫猫_ws}\n${猫猫猫_grpc}`;
+
+	return [威图瑞_ws, 猫猫猫];
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
@@ -2266,8 +2190,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 	const userAgent = UA.toLowerCase();
 	const Config = 配置信息(uuid, hostName);
-	const proxyConfig = Config[0];
-	const clash = Config[1];
+	const proxyConfig = Config[0]; 
+	const clash = Config[1]; 
 	let proxyhost = "";
 	if (hostName.includes(".workers.dev")) {
 		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
@@ -2545,18 +2469,18 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					</div>
 
 					<div class="section">
-						<div class="section-title">📝 proxyConfig</div>
+						<div class="section-title">📝 节点配置 (V2RayN/Shadowrocket/v2rayNG)</div>
 						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
+							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制 VLESS-WS 配置</button>
 							<div style="word-break: break-all; overflow-wrap: anywhere;">${proxyConfig}</div>
 							<div id="qrcode_proxyConfig" class="qrcode-container"></div>
 						</div>
 					</div>
 
 					<div class="section">
-						<div class="section-title">⚙️ Clash Meta 配置</div>
+						<div class="section-title">⚙️ Clash Meta / Sing-box 订阅节点 (包含WS和gRPC)</div>
 						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<div style="word-break: break-all; overflow-wrap: anywhere;">${clash}</div>
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${clash.replace(/\n/g, '<br>')}</div>
 						</div>
 					</div>
 
@@ -2837,21 +2761,24 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
+// --- 关键修改：本地订阅生成函数，增加 gRPC 节点 ---
 function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
-	let notlsresponseBody;
+	let allNodes = []; // 使用一个数组来收集所有节点
+
 	if (noTLS == 'true') {
 		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
 		const uniqueAddressesnotls = [...new Set(addressesnotls)];
 
-		notlsresponseBody = uniqueAddressesnotls.map(address => {
+		uniqueAddressesnotls.forEach(address => {
 			let port = "-1";
 			let addressid = address;
-
-			const match = addressid.match(regex);
+			
+			// ... [解析 noTLS address, port, addressid 的逻辑保持不变]
+			const match = address.match(regex);
 			if (!match) {
 				if (address.includes(':') && address.includes('#')) {
 					const parts = address.split(':');
@@ -2877,7 +2804,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				port = match[2] || port;
 				addressid = match[3] || address;
 			}
-
+			
 			const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
 			if (!isValidIPv4(address) && port == "-1") {
 				for (let httpPort of httpPorts) {
@@ -2888,6 +2815,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				}
 			}
 			if (port == "-1") port = "80";
+
 
 			let 伪装域名 = host;
 			let 最终路径 = path;
@@ -2902,32 +2830,31 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `path=${encodeURIComponent(最终路径)}` + 
                 `#${encodeURIComponent(addressid + 节点备注)}`;
 
-			return secureProtoLink;
-
-		}).join('\n');
-
+			allNodes.push(secureProtoLink);
+		});
 	}
 
 	const uniqueAddresses = [...new Set(addresses)];
 
-	const responseBody = uniqueAddresses.map(address => {
+	uniqueAddresses.forEach(addressItem => {
 		let port = "-1";
-		let addressid = address;
-
-		const match = addressid.match(regex);
+		let addressid = addressItem;
+		let address = addressItem;
+		
+		const match = addressItem.match(regex);
 		if (!match) {
-			if (address.includes(':') && address.includes('#')) {
-				const parts = address.split(':');
+			if (addressItem.includes(':') && addressItem.includes('#')) {
+				const parts = addressItem.split(':');
 				address = parts[0];
 				const subParts = parts[1].split('#');
 				port = subParts[0];
 				addressid = subParts[1];
-			} else if (address.includes(':')) {
-				const parts = address.split(':');
+			} else if (addressItem.includes(':')) {
+				const parts = addressItem.split(':');
 				address = parts[0];
 				port = parts[1];
-			} else if (address.includes('#')) {
-				const parts = address.split('#');
+			} else if (addressItem.includes('#')) {
+				const parts = addressItem.split('#');
 				address = parts[0];
 				addressid = parts[1];
 			}
@@ -2954,6 +2881,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		let 伪装域名 = host;
 		let 最终路径 = path;
 		let 节点备注 = '';
+		let grpcServiceName = 'grpc';
 		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
 		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
 
@@ -2965,24 +2893,37 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 
 		const 协议类型 = atob(protocolEncodedFlag);
 
-		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` + 
+		// 生成 WS 节点
+		const wsLink = `${协议类型}://${UUID}@${address}:${port}?` + 
 			`encryption=none&` +
 			`security=tls&` +
 			`sni=${伪装域名}&` +
 			`fp=randomized&` +
-			`alpn=h3&` + 
+			`alpn=h2,http/1.1&` + 
 			`type=ws&` +
 			`host=${伪装域名}&` +
             `path=${encodeURIComponent(最终路径)}` + 
-			`#${encodeURIComponent(addressid + 节点备注)}`;
+			`#${encodeURIComponent(addressid + 节点备注 + "-WS")}`;
+		allNodes.push(wsLink);
+		
+		// 生成 gRPC 节点
+		const grpcLink = `${协议类型}://${UUID}@${address}:${port}?` + 
+			`encryption=none&` +
+			`security=tls&` +
+			`sni=${伪装域名}&` +
+			`fp=randomized&` +
+			`alpn=h2&` + 
+			`type=grpc&` +
+			`host=${伪装域名}&`+
+			`serviceName=${grpcServiceName}` +
+			`#${encodeURIComponent(addressid + 节点备注 + "-gRPC")}`;
+		allNodes.push(grpcLink);
+	});
 
-		return secureProtoLink;
-	}).join('\n');
-
-	let base64Response = responseBody; 
-	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
-	if (link.length > 0) base64Response += '\n' + link.join('\n');
-	return btoa(base64Response);
+	if (link.length > 0) allNodes.push(...link);
+	
+	const responseBody = allNodes.join('\n');
+	return btoa(responseBody);
 }
 
 // 优化 整理 函数
