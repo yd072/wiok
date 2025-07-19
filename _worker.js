@@ -1,6 +1,8 @@
+
+// --- START OF FILE 源码.js ---
+
 import { connect } from 'cloudflare:sockets';
 
-// 全局变量，部分会被配置加载覆盖
 let userID = '';
 let proxyIP = '';
 //let sub = '';
@@ -47,7 +49,6 @@ let 动态UUID = null;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 let DNS64Server = '';
-
 
 // 添加工具函数
 const utils = {
@@ -375,116 +376,240 @@ async function resolveToIPv6(target) {
 }
 
 /**
- * =========================================================================================
- * 【代码改进 #1】: 重构配置加载逻辑
- * -----------------------------------------------------------------------------------------
- * 功能:
- *   - 将所有配置（KV、环境变量、默认值）的加载过程集中到一个函数中。
- *   - 定义清晰的优先级：KV > 环境变量 > 代码默认值。
- *   - 返回一个统一的配置对象，使代码其他部分能以一致的方式获取配置。
- *
- * 优点:
- *   - 提高代码的可读性和可维护性。
- *   - 简化主 fetch 函数的逻辑。
- *   - 新增或修改配置项变得更加容易。
- * =========================================================================================
+ * =================================================================
+ *  START: 优选IP自动更新功能模块
+ * =================================================================
  */
-async function loadConfiguration(env) {
-    let config = {
-        // 默认值
-        userID: '',
-        proxyIPs: [],
-        proxyIP: '',
-        socks5Address: '',
-        enableSocks: false,
-        parsedSocks5Address: {},
-        RproxyIP: 'false',
-        DNS64Server: atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="), 
-        go2Socks5s: ['*ttvnw.net', '*tapecontent.net', '*cloudatacdn.com', '*.loadshare.org'],
-        httpsPorts: ["2053", "2083", "2087", "2096", "8443"],
-        httpPorts: ["8080", "8880", "2052", "2082", "2086", "2095"],
-        banHosts: [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')], 
-    };
 
-    // 1. 从环境变量加载
-    config.userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || '';
-    let proxyIPFromEnv = env.PROXYIP || env.proxyip || '';
-    let socks5FromEnv = env.SOCKS5 || '';
-    config.DNS64Server = env.DNS64 || env.NAT64 || config.DNS64Server;
-    
-    if (env.GO2SOCKS5) config.go2Socks5s = await 整理(env.GO2SOCKS5);
-    if (env.CFPORTS) config.httpsPorts = await 整理(env.CFPORTS);
-    if (env.BAN) config.banHosts = await 整理(env.BAN);
+// 将IP地址字符串转换为整数
+function ipToInt(ip) {
+	return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+}
 
-    // 2. 从 KV 加载（优先级最高）
-    if (env.KV) {
-        try {
-            const advancedSettingsJSON = await env.KV.get('settinggs.txt');
-            if (advancedSettingsJSON) {
-                const settings = JSON.parse(advancedSettingsJSON);
-                if (settings.proxyip && settings.proxyip.trim()) {
-                    proxyIPFromEnv = settings.proxyip;
-                }
-                if (settings.socks5 && settings.socks5.trim()) {
-                    socks5FromEnv = settings.socks5.split('\n')[0].trim();
-                }
-                if (settings.nat64 && settings.nat64.trim()) {
-                    config.DNS64Server = settings.nat64.trim().split('\n')[0];
-                }
-            }
-        } catch (error) {
-            console.error('从KV读取配置时发生错误:', error);
-        }
-    }
+// 将整数转换回IP地址字符串
+function intToIp(int) {
+	return [(int >>> 24) & 255, (int >>> 16) & 255, (int >>> 8) & 255, int & 255].join('.');
+}
 
-    // 3. 处理并最终确定配置
-    if (proxyIPFromEnv) {
-        config.proxyIPs = await 整理(proxyIPFromEnv);
-        config.proxyIP = config.proxyIPs.length > 0 ? config.proxyIPs[Math.floor(Math.random() * config.proxyIPs.length)] : '';
-    }
-    
-    if (socks5FromEnv) {
-        const socks5sList = await 整理(socks5FromEnv);
-        config.socks5Address = socks5sList.length > 0 ? socks5sList[Math.floor(Math.random() * socks5sList.length)] : '';
-        config.socks5Address = config.socks5Address.split('//')[1] || config.socks5Address;
-        try {
-            config.parsedSocks5Address = socks5AddressParser(config.socks5Address);
-            config.enableSocks = true;
-        } catch (e) {
-            console.log("SOCKS5地址解析失败:", e.toString());
-            config.enableSocks = false;
-        }
-    }
-    
-    // 如果没有有效的 ProxyIP 或 SOCKS5，则 RproxyIP 默认为 true
-    config.RproxyIP = env.RPROXYIP || (!config.proxyIP && !config.enableSocks) ? 'true' : 'false';
+// 从CIDR地址块中生成一个随机IP
+function generateRandomIPFromCIDR(cidr) {
+	const [base, mask] = cidr.split('/');
+	const baseInt = ipToInt(base);
+	const maskBits = parseInt(mask, 10);
+	const hostBits = 32 - maskBits;
+	// 避免生成网络地址和广播地址
+	const maxHosts = Math.pow(2, hostBits) - 2;
+	if (maxHosts <= 0) {
+		return intToIp(baseInt); // 如果是 /31 或 /32，直接返回
+	}
+	const randomOffset = Math.floor(Math.random() * maxHosts) + 1;
+	return intToIp(baseInt + randomOffset);
+}
 
-    return config;
+/**
+ * 测试单个IP的TCP连接延迟
+ * @param {string} ip - 要测试的IP地址
+ * @param {number} port - 要测试的端口
+ * @param {number} timeout - 超时时间 (毫秒)
+ * @returns {Promise<object|null>} - 返回包含ip, port和latency的对象，或在失败/超时时返回null
+ */
+async function testIPSpeed(ip, port = 443, timeout = 2000) {
+	const startTime = performance.now();
+	try {
+		const socket = await Promise.race([
+			connect({ hostname: ip, port: port }),
+			new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), timeout))
+		]);
+		// 连接成功后立即关闭
+		await socket.close();
+		const latency = performance.now() - startTime;
+		return { ip, port, latency: Math.round(latency) };
+	} catch (error) {
+		// 超时或连接失败
+		return null;
+	}
+}
+
+/**
+ * 自动优选Cloudflare IP并更新到KV
+ * @param {object} env - Cloudflare Worker 的环境变量
+ */
+async function updateOptimizedIPs(env) {
+	console.log("开始执行Cloudflare IP自动优选任务...");
+
+	// --- 可配置参数 ---
+	const CIDR_BLOCKS = ['104.16.0.0/14', '104.21.0.0/16', '188.114.96.0/20'];
+	const IP_SAMPLE_COUNT = 60; // 从每个CIDR块中随机抽取多少个IP进行测试
+	const TOP_N_RESULTS = 10; // 最终保留多少个最快的IP
+	const TEST_PORT = 443;    // 优选测试端口
+	// --- 配置结束 ---
+
+	// 1. 生成待测试的IP池
+	const ipsToTest = new Set();
+	CIDR_BLOCKS.forEach(cidr => {
+		for (let i = 0; i < IP_SAMPLE_COUNT; i++) {
+			ipsToTest.add(generateRandomIPFromCIDR(cidr));
+		}
+	});
+	console.log(`已生成 ${ipsToTest.size} 个唯一的IP地址待测试。`);
+
+	// 2. 并发测试所有IP
+	const testPromises = [...ipsToTest].map(ip => testIPSpeed(ip, TEST_PORT));
+	const testResults = await Promise.allSettled(testPromises);
+
+	// 3. 处理并排序结果
+	const successfulResults = testResults
+		.filter(result => result.status === 'fulfilled' && result.value !== null)
+		.map(result => result.value);
+
+	if (successfulResults.length === 0) {
+		console.warn("警告：所有IP测试均失败或超时，本次不更新优选IP。");
+		return;
+	}
+
+	successfulResults.sort((a, b) => a.latency - b.latency);
+
+	// 4. 选取最快的 Top N
+	const topIPs = successfulResults.slice(0, TOP_N_RESULTS);
+	console.log(`测试完成！最快的 ${topIPs.length} 个IP地址:`, topIPs.map(ip => `${ip.ip} (${ip.latency}ms)`).join(', '));
+	
+	// 5. 格式化并准备写入KV
+	const newContentBlock = topIPs.map((ip, index) => {
+		// 格式: IP:端口#备注
+		return `${ip.ip}:${ip.port}#CF自动优选IP-${String(index + 1).padStart(2, '0')} (${ip.latency}ms)`;
+	}).join('\n');
+
+	const finalBlock = `# START Cloudflare Auto-Optimized IPs\n# Last updated on: ${new Date().toUTCString()}\n${newContentBlock}\n# END Cloudflare Auto-Optimized IPs`;
+
+	// 6. 更新KV中的ADD.txt文件
+	try {
+		let existingContent = await env.KV.get('ADD.txt') || '';
+		const blockRegex = /# START Cloudflare Auto-Optimized IPs[\s\S]*?# END Cloudflare Auto-Optimized IPs/g;
+		
+		if (blockRegex.test(existingContent)) {
+			// 如果已存在旧的区块，则替换它
+			existingContent = existingContent.replace(blockRegex, finalBlock);
+		} else {
+			// 否则，在文件末尾添加新区块
+			existingContent = existingContent.trim() + '\n\n' + finalBlock;
+		}
+		
+		await env.KV.put('ADD.txt', existingContent.trim());
+		console.log("成功将优选的Cloudflare IP更新到KV (ADD.txt)。");
+		
+        // (可选) 发送Telegram通知
+		await sendMessage(
+			'CF自动优选IP完成',
+			'Cron Job',
+			`成功获取 ${topIPs.length} 个最快IP并写入ADD.txt`
+		);
+
+	} catch (error) {
+		console.error("更新KV (ADD.txt) 时发生错误:", error);
+	}
 }
 
 
+/**
+ * @description 执行从外部源（API, CSV）更新优选IP的任务
+ * @param {object} env - Cloudflare Worker 的环境变量
+ */
+async function performIPUpdate(env) {
+	console.log("触发定时任务：开始从外部源更新优选IP...");
+
+	if (!env.KV) {
+		console.error("错误：未绑定KV空间，无法执行自动更新任务。");
+		return;
+	}
+
+	try {
+		const addressesapi = await 整理(env.ADDAPI || '');
+		const addressesnotlsapi = await 整理(env.ADDNOTLSAPI || '');
+		const addressescsv = await 整理(env.ADDCSV || '');
+
+		if (addressesapi.length === 0 && addressesnotlsapi.length === 0 && addressescsv.length === 0) {
+			console.log("未配置任何外部优选IP源 (ADDAPI, ADDNOTLSAPI, ADDCSV)，跳过此更新步骤。");
+			return;
+		}
+
+		const [
+			tlsIPsFromApi,
+			noTlsIPsFromApi,
+			tlsIPsFromCsv,
+			noTlsIPsFromCsv
+		] = await Promise.all([
+			整理优选列表(addressesapi),
+			整理优选列表(addressesnotlsapi),
+			整理测速结果('TRUE'),
+			整理测速结果('FALSE')
+		]);
+
+		const allIPs = [
+			...tlsIPsFromApi,
+			...noTlsIPsFromApi,
+			...tlsIPsFromCsv,
+			...noTlsIPsFromCsv
+		];
+		const uniqueIPs = [...new Set(allIPs)];
+
+		if (uniqueIPs.length > 0) {
+			const content = uniqueIPs.join('\n');
+			// 注意：这里是直接覆盖，内置优选IP的功能会在此基础上再追加或替换
+			await env.KV.put('ADD.txt', content);
+			
+			console.log(`成功从外部源更新IP列表！共找到并存储了 ${uniqueIPs.length} 个地址。`);
+
+			await sendMessage(
+				'外部源IP更新完成',
+				'Cron Job',
+				`本次共从外部源更新 ${uniqueIPs.length} 个地址到 ADD.txt`
+			);
+		} else {
+			console.warn("警告：本次自动更新未从任何外部源获取到有效的IP地址。");
+		}
+
+	} catch (error) {
+		console.error("从外部源更新优选IP时发生严重错误:", error);
+		await sendMessage(
+			'外部源IP更新失败',
+			'Cron Job',
+			`错误详情: ${error.message}`
+		);
+	}
+}
+
+/**
+ * =================================================================
+ *  END: 优选IP自动更新功能模块
+ * =================================================================
+ */
+
+
 export default {
+	/**
+	 * 处理 Cron 触发器事件的入口
+	 */
+	async scheduled(event, env, ctx) {
+		// 使用 ctx.waitUntil 来确保即使函数返回，后台任务也能执行完毕
+		ctx.waitUntil(
+			(async () => {
+				// 任务一：从外部API和CSV更新优选IP列表 (如果配置了)
+				await performIPUpdate(env);
+
+				// 任务二：从指定CIDR块中优选IP并更新
+				await updateOptimizedIPs(env);
+			})()
+		);
+	},
+
+	/**
+	 * 处理 HTTP 请求的主入口
+	 */
 	async fetch(request, env, ctx) {
 		try {
-            // 【代码改进 #1】调用新的配置加载函数
-            const config = await loadConfiguration(env);
-            
-            // 将需要全局访问的配置（尤其是被不接受config参数的旧函数使用的）赋值给全局变量
-            userID = config.userID;
-            proxyIP = config.proxyIP;
-            proxyIPs = config.proxyIPs;
-            socks5Address = config.socks5Address;
-            parsedSocks5Address = config.parsedSocks5Address;
-            enableSocks = config.enableSocks;
-            RproxyIP = config.RproxyIP;
-            DNS64Server = config.DNS64Server;
-            go2Socks5s = config.go2Socks5s;
-            httpsPorts = config.httpsPorts;
-            banHosts = config.banHosts;
-
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
-			// userID 的加载已经在 loadConfiguration 中完成
+			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
 			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
 				动态UUID = env.KEY || env.TOKEN || userID;
 				有效时间 = Number(env.TIME) || 有效时间;
@@ -673,8 +798,81 @@ export default {
 			].join('-');
 
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
-            
-			// 注意：所有配置的加载已移至 loadConfiguration 函数
+
+			// 修改PROXYIP初始化逻辑
+			if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.proxyip && settings.proxyip.trim()) {
+							proxyIP = settings.proxyip;
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取PROXYIP时发生错误:', error);
+				}
+			}
+			// 如果proxyIP为空，则使用环境变量或默认值
+			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
+			proxyIPs = await 整理(proxyIP);
+			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+
+			// 修改SOCKS5地址初始化逻辑
+			if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.socks5 && settings.socks5.trim()) {
+							socks5Address = settings.socks5.split('\n')[0].trim();
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取SOCKS5时发生错误:', error);
+				}
+			}
+			// 如果socks5Address为空，则使用环境变量或默认值
+			socks5Address = socks5Address || env.SOCKS5 || '';
+			socks5s = await 整理(socks5Address);
+			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+			socks5Address = socks5Address.split('//')[1] || socks5Address;
+
+			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
+			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
+			if (env.BAN) banHosts = await 整理(env.BAN);
+			
+            // --- NAT64/DNS64 设置加载逻辑 ---
+            if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.nat64 && settings.nat64.trim()) {
+							DNS64Server = settings.nat64.trim().split('\n')[0];
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取NAT64时发生错误:', error);
+                }
+            }
+			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
+
+			if (socks5Address) {
+				try {
+					parsedSocks5Address = socks5AddressParser(socks5Address);
+					RproxyIP = env.RPROXYIP || 'false';
+					enableSocks = true;
+				} catch (err) {
+					let e = err;
+					console.log(e.toString());
+					RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+					enableSocks = false;
+				}
+			} else {
+				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+			}
+
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
@@ -1052,7 +1250,8 @@ export default {
 						parsedSocks5Address = socks5AddressParser(socks5Address);
 						enableSocks = true;
 					} catch (err) {
-						console.log(err.toString());
+						let e = err;
+						console.log(e.toString());
 						enableSocks = false;
 					}
 				} else {
@@ -1072,16 +1271,17 @@ export default {
 					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
 					enableSocks = false;
 				}
-                // 【代码改进 #1】传入 config 对象
-				return await secureProtoOverWSHandler(request, config);
+
+				return await secureProtoOverWSHandler(request);
 			}
 		} catch (err) {
-			return new Response(err.toString());
+			let e = err;
+			return new Response(e.toString());
 		}
-	},
+	}
 };
 
-async function secureProtoOverWSHandler(request, config) { // 接收 config
+async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
 
@@ -1099,7 +1299,7 @@ async function secureProtoOverWSHandler(request, config) { // 接收 config
 
     let remoteSocketWrapper = { value: null };
     let isDns = false;
-    const banHostsSet = new Set(config.banHosts); // 使用 config 中的 banHosts
+    const banHostsSet = new Set(banHosts);
 
     readableWebSocketStream.pipeTo(new WritableStream({
         async write(chunk, controller) {
@@ -1145,8 +1345,7 @@ async function secureProtoOverWSHandler(request, config) { // 接收 config
                 }
                 if (!banHostsSet.has(addressRemote)) {
                     log(`处理 TCP 出站连接 ${addressRemote}:${portRemote}`);
-                    // 【代码改进 #2】将 config 传入 handleTCPOutBound
-                    handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log, config);
+                    handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
                 } else {
                     throw new Error(`黑名单关闭 TCP 出站连接 ${addressRemote}:${portRemote}`);
                 }
@@ -1290,134 +1489,167 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
     }
 }
 
-
-/**
- * =========================================================================================
- * 【代码改进 #2】: 优化 handleTCPOutBound 的回退连接逻辑
- * -----------------------------------------------------------------------------------------
- * 功能:
- *   - 将多种连接方式（直连、SOCKS5、PROXYIP、NAT64）抽象为独立的“策略”。
- *   - 创建一个策略数组，按预设的优先级排序。
- *   - 循环尝试每个策略，直到一个成功为止，取代了原先复杂的嵌套 try-catch 和 if-else。
- *
- * 优点:
- *   - 逻辑清晰，遵循“开放-封闭原则”，方便未来增加新的连接策略（如 H2/QUIC 代理）。
- *   - 减少代码冗余，提高了可读性和可维护性。
- *   - 错误处理更集中，连接失败后会自动尝试下一个策略。
- * =========================================================================================
- */
-async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log, config) {
-    
-    // 辅助函数：连接成功后，写入初始数据并建立双向流
-    const connectAndEstablishStream = async (connectionPromise) => {
-        const tcpSocket = await connectionPromise;
-        remoteSocket.value = tcpSocket;
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(rawClientData);
-        writer.releaseLock();
-        remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
-        return tcpSocket; // 返回 socket 表示成功
-    };
-
-    // 辅助函数：检查当前目标地址是否应走 SOCKS5 代理
-    const checkSocks5Mode = (address) => {
-        if (!config.enableSocks || !config.go2Socks5s || config.go2Socks5s.length === 0) return false;
-        const patterns = [atob('YWxsIGlu'), atob('Kg==')]; // "all in", "*"
-        if (config.go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
-        const pattern = config.go2Socks5s.find(p => new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address));
+async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
+    // 优化 SOCKS5 模式检查
+    const checkSocks5Mode = async (address) => {
+        const patterns = [atob('YWxsIGlu'), atob('Kg==')];
+        if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
+        
+        const pattern = go2Socks5s.find(p => 
+            new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address)
+        );
         return !!pattern;
     };
 
-    // 定义所有连接策略，按优先级排序
-    const strategies = [
-        // 策略 1: 主要连接方式 (根据规则决定是直连还是 SOCKS5)
-        {
-            name: checkSocks5Mode(addressRemote) ? "SOCKS5 Proxy" : "Direct Connection",
-            execute: () => {
-                if (checkSocks5Mode(addressRemote)) {
-                    return connectAndEstablishStream(socks5Connect(addressType, addressRemote, portRemote, log));
-                } else {
-                    return connectAndEstablishStream(connect({ hostname: addressRemote, port: portRemote, allowHalfOpen: false }));
-                }
-            }
-        },
-        // 策略 2: 用户配置的 PROXYIP 作为回退
-        {
-            name: `User PROXYIP (${config.proxyIP})`,
-            enabled: !!config.proxyIP, // 仅当 config.proxyIP 有效时启用
-            execute: () => {
-                let hostname, portStr;
-                if (config.proxyIP.includes(']:')) {
-                    [hostname, portStr] = (config.proxyIP.split(']:'));
-                    hostname += ']';
-                } else {
-                    [hostname, portStr] = config.proxyIP.split(':');
-                }
-                const port = parseInt(portStr) || portRemote;
-                return connectAndEstablishStream(connect({ hostname, port, allowHalfOpen: false }));
-            }
-        },
-        // 策略 3: 用户配置的 NAT64 作为回退
-        {
-            name: `User NAT64 (${config.DNS64Server})`,
-            enabled: config.DNS64Server && config.DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="),
-            execute: async () => {
-                const nat64Address = await resolveToIPv6(addressRemote);
-                return connectAndEstablishStream(connect({ hostname: `[${nat64Address}]`, port: 443, allowHalfOpen: false }));
-            }
-        },
-        // 策略 4: 内置的默认 PROXYIP 作为最终回退
-        {
-            name: 'Default PROXYIP Fallback',
-            enabled: true, // 总是启用作为回退
-            execute: () => {
-                const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-                let port = portRemote;
-                let parsedIP = defaultProxyIP;
-                if (parsedIP.includes(']:')) { [parsedIP, port] = parsedIP.split(']:'); parsedIP += ']'; }
-                else if (parsedIP.includes(':')) { [parsedIP, port] = parsedIP.split(':'); }
-                if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp')[1].split('.')[0] || port; }
-                return connectAndEstablishStream(connect({ hostname: parsedIP.toLowerCase(), port, allowHalfOpen: false }));
-            }
-        },
-        // 策略 5: 内置的默认 NAT64 作为最终回退
-        {
-            name: 'Default NAT64 Fallback',
-            enabled: true, // 总是启用作为最终回退
-            execute: async () => {
-                const originalDns64 = DNS64Server; // 保存当前全局值
-                DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="); // 临时设为默认值
-                try {
-                    const nat64Address = await resolveToIPv6(addressRemote);
-                    return await connectAndEstablishStream(connect({ hostname: `[${nat64Address}]`, port: 443, allowHalfOpen: false }));
-                } finally {
-                    DNS64Server = originalDns64; // 恢复全局值
-                }
-            }
-        }
-    ];
+    // 优化连接处理
+    const createConnection = async (address, port, socks = false) => {
+        log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    // 按顺序执行策略
-    for (const strategy of strategies) {
-        if (strategy.enabled === false) { // 跳过被禁用的策略
-            continue;
-        }
         try {
-            log(`尝试策略: '${strategy.name}'...`);
-            const socket = await strategy.execute();
-            if (socket) {
-                log(`策略 '${strategy.name}' 连接成功!`);
-                return; // 连接成功，任务完成，退出函数
-            }
-        } catch (error) {
-            log(`策略 '${strategy.name}' 失败: ${error.message}`);
-            // 错误被捕获，循环将继续到下一个策略
-        }
-    }
+            const tcpSocket = await Promise.race([
+                socks ? 
+                    socks5Connect(addressType, address, port, log) :
+                    connect({ 
+                        hostname: address,
+                        port: port,
+                        allowHalfOpen: false,
+                        keepAlive: true,
+                        keepAliveInitialDelay: 60000,
+                        signal: controller.signal
+                    })
+                ,
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('连接超时')), 3000)
+                )
+            ]);
 
-    // 如果所有策略都失败了
-    log('所有连接策略均已失败，关闭 WebSocket。');
-    safeCloseWebSocket(webSocket);
+            clearTimeout(timeoutId);
+            remoteSocket.value = tcpSocket;
+
+            // 写入数据
+            const writer = tcpSocket.writable.getWriter();
+            try {
+                await writer.write(rawClientData);
+            } finally {
+                writer.releaseLock();
+            }
+
+            return tcpSocket;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            throw error;
+        }
+    };
+
+    // 优化重试逻辑
+    const retryConnection = async () => {
+            let tcpSocket;
+
+            if (enableSocks) {
+            try {              
+                log('重试：尝试使用 SOCKS5...');
+                tcpSocket = await createConnection(addressRemote, portRemote, true);               
+                log('SOCKS5 连接成功！');
+            } catch (socksError) {
+                log(`SOCKS5 连接失败: ${socksError.message}`);
+                safeCloseWebSocket(webSocket);
+                return;
+            }
+            } else {            
+            // 定义所有回退策略，按优先级排序
+            const strategies = [
+                {
+                    name: '用户配置的 PROXYIP',
+                    enabled: proxyIP && proxyIP.trim() !== '',
+                    execute: async () => {
+                        let port = portRemote;
+                        let parsedIP = proxyIP;
+                        if (parsedIP.includes(']:')) { [parsedIP, port] = parsedIP.split(']:'); parsedIP += ']'; }
+                        else if (parsedIP.includes(':')) { [parsedIP, port] = parsedIP.split(':'); }
+                        if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp')[1].split('.')[0] || port; }
+                        return createConnection(parsedIP.toLowerCase(), port);
+                    }
+                },
+                {
+                    name: '用户配置的 NAT64',
+                    enabled: DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="),
+                    execute: async () => {
+                        const nat64Address = await resolveToIPv6(addressRemote);
+                        const nat64Proxyip = `[${nat64Address}]`;
+                        return createConnection(nat64Proxyip, 443);
+                    }
+                },
+                {
+                    name: '内置的默认 PROXYIP',
+                    enabled: true, // 总是启用作为回退
+                    execute: async () => {
+                        const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                    let port = portRemote;
+                        let parsedIP = defaultProxyIP;
+                        if (parsedIP.includes(']:')) { [parsedIP, port] = parsedIP.split(']:'); parsedIP += ']'; }
+                        else if (parsedIP.includes(':')) { [parsedIP, port] = parsedIP.split(':'); }
+                        if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp')[1].split('.')[0] || port; }
+                        return createConnection(parsedIP.toLowerCase(), port);
+                    }
+                },
+                {
+                    name: '内置的默认 NAT64',
+                    enabled: true, // 总是启用作为最终回退
+                    execute: async () => {
+                        // 确保在尝试默认NAT64之前，全局变量是默认值
+                        if (!DNS64Server || DNS64Server.trim() === '') {
+                           DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+                        }
+                    const nat64Address = await resolveToIPv6(addressRemote);
+                        const nat64Proxyip = `[${nat64Address}]`;
+                        return createConnection(nat64Proxyip, 443);
+            }
+                }
+            ];
+
+            // 按顺序尝试所有策略
+            for (const strategy of strategies) {
+                if (strategy.enabled && !tcpSocket) {
+                    try {
+                        log(`重试：尝试策略 '${strategy.name}'...`);
+                        tcpSocket = await strategy.execute();
+                        log(`策略 '${strategy.name}' 连接成功！`);
+                    } catch (error) {
+                        log(`策略 '${strategy.name}' 失败: ${error.message}`);
+                    }
+                }
+            }
+
+            // 如果所有策略都失败了
+            if (!tcpSocket) {
+                log('所有回退尝试均已失败，关闭连接。');
+                    safeCloseWebSocket(webSocket);
+                return;
+            }
+        }
+        
+        if (tcpSocket) {
+            log('建立从远程服务器到客户端的数据流...');
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
+        }
+    };
+
+    try {
+        // 主连接逻辑
+        log('主流程：第一阶段 - 尝试直接连接...');
+        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
+            await checkSocks5Mode(addressRemote) : false;
+
+        const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
+        log('直接连接成功！');
+        return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
+    } catch (error) {
+        log(`主连接失败 (${error.message})，将启动重试流程...`);
+        return retryConnection();
+    }
 }
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
