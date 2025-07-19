@@ -2035,16 +2035,14 @@ function 配置信息(UUID, 域名地址) {
 	const 别名 = FileName;
 	let 地址 = 域名地址;
 	let 端口 = 443;
-    // gRPC 服务名，必须与客户端配置一致，也与路由路径对应
-    const gRPC服务名 = 域名地址.includes('.workers.dev') ? 'grpc' : `${路径.substring(1)}/grpc`;
-
+    
 	const 用户ID = UUID;
 	const 加密方式 = 'none';
 
 	// WebSocket 配置
 	const 传输层协议_ws = 'ws';
 	const 伪装域名_ws = 域名地址;
-	const 路径_ws = path;
+	const 路径_ws = path; // 使用全局定义的 path
 
 	let 传输层安全 = ['tls', true];
 	const SNI = 域名地址;
@@ -2057,13 +2055,16 @@ function 配置信息(UUID, 域名地址) {
 	}
 
 	const 威图瑞_ws = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议_ws}&host=${伪装域名_ws}&path=${encodeURIComponent(路径_ws)}#${encodeURIComponent(别名 + "-WS")}`;
-	const 猫猫猫_ws = `- {name: ${FileName}-WS, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, network: ${传输层协议_ws}, ws-opts: {path: "${路径_ws}", headers: {Host: "${伪装域名_ws}"}}, client-fingerprint: ${指纹}, servername: ${SNI}, skip-cert-verify: true}`;
+	const 猫猫猫_ws = `- {name: "${FileName}-WS", server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, network: ${传输层协议_ws}, ws-opts: {path: "${路径_ws}", headers: {Host: "${伪装域名_ws}"}}, client-fingerprint: ${指纹}, servername: ${SNI}, skip-cert-verify: true}`;
     
+    // +++ START OF FIX +++
     // 新增 gRPC 配置
     const 传输层协议_grpc = 'grpc';
-	const gRPC路径 = `/${用户ID}/grpc`; // 与路由匹配
-    const 威图瑞_grpc = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议_grpc}&serviceName=${encodeURIComponent(gRPC路径)}#${encodeURIComponent(别名 + "-gRPC")}`;
-    const 猫猫猫_grpc = `- {name: ${FileName}-gRPC, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, network: ${传输层协议_grpc}, grpc-opts: {grpc-service-name: "${gRPC路径}"}, client-fingerprint: ${指纹}, servername: ${SNI}, skip-cert-verify: true}`;
+    // 直接使用 UUID 构建 gRPC 路径，确保与路由逻辑一致
+    const gRPC路径 = `/${UUID}/grpc`; 
+    const 威图瑞_grpc = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指紋}&type=${传输层协议_grpc}&serviceName=${encodeURIComponent(gRPC路径)}#${encodeURIComponent(别名 + "-gRPC")}`;
+    const 猫猫猫_grpc = `- {name: "${FileName}-gRPC", server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, network: ${传输层协议_grpc}, grpc-opts: {"grpc-service-name": "${gRPC路径}"}, client-fingerprint: ${指纹}, servername: ${SNI}, skip-cert-verify: true}`;
+    // +++ END OF FIX +++
 
 	// 返回数组，包含所有配置
 	return [威图瑞_ws, 猫猫猫_ws, 威图瑞_grpc, 猫猫猫_grpc];
