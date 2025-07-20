@@ -372,7 +372,7 @@ export default {
 	async fetch(request, env, ctx) {
 		try {
             // 【默认伪装】定义默认伪装的网址
-            const defaultHostname = 'www.bing.com';
+            const defaultHostname = 'cn.bing.com';
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
             const url = new URL(request.url);
