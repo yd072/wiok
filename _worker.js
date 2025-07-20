@@ -1,3 +1,4 @@
+
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -372,6 +373,69 @@ async function resolveToIPv6(target) {
 	}
 }
 
+/**
+ * 处理 DoH (DNS over HTTPS) 请求
+ * @param {Request} request 传入的请求
+ * @returns {Promise<Response>}
+ */
+async function handleDoHRequest(request) {
+	const dohProvider = 'https://cloudflare-dns.com/dns-query';
+	const contentType = request.headers.get('Content-Type');
+	const acceptHeader = request.headers.get('Accept') || contentType;
+
+	let upstreamRequest;
+
+	// 根据请求类型（GET 或 POST）创建上游请求
+	if (request.method === 'GET' && request.url.includes('?dns=')) {
+		// DoH wireformat in Base64URL
+		const url = new URL(request.url);
+		const dnsQuery = url.searchParams.get('dns');
+		upstreamRequest = new Request(`${dohProvider}?dns=${dnsQuery}`, {
+			headers: { 'Accept': 'application/dns-message' }
+		});
+	} else if (request.method === 'POST' && contentType === 'application/dns-message') {
+		// DoH wireformat in request body
+		const body = await request.arrayBuffer();
+		upstreamRequest = new Request(dohProvider, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/dns-message',
+				'Accept': 'application/dns-message',
+			},
+			body: body,
+		});
+	} else if (request.method === 'GET' && (acceptHeader === 'application/dns-json' || url.searchParams.has('name'))) {
+		// DoH JSON format
+		const url = new URL(request.url);
+		const name = url.searchParams.get('name');
+		const type = url.searchParams.get('type') || 'A';
+		upstreamRequest = new Request(`${dohProvider}?name=${name}&type=${type}`, {
+			headers: { 'Accept': 'application/dns-json' }
+		});
+	} else {
+		return new Response('Unsupported DoH request', { status: 400 });
+	}
+
+	// 将请求发送到上游 DoH 解析器并返回响应
+	try {
+		const response = await fetch(upstreamRequest);
+		const newHeaders = new Headers(response.headers);
+		// 确保跨域资源共享 (CORS) 头已设置，以便浏览器环境可以正常使用
+		newHeaders.set('Access-Control-Allow-Origin', '*');
+		newHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+		newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Accept');
+		
+		return new Response(response.body, {
+			status: response.status,
+			statusText: response.statusText,
+			headers: newHeaders,
+		});
+	} catch (e) {
+		return new Response('Failed to connect to upstream DoH server', { status: 502 });
+	}
+}
+
+
 export default {
 	async fetch(request, env, ctx) {
 		try {
@@ -644,6 +708,15 @@ export default {
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
+				// 添加 OPTIONS 请求处理以支持 CORS 预检
+				if (request.method === 'OPTIONS') {
+					const headers = new Headers();
+					headers.set('Access-Control-Allow-Origin', '*');
+					headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+					headers.set('Access-Control-Allow-Headers', 'Content-Type, Accept');
+					return new Response(null, { headers });
+				}
+				
 				if (env.ADD) addresses = await 整理(env.ADD);
 				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
 				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
@@ -848,6 +921,9 @@ export default {
 							},
 						});
 					}
+				} else if (路径 === '/dns-query') {
+					// 【新增功能】处理 DoH 请求
+					return await handleDoHRequest(request);
 				} else if (路径 === `/${fakeUserID}`) {
 					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 					return new Response(`${fakeConfig}`, { status: 200 });
