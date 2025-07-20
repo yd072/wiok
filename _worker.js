@@ -1811,7 +1811,7 @@ async function 代理URL(request, 代理网址, 目标网址, 调试模式 = fal
             headers: new Headers(响应.headers)
         });
 
-        // 移除可能暴露信息的Cloudflare特有请求头
+        // 移除可能暴露信息的特有请求头
         新响应.headers.delete('cf-ray');
         新响应.headers.delete('cf-connecting-ip');
 
