@@ -42,17 +42,10 @@ let userIDLow;
 let userIDTime = "";
 let proxyIPPool = [];
 let path = '/?ed=2560';
-let 动态UUID = null;
+let 动态UUID = null;  
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 let DNS64Server = '';
-
-// ##################################################################
-// 新增 gRPC 路径和 ServiceName 变量
-const grpcPath = '/vless-grpc';
-const serviceName = 'vless-grpc';
-// ##################################################################
-
 
 // 添加工具函数
 const utils = {
@@ -101,7 +94,7 @@ class WebSocketManager {
 		try {
 			this.webSocket.addEventListener('message', (event) => {
 				if (this.readableStreamCancel) return;
-
+				
 				if (!this.backpressure) {
 					this.processMessage(event.data, controller);
 				} else {
@@ -131,7 +124,7 @@ class WebSocketManager {
 		this.isProcessing = true;
 		try {
 			controller.enqueue(data);
-
+			
 			// 处理消息队列
 			while (this.messageQueue.length > 0 && !this.backpressure) {
 				const queuedData = this.messageQueue.shift();
@@ -160,7 +153,7 @@ class WebSocketManager {
 
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
-
+		
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
 		this.cleanup();
@@ -364,13 +357,17 @@ async function resolveToIPv6(target) {
         if (isIPv6(target)) return target;
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
         const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
-
+        
+        // --- 关键修改 ---
         if (isIPv6(nat64)) {
             return nat64;
         } else {
+            // 如果没得到合法的IPv6，就抛出错误
             throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
         }
     } catch (error) {
+        // --- 关键修改 ---
+        // 将底层的错误继续向上抛出，而不是返回一个默认值
         throw new Error(`NAT64 resolution failed: ${error.message}`);
 	}
 }
@@ -409,7 +406,7 @@ export default {
 									--warning-border: #ffcdd2;
 									--warning-text: #d32f2f;
 								}
-
+								
 								body {
 									margin: 0;
 									padding: 20px;
@@ -495,7 +492,7 @@ export default {
 									body {
 										padding: 10px;
 									}
-
+									
 									.container {
 										padding: 15px;
 									}
@@ -565,11 +562,12 @@ export default {
                 fakeUserIDSHA256.slice(8, 12),
                 fakeUserIDSHA256.slice(12, 16),
                 fakeUserIDSHA256.slice(16, 20),
-                fakeUserIDSHA256.slice(20, 32)
+                fakeUserIDSHA256.slice(20, 32) 
 			].join('-');
 
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
+			// 修改PROXYIP初始化逻辑
 			if (env.KV) {
 				try {
 					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
@@ -583,10 +581,12 @@ export default {
 					console.error('从KV读取PROXYIP时发生错误:', error);
 				}
 			}
+			// 如果proxyIP为空，则使用环境变量或默认值
 			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
 			proxyIPs = await 整理(proxyIP);
 			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 
+			// 修改SOCKS5地址初始化逻辑
 			if (env.KV) {
 				try {
 					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
@@ -600,6 +600,7 @@ export default {
 					console.error('从KV读取SOCKS5时发生错误:', error);
 				}
 			}
+			// 如果socks5Address为空，则使用环境变量或默认值
 			socks5Address = socks5Address || env.SOCKS5 || '';
 			socks5s = await 整理(socks5Address);
 			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
@@ -608,7 +609,8 @@ export default {
 			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
 			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
 			if (env.BAN) banHosts = await 整理(env.BAN);
-
+			
+            // --- NAT64/DNS64 设置加载逻辑 ---
             if (env.KV) {
 				try {
 					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
@@ -641,17 +643,7 @@ export default {
 
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
-
-			// ##################################################################
-            // 修改请求处理逻辑，增加对 gRPC 请求的判断
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
-				const isGrpc = request.headers.get('Content-Type') === 'application/grpc';
-
-				// 如果是 gRPC 请求，则交由 gRPC 处理器处理
-				if (isGrpc && url.pathname.startsWith(grpcPath)) {
-					return await vlessOverGrpcHandler(request);
-				}
-			// ##################################################################
 				if (env.ADD) addresses = await 整理(env.ADD);
 				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
 				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
@@ -693,6 +685,7 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
+						// 生成美化后的系统信息页面
 						const html = `
 						<!DOCTYPE html>
 						<html>
@@ -709,7 +702,7 @@ export default {
 									--warning-border: #ffcdd2;
 									--warning-text: #d32f2f;
 								}
-
+								
 								body {
 									margin: 0;
 									padding: 20px;
@@ -795,7 +788,7 @@ export default {
 									body {
 										padding: 10px;
 									}
-
+									
 									.container {
 										padding: 15px;
 									}
@@ -808,6 +801,11 @@ export default {
 									<span class="icon">🔍</span>
 									系统信息
 								</div>
+
+								<!--<div class="warning-box">
+									<span class="icon">⚠️</span>
+									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
+								</div> -->
 
 								<div class="info-grid">
 									<div class="info-row">
@@ -853,13 +851,14 @@ export default {
 				} else if (路径 === `/${fakeUserID}`) {
 					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 					return new Response(`${fakeConfig}`, { status: 200 });
-				}
+				} 
+				// 【方案一：核心安全修复】在这里修改了判断逻辑
 				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
 					const html = await KV(request, env);
 					return html;
 				} else if ((动态UUID && url.pathname === `/${动态UUID}`) || 路径 === `/${userID}`) {
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
-
+					
 					const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
 					const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
 
@@ -896,6 +895,7 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
+						// 美化错误页面
 						const html = `
 						<!DOCTYPE html>
 						<html>
@@ -912,7 +912,7 @@ export default {
 									--error-border: #f8d7da;
 									--error-text: #721c24;
 								}
-
+								
 								body {
 									margin: 0;
 									padding: 20px;
@@ -973,7 +973,7 @@ export default {
 									body {
 										padding: 10px;
 									}
-
+									
 									.container {
 										padding: 15px;
 									}
@@ -992,7 +992,7 @@ export default {
 						</body>
 						</html>`;
 
-						return new Response(html, {
+						return new Response(html, { 
 							status: 404,
 							headers: {
 								'content-type': 'text/html;charset=utf-8',
@@ -1048,153 +1048,6 @@ export default {
 		}
 	},
 };
-
-// ##################################################################
-// 新增 vlessOverGrpcHandler 函数，用于处理 gRPC 请求
-async function vlessOverGrpcHandler(request) {
-    const log = (info, event = '') => {
-        const timestamp = new Date().toISOString();
-        console.log(`[gRPC] [${request.headers.get('CF-Connecting-IP')}] ${info}`, event);
-    };
-
-    try {
-        log(`gRPC request received for path: ${new URL(request.url).pathname}`);
-		if (!request.body) {
-			return new Response('gRPC request has no body', { status: 400 });
-		}
-
-        const { readable, writable } = new TransformStream();
-        const reader = request.body.getReader();
-
-        processVlessHeader(reader, userID, log).then(vlessHeader => {
-            if (vlessHeader.hasError) {
-                log('Error processing VLESS header', vlessHeader.addressRemote);
-                return;
-            }
-
-            log(`Handling gRPC outbound to ${vlessHeader.addressRemote}:${vlessHeader.portRemote}`);
-
-			const fakeWebSocket = {
-                send: (data) => {
-					// 模拟 WebSocket 的 send 方法，将数据写入 TransformStream
-                    const writer = writable.getWriter();
-                    writer.write(data);
-                    writer.releaseLock();
-                },
-                close: () => {
-					// 模拟 close
-                    log('gRPC remote socket closed.');
-                },
-                readyState: WS_READY_STATE_OPEN, // 始终为 OPEN 状态
-            };
-
-            handleTCPOutBound(
-                { value: null },
-                vlessHeader.addressType,
-                vlessHeader.addressRemote,
-                vlessHeader.portRemote,
-                null, // rawClientData, gRPC模式下为null
-                fakeWebSocket,
-                new Uint8Array([vlessHeader.vlessVersion[0], 0]),
-                log,
-                true // 标记为 gRPC 模式
-            );
-        }).catch(error => {
-            log('gRPC processVlessHeader error', error.message);
-        });
-
-        return new Response(readable, {
-            headers: {
-                'Content-Type': 'application/grpc',
-                'grpc-accept-encoding': 'identity,deflate,gzip',
-                'grpc-encoding': 'identity',
-            },
-        });
-    } catch (error) {
-        log('gRPC handler error', error.message);
-        return new Response('gRPC handler internal error', { status: 500 });
-    }
-}
-
-// 新增 processVlessHeader 函数，用于从 gRPC 流中读取和解析 VLESS 头部
-async function processVlessHeader(reader, userID, log) {
-    let buffer = new Uint8Array(0);
-
-    async function readBytes(length) {
-        while (buffer.length < length) {
-            const { value, done } = await reader.read();
-            if (done) {
-                log('Connection closed before VLESS header was fully received.');
-                throw new Error('Connection closed prematurely');
-            }
-            const newBuffer = new Uint8Array(buffer.length + value.length);
-            newBuffer.set(buffer);
-            newBuffer.set(value, buffer.length);
-            buffer = newBuffer;
-        }
-        const result = buffer.slice(0, length);
-        buffer = buffer.slice(length);
-        return result;
-    }
-
-    const vlessVersion = await readBytes(1);
-    const uuidBytes = await readBytes(16);
-    const userIDString = stringify(uuidBytes);
-
-    if (userIDString !== userID && userIDString !== userIDLow) {
-        log('Invalid user', { expected: userID, received: userIDString });
-        throw new Error('Invalid user');
-    }
-
-	// addons
-	const addonLength = (await readBytes(1))[0];
-	if (addonLength > 0) {
-		await readBytes(addonLength); // Skip addons
-	}
-
-    const command = (await readBytes(1))[0];
-    if (command !== 1) { // 1 = TCP
-        throw new Error(`Unsupported command: ${command}`);
-    }
-
-    const portBytes = await readBytes(2);
-    const portRemote = new DataView(portBytes.buffer).getUint16(0);
-
-    const addressType = (await readBytes(1))[0];
-    let addressRemote = '';
-    let addressLength = 0;
-
-    switch (addressType) {
-        case 1: // IPv4
-            addressLength = 4;
-            addressRemote = (await readBytes(addressLength)).join('.');
-            break;
-        case 2: // Domain
-            addressLength = (await readBytes(1))[0];
-            addressRemote = new TextDecoder().decode(await readBytes(addressLength));
-            break;
-        case 3: // IPv6
-            addressLength = 16;
-            const ipv6Bytes = await readBytes(addressLength);
-            const ipv6 = [];
-            for (let i = 0; i < 8; i++) {
-                ipv6.push(new DataView(ipv6Bytes.buffer).getUint16(i * 2).toString(16));
-            }
-            addressRemote = ipv6.join(':');
-            break;
-        default:
-            throw new Error(`Invalid address type: ${addressType}`);
-    }
-
-    return {
-        hasError: false,
-        vlessVersion,
-        addressRemote,
-        portRemote,
-        addressType,
-    };
-}
-// ##################################################################
 
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
@@ -1266,7 +1119,7 @@ async function secureProtoOverWSHandler(request) {
                 }
             } catch (error) {
                 log('处理数据时发生错误', error.message);
-                safeCloseWebSocket(webSocket, 1011, '内部错误');
+                webSocket.close(1011, '内部错误');
             }
         },
         close() {
@@ -1277,11 +1130,12 @@ async function secureProtoOverWSHandler(request) {
         },
     })).catch((err) => {
         log('readableWebSocketStream 管道错误', err);
-        safeCloseWebSocket(webSocket, 1011, '管道错误');
+        webSocket.close(1011, '管道错误');
     });
 
     return new Response(null, {
         status: 101,
+        // @ts-ignore
         webSocket: client,
     });
 }
@@ -1292,7 +1146,7 @@ function mergeData(header, chunk) {
     }
 
     const totalLength = header.length + chunk.length;
-
+    
     const merged = new Uint8Array(totalLength);
     merged.set(header, 0);
     merged.set(chunk, header.length);
@@ -1301,13 +1155,14 @@ function mergeData(header, chunk) {
 
 async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, log) {
     const DNS_SERVER = { hostname: '8.8.4.4', port: 53 };
-
+    
     let tcpSocket;
     const controller = new AbortController();
     const signal = controller.signal;
-    let timeoutId;
+    let timeoutId; 
 
     try {
+        // 设置全局超时
         timeoutId = setTimeout(() => {
             controller.abort('DNS query timeout');
             if (tcpSocket) {
@@ -1320,19 +1175,21 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
         }, 5000);
 
         try {
+            // 使用Promise.race进行超时控制
             tcpSocket = await Promise.race([
                 connect({
                     hostname: DNS_SERVER.hostname,
                     port: DNS_SERVER.port,
                     signal,
                 }),
-                new Promise((_, reject) =>
+                new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('DNS连接超时')), 1500)
                 )
             ]);
 
             log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
-
+            
+            // 发送DNS查询
             const writer = tcpSocket.writable.getWriter();
             try {
                 await writer.write(udpChunk);
@@ -1340,27 +1197,31 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
                 writer.releaseLock();
             }
 
+            // 简化的数据流处理
             let secureProtoHeader = secureProtoResponseHeader;
             const reader = tcpSocket.readable.getReader();
 
             try {
+                // 使用更高效的循环处理数据
                 while (true) {
                     const { done, value } = await reader.read();
-
+                    
                     if (done) {
                         log('DNS数据流处理完成');
                         break;
                     }
 
+                    // 检查WebSocket是否仍然开放
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                         break;
                     }
 
                     try {
+                        // 处理数据包
                         if (secureProtoHeader) {
                             const data = mergeData(secureProtoHeader, value);
                             webSocket.send(data);
-                            secureProtoHeader = null;
+                            secureProtoHeader = null; // 清除header,只在第一个包使用
                         } else {
                             webSocket.send(value);
                         }
@@ -1396,31 +1257,30 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
     }
 }
 
-// ##################################################################
-// 修改 handleTCPOutBound 函数，增加 isGrpc 参数以处理两种模式
-async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log, isGrpc = false) {
-// ##################################################################
+async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
+    // 优化 SOCKS5 模式检查
     const checkSocks5Mode = async (address) => {
         const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
-
-        const pattern = go2Socks5s.find(p =>
+        
+        const pattern = go2Socks5s.find(p => 
             new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address)
         );
         return !!pattern;
     };
 
+    // 优化连接处理
     const createConnection = async (address, port, socks = false) => {
         log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
-
+        
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         try {
             const tcpSocket = await Promise.race([
-                socks ?
+                socks ? 
                     socks5Connect(addressType, address, port, log) :
-                    connect({
+                    connect({ 
                         hostname: address,
                         port: port,
                         allowHalfOpen: false,
@@ -1429,7 +1289,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                         signal: controller.signal
                     })
                 ,
-                new Promise((_, reject) =>
+                new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('连接超时')), 3000)
                 )
             ]);
@@ -1437,14 +1297,12 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             clearTimeout(timeoutId);
             remoteSocket.value = tcpSocket;
 
-            // 只有在非 gRPC 模式下才写入初始数据
-            if (rawClientData) {
-                const writer = tcpSocket.writable.getWriter();
-                try {
-                    await writer.write(rawClientData);
-                } finally {
-                    writer.releaseLock();
-                }
+            // 写入数据
+            const writer = tcpSocket.writable.getWriter();
+            try {
+                await writer.write(rawClientData);
+            } finally {
+                writer.releaseLock();
             }
 
             return tcpSocket;
@@ -1454,19 +1312,22 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     };
 
+    // 优化重试逻辑
     const retryConnection = async () => {
-        let tcpSocket;
-        if (enableSocks) {
-            try {
+            let tcpSocket;
+
+            if (enableSocks) {
+            try {              
                 log('重试：尝试使用 SOCKS5...');
-                tcpSocket = await createConnection(addressRemote, portRemote, true);
+                tcpSocket = await createConnection(addressRemote, portRemote, true);               
                 log('SOCKS5 连接成功！');
             } catch (socksError) {
                 log(`SOCKS5 连接失败: ${socksError.message}`);
-                if (!isGrpc) safeCloseWebSocket(webSocket);
+                safeCloseWebSocket(webSocket);
                 return;
             }
-        } else {
+            } else {            
+            // 定义所有回退策略，按优先级排序
             const strategies = [
                 {
                     name: '用户配置的 PROXYIP',
@@ -1491,10 +1352,10 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 },
                 {
                     name: '内置的默认 PROXYIP',
-                    enabled: true,
+                    enabled: true, // 总是启用作为回退
                     execute: async () => {
                         const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-                        let port = portRemote;
+                    let port = portRemote;
                         let parsedIP = defaultProxyIP;
                         if (parsedIP.includes(']:')) { [parsedIP, port] = parsedIP.split(']:'); parsedIP += ']'; }
                         else if (parsedIP.includes(':')) { [parsedIP, port] = parsedIP.split(':'); }
@@ -1504,18 +1365,20 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 },
                 {
                     name: '内置的默认 NAT64',
-                    enabled: true,
+                    enabled: true, // 总是启用作为最终回退
                     execute: async () => {
+                        // 确保在尝试默认NAT64之前，全局变量是默认值
                         if (!DNS64Server || DNS64Server.trim() === '') {
                            DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
                         }
-                        const nat64Address = await resolveToIPv6(addressRemote);
+                    const nat64Address = await resolveToIPv6(addressRemote);
                         const nat64Proxyip = `[${nat64Address}]`;
                         return createConnection(nat64Proxyip, 443);
-                    }
+            }
                 }
             ];
 
+            // 按顺序尝试所有策略
             for (const strategy of strategies) {
                 if (strategy.enabled && !tcpSocket) {
                     try {
@@ -1528,27 +1391,29 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 }
             }
 
+            // 如果所有策略都失败了
             if (!tcpSocket) {
                 log('所有回退尝试均已失败，关闭连接。');
-                if (!isGrpc) safeCloseWebSocket(webSocket);
+                    safeCloseWebSocket(webSocket);
                 return;
             }
         }
-
+        
         if (tcpSocket) {
             log('建立从远程服务器到客户端的数据流...');
-            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log, isGrpc);
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
         }
     };
 
     try {
+        // 主连接逻辑
         log('主流程：第一阶段 - 尝试直接连接...');
-        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ?
+        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
             await checkSocks5Mode(addressRemote) : false;
 
         const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
         log('直接连接成功！');
-        return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log, isGrpc);
+        return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
     } catch (error) {
         log(`主连接失败 (${error.message})，将启动重试流程...`);
         return retryConnection();
@@ -1581,7 +1446,7 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     }
 
     const portIndex = 18 + optLength + 1;
-    const portRemote = new DataView(secureProtoBuffer.buffer, secureProtoBuffer.byteOffset + portIndex).getUint16(0);
+    const portRemote = new DataView(secureProtoBuffer).getUint16(portIndex);
 
     const addressIndex = portIndex + 2;
     const addressType = new Uint8Array(secureProtoBuffer.slice(addressIndex, addressIndex + 1))[0];
@@ -1601,7 +1466,7 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
             break;
         case 3:
             addressLength = 16;
-            const dataView = new DataView(secureProtoBuffer.buffer, secureProtoBuffer.byteOffset + addressValueIndex, addressLength);
+            const dataView = new DataView(secureProtoBuffer.slice(addressValueIndex, addressValueIndex + addressLength));
             const ipv6 = [];
             for (let i = 0; i < 8; i++) {
                 ipv6.push(dataView.getUint16(i * 2).toString(16));
@@ -1627,20 +1492,19 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     };
 }
 
-// ##################################################################
-// 修改 remoteSocketToWS 函数，增加 isGrpc 参数以跳过 WebSocket 特有的检查
-async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log, isGrpc = false) {
-// ##################################################################
+async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
     let isSocketClosed = false;
     let retryAttempted = false;
-    let retryCount = 0;
-    const MAX_RETRIES = 3;
+    let retryCount = 0; // 记录重试次数
+    const MAX_RETRIES = 3; // 限制最大重试次数
 
+    // 控制超时
     const controller = new AbortController();
     const signal = controller.signal;
 
+    // 设置全局超时
     const timeout = setTimeout(() => {
         if (!hasIncomingData) {
             controller.abort('连接超时');
@@ -1648,20 +1512,23 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }, 5000);
 
     try {
-        const writeData = async (chunk) => {
-            if (!isGrpc && webSocket.readyState !== WS_READY_STATE_OPEN) {
+        // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
+    const writeData = async (chunk) => {
+        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                 throw new Error('WebSocket 未连接');
-            }
+        }
 
-            if (header) {
+        if (header) {
+                // 预分配足够的 buffer，避免重复分配
                 const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
                 combinedData.set(new Uint8Array(header), 0);
                 combinedData.set(new Uint8Array(chunk), header.byteLength);
                 webSocket.send(combinedData);
-                header = null;
-            } else {
-                webSocket.send(chunk);
-            }
+                header = null; // 清除 header 引用
+        } else {
+            webSocket.send(chunk);
+        }
+        
             hasIncomingData = true;
         };
 
@@ -1680,15 +1547,14 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                         isSocketClosed = true;
                         clearTimeout(timeout);
                         log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
-
+                        
+                        // 仅在没有数据时尝试重试，且不超过最大重试次数
                         if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
                             retryAttempted = true;
                             retryCount++;
                             log(`未收到数据, 正在进行第 ${retryCount} 次重试...`);
                             retry();
-                        } else if (!isGrpc) {
-							safeCloseWebSocket(webSocket);
-						}
+                        }
                     },
                     abort(reason) {
                         isSocketClosed = true;
@@ -1703,10 +1569,11 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             )
             .catch((error) => {
                 log(`数据传输异常: ${error.message}`);
-                if (!isSocketClosed && !isGrpc) {
+                if (!isSocketClosed) {
                     safeCloseWebSocket(webSocket);
                 }
-
+                
+                // 仅在未收到数据时尝试重试，并限制重试次数
                 if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
                     retryAttempted = true;
                     retryCount++;
@@ -1714,23 +1581,26 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     retry();
                 }
             });
+
     } catch (error) {
         clearTimeout(timeout);
         log(`连接处理异常: ${error.message}`);
-        if (!isSocketClosed && !isGrpc) {
+        if (!isSocketClosed) {
             safeCloseWebSocket(webSocket);
         }
-
+        
+        // 仅在发生异常且未收到数据时尝试重试，并限制重试次数
         if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
             retryAttempted = true;
             retryCount++;
             log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
             retry();
         }
+        
         throw error;
     } finally {
         clearTimeout(timeout);
-        if (signal.aborted && !isGrpc) {
+        if (signal.aborted) {
             safeCloseWebSocket(webSocket);
         }
     }
@@ -1739,10 +1609,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
 
-function safeCloseWebSocket(socket, code, reason) {
+function safeCloseWebSocket(socket) {
     try {
-        if (socket && (socket.readyState === WS_READY_STATE_OPEN || socket.readyState === WS_READY_STATE_CLOSING)) {
-            socket.close(code, reason);
+        if (socket.readyState === WS_READY_STATE_OPEN || socket.readyState === WS_READY_STATE_CLOSING) {
+            socket.close();
         }
     } catch (error) {
         console.error('safeCloseWebSocket error', error);
@@ -1887,26 +1757,19 @@ function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName,
     content = content.replace(fakeUserIDRegExp, userID)
                      .replace(fakeHostNameRegExp, hostName);
 
-    // ##################################################################
-    // 新增对 gRPC 路径和 serviceName 的恢复
-    const fakeGrpcPathRegExp = new RegExp(escapeRegExp(grpcPath), 'g');
-    const fakeServiceNameRegExp = new RegExp(escapeRegExp(serviceName), 'g');
-    content = content.replace(fakeGrpcPathRegExp, grpcPath)
-                     .replace(fakeServiceNameRegExp, serviceName);
-    // ##################################################################
-
-
     return isBase64 ? btoa(content) : content;
 }
 
 async function 双重哈希(文本) {
     const 编码器 = new TextEncoder();
 
+    // 计算第一次哈希 (SHA-256)
     const 第一次哈希 = await crypto.subtle.digest('SHA-256', 编码器.encode(文本));
     const 第一次十六进制 = [...new Uint8Array(第一次哈希)]
         .map(byte => byte.toString(16).padStart(2, '0'))
         .join('');
 
+    // 截取部分哈希值，并进行二次哈希
     const 截取部分 = 第一次十六进制.substring(7, 27);
     const 第二次哈希 = await crypto.subtle.digest('SHA-256', 编码器.encode(截取部分));
     const 第二次十六进制 = [...new Uint8Array(第二次哈希)]
@@ -1927,17 +1790,19 @@ async function 代理URL(request, 代理网址, 目标网址, 调试模式 = fal
         const 解析后的网址 = new URL(完整网址);
         if (调试模式) console.log(`代理 URL: ${解析后的网址}`);
 
+        // 正确拼接目标路径和查询参数
         const 目标URL = new URL(目标网址.pathname + 目标网址.search, 解析后的网址);
 
+        // 复制原始请求头，并可以进行一些清理
         const newHeaders = new Headers(request.headers);
-        newHeaders.set('Host', 解析后的网址.hostname);
-        newHeaders.set('Referer', 解析后的网址.origin);
+        newHeaders.set('Host', 解析后的网址.hostname); // 将Host头修改为代理目标的域名
+        newHeaders.set('Referer', 解析后的网址.origin); // 可选：伪造或设置正确的Referer
 
         const 响应 = await fetch(目标URL.toString(), {
-            method: request.method,
-            headers: newHeaders,
-            body: request.body,
-            redirect: 'manual'
+            method: request.method, // 传递原始请求方法
+            headers: newHeaders,    // 传递处理过的请求头，增强伪装
+            body: request.body,     // 传递请求体，支持POST等方法
+            redirect: 'manual'      // 手动处理重定向
         });
 
         const 新响应 = new Response(响应.body, {
@@ -1946,10 +1811,11 @@ async function 代理URL(request, 代理网址, 目标网址, 调试模式 = fal
             headers: new Headers(响应.headers)
         });
 
+        // 移除可能暴露信息的特有请求头
         新响应.headers.delete('cf-ray');
         新响应.headers.delete('cf-connecting-ip');
         新响应.headers.delete('x-forwarded-proto');
-        新响应.headers.delete('x-real-ip');
+        新响应.headers.delete('x-real-ip');		
 
         return 新响应;
     } catch (error) {
@@ -1959,9 +1825,6 @@ async function 代理URL(request, 代理网址, 目标网址, 调试模式 = fal
 }
 
 const protocolEncodedFlag = atob('ZG14bGMzTT0=');
-
-// ##################################################################
-// 修改 配置信息 函数，增加对 gRPC 节点配置的生成
 function 配置信息(UUID, 域名地址) {
 	const 协议类型 = atob(protocolEncodedFlag);
 
@@ -1972,15 +1835,9 @@ function 配置信息(UUID, 域名地址) {
 	const 用户ID = UUID;
 	const 加密方式 = 'none';
 
-	// WebSocket 配置
-	const ws传输层协议 = 'ws';
-	const ws伪装域名 = 域名地址;
-	const ws路径 = path;
-
-	// gRPC 配置
-	const grpc传输层协议 = 'grpc';
-	const grpc服务名 = serviceName;
-
+	const 传输层协议 = 'ws';
+	const 伪装域名 = 域名地址;
+	const 路径 = path;
 
 	let 传输层安全 = ['tls', true];
 	const SNI = 域名地址;
@@ -1992,21 +1849,16 @@ function 配置信息(UUID, 域名地址) {
 		传输层安全 = ['', false];
 	}
 
-	const ws威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${ws传输层协议}&host=${ws伪装域名}&path=${encodeURIComponent(ws路径)}#${encodeURIComponent(别名 + '-WebSocket')}`;
-	const ws猫猫猫 = `- {name: ${FileName}-WebSocket, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h2, http/1.1], udp: false, sni: ${SNI}, skip-cert-verify: true, servername: ${ws伪装域名}, client-fingerprint: ${指纹}, network: ${ws传输层协议}, ws-opts: {path: "${ws路径}", headers: {Host: "${ws伪装域名}"}}}`;
-
-    const grpc威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${grpc传输层协议}&serviceName=${encodeURIComponent(grpc服务名)}&path=${encodeURIComponent(grpcPath)}#${encodeURIComponent(别名 + '-gRPC')}`;
-    const grpc猫猫猫 = `- {name: ${FileName}-gRPC, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h2], udp: false, sni: ${SNI}, skip-cert-verify: true, servername: ${域名地址}, client-fingerprint: ${指纹}, network: ${grpc传输层协议}, grpc-opts: {grpc-service-name: "${grpc服务名}"}}`;
-
-	return [ws威图瑞, ws猫猫猫, grpc威图瑞, grpc猫猫猫];
+	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
+	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
+	return [威图瑞, 猫猫猫];
 }
-// ##################################################################
-
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+	// 在获取其他配置前,先尝试读取自定义的设置
 	if (env.KV) {
 		try {
 			const advancedSettingsJSON = await env.KV.get('settinggs.txt');
@@ -2019,64 +1871,86 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				}
 			}
 
+			// 修改PROXYIP设置逻辑
 			const customProxyIP = settings.proxyip;
 			if (customProxyIP && customProxyIP.trim()) {
+				// 如果KV中有PROXYIP设置，使用KV中的设置
 				proxyIP = customProxyIP;
 				proxyIPs = await 整理(proxyIP);
 				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 				RproxyIP = 'false';
 			} else if (env.PROXYIP) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				proxyIP = env.PROXYIP;
 				proxyIPs = await 整理(proxyIP);
 				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 				RproxyIP = 'false';
 			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
 				proxyIP = '';
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 
-			const customSocks5 = settings.socks5;
+			// 修改SOCKS5设置逻辑
+			const customSocks5 = settings.socks5;			
 			if (customSocks5 && customSocks5.trim()) {
+				// 如果KV中有SOCKS5设置，使用KV中的设置
 				socks5Address = customSocks5.trim().split('\n')[0];
 				socks5s = await 整理(socks5Address);
 				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
-				enableSocks = true;
+				enableSocks = true; 
 			} else if (env.SOCKS5) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				socks5Address = env.SOCKS5;
 				socks5s = await 整理(socks5Address);
 				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 				socks5Address = socks5Address.split('//')[1] || socks5Address;
-				enableSocks = true;
+				enableSocks = true; 
 			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
 				enableSocks = false;
 				socks5Address = '';
 			}
 
+			// 读取自定义SUB设置
 			const customSub = settings.sub;
+			// 明确检查是否为null或空字符串
 			if (customSub !== null && customSub.trim() !== '') {
+				// 如果KV中有SUB设置，使用KV中的设置
 				sub = customSub.trim().split('\n')[0];
 			} else if (env.SUB) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				sub = env.SUB;
 			} else {
+				// 如果KV和环境变量中都没有设置，使用默认值
 				sub = '';
 			}
 
+			// 读取自定义SUBAPI设置
 			const customSubAPI = settings.subapi;
+			// 明确检查是否为null或空字符串
 			if (customSubAPI !== null && customSubAPI.trim() !== '') {
+				// 如果KV中有SUBAPI设置，使用KV中的设置
 				subConverter = customSubAPI.trim().split('\n')[0];
 			} else if (env.SUBAPI) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				subConverter = env.SUBAPI;
 			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
 				subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 			}
 
+			// 读取自定义SUBCONFIG设置
 			const customSubConfig = settings.subconfig;
 			if (customSubConfig !== null && customSubConfig.trim() !== '') {
+				// 如果KV中有SUBCONFIG设置，使用KV中的设置
 				subConfig = customSubConfig.trim().split('\n')[0];
 			} else if (env.SUBCONFIG) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				subConfig = env.SUBCONFIG;
 			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
 				subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 			}
 		} catch (error) {
@@ -2090,7 +1964,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		const subs = await 整理(sub);
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
-
+	
 	if (env.KV) {
 		await 迁移地址列表(env);
 		const 优选地址列表 = await env.KV.get('ADD.txt');
@@ -2118,78 +1992,84 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		}
 	}
 
-	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-		let cfips = [
-			'104.16.0.0/14',
-			'104.21.0.0/16',
-			'188.114.96.0/20',
-		];
+	    if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
+	    		let cfips = [
+		            '104.16.0.0/14',
+		            '104.21.0.0/16',
+		            '188.114.96.0/20',
+			    
+	    		];
 
-		function ipToInt(ip) {
-			return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
-		}
+    		function ipToInt(ip) {
+        			return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+    		}
 
-		function intToIp(int) {
-			return [
-				(int >>> 24) & 255,
-				(int >>> 16) & 255,
-				(int >>> 8) & 255,
-				int & 255
-			].join('.');
-		}
+    			function intToIp(int) {
+        			return [
+            			(int >>> 24) & 255,
+            			(int >>> 16) & 255,
+            			(int >>> 8) & 255,
+            			int & 255
+        				].join('.');
+    				}
 
-		function generateRandomIPFromCIDR(cidr) {
-			const [base, mask] = cidr.split('/');
-			const baseInt = ipToInt(base);
-			const maskBits = parseInt(mask, 10);
-			const hostBits = 32 - maskBits;
-			const maxHosts = Math.pow(2, hostBits);
-			const randomOffset = Math.floor(Math.random() * maxHosts);
-			const randomIPInt = baseInt + randomOffset;
-			return intToIp(randomIPInt);
-		}
+	    function generateRandomIPFromCIDR(cidr) {
+		    const [base, mask] = cidr.split('/');
+        		const baseInt = ipToInt(base);
+        		const maskBits = parseInt(mask, 10);
+        		const hostBits = 32 - maskBits;
+        		const maxHosts = Math.pow(2, hostBits);
+        		const randomOffset = Math.floor(Math.random() * maxHosts);
 
-		let counter = 1;
-		const totalIPsToGenerate = 10;
+        		const randomIPInt = baseInt + randomOffset;
+        	return intToIp(randomIPInt);
+	    }
 
-		if (hostName.includes("worker") || hostName.includes("notls")) {
-			const randomPorts = httpPorts.concat('80');
-			for (let i = 0; i < totalIPsToGenerate; i++) {
-				const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
-				const randomIP = generateRandomIPFromCIDR(randomCIDR);
-				const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-				addressesnotls.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
-			}
-		} else {
-			const randomPorts = httpsPorts.concat('443');
-			for (let i = 0; i < totalIPsToGenerate; i++) {
-				const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
-				const randomIP = generateRandomIPFromCIDR(randomCIDR);
-				const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-				addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
-			}
-		}
+	    let counter = 1;
+	    const totalIPsToGenerate = 10;
+
+	    if (hostName.includes("worker") || hostName.includes("notls")) {
+		    const randomPorts = httpPorts.concat('80');
+		    for (let i = 0; i < totalIPsToGenerate; i++) {
+			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
+			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
+			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
+			    addressesnotls.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
+		    }
+	    } else {
+		    const randomPorts = httpsPorts.concat('443');
+		        for (let i = 0; i < totalIPsToGenerate; i++) {
+			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
+			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
+			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
+			    addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
+		    }
+	    }
     }
 
 	const userAgent = UA.toLowerCase();
-    // ##################################################################
-    // 修改此处以正确解构 WebSocket 和 gRPC 的配置
-	const [wsVless, wsClash, grpcVless, grpcClash] = 配置信息(uuid, hostName);
-    // ##################################################################
+	const Config = 配置信息(uuid, hostName);
+	const proxyConfig = Config[0];
+	const clash = Config[1];
 	let proxyhost = "";
 	if (hostName.includes(".workers.dev")) {
 		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
 			try {
 				const response = await fetch(proxyhostsURL);
+
 				if (!response.ok) {
 					console.error('获取地址时出错:', response.status, response.statusText);
-					return;
+					return; 
 				}
+
 				const text = await response.text();
 				const lines = text.split('\n');
 				const nonEmptyLines = lines.filter(line => line.trim() !== '');
+
 				proxyhosts = proxyhosts.concat(nonEmptyLines);
-			} catch (error) {}
+			} catch (error) {
+				//console.error('获取地址时出错:', error);
+			}
 		}
 		if (proxyhosts.length != 0) proxyhost = proxyhosts[Math.floor(Math.random() * proxyhosts.length)] + "/";
 	}
@@ -2211,7 +2091,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 		let 订阅器 = '<br>';
 		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
-
+		
 		if (sub) {
 			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
@@ -2249,7 +2129,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
 					}
-
+					
 					body {
 						margin: 0;
 						padding: 20px;
@@ -2357,9 +2237,17 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 
 					@media (max-width: 768px) {
-						body { padding: 10px; }
-						.container { padding: 15px; }
-						.section { padding: 15px; }
+						body {
+							padding: 10px;
+						}
+						
+						.container {
+							padding: 15px;
+						}
+						
+						.section {
+							padding: 15px;
+						}
 					}
 				</style>
 			</head>
@@ -2369,7 +2257,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						<div class="section-title">📋 订阅信息</div>
 						<div class="subscription-link">
 							自适应订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}','qrcode_0')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
 								https://${proxyhost}${hostName}/${uuid}
 							</a>
 							<div id="qrcode_0" class="qrcode-container"></div>
@@ -2439,40 +2327,21 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						</div>
 					</div>
 
-                    <!-- ################################################################## -->
-                    <!-- 修改配置显示区域，增加 gRPC 相关信息的展示 -->
 					<div class="section">
-						<div class="section-title">📝 VLESS (WebSocket)</div>
+						<div class="section-title">📝 proxyConfig</div>
 						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<button class="copy-button" onclick="copyToClipboard('${wsVless}','qrcode_wsVless')">复制配置</button>
-							<div style="word-break: break-all; overflow-wrap: anywhere;">${wsVless}</div>
-							<div id="qrcode_wsVless" class="qrcode-container"></div>
-						</div>
-					</div>
-
-                    <div class="section">
-						<div class="section-title">📝 VLESS (gRPC)</div>
-						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<button class="copy-button" onclick="copyToClipboard('${grpcVless}','qrcode_grpcVless')">复制配置</button>
-							<div style="word-break: break-all; overflow-wrap: anywhere;">${grpcVless}</div>
-							<div id="qrcode_grpcVless" class="qrcode-container"></div>
+							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${proxyConfig}</div>
+							<div id="qrcode_proxyConfig" class="qrcode-container"></div>
 						</div>
 					</div>
 
 					<div class="section">
-						<div class="section-title">⚙️ Clash Meta (WebSocket)</div>
+						<div class="section-title">⚙️ Clash Meta 配置</div>
 						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<div style="word-break: break-all; overflow-wrap: anywhere;">${wsClash}</div>
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${clash}</div>
 						</div>
 					</div>
-
-                    <div class="section">
-						<div class="section-title">⚙️ Clash Meta (gRPC)</div>
-						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<div style="word-break: break-all; overflow-wrap: anywhere;">${grpcClash}</div>
-						</div>
-					</div>
-                    <!-- ################################################################## -->
 
 					<div class="divider"></div>
 					${cmad}
@@ -2541,10 +2410,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			fakeHostName = `${fakeHostName}.xyz`
 		}
 		console.log(`虚假HOST: ${fakeHostName}`);
-        // ##################################################################
-        // 修改订阅 URL，增加 grpcpath 参数
-		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}&grpcpath=${encodeURIComponent(grpcPath)}`;
-        // ##################################################################
+		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}`;
 		let isBase64 = true;
 
 		if (!sub || sub == "") {
@@ -2552,13 +2418,16 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
 					try {
 						const response = await fetch(proxyhostsURL);
+
 						if (!response.ok) {
 							console.error('获取地址时出错:', response.status, response.statusText);
-							return;
+							return; 
 						}
+
 						const text = await response.text();
 						const lines = text.split('\n');
 						const nonEmptyLines = lines.filter(line => line.trim() !== '');
+
 						proxyhosts = proxyhosts.concat(nonEmptyLines);
 					} catch (error) {
 						console.error('获取地址时出错:', error);
@@ -2585,6 +2454,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			} else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
+				// 添加Loon支持
 				url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			}
@@ -2616,11 +2486,14 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 async function 整理优选列表(api) {
 	if (!api || api.length === 0) return [];
+
 	let newapi = "";
+
 	const controller = new AbortController();
+
 	const timeout = setTimeout(() => {
-		controller.abort();
-	}, 2000);
+		controller.abort(); 
+	}, 2000); 
 
 	try {
 		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
@@ -2629,12 +2502,13 @@ async function 整理优选列表(api) {
 				'Accept': 'text/html,application/xhtml+xml,application/xml;',
 				'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
 			},
-			signal: controller.signal
+			signal: controller.signal 
 		}).then(response => response.ok ? response.text() : Promise.reject())));
 
 		for (const [index, response] of responses.entries()) {
 			if (response.status === 'fulfilled') {
 				const content = await response.value;
+
 				const lines = content.split(/\r?\n/);
 				let 节点备注 = '';
 				let 测速端口 = '443';
@@ -2642,6 +2516,7 @@ async function 整理优选列表(api) {
 				if (lines[0].split(',').length > 3) {
 					const idMatch = api[index].match(/id=([^&]*)/);
 					if (idMatch) 节点备注 = idMatch[1];
+
 					const portMatch = api[index].match(/port=([^&]*)/);
 					if (portMatch) 测速端口 = portMatch[1];
 
@@ -2654,6 +2529,7 @@ async function 整理优选列表(api) {
 					}
 				} else {
 					if (api[index].includes('proxyip=true')) {
+						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
 						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
 							const baseItem = item.split('#')[0] || item;
 							if (baseItem.includes(':')) {
@@ -2664,7 +2540,7 @@ async function 整理优选列表(api) {
 							} else {
 								return `${baseItem}:443`;
 							}
-							return null;
+							return null; 
 						}).filter(Boolean));
 					}
 					newapi += content + '\n';
@@ -2676,7 +2552,10 @@ async function 整理优选列表(api) {
 	} finally {
 		clearTimeout(timeout);
 	}
-	return await 整理(newapi);
+
+	const newAddressesapi = await 整理(newapi);
+
+	return newAddressesapi;
 }
 
 async function 整理测速结果(tls) {
@@ -2689,18 +2568,26 @@ async function 整理测速结果(tls) {
 	for (const csvUrl of addressescsv) {
 		try {
 			const response = await fetch(csvUrl);
+
 			if (!response.ok) {
 				console.error('获取CSV地址时出错:', response.status, response.statusText);
 				continue;
 			}
+
 			const text = await response.text();
-			let lines = text.includes('\r\n') ? text.split('\r\n') : text.split('\n');
+			let lines;
+			if (text.includes('\r\n')) {
+				lines = text.split('\r\n');
+			} else {
+				lines = text.split('\n');
+			}
 
 			const header = lines[0].split(',');
 			const tlsIndex = header.indexOf('TLS');
+
 			const ipAddressIndex = 0;
 			const portIndex = 1;
-			const dataCenterIndex = tlsIndex + remarkIndex;
+			const dataCenterIndex = tlsIndex + remarkIndex; 
 
 			if (tlsIndex === -1) {
 				console.error('CSV文件缺少必需的字段');
@@ -2709,14 +2596,17 @@ async function 整理测速结果(tls) {
 
 			for (let i = 1; i < lines.length; i++) {
 				const columns = lines[i].split(',');
-				const speedIndex = columns.length - 1;
-				if (columns[tlsIndex] && columns[tlsIndex].toUpperCase() === tls && parseFloat(columns[speedIndex]) > DLS) {
+				const speedIndex = columns.length - 1; 
+				// 检查TLS是否为"TRUE"且速度大于DLS
+				if (columns[tlsIndex].toUpperCase() === tls && parseFloat(columns[speedIndex]) > DLS) {
 					const ipAddress = columns[ipAddressIndex];
 					const port = columns[portIndex];
 					const dataCenter = columns[dataCenterIndex];
+
 					const formattedAddress = `${ipAddress}:${port}#${dataCenter}`;
 					newAddressescsv.push(formattedAddress);
-					if (csvUrl.includes('proxyip=true') && columns[tlsIndex].toUpperCase() == 'TRUE' && !httpsPorts.includes(port)) {
+					if (csvUrl.includes('proxyip=true') && columns[tlsIndex].toUpperCase() == 'true' && !httpsPorts.includes(port)) {
+						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
 						proxyIPPool.push(`${ipAddress}:${port}`);
 					}
 				}
@@ -2729,73 +2619,161 @@ async function 整理测速结果(tls) {
 
 	return newAddressescsv;
 }
-// ##################################################################
-// 修改 生成本地订阅 函数，使其能同时生成 WebSocket 和 gRPC 节点
+
 function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
-	let responseBody = '';
+	addresses = addresses.concat(newAddressesapi);
+	addresses = addresses.concat(newAddressescsv);
+	let notlsresponseBody;
+	if (noTLS == 'true') {
+		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
+		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
+		const uniqueAddressesnotls = [...new Set(addressesnotls)];
 
-	// 处理 TLS 节点 (WebSocket + gRPC)
-	const tlsAddresses = [...new Set(addresses.concat(newAddressesapi, newAddressescsv))];
-	responseBody += tlsAddresses.map(address => {
-		const match = address.match(regex);
-		let ip = address, port = "443", remark = address;
-		if (match) {
-			ip = match[1];
-			port = match[2] || "443";
-			remark = match[3] || ip;
+		notlsresponseBody = uniqueAddressesnotls.map(address => {
+			let port = "-1";
+			let addressid = address;
+
+			const match = addressid.match(regex);
+			if (!match) {
+				if (address.includes(':') && address.includes('#')) {
+					const parts = address.split(':');
+					address = parts[0];
+					const subParts = parts[1].split('#');
+					port = subParts[0];
+					addressid = subParts[1];
+				} else if (address.includes(':')) {
+					const parts = address.split(':');
+					address = parts[0];
+					port = parts[1];
+				} else if (address.includes('#')) {
+					const parts = address.split('#');
+					address = parts[0];
+					addressid = parts[1];
+				}
+
+				if (addressid.includes(':')) {
+					addressid = addressid.split(':')[0];
+				}
+			} else {
+				address = match[1];
+				port = match[2] || port;
+				addressid = match[3] || address;
+			}
+
+			const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
+			if (!isValidIPv4(address) && port == "-1") {
+				for (let httpPort of httpPorts) {
+					if (address.includes(httpPort)) {
+						port = httpPort;
+						break;
+					}
+				}
+			}
+			if (port == "-1") port = "80";
+
+			let 伪装域名 = host;
+			let 最终路径 = path;
+			let 节点备注 = '';
+			const 协议类型 = atob(protocolEncodedFlag);
+
+            const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` + 
+                `encryption=none&` + 
+                `security=none&` + 
+                `type=ws&` + 
+                `host=${伪装域名}&` + 
+                `path=${encodeURIComponent(最终路径)}` + 
+                `#${encodeURIComponent(addressid + 节点备注)}`;
+
+			return secureProtoLink;
+
+		}).join('\n');
+
+	}
+
+	const uniqueAddresses = [...new Set(addresses)];
+
+	const responseBody = uniqueAddresses.map(address => {
+		let port = "-1";
+		let addressid = address;
+
+		const match = addressid.match(regex);
+		if (!match) {
+			if (address.includes(':') && address.includes('#')) {
+				const parts = address.split(':');
+				address = parts[0];
+				const subParts = parts[1].split('#');
+				port = subParts[0];
+				addressid = subParts[1];
+			} else if (address.includes(':')) {
+				const parts = address.split(':');
+				address = parts[0];
+				port = parts[1];
+			} else if (address.includes('#')) {
+				const parts = address.split('#');
+				address = parts[0];
+				addressid = parts[1];
+			}
+
+			if (addressid.includes(':')) {
+				addressid = addressid.split(':')[0];
+			}
+		} else {
+			address = match[1];
+			port = match[2] || port;
+			addressid = match[3] || address;
 		}
 
+		if (!isValidIPv4(address) && port == "-1") {
+			for (let httpsPort of httpsPorts) {
+				if (address.includes(httpsPort)) {
+					port = httpsPort;
+					break;
+				}
+			}
+		}
+		if (port == "-1") port = "443";
+
 		let 伪装域名 = host;
-		let ws路径 = path;
+		let 最终路径 = path;
 		let 节点备注 = '';
-		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(ip));
-		if (matchingProxyIP) ws路径 = `/?proxyip=${matchingProxyIP}`;
+		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
+		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
 
 		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
-			ws路径 = `/${伪装域名}${ws路径}`;
+			最终路径 = `/${伪装域名}${最终路径}`;
 			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
 			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
 		}
 
 		const 协议类型 = atob(protocolEncodedFlag);
 
-		const wsLink = `${协议类型}://${UUID}@${ip}:${port}?encryption=none&security=tls&sni=${伪装域名}&fp=randomized&alpn=h2,http/1.1&type=ws&host=${伪装域名}&path=${encodeURIComponent(ws路径)}#${encodeURIComponent(remark + '-WS' + 节点备注)}`;
-		const grpcLink = `${协议类型}://${UUID}@${ip}:${port}?encryption=none&security=tls&sni=${伪装域名}&fp=randomized&alpn=h2&type=grpc&serviceName=${serviceName}&path=${encodeURIComponent(grpcPath)}#${encodeURIComponent(remark + '-gRPC' + 节点备注)}`;
+		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` + 
+			`encryption=none&` +
+			`security=tls&` +
+			`sni=${伪装域名}&` +
+			`fp=randomized&` +
+			`alpn=h3&` + 
+			`type=ws&` +
+			`host=${伪装域名}&` +
+            `path=${encodeURIComponent(最终路径)}` + 
+			`#${encodeURIComponent(addressid + 节点备注)}`;
 
-		return `${wsLink}\n${grpcLink}`;
+		return secureProtoLink;
 	}).join('\n');
 
-
-	// 处理 noTLS 节点 (仅 WebSocket)
-	if (noTLS == 'true') {
-		const noTlsAddresses = [...new Set(addressesnotls.concat(newAddressesnotlsapi, newAddressesnotlscsv))];
-		const notlsresponseBody = noTlsAddresses.map(address => {
-			const match = address.match(regex);
-			let ip = address, port = "80", remark = address;
-			if (match) {
-				ip = match[1];
-				port = match[2] || "80";
-				remark = match[3] || ip;
-			}
-			const 协议类型 = atob(protocolEncodedFlag);
-			const secureProtoLink = `${协议类型}://${UUID}@${ip}:${port}?encryption=none&security=none&type=ws&host=${host}&path=${encodeURIComponent(path)}#${encodeURIComponent(remark + '-WS-NoTLS')}`;
-			return secureProtoLink;
-		}).join('\n');
-		responseBody += `\n${notlsresponseBody}`;
-	}
-
-
-	if (link.length > 0) responseBody += '\n' + link.join('\n');
-	return btoa(responseBody);
+	let base64Response = responseBody; 
+	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
+	if (link.length > 0) base64Response += '\n' + link.join('\n');
+	return btoa(base64Response);
 }
-// ##################################################################
 
+// 优化 整理 函数
 async function 整理(内容) {
     if (!内容) return [];
     const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
         .replace(/^,|,$/g, '');
-
+    
     return 替换后的内容.split(',');
 }
 
@@ -2832,8 +2810,8 @@ function isValidIPv4(address) {
 }
 
 function 生成动态UUID(密钥) {
-	const 时区偏移 = 8;
-	const 起始日期 = new Date(2007, 6, 7, 更新时间, 0, 0);
+	const 时区偏移 = 8; 
+	const 起始日期 = new Date(2007, 6, 7, 更新时间, 0, 0); 
 	const 一周的毫秒数 = 1000 * 60 * 60 * 24 * 有效时间;
 
 	function 获取当前周数() {
@@ -2844,21 +2822,21 @@ function 生成动态UUID(密钥) {
 	}
 
 	function 生成UUID(基础字符串) {
-		const 编码器 = new TextEncoder();
-		return crypto.subtle.digest('SHA-256', 编码器.encode(基础字符串)).then((哈希) => {
+		const 哈希缓冲区 = new TextEncoder().encode(基础字符串);
+		return crypto.subtle.digest('SHA-256', 哈希缓冲区).then((哈希) => {
 			const 哈希数组 = Array.from(new Uint8Array(哈希));
 			const 十六进制哈希 = 哈希数组.map(b => b.toString(16).padStart(2, '0')).join('');
 			return `${十六进制哈希.substr(0, 8)}-${十六进制哈希.substr(8, 4)}-4${十六进制哈希.substr(13, 3)}-${(parseInt(十六进制哈希.substr(16, 2), 16) & 0x3f | 0x80).toString(16)}${十六进制哈希.substr(18, 2)}-${十六进制哈希.substr(20, 12)}`;
 		});
 	}
 
-	const 当前周数 = 获取当前周数();
+	const 当前周数 = 获取当前周数(); 
 	const 结束时间 = new Date(起始日期.getTime() + 当前周数 * 一周的毫秒数);
 
 	const 当前UUIDPromise = 生成UUID(密钥 + 当前周数);
 	const 上一个UUIDPromise = 生成UUID(密钥 + (当前周数 - 1));
 
-	const 到期时间UTC = new Date(结束时间.getTime() - 时区偏移 * 60 * 60 * 1000);
+	const 到期时间UTC = new Date(结束时间.getTime() - 时区偏移 * 60 * 60 * 1000); // UTC时间
 	const 到期时间字符串 = `到期时间(UTC): ${到期时间UTC.toISOString().slice(0, 19).replace('T', ' ')} (UTC+8): ${结束时间.toISOString().slice(0, 19).replace('T', ' ')}\n`;
 
 	return Promise.all([当前UUIDPromise, 上一个UUIDPromise, 到期时间字符串]);
@@ -2900,14 +2878,15 @@ async function handlePostRequest(request, env, txt) {
         const url = new URL(request.url);
         const type = url.searchParams.get('type');
 
+        // 根据类型保存到不同的KV
         switch(type) {
             case 'advanced':
                 await env.KV.put('settinggs.txt', content);
                 break;
-            default:
+            default: // 主列表内容保存到ADD.txt
                 await env.KV.put(txt, content);
         }
-
+        
         return new Response("保存成功");
     } catch (error) {
         console.error('保存KV时发生错误:', error);
@@ -2920,7 +2899,7 @@ async function handleGetRequest(env, txt) {
     let hasKV = !!env.KV;
     let proxyIPContent = '';
     let socks5Content = '';
-    let subContent = '';
+    let subContent = ''; 
     let subAPIContent = '';
     let subConfigContent = '';
     let nat64Content = '';
@@ -2928,7 +2907,7 @@ async function handleGetRequest(env, txt) {
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
-
+			
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
@@ -2960,84 +2939,279 @@ async function handleGetRequest(env, txt) {
                     --text-color: #333;
                     --background-color: #f5f5f5;
                 }
-                body { margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: var(--text-color); background-color: var(--background-color); }
-                .container { max-width: 1000px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-                .title { font-size: 1.5em; color: var(--text-color); margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid var(--border-color); }
-                .editor-container { width: 100%; margin: 20px 0; }
-                .editor { width: 100%; height: 520px; padding: 15px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 8px; font-family: Monaco, Consolas, "Courier New", monospace; font-size: 14px; line-height: 1.5; resize: vertical; transition: border-color 0.3s ease; }
-                .editor:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1); }
-                .button-group { display: flex; gap: 12px; margin-top: 15px; }
-                .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s ease; }
-                .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-                .btn-primary { background: var(--primary-color); color: white; }
-                .btn-primary:hover:not(:disabled) { background: var(--secondary-color); }
-                .btn-secondary { background: #666; color: white; }
-                .btn-secondary:hover:not(:disabled) { background: #555; }
-                .save-status { margin-left: 10px; font-size: 14px; color: #666; }
-                .notice-toggle { color: var(--primary-color); cursor: pointer; text-decoration: none; display: inline-block; margin: 10px 0; font-weight: 500; }
-                .notice-content { background: #f8f9fa; border-left: 4px solid var(--primary-color); padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0; }
-                .divider { height: 1px; background: var(--border-color); margin: 20px 0; }
-                @media (max-width: 768px) { body { padding: 10px; } .container { padding: 15px; } .editor { height: 400px; } }
-                .advanced-settings { margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid var(--border-color); }
-                .advanced-settings-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; cursor: pointer; }
-                .advanced-settings-content { display: none; }
-                .proxyip-editor { width: 100%; height: 100px; margin-top: 10px; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-family: Monaco, Consolas, "Courier New", monospace; font-size: 14px; resize: vertical; }
+                
+                body {
+                    margin: 0;
+                    padding: 20px;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    line-height: 1.6;
+                    color: var(--text-color);
+                    background-color: var(--background-color);
+                }
+
+                .container {
+                    max-width: 1000px;
+                    margin: 0 auto;
+                    background: white;
+                    padding: 25px;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+
+                .title {
+                    font-size: 1.5em;
+                    color: var(--text-color);
+                    margin-bottom: 20px;
+                    padding-bottom: 10px;
+                    border-bottom: 2px solid var(--border-color);
+                }
+
+                .editor-container {
+                    width: 100%;
+                    margin: 20px 0;
+                }
+
+                .editor {
+                    width: 100%;
+                    height: 520px;
+                    padding: 15px;
+                    box-sizing: border-box;
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
+                    font-size: 14px;
+                    line-height: 1.5;
+                    resize: vertical;
+                    transition: border-color 0.3s ease;
+                }
+
+                .editor:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+                }
+
+                .button-group {
+                    display: flex;
+                    gap: 12px;
+                    margin-top: 15px;
+                }
+
+                .btn {
+                    padding: 8px 20px;
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+
+                .btn:disabled {
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+
+                .btn-primary {
+                    background: var(--primary-color);
+                    color: white;
+                }
+
+                .btn-primary:hover:not(:disabled) {
+                    background: var(--secondary-color);
+                }
+
+                .btn-secondary {
+                    background: #666;
+                    color: white;
+                }
+
+                .btn-secondary:hover:not(:disabled) {
+                    background: #555;
+                }
+
+                .save-status {
+                    margin-left: 10px;
+                    font-size: 14px;
+                    color: #666;
+                }
+
+                .notice-toggle {
+                    color: var(--primary-color);
+                    cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                    margin: 10px 0;
+                    font-weight: 500;
+                }
+
+                .notice-content {
+                    background: #f8f9fa;
+                    border-left: 4px solid var(--primary-color);
+                    padding: 15px;
+                    margin: 10px 0;
+                    border-radius: 0 8px 8px 0;
+                }
+
+                .divider {
+                    height: 1px;
+                    background: var(--border-color);
+                    margin: 20px 0;
+                }
+
+                @media (max-width: 768px) {
+                    body {
+                        padding: 10px;
+                    }
+                    
+                    .container {
+                        padding: 15px;
+                    }
+                    
+                    .editor {
+                        height: 400px;
+                    }
+                }
+
+                .advanced-settings {
+                    margin: 20px 0;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    border: 1px solid var(--border-color);
+                }
+
+                .advanced-settings-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 15px;
+                    cursor: pointer;
+                }
+
+                .advanced-settings-content {
+                    display: none;
+                }
+
+                .proxyip-editor {
+                    width: 100%;
+                    height: 100px;
+                    margin-top: 10px;
+                    padding: 10px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 4px;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
+                    font-size: 14px;
+                    resize: vertical;
+                }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
+                
+                <!-- 修改高级设置部分 -->
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
                         <h3 style="margin: 0;">⚙️ 高级设置</h3>
                         <span id="advanced-settings-toggle">∨</span>
                     </div>
                     <div id="advanced-settings-content" class="advanced-settings-content">
+                        <!-- PROXYIP设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="proxyip"><strong>PROXYIP 设置</strong></label>
                             <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
-                            <textarea id="proxyip" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${proxyIPContent}</textarea>
+                            <textarea 
+                                id="proxyip" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}"
+                            >${proxyIPContent}</textarea>
                         </div>
+
+                        <!-- SOCKS5设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="socks5"><strong>SOCKS5 设置</strong></label>
                             <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
-                            <textarea id="socks5" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
+                            <textarea 
+                                id="socks5" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}"
+                            >${socks5Content}</textarea>
                         </div>
+
+                        <!-- SUB设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="sub"><strong>SUB 设置</strong></label>
                             <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
-                            <textarea id="sub" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
+                            <textarea 
+                                id="sub" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}"
+                            >${subContent}</textarea>
                         </div>
+                        
+                        <!-- SUBAPI设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="subapi"><strong>SUBAPI 设置</strong></label>
                             <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
-                            <textarea id="subapi" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
+                            <textarea 
+                                id="subapi" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}"
+                            >${subAPIContent}</textarea>
                         </div>
+                        
+                        <!-- SUBCONFIG设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="subconfig"><strong>SUBCONFIG 设置</strong></label>
                             <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
-                            <textarea id="subconfig" class="proxyip-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
+                            <textarea 
+                                id="subconfig" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}"
+                            >${subConfigContent}</textarea>
                         </div>
+
+                        <!-- NAT64/DNS64 设置 -->
                         <div style="margin-bottom: 20px;">
                             <label for="nat64"><strong>NAT64/DNS64</strong></label>
-    						<p style="margin: 5px 0; color: #666;"><a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a></p>
-                            <textarea id="nat64" class="proxyip-editor" placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1">${nat64Content}</textarea>
+    						<p style="margin: 5px 0; color: #666;">
+        					<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
+    						</p>
+                            <textarea 
+                                id="nat64" 
+                                class="proxyip-editor" 
+                                placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1"
+                            >${nat64Content}</textarea>
                         </div>
+
 						<script>
-  							document.getElementById('nat64-link').setAttribute('href', atob('aHR0cHM6Ly9uYXQ2NC54eXo='));
+  							const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
+  							const decodedURL = atob(encodedURL);
+  							document.getElementById('nat64-link').setAttribute('href', decodedURL);
 						</script>
+                        <!-- 统一的保存按钮 -->
                         <div>
                             <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
                 </div>
-                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">ℹ️ 注意事项 ∨</a>
+
+                <!-- 保持现有内容 -->
+                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                    ℹ️ 注意事项 ∨
+                </a>
+                
                 <div id="noticeContent" class="notice-content" style="display: none">
 				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
+
                 <div class="editor-container">
-                    ${hasKV ? `<textarea class="editor" placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}" id="content">${content}</textarea>
+                    ${hasKV ? `
+                        <textarea class="editor" 
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+                            id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                             <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
@@ -3048,32 +3222,45 @@ async function handleGetRequest(env, txt) {
                     ` : '<p>未绑定KV空间</p>'}
                 </div>
             </div>
+
             <script>
             function goBack() {
                 const pathParts = window.location.pathname.split('/');
-                pathParts.pop();
+                pathParts.pop(); // 移除 "edit"
                 const newPath = pathParts.join('/');
                 window.location.href = newPath;
             }
+
             async function saveContent(button) {
                 try {
                     button.disabled = true;
                     const content = document.getElementById('content').value;
                     const saveStatus = document.getElementById('saveStatus');
+                    
                     saveStatus.textContent = '保存中...';
+                    
                     const response = await fetch(window.location.href, {
                         method: 'POST',
                         body: content
                     });
+
                     if (response.ok) {
                         saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => { saveStatus.textContent = ''; }, 3000);
-                    } else { throw new Error('保存失败'); }
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败');
+                    }
                 } catch (error) {
                     const saveStatus = document.getElementById('saveStatus');
                     saveStatus.textContent = '❌ ' + error.message;
-                } finally { button.disabled = false; }
+                    console.error('保存时发生错误:', error);
+                } finally {
+                    button.disabled = false;
+                }
             }
+
             function toggleNotice() {
                 const noticeContent = document.getElementById('noticeContent');
                 const noticeToggle = document.getElementById('noticeToggle');
@@ -3085,6 +3272,7 @@ async function handleGetRequest(env, txt) {
                     noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
                 }
             }
+
             function toggleAdvancedSettings() {
                 const content = document.getElementById('advanced-settings-content');
                 const toggle = document.getElementById('advanced-settings-toggle');
@@ -3096,9 +3284,12 @@ async function handleGetRequest(env, txt) {
                     toggle.textContent = '∨';
                 }
             }
+
+            // 修改保存设置函数
             async function saveSettings() {
                 const saveStatus = document.getElementById('settings-save-status');
                 saveStatus.textContent = '保存中...';
+                
                 try {
                     const advancedSettings = {
                         proxyip: document.getElementById('proxyip').value,
@@ -3108,16 +3299,27 @@ async function handleGetRequest(env, txt) {
                         subconfig: document.getElementById('subconfig').value,
                         nat64: document.getElementById('nat64').value
                     };
+
                     const response = await fetch(window.location.href + '?type=advanced', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify(advancedSettings)
                     });
+
                     if (response.ok) {
                         saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => { saveStatus.textContent = ''; }, 3000);
-                    } else { throw new Error('保存失败: ' + await response.text()); }
-                } catch (error) { saveStatus.textContent = '❌ ' + error.message; }
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败: ' + await response.text());
+                    }
+                } catch (error) {
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存设置时发生错误:', error);
+                }
             }
             </script>
         </body>
