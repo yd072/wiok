@@ -358,26 +358,25 @@ async function resolveToIPv6(target) {
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
         const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
         
-        // --- 关键修改 ---
         if (isIPv6(nat64)) {
             return nat64;
         } else {
-            // 如果没得到合法的IPv6，就抛出错误
             throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
         }
     } catch (error) {
-        // --- 关键修改 ---
-        // 将底层的错误继续向上抛出，而不是返回一个默认值
         throw new Error(`NAT64 resolution failed: ${error.message}`);
 	}
 }
 
-// --- 关键修改：在主 fetch 函数中增加 gRPC 路由 ---
 export default {
 	async fetch(request, env, ctx) {
 		try {
+            // 【默认伪装】定义默认伪装的网址
+            const defaultHostname = 'www.bing.com';
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
+            const url = new URL(request.url);
+
 			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
 			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
 				动态UUID = env.KEY || env.TOKEN || userID;
@@ -390,168 +389,11 @@ export default {
 			}
 
 			if (!userID) {
-				// 生成美化后的系统信息页面
-				const html = `
-				<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1">
-							<title>系统信息</title>
-							<style>
-								:root {
-									--primary-color: #4CAF50;
-									--border-color: #e0e0e0;
-									--background-color: #f5f5f5;
-									--warning-bg: #fff3f3;
-									--warning-border: #ffcdd2;
-									--warning-text: #d32f2f;
-								}
-								
-								body {
-									margin: 0;
-									padding: 20px;
-									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-									line-height: 1.6;
-									background-color: var(--background-color);
-								}
-
-								.container {
-									max-width: 800px;
-									margin: 0 auto;
-									background: white;
-									padding: 25px;
-									border-radius: 10px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-								}
-
-								.title {
-									font-size: 1.5em;
-									color: var(--primary-color);
-									margin-bottom: 20px;
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.title .icon {
-									font-size: 1.2em;
-								}
-
-								.warning-box {
-									background-color: var(--warning-bg);
-									border: 1px solid var(--warning-border);
-									border-radius: 6px;
-									padding: 15px;
-									margin-bottom: 20px;
-									color: var(--warning-text);
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.warning-box .icon {
-									font-size: 1.2em;
-								}
-
-								.info-grid {
-									display: grid;
-									grid-template-columns: auto 1fr;
-									gap: 12px;
-									background: #fff;
-									border-radius: 8px;
-									overflow: hidden;
-								}
-
-								.info-row {
-									display: contents;
-								}
-
-								.info-row:hover > * {
-									background-color: #f8f9fa;
-								}
-
-								.info-label {
-									padding: 12px 15px;
-									color: #666;
-									font-weight: 500;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-value {
-									padding: 12px 15px;
-									color: #333;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-row:last-child .info-label,
-								.info-row:last-child .info-value {
-									border-bottom: none;
-								}
-
-								@media (max-width: 768px) {
-									body {
-										padding: 10px;
-									}
-									
-									.container {
-										padding: 15px;
-									}
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="title">
-									<span class="icon">🔍</span>
-									系统信息
-								</div>
-
-								<div class="warning-box">
-									<span class="icon">⚠️</span>
-									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
-								</div>
-
-								<div class="info-grid">
-									<div class="info-row">
-										<div class="info-label">TLS 版本</div>
-										<div class="info-value">${request.cf?.tlsVersion || 'TLSv1.3'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">HTTP 协议</div>
-										<div class="info-value">${request.cf?.httpProtocol || 'HTTP/2'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 TCP RTT</div>
-										<div class="info-value">${request.cf?.clientTcpRtt || '3'} ms</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">地理位置</div>
-										<div class="info-value">${request.cf?.continent || 'EU'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">时区</div>
-										<div class="info-value">${request.cf?.timezone || 'Europe/Vilnius'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 IP</div>
-										<div class="info-value">${request.headers.get('CF-Connecting-IP') || '127.0.0.1'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">User Agent</div>
-										<div class="info-value">${request.headers.get('User-Agent') || 'Mozilla/5.0'}</div>
-									</div>
-								</div>
-							</div>
-						</body>
-						</html>`;
-
-				return new Response(html, {
-					status: 200,
-					headers: {
-						'content-type': 'text/html;charset=utf-8',
-					},
-				});
+                // 【默认伪装增强】如果未设置UUID，则启用伪装
+                if (env.URL302) return Response.redirect(env.URL302, 302);
+                if (env.URL) return 代理URL(request, env.URL, url);
+                // 如果环境变量都未设置，则使用默认的伪装地址
+                return 代理URL(request, `https://${defaultHostname}`, url);
 			}
 
 			const currentDate = new Date();
@@ -643,55 +485,8 @@ export default {
 			}
 
 			const upgradeHeader = request.headers.get('Upgrade');
-			const url = new URL(request.url);
-
-			// --- 路由逻辑 ---
-			if (upgradeHeader && upgradeHeader === 'websocket') {
-				// 保持原有的 WebSocket 逻辑不变
-				socks5Address = url.searchParams.get('socks5') || socks5Address;
-				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
-				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
-					socks5Address = url.pathname.split('://')[1].split('#')[0];
-					if (socks5Address.includes('@')) {
-						let userPassword = socks5Address.split('@')[0];
-						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
-						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
-						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
-					}
-				}
-
-				if (socks5Address) {
-					try {
-						parsedSocks5Address = socks5AddressParser(socks5Address);
-						enableSocks = true;
-					} catch (err) {
-						console.log(err.toString());
-						enableSocks = false;
-					}
-				} else {
-					enableSocks = false;
-				}
-
-				if (url.searchParams.has('proxyip')) {
-					proxyIP = url.searchParams.get('proxyip');
-					enableSocks = false;
-				} else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
-					proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
-					enableSocks = false;
-				} else if (new RegExp('/proxyip.', 'i').test(url.pathname)) {
-					proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
-					enableSocks = false;
-				} else if (new RegExp('/pyip=', 'i').test(url.pathname)) {
-					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
-					enableSocks = false;
-				}
-				return await secureProtoOverWSHandler(request);
-
-			} else if (url.pathname.startsWith("/grpc")) {
-				// 【新增】处理 gRPC 请求的逻辑
-				return await vlessOverGRPCHandler(request);
-			} else {
-				// --- 保持原有的订阅和页面处理逻辑不变 ---
+			
+			if (!upgradeHeader || upgradeHeader !== 'websocket') {
 				if (env.ADD) addresses = await 整理(env.ADD);
 				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
 				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
@@ -730,177 +525,17 @@ export default {
 
 				const 路径 = url.pathname.toLowerCase();
 				if (路径 == '/') {
+                    // 【默认伪装增强】如果访问根路径，则启用伪装
 					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(env.URL, url);
-					else {
-						// 生成美化后的系统信息页面
-						const html = `
-						<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1">
-							<title>系统信息</title>
-							<style>
-								:root {
-									--primary-color: #4CAF50;
-									--border-color: #e0e0e0;
-									--background-color: #f5f5f5;
-									--warning-bg: #fff3f3;
-									--warning-border: #ffcdd2;
-									--warning-text: #d32f2f;
-								}
-								
-								body {
-									margin: 0;
-									padding: 20px;
-									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-									line-height: 1.6;
-									background-color: var(--background-color);
-								}
+					if (env.URL) return await 代理URL(request, env.URL, url);
+                    // 如果环境变量都未设置，则使用默认的伪装地址
+                    return await 代理URL(request, `https://${defaultHostname}`, url);
 
-								.container {
-									max-width: 800px;
-									margin: 0 auto;
-									background: white;
-									padding: 25px;
-									border-radius: 10px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-								}
-
-								.title {
-									font-size: 1.5em;
-									color: var(--primary-color);
-									margin-bottom: 20px;
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.title .icon {
-									font-size: 1.2em;
-								}
-
-								.warning-box {
-									background-color: var(--warning-bg);
-									border: 1px solid var(--warning-border);
-									border-radius: 6px;
-									padding: 15px;
-									margin-bottom: 20px;
-									color: var(--warning-text);
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.warning-box .icon {
-									font-size: 1.2em;
-								}
-
-								.info-grid {
-									display: grid;
-									grid-template-columns: auto 1fr;
-									gap: 12px;
-									background: #fff;
-									border-radius: 8px;
-									overflow: hidden;
-								}
-
-								.info-row {
-									display: contents;
-								}
-
-								.info-row:hover > * {
-									background-color: #f8f9fa;
-								}
-
-								.info-label {
-									padding: 12px 15px;
-									color: #666;
-									font-weight: 500;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-value {
-									padding: 12px 15px;
-									color: #333;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-row:last-child .info-label,
-								.info-row:last-child .info-value {
-									border-bottom: none;
-								}
-
-								@media (max-width: 768px) {
-									body {
-										padding: 10px;
-									}
-									
-									.container {
-										padding: 15px;
-									}
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="title">
-									<span class="icon">🔍</span>
-									系统信息
-								</div>
-
-								<!--<div class="warning-box">
-									<span class="icon">⚠️</span>
-									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
-								</div> -->
-
-								<div class="info-grid">
-									<div class="info-row">
-										<div class="info-label">TLS 版本</div>
-										<div class="info-value">${request.cf?.tlsVersion || 'TLSv1.3'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">HTTP 协议</div>
-										<div class="info-value">${request.cf?.httpProtocol || 'HTTP/2'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 TCP RTT</div>
-										<div class="info-value">${request.cf?.clientTcpRtt || '3'} ms</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">地理位置</div>
-										<div class="info-value">${request.cf?.continent || 'EU'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">时区</div>
-										<div class="info-value">${request.cf?.timezone || 'Europe/Vilnius'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 IP</div>
-										<div class="info-value">${request.headers.get('CF-Connecting-IP') || '127.0.0.1'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">User Agent</div>
-										<div class="info-value">${request.headers.get('User-Agent') || 'Mozilla/5.0'}</div>
-									</div>
-								</div>
-							</div>
-						</body>
-						</html>`;
-
-						return new Response(html, {
-							status: 200,
-							headers: {
-								'content-type': 'text/html;charset=utf-8',
-							},
-						});
-					}
 				} else if (路径 === `/${fakeUserID}`) {
 					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 					return new Response(`${fakeConfig}`, { status: 200 });
 				} 
-				// 【方案一：核心安全修复】在这里修改了判断逻辑
+				
 				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
 					const html = await KV(request, env);
 					return html;
@@ -940,114 +575,52 @@ export default {
 						});
 					}
 				} else {
+                    // 【默认伪装增强】对于所有其他无效路径，同样启用伪装
 					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(env.URL, url);
-					else {
-						// 美化错误页面
-						const html = `
-						<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1">
-							<title>错误提示</title>
-							<style>
-								:root {
-									--primary-color: #e74c3c;
-									--border-color: #e0e0e0;
-									--background-color: #f5f5f5;
-									--error-bg: #fef5f5;
-									--error-border: #f8d7da;
-									--error-text: #721c24;
-								}
-								
-								body {
-									margin: 0;
-									padding: 20px;
-									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-									line-height: 1.6;
-									background-color: var(--background-color);
-								}
-
-								.container {
-									max-width: 600px;
-									margin: 50px auto;
-									background: white;
-									padding: 25px;
-									border-radius: 10px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-									text-align: center;
-								}
-
-								.error-icon {
-									font-size: 60px;
-									color: var(--primary-color);
-									margin-bottom: 20px;
-								}
-
-								.error-title {
-									font-size: 24px;
-									color: var(--error-text);
-									margin-bottom: 15px;
-								}
-
-								.error-message {
-									background-color: var(--error-bg);
-									border: 1px solid var(--error-border);
-									border-radius: 6px;
-									padding: 15px;
-									margin: 20px 0;
-									color: var(--error-text);
-									font-size: 16px;
-								}
-
-								.back-button {
-									display: inline-block;
-									padding: 10px 20px;
-									background-color: var(--primary-color);
-									color: white;
-									border-radius: 5px;
-									text-decoration: none;
-									font-weight: 500;
-									margin-top: 20px;
-									transition: background-color 0.3s;
-								}
-
-								.back-button:hover {
-									background-color: #c0392b;
-								}
-
-								@media (max-width: 768px) {
-									body {
-										padding: 10px;
-									}
-									
-									.container {
-										padding: 15px;
-									}
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="error-icon">⚠️</div>
-								<div class="error-title">访问错误</div>
-								<div class="error-message">
-									不用怀疑！你的 UUID 输入错误！请检查配置并重试。
-								</div>
-								<a href="/" class="back-button">返回首页</a>
-							</div>
-						</body>
-						</html>`;
-
-						return new Response(html, { 
-							status: 404,
-							headers: {
-								'content-type': 'text/html;charset=utf-8',
-							},
-						});
+					if (env.URL) return await 代理URL(request, env.URL, url);
+                    return await 代理URL(request, `https://${defaultHostname}`, url);
+				}
+			} else {
+				socks5Address = url.searchParams.get('socks5') || socks5Address;
+				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
+				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
+					socks5Address = url.pathname.split('://')[1].split('#')[0];
+					if (socks5Address.includes('@')) {
+						let userPassword = socks5Address.split('@')[0];
+						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
+						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
+						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
 					}
 				}
+
+				if (socks5Address) {
+					try {
+						parsedSocks5Address = socks5AddressParser(socks5Address);
+						enableSocks = true;
+					} catch (err) {
+						let e = err;
+						console.log(e.toString());
+						enableSocks = false;
+					}
+				} else {
+					enableSocks = false;
+				}
+
+				if (url.searchParams.has('proxyip')) {
+					proxyIP = url.searchParams.get('proxyip');
+					enableSocks = false;
+				} else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
+					proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
+					enableSocks = false;
+				} else if (new RegExp('/proxyip.', 'i').test(url.pathname)) {
+					proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
+					enableSocks = false;
+				} else if (new RegExp('/pyip=', 'i').test(url.pathname)) {
+					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
+					enableSocks = false;
+				}
+
+				return await secureProtoOverWSHandler(request);
 			}
 		} catch (err) {
 			let e = err;
@@ -1055,143 +628,6 @@ export default {
 		}
 	},
 };
-
-// 【新增】gRPC 数据帧头部长度
-const GRPC_DATA_FRAME_HEADER_LENGTH = 5;
-
-// 【新增】为数据块添加 gRPC 数据帧头部
-function prependGRPCFrame(data) {
-	const frame = new Uint8Array(GRPC_DATA_FRAME_HEADER_LENGTH + data.byteLength);
-	// gRPC 数据帧头部：第一个字节为 0（未压缩），后四个字节为数据长度（大端序）
-	frame[0] = 0x00;
-	new DataView(frame.buffer).setUint32(1, data.byteLength, false);
-	frame.set(data, GRPC_DATA_FRAME_HEADER_LENGTH);
-	return frame;
-}
-
-// 【新增】处理 gRPC 请求的主函数
-async function vlessOverGRPCHandler(request) {
-    const log = (info, event = '') => {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] [gRPC] ${info}`, event);
-    };
-
-    if (request.method !== 'POST' || !request.body) {
-        return new Response('Method Not Allowed', { status: 405 });
-    }
-
-    // 使用 TransformStream 来处理响应流
-    const { readable, writable } = new TransformStream();
-    const responseWriter = writable.getWriter();
-
-    let remoteSocketWrapper = { value: null };
-    let isDns = false;
-    let unprocessedData = new Uint8Array(0);
-
-    // 异步处理请求体，不阻塞响应返回
-    (async () => {
-        const reader = request.body.getReader();
-        try {
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                // 将新收到的数据块与之前未处理完的数据合并
-                const newData = new Uint8Array(unprocessedData.length + value.length);
-                newData.set(unprocessedData, 0);
-                newData.set(value, unprocessedData.length);
-                unprocessedData = newData;
-
-                // 循环处理 gRPC 数据帧
-                while (unprocessedData.length >= GRPC_DATA_FRAME_HEADER_LENGTH) {
-                    const dataView = new DataView(unprocessedData.buffer, unprocessedData.byteOffset, unprocessedData.byteLength);
-                    const messageLength = dataView.getUint32(1, false);
-
-                    if (unprocessedData.length < GRPC_DATA_FRAME_HEADER_LENGTH + messageLength) {
-                        // 数据不完整，等待下一个数据块
-                        break;
-                    }
-
-                    const message = unprocessedData.slice(GRPC_DATA_FRAME_HEADER_LENGTH, GRPC_DATA_FRAME_HEADER_LENGTH + messageLength);
-                    unprocessedData = unprocessedData.slice(GRPC_DATA_FRAME_HEADER_LENGTH + messageLength);
-
-                    // 如果远程连接还未建立（即处理第一个 gRPC 消息）
-                    if (!remoteSocketWrapper.value) {
-                        const {
-                            hasError,
-                            addressRemote,
-                            portRemote,
-                            rawDataIndex,
-                            addressType,
-                            isUDP,
-                        } = processsecureProtoHeader(message, userID);
-
-                        if (hasError) throw new Error('gRPC VLESS header processing failed');
-                        if (isUDP) throw new Error('gRPC transport does not support UDP');
-
-						log(`处理 gRPC 出站连接 ${addressRemote}:${portRemote}`);
-                        // 建立远程连接，复用现有的 handleTCPOutBound 逻辑
-						// 创建一个模拟的 WebSocket 对象用于传递给 remoteSocketToWS
-						const mockWebSocket = {
-							readyState: 1, // 模拟 OPEN 状态
-							close: () => {
-								// 关闭 gRPC 响应流
-								responseWriter.close().catch(err => log('Error closing gRPC response writer', err.message));
-							},
-							send: (data) => {
-								// 将数据打包成 gRPC 帧并发送
-								try {
-									responseWriter.write(prependGRPCFrame(data));
-								} catch (err) {
-									log('Error writing to gRPC response stream', err.message);
-								}
-							}
-						};
-
-                        await handleTCPOutBound(
-                            remoteSocketWrapper,
-                            addressType,
-                            addressRemote,
-                            portRemote,
-                            message.slice(rawDataIndex), // VLESS header 之后的数据
-                            mockWebSocket, // 传递模拟的 WebSocket 对象
-                            null, // gRPC 不需要 VLESS 响应头
-                            log
-                        );
-                    } else {
-                        // 如果远程连接已建立，直接写入数据
-                        const writer = remoteSocketWrapper.value.writable.getWriter();
-                        await writer.write(message);
-                        writer.releaseLock();
-                    }
-                }
-            }
-        } catch (error) {
-            log('gRPC stream processing error', error.message);
-            responseWriter.close().catch(() => {});
-            if (remoteSocketWrapper.value) {
-                remoteSocketWrapper.value.close().catch(() => {});
-            }
-        } finally {
-			// 确保所有资源都被关闭
-			reader.cancel().catch(() => {});
-			responseWriter.close().catch(() => {});
-			if (remoteSocketWrapper.value) {
-				remoteSocketWrapper.value.close().catch(() => {});
-			}
-		}
-    })().catch(err => {
-        log('Error in gRPC handler background task', err);
-    });
-
-    return new Response(readable, {
-        status: 200,
-        headers: {
-            'Content-Type': 'application/grpc',
-            'grpc-encoding': 'identity',
-        },
-    });
-}
 
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
@@ -1923,37 +1359,60 @@ async function 双重哈希(文本) {
     return 第二次十六进制.toLowerCase();
 }
 
-async function 代理URL(代理网址, 目标网址, 调试模式 = false) {
+/**
+ * 反向代理函数
+ * @param {Request} request 原始请求对象
+ * @param {string} 代理网址 伪装网站的URL
+ * @param {URL} 目标网址 原始请求的URL对象
+ * @param {boolean} 调试模式
+ * @returns {Promise<Response>}
+ */
+async function 代理URL(request, 代理网址, 目标网址, 调试模式 = false) {
     try {
-    const 网址列表 = await 整理(代理网址);
+        const 网址列表 = await 整理(代理网址);
         if (!网址列表 || 网址列表.length === 0) {
             throw new Error('代理网址列表为空');
         }
-    const 完整网址 = 网址列表[Math.floor(Math.random() * 网址列表.length)];
+        const 完整网址 = 网址列表[Math.floor(Math.random() * 网址列表.length)];
 
-    const 解析后的网址 = new URL(完整网址);
+        const 解析后的网址 = new URL(完整网址);
         if (调试模式) console.log(`代理 URL: ${解析后的网址}`);
 
-        const 目标URL = new URL(目标网址, 解析后的网址);
+        // 正确拼接目标路径和查询参数
+        const 目标URL = new URL(目标网址.pathname + 目标网址.search, 解析后的网址);
 
-        const 响应 = await fetch(目标URL.toString(), { method: 'GET' });
+        // 复制原始请求头，并进行一些清理
+        const newHeaders = new Headers(request.headers);
+        newHeaders.set('Host', 解析后的网址.hostname); // 将Host头修改为代理目标的域名
+        newHeaders.set('Referer', 解析后的网址.origin); // 可选：伪造或设置正确的Referer
 
-    const 新响应 = new Response(响应.body, {
-        status: 响应.status,
-        statusText: 响应.statusText,
+        const 响应 = await fetch(目标URL.toString(), {
+            method: request.method, // 传递原始请求方法
+            headers: newHeaders,    // 传递处理过的请求头，增强伪装
+            body: request.body,     // 传递请求体，支持POST等方法
+            redirect: 'manual'      // 手动处理重定向
+        });
+
+        const 新响应 = new Response(响应.body, {
+            status: 响应.status,
+            statusText: 响应.statusText,
             headers: new Headers(响应.headers)
-    });
+        });
 
-        新响应.headers.set('X-New-URL', 目标URL.toString());
+        // 移除可能暴露信息的特有请求头
+        新响应.headers.delete('cf-ray');
+        新响应.headers.delete('cf-connecting-ip');
+        新响应.headers.delete('x-forwarded-proto');
+        新响应.headers.delete('x-real-ip');
 
-    return 新响应;
+        return 新响应;
     } catch (error) {
         console.error(`代理请求失败: ${error.message}`);
         return new Response(`代理请求失败: ${error.message}`, { status: 500 });
     }
 }
 
-// --- 关键修改：配置信息函数，增加 gRPC 配置 ---
+
 const protocolEncodedFlag = atob('ZG14bGMzTT0=');
 function 配置信息(UUID, 域名地址) {
 	const 协议类型 = atob(protocolEncodedFlag);
@@ -1961,13 +1420,11 @@ function 配置信息(UUID, 域名地址) {
 	const 别名 = FileName;
 	let 地址 = 域名地址;
 	let 端口 = 443;
-	let grpcServiceName = 'grpc'; // 约定的 gRPC 服务名（路径前缀）
 
 	const 用户ID = UUID;
 	const 加密方式 = 'none';
 
-	const 传输层协议_ws = 'ws';
-	const 传输层协议_grpc = 'grpc';
+	const 传输层协议 = 'ws';
 	const 伪装域名 = 域名地址;
 	const 路径 = path;
 
@@ -1981,22 +1438,13 @@ function 配置信息(UUID, 域名地址) {
 		传输层安全 = ['', false];
 	}
 
-	
-	const 威图瑞_ws = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议_ws}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名 + "-WS")}`;
-	
-
-	const 猫猫猫_ws = `- {name: ${FileName}-WS, server: ${地址}, port: ${端口}, type: ${协议类型.toLowerCase()}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h2,http/1.1], udp: false, sni: ${SNI}, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议_ws}, ws-opts: {path: "${路径}", headers: {Host: "${伪装域名}"}}}`;
-	
-
-	const 猫猫猫_grpc = `- {name: ${FileName}-gRPC, server: ${地址}, port: ${端口}, type: ${协议类型.toLowerCase()}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h2], udp: false, sni: ${SNI}, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议_grpc}, grpc-opts: {grpc-service-name: "${grpcServiceName}"}}`;
-
-	const 猫猫猫 = `${猫猫猫_ws}\n${猫猫猫_grpc}`;
-
-	return [威图瑞_ws, 猫猫猫];
+	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
+	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
+	return [威图瑞, 猫猫猫];
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
@@ -2190,8 +1638,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 	const userAgent = UA.toLowerCase();
 	const Config = 配置信息(uuid, hostName);
-	const proxyConfig = Config[0]; 
-	const clash = Config[1]; 
+	const proxyConfig = Config[0];
+	const clash = Config[1];
 	let proxyhost = "";
 	if (hostName.includes(".workers.dev")) {
 		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
@@ -2469,18 +1917,18 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					</div>
 
 					<div class="section">
-						<div class="section-title">📝 节点配置 (V2RayN/Shadowrocket/v2rayNG)</div>
+						<div class="section-title">📝 proxyConfig</div>
 						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制 VLESS-WS 配置</button>
+							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
 							<div style="word-break: break-all; overflow-wrap: anywhere;">${proxyConfig}</div>
 							<div id="qrcode_proxyConfig" class="qrcode-container"></div>
 						</div>
 					</div>
 
 					<div class="section">
-						<div class="section-title">⚙️ Clash Meta / Sing-box 订阅节点 (包含WS和gRPC)</div>
+						<div class="section-title">⚙️ Clash Meta 配置</div>
 						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<div style="word-break: break-all; overflow-wrap: anywhere;">${clash.replace(/\n/g, '<br>')}</div>
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${clash}</div>
 						</div>
 					</div>
 
@@ -2761,24 +2209,21 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-// --- 关键修改：本地订阅生成函数，增加 gRPC 节点 ---
 function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
-	let allNodes = []; // 使用一个数组来收集所有节点
-
+	let notlsresponseBody;
 	if (noTLS == 'true') {
 		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
 		const uniqueAddressesnotls = [...new Set(addressesnotls)];
 
-		uniqueAddressesnotls.forEach(address => {
+		notlsresponseBody = uniqueAddressesnotls.map(address => {
 			let port = "-1";
 			let addressid = address;
-			
-			// ... [解析 noTLS address, port, addressid 的逻辑保持不变]
-			const match = address.match(regex);
+
+			const match = addressid.match(regex);
 			if (!match) {
 				if (address.includes(':') && address.includes('#')) {
 					const parts = address.split(':');
@@ -2804,7 +2249,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				port = match[2] || port;
 				addressid = match[3] || address;
 			}
-			
+
 			const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
 			if (!isValidIPv4(address) && port == "-1") {
 				for (let httpPort of httpPorts) {
@@ -2815,7 +2260,6 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 				}
 			}
 			if (port == "-1") port = "80";
-
 
 			let 伪装域名 = host;
 			let 最终路径 = path;
@@ -2830,31 +2274,32 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `path=${encodeURIComponent(最终路径)}` + 
                 `#${encodeURIComponent(addressid + 节点备注)}`;
 
-			allNodes.push(secureProtoLink);
-		});
+			return secureProtoLink;
+
+		}).join('\n');
+
 	}
 
 	const uniqueAddresses = [...new Set(addresses)];
 
-	uniqueAddresses.forEach(addressItem => {
+	const responseBody = uniqueAddresses.map(address => {
 		let port = "-1";
-		let addressid = addressItem;
-		let address = addressItem;
-		
-		const match = addressItem.match(regex);
+		let addressid = address;
+
+		const match = addressid.match(regex);
 		if (!match) {
-			if (addressItem.includes(':') && addressItem.includes('#')) {
-				const parts = addressItem.split(':');
+			if (address.includes(':') && address.includes('#')) {
+				const parts = address.split(':');
 				address = parts[0];
 				const subParts = parts[1].split('#');
 				port = subParts[0];
 				addressid = subParts[1];
-			} else if (addressItem.includes(':')) {
-				const parts = addressItem.split(':');
+			} else if (address.includes(':')) {
+				const parts = address.split(':');
 				address = parts[0];
 				port = parts[1];
-			} else if (addressItem.includes('#')) {
-				const parts = addressItem.split('#');
+			} else if (address.includes('#')) {
+				const parts = address.split('#');
 				address = parts[0];
 				addressid = parts[1];
 			}
@@ -2881,7 +2326,6 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		let 伪装域名 = host;
 		let 最终路径 = path;
 		let 节点备注 = '';
-		let grpcServiceName = 'grpc';
 		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
 		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
 
@@ -2893,37 +2337,24 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 
 		const 协议类型 = atob(protocolEncodedFlag);
 
-		// 生成 WS 节点
-		const wsLink = `${协议类型}://${UUID}@${address}:${port}?` + 
+		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` + 
 			`encryption=none&` +
 			`security=tls&` +
 			`sni=${伪装域名}&` +
 			`fp=randomized&` +
-			`alpn=h2,http/1.1&` + 
+			`alpn=h3&` + 
 			`type=ws&` +
 			`host=${伪装域名}&` +
             `path=${encodeURIComponent(最终路径)}` + 
-			`#${encodeURIComponent(addressid + 节点备注 + "-WS")}`;
-		allNodes.push(wsLink);
-		
-		// 生成 gRPC 节点
-		const grpcLink = `${协议类型}://${UUID}@${address}:${port}?` + 
-			`encryption=none&` +
-			`security=tls&` +
-			`sni=${伪装域名}&` +
-			`fp=randomized&` +
-			`alpn=h2&` + 
-			`type=grpc&` +
-			`host=${伪装域名}&`+
-			`serviceName=${grpcServiceName}` +
-			`#${encodeURIComponent(addressid + 节点备注 + "-gRPC")}`;
-		allNodes.push(grpcLink);
-	});
+			`#${encodeURIComponent(addressid + 节点备注)}`;
 
-	if (link.length > 0) allNodes.push(...link);
-	
-	const responseBody = allNodes.join('\n');
-	return btoa(responseBody);
+		return secureProtoLink;
+	}).join('\n');
+
+	let base64Response = responseBody; 
+	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
+	if (link.length > 0) base64Response += '\n' + link.join('\n');
+	return btoa(base64Response);
 }
 
 // 优化 整理 函数
