@@ -1,163 +1,4 @@
 
-// --- START OF FILE _worker.js ---
-
-// =================================================================
-//  伪装页面：服务状态页 (Status Page)
-// =================================================================
-async function statusPage() {
-    const html = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Service Status</title>
-        <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0ZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiIGZpbGw9IiMyZGNlODkiLz48L3N2Zz4=">
-        <style>
-            :root {
-                --bg-color: #f4f7f9;
-                --card-bg-color: #ffffff;
-                --text-color: #333;
-                --primary-color: #2dce89; /* Green for operational */
-                --secondary-color: #8898aa;
-                --border-color: #e9ecef;
-                --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            }
-            body {
-                margin: 0;
-                font-family: var(--font-family);
-                background-color: var(--bg-color);
-                color: var(--text-color);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-                padding: 20px;
-                box-sizing: border-box;
-            }
-            .container {
-                max-width: 800px;
-                width: 100%;
-                background-color: var(--card-bg-color);
-                border-radius: 8px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                padding: 40px;
-                box-sizing: border-box;
-            }
-            .header {
-                border-bottom: 1px solid var(--border-color);
-                padding-bottom: 20px;
-                margin-bottom: 30px;
-            }
-            .header h1 {
-                margin: 0;
-                font-size: 24px;
-            }
-            .header .all-systems-operational {
-                color: var(--primary-color);
-                font-size: 18px;
-                font-weight: 600;
-                margin-top: 10px;
-            }
-            .service-group h2 {
-                font-size: 18px;
-                color: var(--text-color);
-                margin-bottom: 15px;
-            }
-            .service-item {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 15px 0;
-                border-bottom: 1px solid var(--border-color);
-            }
-            .service-item:last-child {
-                border-bottom: none;
-            }
-            .service-name {
-                font-size: 16px;
-            }
-            .service-status {
-                font-size: 16px;
-                font-weight: 600;
-                color: var(--primary-color);
-            }
-            .footer {
-                margin-top: 30px;
-                text-align: center;
-                font-size: 14px;
-                color: var(--secondary-color);
-            }
-            .footer a {
-                color: var(--secondary-color);
-                text-decoration: none;
-            }
-            .footer a:hover {
-                text-decoration: underline;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>Service Status</h1>
-                <div class="all-systems-operational">✔ All Systems Operational</div>
-            </div>
-
-            <div class="service-group">
-                <h2>Backend Infrastructure</h2>
-                <div class="service-item">
-                    <span class="service-name">API Gateway</span>
-                    <span class="service-status">Operational</span>
-                </div>
-                <div class="service-item">
-                    <span class="service-name">Authentication Service</span>
-                    <span class="service-status">Operational</span>
-                </div>
-                 <div class="service-item">
-                    <span class="service-name">Storage Cluster</span>
-                    <span class="service-status">Operational</span>
-                </div>
-            </div>
-
-            <div class="service-group" style="margin-top: 30px;">
-                <h2>Real-time Data Services</h2>
-                <div class="service-item">
-                    <span class="service-name">WebSocket Push Service</span>
-                    <span class="service-status">Operational</span>
-                </div>
-                <div class="service-item">
-                    <span class="service-name">Real-time Data Pipeline</span>
-                    <span class="service-status">Operational</span>
-                </div>
-            </div>
-
-            <div class="footer">
-                <p id="last-updated"></p>
-                <a href="https://github.com/cmliu/edgetunnel" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
-            </div>
-        </div>
-        <script>
-            function updateTimestamp() {
-                const now = new Date();
-                const timestamp = now.toUTCString();
-                document.getElementById('last-updated').textContent = 'Last Updated: ' + timestamp;
-            }
-            setInterval(updateTimestamp, 1000);
-            updateTimestamp();
-        </script>
-    </body>
-    </html>
-    `;
-    return new Response(html, {
-        status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    });
-}
-
-
-// --- 以下是原始脚本代码，只修改了 fetch 函数的主逻辑 ---
-
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -353,6 +194,160 @@ class WebSocketManager {
 
 		safeCloseWebSocket(this.webSocket);
 	}
+}
+
+// =================================================================
+//  服务状态页 (Status Page)
+// =================================================================
+async function statusPage() {
+    const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Service Status</title>
+        <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0ZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiIGZpbGw9IiMyZGNlODkiLz48L3N2Zz4=">
+        <style>
+            :root {
+                --bg-color: #f4f7f9;
+                --card-bg-color: #ffffff;
+                --text-color: #333;
+                --primary-color: #2dce89; /* Green for operational */
+                --secondary-color: #8898aa;
+                --border-color: #e9ecef;
+                --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            body {
+                margin: 0;
+                font-family: var(--font-family);
+                background-color: var(--bg-color);
+                color: var(--text-color);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                padding: 20px;
+                box-sizing: border-box;
+            }
+            .container {
+                max-width: 800px;
+                width: 100%;
+                background-color: var(--card-bg-color);
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                padding: 40px;
+                box-sizing: border-box;
+            }
+            .header {
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+            }
+            .header h1 {
+                margin: 0;
+                font-size: 24px;
+            }
+            .header .all-systems-operational {
+                color: var(--primary-color);
+                font-size: 18px;
+                font-weight: 600;
+                margin-top: 10px;
+            }
+            .service-group h2 {
+                font-size: 18px;
+                color: var(--text-color);
+                margin-bottom: 15px;
+            }
+            .service-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 15px 0;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .service-item:last-child {
+                border-bottom: none;
+            }
+            .service-name {
+                font-size: 16px;
+            }
+            .service-status {
+                font-size: 16px;
+                font-weight: 600;
+                color: var(--primary-color);
+            }
+            .footer {
+                margin-top: 30px;
+                text-align: center;
+                font-size: 14px;
+                color: var(--secondary-color);
+            }
+            .footer a {
+                color: var(--secondary-color);
+                text-decoration: none;
+            }
+            .footer a:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Service Status</h1>
+                <div class="all-systems-operational">✔ All Systems Operational</div>
+            </div>
+
+            <div class="service-group">
+                <h2>Backend Infrastructure</h2>
+                <div class="service-item">
+                    <span class="service-name">API Gateway</span>
+                    <span class="service-status">Operational</span>
+                </div>
+                <div class="service-item">
+                    <span class="service-name">Authentication Service</span>
+                    <span class="service-status">Operational</span>
+                </div>
+                 <div class="service-item">
+                    <span class="service-name">Storage Cluster</span>
+                    <span class="service-status">Operational</span>
+                </div>
+            </div>
+
+            <div class="service-group" style="margin-top: 30px;">
+                <h2>Real-time Data Services</h2>
+                <div class="service-item">
+                    <span class="service-name">WebSocket Push Service</span>
+                    <span class="service-status">Operational</span>
+                </div>
+                <div class="service-item">
+                    <span class="service-name">Real-time Data Pipeline</span>
+                    <span class="service-status">Operational</span>
+                </div>
+            </div>
+
+            <div class="footer">
+                <p id="last-updated"></p>
+                <a href="https://github.com/cmliu/edgetunnel" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
+            </div>
+        </div>
+        <script>
+            function updateTimestamp() {
+                const now = new Date();
+                const timestamp = now.toUTCString();
+                document.getElementById('last-updated').textContent = 'Last Updated: ' + timestamp;
+            }
+            setInterval(updateTimestamp, 1000);
+            updateTimestamp();
+        </script>
+    </body>
+    </html>
+    `;
+    return new Response(html, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
 }
 
 async function resolveToIPv6(target) {
