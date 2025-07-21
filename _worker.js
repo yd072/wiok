@@ -1,20 +1,27 @@
+
 import { connect } from 'cloudflare:sockets';
 
-// 全局配置变量，由 loadConfigurations 函数初始化
 let userID = '';
 let proxyIP = '';
-let subConverter = '';
-let subConfig = '';
+//let sub = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
+let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
 let socks5Address = '';
 let parsedSocks5Address = {};
 let enableSocks = false;
+
 let noTLS = 'false';
 const expire = -1;
 let proxyIPs = [];
 let socks5s = [];
-let go2Socks5s = [];
+let go2Socks5s = [
+	'*ttvnw.net',
+	'*tapecontent.net',
+	'*cloudatacdn.com',
+	'*.loadshare.org',
+];
 let addresses = [];
 let addressesapi = [];
 let addressesnotls = [];
@@ -22,7 +29,7 @@ let addressesnotlsapi = [];
 let addressescsv = [];
 let DLS = 8;
 let remarkIndex = 1;
-let FileName = '';
+let FileName = atob('ZWRnZXR1bm5lbA==');
 let BotToken = '';
 let ChatID = '';
 let proxyhosts = [];
@@ -38,7 +45,7 @@ let proxyIPPool = [];
 let path = '/?ed=2560';
 let 动态UUID = null;  
 let link = [];
-let banHosts = [];
+let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 let DNS64Server = '';
 
 /**
@@ -69,51 +76,46 @@ const utils = {
  * @param {any} env 
  */
 async function loadConfigurations(env) {
-    // 1. 从环境变量加载作为基准
-    userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || '';
-    proxyIP = env.PROXYIP || env.proxyip || '';
-    socks5Address = env.SOCKS5 || '';
-    subConverter = env.SUBAPI || 'U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=';
-    subConfig = env.SUBCONFIG || 'aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==';
-    FileName = env.SUBNAME || 'ZWRnZXR1bm5lbA==';
-    DNS64Server = env.DNS64 || env.NAT64 || '';
+    // 1. 从环境变量加载，如果存在则覆盖默认值
+    if (env.UUID || env.uuid || env.PASSWORD || env.pswd) userID = env.UUID || env.uuid || env.PASSWORD || env.pswd;
+    if (env.PROXYIP || env.proxyip) proxyIP = env.PROXYIP || env.proxyip;
+    if (env.SOCKS5) socks5Address = env.SOCKS5;
+    if (env.SUBAPI) subConverter = atob(env.SUBAPI);
+    if (env.SUBCONFIG) subConfig = atob(env.SUBCONFIG);
+    if (env.SUBNAME) FileName = atob(env.SUBNAME);
+    if (env.DNS64 || env.NAT64) DNS64Server = env.DNS64 || env.NAT64;
     
-    addresses = await 整理(env.ADD);
-    addressesapi = await 整理(env.ADDAPI);
-    addressesnotls = await 整理(env.ADDNOTLS);
-    addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
-    addressescsv = await 整理(env.ADDCSV);
-    link = await 整理(env.LINK);
-    go2Socks5s = await 整理(env.GO2SOCKS5);
-    if (go2Socks5s.length === 0) go2Socks5s = ['*ttvnw.net', '*tapecontent.net', '*cloudatacdn.com', '*.loadshare.org'];
-    banHosts = await 整理(env.BAN);
-    if (banHosts.length === 0) banHosts = ['c3BlZWQuY2xvdWRmbGFyZS5jb20='];
+    if (env.ADD) addresses = await 整理(env.ADD);
+    if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
+    if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
+    if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
+    if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
+    if (env.LINK) link = await 整理(env.LINK);
+    if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
+    if (env.BAN) banHosts = (await 整理(env.BAN)).map(h => atob(h));
 
-    DLS = Number(env.DLS) || 8;
-    remarkIndex = Number(env.CSVREMARK) || 1;
-    BotToken = env.TGTOKEN || '';
-    ChatID = env.TGID || '';
-    subEmoji = env.SUBEMOJI || env.EMOJI || 'true';
+    if (env.DLS) DLS = Number(env.DLS);
+    if (env.CSVREMARK) remarkIndex = Number(env.CSVREMARK);
+    if (env.TGTOKEN) BotToken = env.TGTOKEN;
+    if (env.TGID) ChatID = env.TGID;
+    if (env.SUBEMOJI || env.EMOJI) subEmoji = env.SUBEMOJI || env.EMOJI;
 
-    // 2. 如果存在 KV，则使用 KV 的值覆盖环境变量的值
+    // 2. 如果存在 KV，则使用 KV 的值覆盖所有之前的值
     if (env.KV) {
         try {
-            // 迁移旧数据
             await 迁移地址列表(env, 'ADD.txt');
 
-            // 读取高级设置
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
                 if (settings.proxyip && settings.proxyip.trim()) proxyIP = settings.proxyip;
                 if (settings.socks5 && settings.socks5.trim()) socks5Address = settings.socks5.split('\n')[0].trim();
-                if (settings.sub && settings.sub.trim()) env.SUB = settings.sub.trim().split('\n')[0]; // env.SUB 用于后续传递
+                if (settings.sub && settings.sub.trim()) env.SUB = settings.sub.trim().split('\n')[0];
                 if (settings.subapi && settings.subapi.trim()) subConverter = settings.subapi.trim().split('\n')[0];
                 if (settings.subconfig && settings.subconfig.trim()) subConfig = settings.subconfig.trim().split('\n')[0];
                 if (settings.nat64 && settings.nat64.trim()) DNS64Server = settings.nat64.trim().split('\n')[0];
             }
 
-            // 读取优选IP列表
             const preferList = await env.KV.get('ADD.txt');
             if (preferList) {
                 const 优选地址数组 = await 整理(preferList);
@@ -133,12 +135,10 @@ async function loadConfigurations(env) {
         }
     }
     
-    // 3. 解码和最终处理
-    subConverter = atob(subConverter);
-    subConfig = atob(subConfig);
-    FileName = atob(FileName);
-    banHosts = banHosts.map(host => atob(host));
-    if (!DNS64Server) DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+    // 3. 最终处理
+    if (!DNS64Server) {
+        DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+    }
 
     if (subConverter.includes("http://")) {
         subConverter = subConverter.split("//")[1];
@@ -154,6 +154,7 @@ async function loadConfigurations(env) {
     socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 	socks5Address = socks5Address.split('//')[1] || socks5Address;
 }
+
 
 /**
  * 解析 PROXYIP 字符串，提取地址和端口
@@ -467,16 +468,12 @@ async function resolveToIPv6(target) {
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
         const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
         
-        // --- 关键修改 ---
         if (isIPv6(nat64)) {
             return nat64;
         } else {
-            // 如果没得到合法的IPv6，就抛出错误
             throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
         }
     } catch (error) {
-        // --- 关键修改 ---
-        // 将底层的错误继续向上抛出，而不是返回一个默认值
         throw new Error(`NAT64 resolution failed: ${error.message}`);
 	}
 }
@@ -1389,14 +1386,13 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                     name: '内置的默认 NAT64',
                     enabled: true, // 总是启用作为最终回退
                     execute: async () => {
-                        // 确保在尝试默认NAT64之前，全局变量是默认值
                         if (!DNS64Server || DNS64Server.trim() === '') {
                            DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
                         }
-                    const nat64Address = await resolveToIPv6(addressRemote);
+                        const nat64Address = await resolveToIPv6(addressRemote);
                         const nat64Proxyip = `[${nat64Address}]`;
                         return createConnection(nat64Proxyip, 443);
-            }
+                    }
                 }
             ];
 
@@ -1413,7 +1409,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 }
             }
 
-            // 如果所有策略都失败了
             if (!tcpSocket) {
                 log('所有回退尝试均已失败，关闭连接。');
                     safeCloseWebSocket(webSocket);
@@ -1880,8 +1875,7 @@ let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-	// 移除了所有配置加载逻辑，因为它们已在 fetch 函数开头被统一处理
-
+	
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
@@ -2665,7 +2659,6 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	return btoa(base64Response);
 }
 
-// 优化 整理 函数
 async function 整理(内容) {
     if (!内容) return [];
     const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
@@ -3101,7 +3094,7 @@ async function handleGetRequest(env, txt) {
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JThCJUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
