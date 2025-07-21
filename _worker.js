@@ -1,3 +1,163 @@
+
+
+// =================================================================
+//  伪装页面：服务状态页 (Status Page)
+//  所有非代理、非订阅的请求都将显示此页面，以提供最高级别的伪装。
+// =================================================================
+async function statusPage() {
+    const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Service Status</title>
+        <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0ZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiIGZpbGw9IiMyZGNlODkiLz48L3N2Zz4=">
+        <style>
+            :root {
+                --bg-color: #f4f7f9;
+                --card-bg-color: #ffffff;
+                --text-color: #333;
+                --primary-color: #2dce89; /* Green for operational */
+                --secondary-color: #8898aa;
+                --border-color: #e9ecef;
+                --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            body {
+                margin: 0;
+                font-family: var(--font-family);
+                background-color: var(--bg-color);
+                color: var(--text-color);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                padding: 20px;
+                box-sizing: border-box;
+            }
+            .container {
+                max-width: 800px;
+                width: 100%;
+                background-color: var(--card-bg-color);
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                padding: 40px;
+                box-sizing: border-box;
+            }
+            .header {
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+            }
+            .header h1 {
+                margin: 0;
+                font-size: 24px;
+            }
+            .header .all-systems-operational {
+                color: var(--primary-color);
+                font-size: 18px;
+                font-weight: 600;
+                margin-top: 10px;
+            }
+            .service-group h2 {
+                font-size: 18px;
+                color: var(--text-color);
+                margin-bottom: 15px;
+            }
+            .service-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 15px 0;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .service-item:last-child {
+                border-bottom: none;
+            }
+            .service-name {
+                font-size: 16px;
+            }
+            .service-status {
+                font-size: 16px;
+                font-weight: 600;
+                color: var(--primary-color);
+            }
+            .footer {
+                margin-top: 30px;
+                text-align: center;
+                font-size: 14px;
+                color: var(--secondary-color);
+            }
+            .footer a {
+                color: var(--secondary-color);
+                text-decoration: none;
+            }
+            .footer a:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Service Status</h1>
+                <div class="all-systems-operational">✔ All Systems Operational</div>
+            </div>
+
+            <div class="service-group">
+                <h2>Backend Infrastructure</h2>
+                <div class="service-item">
+                    <span class="service-name">API Gateway</span>
+                    <span class="service-status">Operational</span>
+                </div>
+                <div class="service-item">
+                    <span class="service-name">Authentication Service</span>
+                    <span class="service-status">Operational</span>
+                </div>
+                 <div class="service-item">
+                    <span class="service-name">Storage Cluster</span>
+                    <span class="service-status">Operational</span>
+                </div>
+            </div>
+
+            <div class="service-group" style="margin-top: 30px;">
+                <h2>Real-time Data Services</h2>
+                <div class="service-item">
+                    <span class="service-name">WebSocket Push Service</span>
+                    <span class="service-status">Operational</span>
+                </div>
+                <div class="service-item">
+                    <span class="service-name">Real-time Data Pipeline</span>
+                    <span class="service-status">Operational</span>
+                </div>
+            </div>
+
+            <div class="footer">
+                <p id="last-updated"></p>
+                <a href="#">Powered by Uptime Engine</a>
+            </div>
+        </div>
+        <script>
+            function updateTimestamp() {
+                const now = new Date();
+                const timestamp = now.toUTCString();
+                document.getElementById('last-updated').textContent = 'Last Updated: ' + timestamp;
+            }
+            setInterval(updateTimestamp, 1000);
+            updateTimestamp();
+        </script>
+    </body>
+    </html>
+    `;
+    return new Response(html, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+}
+
+
+// --- 以下是原始脚本代码，只修改了 fetch 函数的主逻辑 ---
+
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -375,6 +535,76 @@ async function resolveToIPv6(target) {
 export default {
 	async fetch(request, env, ctx) {
 		try {
+            // ---------------------------------------------------
+            //  核心修改：统一伪装页面逻辑
+            // ---------------------------------------------------
+			const url = new URL(request.url);
+			const upgradeHeader = request.headers.get('Upgrade');
+
+            // 1. WebSocket 代理请求：这是最高优先级的，直接处理
+			if (upgradeHeader && upgradeHeader === 'websocket') {
+                // 在进入代理处理器之前，先加载必要的环境变量
+                userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
+                if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
+                    动态UUID = env.KEY || env.TOKEN || userID;
+                    const userIDs = await 生成动态UUID(动态UUID);
+                    userID = userIDs[0];
+                    userIDLow = userIDs[1];
+                }
+                proxyIP = env.PROXYIP || env.proxyip || '';
+                socks5Address = env.SOCKS5 || '';
+                if (socks5Address) {
+                    try {
+                        parsedSocks5Address = socks5AddressParser(socks5Address);
+                        enableSocks = true;
+                    } catch (err) {
+                        enableSocks = false;
+                    }
+                }
+                
+                // 处理 WebSocket 请求
+				socks5Address = url.searchParams.get('socks5') || socks5Address;
+				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
+				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
+					socks5Address = url.pathname.split('://')[1].split('#')[0];
+					if (socks5Address.includes('@')) {
+						let userPassword = socks5Address.split('@')[0];
+						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
+						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
+						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
+					}
+				}
+
+				if (socks5Address) {
+					try {
+						parsedSocks5Address = socks5AddressParser(socks5Address);
+						enableSocks = true;
+					} catch (err) {
+						console.log(err.toString());
+						enableSocks = false;
+					}
+				} else {
+					enableSocks = false;
+				}
+
+				if (url.searchParams.has('proxyip')) {
+					proxyIP = url.searchParams.get('proxyip');
+					enableSocks = false;
+				} else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
+					proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
+					enableSocks = false;
+				} else if (new RegExp('/proxyip.', 'i').test(url.pathname)) {
+					proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
+					enableSocks = false;
+				} else if (new RegExp('/pyip=', 'i').test(url.pathname)) {
+					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
+					enableSocks = false;
+				}
+
+				return await secureProtoOverWSHandler(request);
+			}
+
+            // 2. 加载所有需要的环境变量，为订阅和编辑页做准备
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
 			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
@@ -387,172 +617,50 @@ export default {
 				userIDLow = userIDs[1];
 				userIDTime = userIDs[2];
 			}
-
+            
+            // 如果没有设置 UUID，直接显示伪装页
 			if (!userID) {
-				// 生成美化后的系统信息页面
-				const html = `
-				<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1">
-							<title>系统信息</title>
-							<style>
-								:root {
-									--primary-color: #4CAF50;
-									--border-color: #e0e0e0;
-									--background-color: #f5f5f5;
-									--warning-bg: #fff3f3;
-									--warning-border: #ffcdd2;
-									--warning-text: #d32f2f;
-								}
-								
-								body {
-									margin: 0;
-									padding: 20px;
-									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-									line-height: 1.6;
-									background-color: var(--background-color);
-								}
-
-								.container {
-									max-width: 800px;
-									margin: 0 auto;
-									background: white;
-									padding: 25px;
-									border-radius: 10px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-								}
-
-								.title {
-									font-size: 1.5em;
-									color: var(--primary-color);
-									margin-bottom: 20px;
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.title .icon {
-									font-size: 1.2em;
-								}
-
-								.warning-box {
-									background-color: var(--warning-bg);
-									border: 1px solid var(--warning-border);
-									border-radius: 6px;
-									padding: 15px;
-									margin-bottom: 20px;
-									color: var(--warning-text);
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.warning-box .icon {
-									font-size: 1.2em;
-								}
-
-								.info-grid {
-									display: grid;
-									grid-template-columns: auto 1fr;
-									gap: 12px;
-									background: #fff;
-									border-radius: 8px;
-									overflow: hidden;
-								}
-
-								.info-row {
-									display: contents;
-								}
-
-								.info-row:hover > * {
-									background-color: #f8f9fa;
-								}
-
-								.info-label {
-									padding: 12px 15px;
-									color: #666;
-									font-weight: 500;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-value {
-									padding: 12px 15px;
-									color: #333;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-row:last-child .info-label,
-								.info-row:last-child .info-value {
-									border-bottom: none;
-								}
-
-								@media (max-width: 768px) {
-									body {
-										padding: 10px;
-									}
-									
-									.container {
-										padding: 15px;
-									}
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="title">
-									<span class="icon">🔍</span>
-									系统信息
-								</div>
-
-								<div class="warning-box">
-									<span class="icon">⚠️</span>
-									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
-								</div>
-
-								<div class="info-grid">
-									<div class="info-row">
-										<div class="info-label">TLS 版本</div>
-										<div class="info-value">${request.cf?.tlsVersion || 'TLSv1.3'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">HTTP 协议</div>
-										<div class="info-value">${request.cf?.httpProtocol || 'HTTP/2'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 TCP RTT</div>
-										<div class="info-value">${request.cf?.clientTcpRtt || '3'} ms</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">地理位置</div>
-										<div class="info-value">${request.cf?.continent || 'EU'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">时区</div>
-										<div class="info-value">${request.cf?.timezone || 'Europe/Vilnius'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 IP</div>
-										<div class="info-value">${request.headers.get('CF-Connecting-IP') || '127.0.0.1'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">User Agent</div>
-										<div class="info-value">${request.headers.get('User-Agent') || 'Mozilla/5.0'}</div>
-									</div>
-								</div>
-							</div>
-						</body>
-						</html>`;
-
-				return new Response(html, {
-					status: 200,
-					headers: {
-						'content-type': 'text/html;charset=utf-8',
-					},
-				});
+				return await statusPage();
 			}
 
+            // 订阅和编辑页面的必要变量加载
+            if (env.ADD) addresses = await 整理(env.ADD);
+            if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
+            if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
+            if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
+            if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
+            DLS = Number(env.DLS) || DLS;
+            remarkIndex = Number(env.CSVREMARK) || remarkIndex;
+            BotToken = env.TGTOKEN || BotToken;
+            ChatID = env.TGID || ChatID;
+            FileName = env.SUBNAME || FileName;
+            subEmoji = env.SUBEMOJI || env.EMOJI || subEmoji;
+            if (subEmoji == '0') subEmoji = 'false';
+            if (env.LINK) link = await 整理(env.LINK);
+            let sub = env.SUB || '';
+            subConverter = env.SUBAPI || subConverter;
+            if (subConverter.includes("http://")) {
+                subConverter = subConverter.split("//")[1];
+                subProtocol = 'http';
+            } else {
+                subConverter = subConverter.split("//")[1] || subConverter;
+            }
+            subConfig = env.SUBCONFIG || subConfig;
+            if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
+            if (url.searchParams.has('notls')) noTLS = 'true';
+
+            if (url.searchParams.has('proxyip')) {
+                path = `/?proxyip=${url.searchParams.get('proxyip')}`;
+                RproxyIP = 'false';
+            } else if (url.searchParams.has('socks5')) {
+                path = `/?socks5=${url.searchParams.get('socks5')}`;
+                RproxyIP = 'false';
+            } else if (url.searchParams.has('socks')) {
+                path = `/?socks5=${url.searchParams.get('socks')}`;
+                RproxyIP = 'false';
+            }
+
+            // 生成用于伪装订阅链接的假信息
 			const currentDate = new Date();
 			currentDate.setHours(0, 0, 0, 0);
 			const timestamp = Math.ceil(currentDate.getTime() / 1000);
@@ -564,10 +672,10 @@ export default {
                 fakeUserIDSHA256.slice(16, 20),
                 fakeUserIDSHA256.slice(20, 32) 
 			].join('-');
-
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
-			// 修改PROXYIP初始化逻辑
+            // PROXYIP/SOCKS5/NAT64 等高级配置加载
+            // 修改PROXYIP初始化逻辑
 			if (env.KV) {
 				try {
 					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
@@ -587,7 +695,7 @@ export default {
 			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 
 			// 修改SOCKS5地址初始化逻辑
-			if (env.KV) {
+            if (env.KV) {
 				try {
 					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
 					if (advancedSettingsJSON) {
@@ -625,429 +733,77 @@ export default {
                 }
             }
 			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
+			RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 
-			if (socks5Address) {
-				try {
-					parsedSocks5Address = socks5AddressParser(socks5Address);
-					RproxyIP = env.RPROXYIP || 'false';
-					enableSocks = true;
-				} catch (err) {
-					let e = err;
-					console.log(e.toString());
-					RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
-					enableSocks = false;
+            // 3. 匹配特定的功能路径 (订阅、编辑页、伪装订阅)
+			const 路径 = url.pathname.toLowerCase();
+
+            // 伪装订阅路径
+			if (路径 === `/${fakeUserID}`) {
+				const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
+				return new Response(`${fakeConfig}`, { status: 200 });
+			} 
+            // 编辑页路径
+			else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
+				return await KV(request, env);
+			} 
+            // 真实订阅路径
+            else if ((动态UUID && url.pathname === `/${动态UUID}`) || 路径 === `/${userID}`) {
+				await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
+				
+				const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
+				const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
+
+				const now = Date.now();
+				const today = new Date(now);
+				today.setHours(0, 0, 0, 0);
+				const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
+				let pagesSum = UD;
+				let workersSum = UD;
+				let total = 24 * 1099511627776;
+
+				if (userAgent && userAgent.includes('mozilla')) {
+					return new Response(`<div style="font-size:13px;">${secureProtoConfig}</div>`, {
+						status: 200,
+						headers: {
+							"Content-Type": "text/html;charset=utf-8",
+							"Profile-Update-Interval": "6",
+							"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+							"Cache-Control": "no-store",
+						}
+					});
+				} else {
+					return new Response(`${secureProtoConfig}`, {
+						status: 200,
+						headers: {
+							"Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
+							"Content-Type": "text/plain;charset=utf-8",
+							"Profile-Update-Interval": "6",
+							"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+						}
+					});
 				}
-			} else {
-				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 
-			const upgradeHeader = request.headers.get('Upgrade');
-			const url = new URL(request.url);
-			if (!upgradeHeader || upgradeHeader !== 'websocket') {
-				if (env.ADD) addresses = await 整理(env.ADD);
-				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
-				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
-				if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
-				if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
-				DLS = Number(env.DLS) || DLS;
-				remarkIndex = Number(env.CSVREMARK) || remarkIndex;
-				BotToken = env.TGTOKEN || BotToken;
-				ChatID = env.TGID || ChatID;
-				FileName = env.SUBNAME || FileName;
-				subEmoji = env.SUBEMOJI || env.EMOJI || subEmoji;
-				if (subEmoji == '0') subEmoji = 'false';
-				if (env.LINK) link = await 整理(env.LINK);
-				let sub = env.SUB || '';
-				subConverter = env.SUBAPI || subConverter;
-				if (subConverter.includes("http://")) {
-					subConverter = subConverter.split("//")[1];
-					subProtocol = 'http';
-				} else {
-					subConverter = subConverter.split("//")[1] || subConverter;
-				}
-				subConfig = env.SUBCONFIG || subConfig;
-				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
-				if (url.searchParams.has('notls')) noTLS = 'true';
+            // 4. 如果以上路径都不匹配，则显示统一的伪装页面
+            // 检查是否有重定向或反代URL的设置，如果没有，则显示状态页
+			if (env.URL302) {
+                return Response.redirect(env.URL302, 302);
+            } else if (env.URL) {
+                return await 代理URL(request, env.URL, url);
+            } else {
+                return await statusPage();
+            }
 
-				if (url.searchParams.has('proxyip')) {
-					path = `/?proxyip=${url.searchParams.get('proxyip')}`;
-					RproxyIP = 'false';
-				} else if (url.searchParams.has('socks5')) {
-					path = `/?socks5=${url.searchParams.get('socks5')}`;
-					RproxyIP = 'false';
-				} else if (url.searchParams.has('socks')) {
-					path = `/?socks5=${url.searchParams.get('socks')}`;
-					RproxyIP = 'false';
-				}
-
-				const 路径 = url.pathname.toLowerCase();
-				if (路径 == '/') {
-					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(env.URL, url);
-					else {
-						// 生成美化后的系统信息页面
-						const html = `
-						<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1">
-							<title>系统信息</title>
-							<style>
-								:root {
-									--primary-color: #4CAF50;
-									--border-color: #e0e0e0;
-									--background-color: #f5f5f5;
-									--warning-bg: #fff3f3;
-									--warning-border: #ffcdd2;
-									--warning-text: #d32f2f;
-								}
-								
-								body {
-									margin: 0;
-									padding: 20px;
-									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-									line-height: 1.6;
-									background-color: var(--background-color);
-								}
-
-								.container {
-									max-width: 800px;
-									margin: 0 auto;
-									background: white;
-									padding: 25px;
-									border-radius: 10px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-								}
-
-								.title {
-									font-size: 1.5em;
-									color: var(--primary-color);
-									margin-bottom: 20px;
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.title .icon {
-									font-size: 1.2em;
-								}
-
-								.warning-box {
-									background-color: var(--warning-bg);
-									border: 1px solid var(--warning-border);
-									border-radius: 6px;
-									padding: 15px;
-									margin-bottom: 20px;
-									color: var(--warning-text);
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.warning-box .icon {
-									font-size: 1.2em;
-								}
-
-								.info-grid {
-									display: grid;
-									grid-template-columns: auto 1fr;
-									gap: 12px;
-									background: #fff;
-									border-radius: 8px;
-									overflow: hidden;
-								}
-
-								.info-row {
-									display: contents;
-								}
-
-								.info-row:hover > * {
-									background-color: #f8f9fa;
-								}
-
-								.info-label {
-									padding: 12px 15px;
-									color: #666;
-									font-weight: 500;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-value {
-									padding: 12px 15px;
-									color: #333;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-row:last-child .info-label,
-								.info-row:last-child .info-value {
-									border-bottom: none;
-								}
-
-								@media (max-width: 768px) {
-									body {
-										padding: 10px;
-									}
-									
-									.container {
-										padding: 15px;
-									}
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="title">
-									<span class="icon">🔍</span>
-									系统信息
-								</div>
-
-								<!--<div class="warning-box">
-									<span class="icon">⚠️</span>
-									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
-								</div> -->
-
-								<div class="info-grid">
-									<div class="info-row">
-										<div class="info-label">TLS 版本</div>
-										<div class="info-value">${request.cf?.tlsVersion || 'TLSv1.3'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">HTTP 协议</div>
-										<div class="info-value">${request.cf?.httpProtocol || 'HTTP/2'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 TCP RTT</div>
-										<div class="info-value">${request.cf?.clientTcpRtt || '3'} ms</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">地理位置</div>
-										<div class="info-value">${request.cf?.continent || 'EU'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">时区</div>
-										<div class="info-value">${request.cf?.timezone || 'Europe/Vilnius'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 IP</div>
-										<div class="info-value">${request.headers.get('CF-Connecting-IP') || '127.0.0.1'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">User Agent</div>
-										<div class="info-value">${request.headers.get('User-Agent') || 'Mozilla/5.0'}</div>
-									</div>
-								</div>
-							</div>
-						</body>
-						</html>`;
-
-						return new Response(html, {
-							status: 200,
-							headers: {
-								'content-type': 'text/html;charset=utf-8',
-							},
-						});
-					}
-				} else if (路径 === `/${fakeUserID}`) {
-					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
-					return new Response(`${fakeConfig}`, { status: 200 });
-				} 
-				// 【方案一：核心安全修复】在这里修改了判断逻辑
-				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
-					const html = await KV(request, env);
-					return html;
-				} else if ((动态UUID && url.pathname === `/${动态UUID}`) || 路径 === `/${userID}`) {
-					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
-					
-					const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
-					const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
-
-					const now = Date.now();
-					const today = new Date(now);
-					today.setHours(0, 0, 0, 0);
-					const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
-					let pagesSum = UD;
-					let workersSum = UD;
-					let total = 24 * 1099511627776;
-
-					if (userAgent && userAgent.includes('mozilla')) {
-						return new Response(`<div style="font-size:13px;">${secureProtoConfig}</div>`, {
-							status: 200,
-							headers: {
-								"Content-Type": "text/html;charset=utf-8",
-								"Profile-Update-Interval": "6",
-								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
-								"Cache-Control": "no-store",
-							}
-						});
-					} else {
-						return new Response(`${secureProtoConfig}`, {
-							status: 200,
-							headers: {
-								"Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
-								"Content-Type": "text/plain;charset=utf-8",
-								"Profile-Update-Interval": "6",
-								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
-							}
-						});
-					}
-				} else {
-					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(env.URL, url);
-					else {
-						// 美化错误页面
-						const html = `
-						<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1">
-							<title>错误提示</title>
-							<style>
-								:root {
-									--primary-color: #e74c3c;
-									--border-color: #e0e0e0;
-									--background-color: #f5f5f5;
-									--error-bg: #fef5f5;
-									--error-border: #f8d7da;
-									--error-text: #721c24;
-								}
-								
-								body {
-									margin: 0;
-									padding: 20px;
-									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-									line-height: 1.6;
-									background-color: var(--background-color);
-								}
-
-								.container {
-									max-width: 600px;
-									margin: 50px auto;
-									background: white;
-									padding: 25px;
-									border-radius: 10px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-									text-align: center;
-								}
-
-								.error-icon {
-									font-size: 60px;
-									color: var(--primary-color);
-									margin-bottom: 20px;
-								}
-
-								.error-title {
-									font-size: 24px;
-									color: var(--error-text);
-									margin-bottom: 15px;
-								}
-
-								.error-message {
-									background-color: var(--error-bg);
-									border: 1px solid var(--error-border);
-									border-radius: 6px;
-									padding: 15px;
-									margin: 20px 0;
-									color: var(--error-text);
-									font-size: 16px;
-								}
-
-								.back-button {
-									display: inline-block;
-									padding: 10px 20px;
-									background-color: var(--primary-color);
-									color: white;
-									border-radius: 5px;
-									text-decoration: none;
-									font-weight: 500;
-									margin-top: 20px;
-									transition: background-color 0.3s;
-								}
-
-								.back-button:hover {
-									background-color: #c0392b;
-								}
-
-								@media (max-width: 768px) {
-									body {
-										padding: 10px;
-									}
-									
-									.container {
-										padding: 15px;
-									}
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="error-icon">⚠️</div>
-								<div class="error-title">访问错误</div>
-								<div class="error-message">
-									不用怀疑！你的 UUID 输入错误！请检查配置并重试。
-								</div>
-								<a href="/" class="back-button">返回首页</a>
-							</div>
-						</body>
-						</html>`;
-
-						return new Response(html, { 
-							status: 404,
-							headers: {
-								'content-type': 'text/html;charset=utf-8',
-							},
-						});
-					}
-				}
-			} else {
-				socks5Address = url.searchParams.get('socks5') || socks5Address;
-				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
-				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
-					socks5Address = url.pathname.split('://')[1].split('#')[0];
-					if (socks5Address.includes('@')) {
-						let userPassword = socks5Address.split('@')[0];
-						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
-						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
-						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
-					}
-				}
-
-				if (socks5Address) {
-					try {
-						parsedSocks5Address = socks5AddressParser(socks5Address);
-						enableSocks = true;
-					} catch (err) {
-						let e = err;
-						console.log(e.toString());
-						enableSocks = false;
-					}
-				} else {
-					enableSocks = false;
-				}
-
-				if (url.searchParams.has('proxyip')) {
-					proxyIP = url.searchParams.get('proxyip');
-					enableSocks = false;
-				} else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
-					proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
-					enableSocks = false;
-				} else if (new RegExp('/proxyip.', 'i').test(url.pathname)) {
-					proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
-					enableSocks = false;
-				} else if (new RegExp('/pyip=', 'i').test(url.pathname)) {
-					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
-					enableSocks = false;
-				}
-
-				return await secureProtoOverWSHandler(request);
-			}
 		} catch (err) {
 			let e = err;
 			return new Response(e.toString());
 		}
 	},
 };
+
+
+// --- 以下是原始脚本的其余辅助函数，无需改动 ---
 
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
