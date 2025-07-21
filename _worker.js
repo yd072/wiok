@@ -438,7 +438,7 @@ async function statusPage() {
 
             <div class="footer">
                 <p id="last-updated"></p>
-                <a href="https://github.com/cmliu/edgetunnel" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
+                <a href="#" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
             </div>
         </div>
         <script>
