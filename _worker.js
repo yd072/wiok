@@ -440,6 +440,7 @@ async function statusPage() {
                 <p>
                     Last Updated:
                     <span id="date-container"></span>
+                    <!-- 关键点: 时间容器本身不翻译，且内容是纯数字的英文格式 -->
                     <span id="time-container" class="notranslate"></span>
                 </p>
                 <a href="#" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
@@ -449,13 +450,19 @@ async function statusPage() {
             let lastDate = '';
             function updateTimestamp() {
                 const now = new Date();
-                const currentDate = now.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+                const currentDate = now.toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
                 if (currentDate !== lastDate) {
-                    document.getElementById('date-container').textContent = currentDate;
+                    document.getElementById('date-container').textContent = ' ' + currentDate;
                     lastDate = currentDate;
                 }
-                document.getElementById('time-container').textContent = now.toLocaleTimeString();
+                const englishTime = now.toLocaleTimeString('en-GB');
+                document.getElementById('time-container').textContent = ' ' + englishTime;
             }
+
             setInterval(updateTimestamp, 1000);
             updateTimestamp();
         </script>
