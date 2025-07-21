@@ -437,7 +437,7 @@ async function statusPage() {
             </div>
 
             <div class="footer">
-                <p><span class="notranslate">Last Updated: </span><span id="timestamp-container"></span></p>
+                <p id="last-updated"></p>
                 <a href="#" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
             </div>
         </div>
@@ -445,7 +445,7 @@ async function statusPage() {
             function updateTimestamp() {
                 const now = new Date();
                 const timestamp = now.toUTCString();
-                document.getElementById('timestamp-container').textContent = timestamp;
+                document.getElementById('last-updated').textContent = 'Last Updated: ' + timestamp;
             }
             setInterval(updateTimestamp, 1000);
             updateTimestamp();
