@@ -1,6 +1,7 @@
 
 import { connect } from 'cloudflare:sockets';
 
+// ... (所有早期代码都无需修改，直接保留) ...
 let userID = '';
 let proxyIP = '';
 //let sub = '';
@@ -369,10 +370,6 @@ async function resolveToIPv6(target) {
 	}
 }
 
-/**
- * 返回Nginx欢迎页面的函数
- * @returns {string} HTML content
- */
 async function nginx() {
     const text = `
 	<!DOCTYPE html>
@@ -421,11 +418,198 @@ export default {
 				userIDLow = userIDs[1];
 				userIDTime = userIDs[2];
 			}
-            
-            const upgradeHeader = request.headers.get('Upgrade');
-			if (upgradeHeader && upgradeHeader === 'websocket') {
-                // 如果是WebSocket请求，直接进入处理流程
-                // ... (从 socks5Address = url.searchParams.get('socks5') ... 到 return await secureProtoOverWSHandler(request) 的逻辑) ...
+
+			if (!userID) {
+				const html = await nginx();
+				return new Response(html, {
+					headers: { 'Content-Type': 'text/html; charset=utf-8' },
+				});
+			}
+
+			const currentDate = new Date();
+			currentDate.setHours(0, 0, 0, 0);
+			const timestamp = Math.ceil(currentDate.getTime() / 1000);
+			const fakeUserIDSHA256 = await 双重哈希(`${userID}${timestamp}`);
+			const fakeUserID = [
+                fakeUserIDSHA256.slice(0, 8),
+                fakeUserIDSHA256.slice(8, 12),
+                fakeUserIDSHA256.slice(12, 16),
+                fakeUserIDSHA256.slice(16, 20),
+                fakeUserIDSHA256.slice(20, 32) 
+			].join('-');
+
+			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
+
+            if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.proxyip && settings.proxyip.trim()) {
+							proxyIP = settings.proxyip;
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取PROXYIP时发生错误:', error);
+				}
+			}
+			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
+			proxyIPs = await 整理(proxyIP);
+			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+
+			if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.socks5 && settings.socks5.trim()) {
+							socks5Address = settings.socks5.split('\n')[0].trim();
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取SOCKS5时发生错误:', error);
+				}
+			}
+			socks5Address = socks5Address || env.SOCKS5 || '';
+			socks5s = await 整理(socks5Address);
+			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+			socks5Address = socks5Address.split('//')[1] || socks5Address;
+
+			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
+			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
+			if (env.BAN) banHosts = await 整理(env.BAN);
+			
+            if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.nat64 && settings.nat64.trim()) {
+							DNS64Server = settings.nat64.trim().split('\n')[0];
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取NAT64时发生错误:', error);
+                }
+            }
+			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
+
+			if (socks5Address) {
+				try {
+					parsedSocks5Address = socks5AddressParser(socks5Address);
+					RproxyIP = env.RPROXYIP || 'false';
+					enableSocks = true;
+				} catch (err) {
+					let e = err;
+					console.log(e.toString());
+					RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+					enableSocks = false;
+				}
+			} else {
+				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+			}
+
+			const upgradeHeader = request.headers.get('Upgrade');
+			
+			if (!upgradeHeader || upgradeHeader !== 'websocket') {
+                if (env.ADD) addresses = await 整理(env.ADD);
+				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
+				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
+				if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
+				if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
+				DLS = Number(env.DLS) || DLS;
+				remarkIndex = Number(env.CSVREMARK) || remarkIndex;
+				BotToken = env.TGTOKEN || BotToken;
+				ChatID = env.TGID || ChatID;
+				FileName = env.SUBNAME || FileName;
+				subEmoji = env.SUBEMOJI || env.EMOJI || subEmoji;
+				if (subEmoji == '0') subEmoji = 'false';
+				if (env.LINK) link = await 整理(env.LINK);
+				let sub = env.SUB || '';
+				subConverter = env.SUBAPI || subConverter;
+				if (subConverter.includes("http://")) {
+					subConverter = subConverter.split("//")[1];
+					subProtocol = 'http';
+				} else {
+					subConverter = subConverter.split("//")[1] || subConverter;
+				}
+				subConfig = env.SUBCONFIG || subConfig;
+				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
+				if (url.searchParams.has('notls')) noTLS = 'true';
+
+				if (url.searchParams.has('proxyip')) {
+					path = `/?proxyip=${url.searchParams.get('proxyip')}`;
+					RproxyIP = 'false';
+				} else if (url.searchParams.has('socks5')) {
+					path = `/?socks5=${url.searchParams.get('socks5')}`;
+					RproxyIP = 'false';
+				} else if (url.searchParams.has('socks')) {
+					path = `/?socks5=${url.searchParams.get('socks')}`;
+					RproxyIP = 'false';
+				}
+
+				const 路径 = url.pathname.toLowerCase();
+				
+                // 【主要修改点】增加对根路径的优先判断
+                // 无论是否设置UUID，只要是访问根目录，就显示Nginx欢迎页
+                if (路径 === '/') {
+                    const html = await nginx();
+                    return new Response(html, {
+                        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                    });
+                }
+				
+				if (路径 === `/${fakeUserID}`) {
+					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
+					return new Response(`${fakeConfig}`, { status: 200 });
+				} 
+				
+				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
+					const html = await KV(request, env);
+					return html;
+				} else if ((动态UUID && url.pathname === `/${动态UUID}`) || 路径 === `/${userID}`) {
+					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
+					
+					const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
+					const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
+
+					const now = Date.now();
+					const today = new Date(now);
+					today.setHours(0, 0, 0, 0);
+					const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
+					let pagesSum = UD;
+					let workersSum = UD;
+					let total = 24 * 1099511627776;
+
+					if (userAgent && userAgent.includes('mozilla')) {
+						return new Response(`<div style="font-size:13px;">${secureProtoConfig}</div>`, {
+							status: 200,
+							headers: {
+								"Content-Type": "text/html;charset=utf-8",
+								"Profile-Update-Interval": "6",
+								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+								"Cache-Control": "no-store",
+							}
+						});
+					} else {
+						return new Response(`${secureProtoConfig}`, {
+							status: 200,
+							headers: {
+								"Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
+								"Content-Type": "text/plain;charset=utf-8",
+								"Profile-Update-Interval": "6",
+								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+							}
+						});
+					}
+				} else {
+                    // 对于所有其他无效路径，同样返回Nginx欢迎页
+                    const html = await nginx();
+                    return new Response(html, {
+                        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                    });
+				}
+			} else {
                 socks5Address = url.searchParams.get('socks5') || socks5Address;
 				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
 				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
@@ -466,70 +650,7 @@ export default {
 				}
 
 				return await secureProtoOverWSHandler(request);
-            }
-
-            // 【核心修改点】对于所有非WebSocket的HTTP请求，进行路径判断
-            const 路径 = url.pathname.toLowerCase();
-
-            // 1. 检查UUID是否存在，如果不存在，所有路径都显示Nginx欢迎页
-            if (!userID) {
-				const html = await nginx();
-				return new Response(html, {
-					headers: { 'Content-Type': 'text/html; charset=utf-8' },
-				});
 			}
-            
-            // 2. 如果UUID存在，则精确匹配路径
-            if ((动态UUID && url.pathname === `/${动态UUID}`) || 路径 === `/${userID}`) {
-                // 这是获取订阅的路径
-                // ... (从 await sendMessage(...) 到 return new Response(...) 的订阅页面逻辑) ...
-                await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
-					
-                const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
-                const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), url.searchParams.get('sub') || '', UA, RproxyIP, url, null, null, env);
-
-                const now = Date.now();
-                const today = new Date(now);
-                today.setHours(0, 0, 0, 0);
-                const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
-                let pagesSum = UD;
-                let workersSum = UD;
-                let total = 24 * 1099511627776;
-
-                if (userAgent && userAgent.includes('mozilla')) {
-                    return new Response(`<div style="font-size:13px;">${secureProtoConfig}</div>`, {
-                        status: 200,
-                        headers: {
-                            "Content-Type": "text/html;charset=utf-8",
-                            "Profile-Update-Interval": "6",
-                            "Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
-                            "Cache-Control": "no-store",
-                        }
-                    });
-                } else {
-                    return new Response(`${secureProtoConfig}`, {
-                        status: 200,
-                        headers: {
-                            "Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
-                            "Content-Type": "text/plain;charset=utf-8",
-                            "Profile-Update-Interval": "6",
-                            "Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
-                        }
-                    });
-                }
-            } else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
-                // 这是编辑优选列表的路径
-                const html = await KV(request, env);
-                return html;
-            }
-
-            // 3. 【最终保障】如果以上所有特定路径都不匹配，则默认显示Nginx欢迎页
-            //    这会覆盖根域名 / 以及任何其他无效路径
-            const html = await nginx();
-            return new Response(html, {
-                headers: { 'Content-Type': 'text/html; charset=utf-8' },
-            });
-
 		} catch (err) {
 			let e = err;
 			return new Response(e.toString());
@@ -537,6 +658,7 @@ export default {
 	},
 };
 
+// ... (所有其他辅助函数和核心代理逻辑都无需修改，直接保留) ...
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
@@ -556,19 +678,6 @@ async function secureProtoOverWSHandler(request) {
     let remoteSocketWrapper = { value: null };
     let isDns = false;
     const banHostsSet = new Set(banHosts);
-
-    // 在这里初始化环境变量，因为这部分逻辑只在 secureProtoOverWSHandler 中使用
-    if (proxyIP === '' && parsedSocks5Address.hostname === undefined) {
-        if (enableSocks) {
-            // SOCKS5 逻辑
-        } else {
-            // PROXYIP / NAT64 逻辑
-            proxyIP = env.PROXYIP || env.proxyip || '';
-            proxyIPs = await 整理(proxyIP);
-            proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-            DNS64Server = env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
-        }
-    }
 
     readableWebSocketStream.pipeTo(new WritableStream({
         async write(chunk, controller) {
@@ -1315,7 +1424,7 @@ const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRT
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
-    if (env.KV) {
+	if (env.KV) {
 		try {
 			const advancedSettingsJSON = await env.KV.get('settinggs.txt');
 			let settings = {};
@@ -1844,21 +1953,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		if (typeof fetch != 'function') {
 			return 'Error: fetch is not available in this environment.';
 		}
-
-		// 为 fakeUserID 生成逻辑补充所需变量
-		const currentDate = new Date();
-		currentDate.setHours(0, 0, 0, 0);
-		const timestamp = Math.ceil(currentDate.getTime() / 1000);
-		const fakeUserIDSHA256 = await 双重哈希(`${userID}${timestamp}`);
-		const fakeUserID = [
-			fakeUserIDSHA256.slice(0, 8),
-			fakeUserIDSHA256.slice(8, 12),
-			fakeUserIDSHA256.slice(12, 16),
-			fakeUserIDSHA256.slice(16, 20),
-			fakeUserIDSHA256.slice(20, 32)
-		].join('-');
-		
-		let fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
 		let newAddressesapi = [];
 		let newAddressescsv = [];
