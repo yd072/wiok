@@ -1,4 +1,9 @@
+
+
 import { connect } from 'cloudflare:sockets';
+
+// ... (从 let userID = ''; 到 function resolveToIPv6(target) { ... } 的所有代码保持不变) ...
+// ... (所有这些早期代码都无需修改，直接保留) ...
 
 let userID = '';
 let proxyIP = '';
@@ -368,12 +373,45 @@ async function resolveToIPv6(target) {
 	}
 }
 
+/**
+ * 【新增】返回Nginx欢迎页面的函数
+ * @returns {string} HTML content
+ */
+async function nginx() {
+    const text = `
+	<!DOCTYPE html>
+	<html>
+	<head>
+	<title>Welcome to nginx!</title>
+	<style>
+		body {
+			width: 35em;
+			margin: 0 auto;
+			font-family: Tahoma, Verdana, Arial, sans-serif;
+		}
+	</style>
+	</head>
+	<body>
+	<h1>Welcome to nginx!</h1>
+	<p>If you see this page, the nginx web server is successfully installed and
+	working. Further configuration is required.</p>
+	
+	<p>For online documentation and support please refer to
+	<a href="http://nginx.org/">nginx.org</a>.<br/>
+	Commercial support is available at
+	<a href="http://nginx.com/">nginx.com</a>.</p>
+	
+	<p><em>Thank you for using nginx.</em></p>
+	</body>
+	</html>
+	`
+    return text;
+}
+
 export default {
 	async fetch(request, env, ctx) {
 		try {
-            // 【默认伪装】定义默认伪装的网址
-            const defaultHostname = 'nginx.com';
-			const UA = request.headers.get('User-Agent') || 'null';
+            const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
             const url = new URL(request.url);
 
@@ -388,12 +426,12 @@ export default {
 				userIDTime = userIDs[2];
 			}
 
+            // 【修改点】如果未设置UUID，则返回Nginx欢迎页进行伪装
 			if (!userID) {
-                // 【默认伪装增强】如果未设置UUID，则启用伪装
-                if (env.URL302) return Response.redirect(env.URL302, 302);
-                if (env.URL) return 代理URL(request, env.URL, url);
-                // 如果环境变量都未设置，则使用默认的伪装地址
-                return 代理URL(request, `https://${defaultHostname}`, url);
+				const html = await nginx();
+				return new Response(html, {
+					headers: { 'Content-Type': 'text/html; charset=utf-8' },
+				});
 			}
 
 			const currentDate = new Date();
@@ -410,8 +448,8 @@ export default {
 
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
-			// 修改PROXYIP初始化逻辑
-			if (env.KV) {
+			// ... (从 proxyIP 初始化到 RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false'; 的代码保持不变) ...
+            if (env.KV) {
 				try {
 					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
 					if (advancedSettingsJSON) {
@@ -424,12 +462,10 @@ export default {
 					console.error('从KV读取PROXYIP时发生错误:', error);
 				}
 			}
-			// 如果proxyIP为空，则使用环境变量或默认值
 			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
 			proxyIPs = await 整理(proxyIP);
 			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 
-			// 修改SOCKS5地址初始化逻辑
 			if (env.KV) {
 				try {
 					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
@@ -443,7 +479,6 @@ export default {
 					console.error('从KV读取SOCKS5时发生错误:', error);
 				}
 			}
-			// 如果socks5Address为空，则使用环境变量或默认值
 			socks5Address = socks5Address || env.SOCKS5 || '';
 			socks5s = await 整理(socks5Address);
 			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
@@ -453,7 +488,6 @@ export default {
 			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
 			if (env.BAN) banHosts = await 整理(env.BAN);
 			
-            // --- NAT64/DNS64 设置加载逻辑 ---
             if (env.KV) {
 				try {
 					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
@@ -487,7 +521,8 @@ export default {
 			const upgradeHeader = request.headers.get('Upgrade');
 			
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
-				if (env.ADD) addresses = await 整理(env.ADD);
+				// ... (从 if (env.ADD) 到 if (url.searchParams.has('socks')) { ... } 的代码保持不变) ...
+                if (env.ADD) addresses = await 整理(env.ADD);
 				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
 				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
 				if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
@@ -524,13 +559,13 @@ export default {
 				}
 
 				const 路径 = url.pathname.toLowerCase();
+				
+                // 【修改点】对于根路径的访问，直接返回Nginx欢迎页
 				if (路径 == '/') {
-                    // 【默认伪装增强】如果访问根路径，则启用伪装
-					if (env.URL302) return Response.redirect(env.URL302, 302);
-					if (env.URL) return await 代理URL(request, env.URL, url);
-                    // 如果环境变量都未设置，则使用默认的伪装地址
-                    return await 代理URL(request, `https://${defaultHostname}`, url);
-
+                    const html = await nginx();
+                    return new Response(html, {
+                        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                    });
 				} else if (路径 === `/${fakeUserID}`) {
 					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 					return new Response(`${fakeConfig}`, { status: 200 });
@@ -575,13 +610,16 @@ export default {
 						});
 					}
 				} else {
-                    // 【默认伪装增强】对于所有其他无效路径，同样启用伪装
-					if (env.URL302) return Response.redirect(env.URL302, 302);
-					if (env.URL) return await 代理URL(request, env.URL, url);
-                    return await 代理URL(request, `https://${defaultHostname}`, url);
+                    // 【修改点】对于所有其他无效路径，同样返回Nginx欢迎页
+                    const html = await nginx();
+                    return new Response(html, {
+                        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                    });
 				}
 			} else {
-				socks5Address = url.searchParams.get('socks5') || socks5Address;
+				// ... (从 socks5Address = url.searchParams.get('socks5') || socks5Address; 到函数结尾的所有代码保持不变) ...
+				// ... (这部分是处理WebSocket连接的，无需修改) ...
+                socks5Address = url.searchParams.get('socks5') || socks5Address;
 				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
 				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
 					socks5Address = url.pathname.split('://')[1].split('#')[0];
@@ -628,6 +666,9 @@ export default {
 		}
 	},
 };
+
+// ... (从 async function secureProtoOverWSHandler(request) { 到文件末尾的所有代码保持不变) ...
+// ... (所有这些辅助函数和核心代理逻辑都无需修改，直接保留) ...
 
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
@@ -1360,58 +1401,9 @@ async function 双重哈希(文本) {
 }
 
 /**
- * 反向代理函数
- * @param {Request} request 原始请求对象
- * @param {string} 代理网址 伪装网站的URL
- * @param {URL} 目标网址 原始请求的URL对象
- * @param {boolean} 调试模式
- * @returns {Promise<Response>}
+ * 【已废弃】反向代理函数不再需要，因为我们直接返回本地HTML
+ * async function 代理URL(...) { ... }
  */
-async function 代理URL(request, 代理网址, 目标网址, 调试模式 = false) {
-    try {
-        const 网址列表 = await 整理(代理网址);
-        if (!网址列表 || 网址列表.length === 0) {
-            throw new Error('代理网址列表为空');
-        }
-        const 完整网址 = 网址列表[Math.floor(Math.random() * 网址列表.length)];
-
-        const 解析后的网址 = new URL(完整网址);
-        if (调试模式) console.log(`代理 URL: ${解析后的网址}`);
-
-        // 正确拼接目标路径和查询参数
-        const 目标URL = new URL(目标网址.pathname + 目标网址.search, 解析后的网址);
-
-        // 复制原始请求头，并进行一些清理
-        const newHeaders = new Headers(request.headers);
-        newHeaders.set('Host', 解析后的网址.hostname); // 将Host头修改为代理目标的域名
-        newHeaders.set('Referer', 解析后的网址.origin); // 可选：伪造或设置正确的Referer
-
-        const 响应 = await fetch(目标URL.toString(), {
-            method: request.method, // 传递原始请求方法
-            headers: newHeaders,    // 传递处理过的请求头，增强伪装
-            body: request.body,     // 传递请求体，支持POST等方法
-            redirect: 'manual'      // 手动处理重定向
-        });
-
-        const 新响应 = new Response(响应.body, {
-            status: 响应.status,
-            statusText: 响应.statusText,
-            headers: new Headers(响应.headers)
-        });
-
-        // 移除可能暴露信息的特有请求头
-        新响应.headers.delete('cf-ray');
-        新响应.headers.delete('cf-connecting-ip');
-        新响应.headers.delete('x-forwarded-proto');
-        新响应.headers.delete('x-real-ip');
-
-        return 新响应;
-    } catch (error) {
-        console.error(`代理请求失败: ${error.message}`);
-        return new Response(`代理请求失败: ${error.message}`, { status: 500 });
-    }
-}
-
 
 const protocolEncodedFlag = atob('ZG14bGMzTT0=');
 function 配置信息(UUID, 域名地址) {
@@ -1444,7 +1436,9 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+
+// ... (所有其他函数，如 生成配置信息, 整理优选列表, KV 等，都保持不变) ...
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	// 在获取其他配置前,先尝试读取自定义的设置
