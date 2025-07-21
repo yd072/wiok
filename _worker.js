@@ -306,7 +306,7 @@ class WebSocketManager {
 }
 
 // =================================================================
-//  服务状态页 (Status Page)
+//  服务状态页 (Status Page) 
 // =================================================================
 async function statusPage() {
     const html = `
@@ -437,15 +437,14 @@ async function statusPage() {
             </div>
 
             <div class="footer">
-                <p id="last-updated"></p>
+                <p>Last Updated: <span id="timestamp-container" class="notranslate"></span></p>
                 <a href="#" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
             </div>
         </div>
         <script>
             function updateTimestamp() {
                 const now = new Date();
-                const timestamp = now.toUTCString();
-                document.getElementById('last-updated').textContent = 'Last Updated: ' + timestamp;
+                document.getElementById('timestamp-container').textContent = ' ' + now.toUTCString();
             }
             setInterval(updateTimestamp, 1000);
             updateTimestamp();
