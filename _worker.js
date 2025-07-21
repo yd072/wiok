@@ -1,8 +1,8 @@
 
+// --- START OF FILE _worker.js ---
 
 // =================================================================
 //  伪装页面：服务状态页 (Status Page)
-//  所有非代理、非订阅的请求都将显示此页面，以提供最高级别的伪装。
 // =================================================================
 async function statusPage() {
     const html = `
@@ -518,16 +518,12 @@ async function resolveToIPv6(target) {
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
         const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
         
-        // --- 关键修改 ---
         if (isIPv6(nat64)) {
             return nat64;
         } else {
-            // 如果没得到合法的IPv6，就抛出错误
             throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
         }
     } catch (error) {
-        // --- 关键修改 ---
-        // 将底层的错误继续向上抛出，而不是返回一个默认值
         throw new Error(`NAT64 resolution failed: ${error.message}`);
 	}
 }
@@ -535,28 +531,82 @@ async function resolveToIPv6(target) {
 export default {
 	async fetch(request, env, ctx) {
 		try {
-			const upgradeHeader = request.headers.get('Upgrade');
-			if (upgradeHeader && upgradeHeader === 'websocket') {
-                // 如果是 WebSocket 请求，直接处理，无需加载所有 HTTP 变量
-				userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || '';
-                if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
-                    动态UUID = env.KEY || env.TOKEN || userID;
-                    const userIDs = await 生成动态UUID(动态UUID);
-                    userID = userIDs[0];
-                    userIDLow = userIDs[1];
-                }
-                proxyIP = env.PROXYIP || env.proxyip || '';
-				socks5Address = env.SOCKS5 || '';
-				if (socks5Address) {
-					try {
-						parsedSocks5Address = socks5AddressParser(socks5Address);
-						enableSocks = true;
-					} catch (err) {
-						enableSocks = false;
+            // =================================================================
+            //  **修正部分**：在此处统一加载所有环境变量，恢复原始逻辑
+            // =================================================================
+			const UA = request.headers.get('User-Agent') || 'null';
+			const userAgent = UA.toLowerCase();
+			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || '';
+
+			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
+				动态UUID = env.KEY || env.TOKEN || userID;
+				有效时间 = Number(env.TIME) || 有效时间;
+				更新时间 = Number(env.UPTIME) || 更新时间;
+				const userIDs = await 生成动态UUID(动态UUID);
+				userID = userIDs[0];
+				userIDLow = userIDs[1];
+				userIDTime = userIDs[2];
+			}
+
+			if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.proxyip && settings.proxyip.trim()) {
+							proxyIP = settings.proxyip;
+						}
+						if (settings.socks5 && settings.socks5.trim()) {
+							socks5Address = settings.socks5.split('\n')[0].trim();
+						}
+                        if (settings.nat64 && settings.nat64.trim()) {
+							DNS64Server = settings.nat64.trim().split('\n')[0];
+						}
 					}
+				} catch (error) {
+					console.error('从KV读取高级设置时发生错误:', error);
 				}
-				const url = new URL(request.url);
-				socks5Address = url.searchParams.get('socks5') || socks5Address;
+			}
+
+			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
+			proxyIPs = await 整理(proxyIP);
+			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+			
+            socks5Address = socks5Address || env.SOCKS5 || '';
+			socks5s = await 整理(socks5Address);
+			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+			socks5Address = socks5Address.split('//')[1] || socks5Address;
+
+            if (socks5Address) {
+				try {
+					parsedSocks5Address = socks5AddressParser(socks5Address);
+					enableSocks = true;
+				} catch (err) {
+					console.log(err.toString());
+					enableSocks = false;
+				}
+			}
+
+			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
+			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
+			if (env.BAN) banHosts = await 整理(env.BAN);
+            DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
+            RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+
+            // =================================================================
+            //  请求分流逻辑
+            // =================================================================
+			const upgradeHeader = request.headers.get('Upgrade');
+			const url = new URL(request.url);
+
+			// 1. 处理 WebSocket 代理连接请求
+			if (upgradeHeader && upgradeHeader === 'websocket') {
+                // 此处的变量已在上面加载完毕，只需根据 URL 参数进行覆盖
+                const urlSocks5 = url.searchParams.get('socks5') || url.searchParams.get('socks');
+                if (urlSocks5) {
+                    socks5Address = urlSocks5;
+                    enableSocks = true;
+                }
 				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
 				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
 					socks5Address = url.pathname.split('://')[1].split('#')[0];
@@ -567,17 +617,15 @@ export default {
 						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
 					}
 				}
-				if (socks5Address) {
+				if (socks5Address && enableSocks) {
 					try {
 						parsedSocks5Address = socks5AddressParser(socks5Address);
-						enableSocks = true;
 					} catch (err) {
 						console.log(err.toString());
 						enableSocks = false;
 					}
-				} else {
-					enableSocks = false;
 				}
+
 				if (url.searchParams.has('proxyip')) {
 					proxyIP = url.searchParams.get('proxyip');
 					enableSocks = false;
@@ -594,26 +642,11 @@ export default {
 				return await secureProtoOverWSHandler(request);
 			}
 
-            // 对于所有 HTTP 请求
-			const UA = request.headers.get('User-Agent') || 'null';
-			const userAgent = UA.toLowerCase();
-			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || '';
-
-			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
-				动态UUID = env.KEY || env.TOKEN || userID;
-				有效时间 = Number(env.TIME) || 有效时间;
-				更新时间 = Number(env.UPTIME) || 更新时间;
-				const userIDs = await 生成动态UUID(动态UUID);
-				userID = userIDs[0];
-				userIDLow = userIDs[1];
-				userIDTime = userIDs[2];
-			}
-
+            // 2. 处理 HTTP 订阅和功能页面请求
 			if (!userID) {
 				return await statusPage();
 			}
 
-			const url = new URL(request.url);
 			if (env.ADD) addresses = await 整理(env.ADD);
 			if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
 			if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
@@ -641,13 +674,8 @@ export default {
 
 			if (url.searchParams.has('proxyip')) {
 				path = `/?proxyip=${url.searchParams.get('proxyip')}`;
-				RproxyIP = 'false';
-			} else if (url.searchParams.has('socks5')) {
-				path = `/?socks5=${url.searchParams.get('socks5')}`;
-				RproxyIP = 'false';
-			} else if (url.searchParams.has('socks')) {
-				path = `/?socks5=${url.searchParams.get('socks')}`;
-				RproxyIP = 'false';
+			} else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
+				path = `/?socks5=${url.searchParams.get('socks5') || url.searchParams.get('socks')}`;
 			}
 
 			const currentDate = new Date();
@@ -663,69 +691,8 @@ export default {
 			].join('-');
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
-			// 修改PROXYIP初始化逻辑
-			if (env.KV) {
-				try {
-					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
-					if (advancedSettingsJSON) {
-						const settings = JSON.parse(advancedSettingsJSON);
-						if (settings.proxyip && settings.proxyip.trim()) {
-							proxyIP = settings.proxyip;
-						}
-					}
-				} catch (error) {
-					console.error('从KV读取PROXYIP时发生错误:', error);
-				}
-			}
-			// 如果proxyIP为空，则使用环境变量或默认值
-			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
-			proxyIPs = await 整理(proxyIP);
-			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-
-			// 修改SOCKS5地址初始化逻辑
-			if (env.KV) {
-				try {
-					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
-					if (advancedSettingsJSON) {
-						const settings = JSON.parse(advancedSettingsJSON);
-						if (settings.socks5 && settings.socks5.trim()) {
-							socks5Address = settings.socks5.split('\n')[0].trim();
-						}
-					}
-				} catch (error) {
-					console.error('从KV读取SOCKS5时发生错误:', error);
-				}
-			}
-			// 如果socks5Address为空，则使用环境变量或默认值
-			socks5Address = socks5Address || env.SOCKS5 || '';
-			socks5s = await 整理(socks5Address);
-			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-			socks5Address = socks5Address.split('//')[1] || socks5Address;
-
-			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
-			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
-			if (env.BAN) banHosts = await 整理(env.BAN);
-			
-            // --- NAT64/DNS64 设置加载逻辑 ---
-            if (env.KV) {
-				try {
-					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
-					if (advancedSettingsJSON) {
-						const settings = JSON.parse(advancedSettingsJSON);
-						if (settings.nat64 && settings.nat64.trim()) {
-							DNS64Server = settings.nat64.trim().split('\n')[0];
-						}
-					}
-				} catch (error) {
-					console.error('从KV读取NAT64时发生错误:', error);
-                }
-            }
-			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
-			RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
-
 			const 路径 = url.pathname.toLowerCase();
 
-            // 检查功能性路径
 			if (路径 === `/${fakeUserID}`) {
 				const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 				return new Response(`${fakeConfig}`, { status: 200 });
@@ -770,7 +737,7 @@ export default {
 				}
 			}
 
-            // 如果不是任何已知的功能路径，则显示伪装页面
+            // 3. 如果不是任何已知的功能路径，则显示伪装页面
             if (env.URL302) {
                 return Response.redirect(env.URL302, 302);
             }
@@ -778,7 +745,6 @@ export default {
                 return await 代理URL(request, env.URL, url);
             }
 
-            // 默认情况下返回状态页
 			return await statusPage();
 		} catch (err) {
 			let e = err;
@@ -786,6 +752,8 @@ export default {
 		}
 	},
 };
+
+// --- 以下所有辅助函数均保持不变 ---
 
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
@@ -1609,86 +1577,33 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				}
 			}
 
-			// 修改PROXYIP设置逻辑
-			const customProxyIP = settings.proxyip;
-			if (customProxyIP && customProxyIP.trim()) {
-				// 如果KV中有PROXYIP设置，使用KV中的设置
-				proxyIP = customProxyIP;
-				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-				RproxyIP = 'false';
-			} else if (env.PROXYIP) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				proxyIP = env.PROXYIP;
-				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-				RproxyIP = 'false';
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				proxyIP = '';
-				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
-			}
-
-			// 修改SOCKS5设置逻辑
-			const customSocks5 = settings.socks5;			
-			if (customSocks5 && customSocks5.trim()) {
-				// 如果KV中有SOCKS5设置，使用KV中的设置
-				socks5Address = customSocks5.trim().split('\n')[0];
-				socks5s = await 整理(socks5Address);
-				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-				socks5Address = socks5Address.split('//')[1] || socks5Address;
-				enableSocks = true; 
-			} else if (env.SOCKS5) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				socks5Address = env.SOCKS5;
-				socks5s = await 整理(socks5Address);
-				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-				socks5Address = socks5Address.split('//')[1] || socks5Address;
-				enableSocks = true; 
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				enableSocks = false;
-				socks5Address = '';
-			}
-
 			// 读取自定义SUB设置
 			const customSub = settings.sub;
-			// 明确检查是否为null或空字符串
 			if (customSub !== null && customSub.trim() !== '') {
-				// 如果KV中有SUB设置，使用KV中的设置
 				sub = customSub.trim().split('\n')[0];
 			} else if (env.SUB) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				sub = env.SUB;
 			} else {
-				// 如果KV和环境变量中都没有设置，使用默认值
 				sub = '';
 			}
 
 			// 读取自定义SUBAPI设置
 			const customSubAPI = settings.subapi;
-			// 明确检查是否为null或空字符串
 			if (customSubAPI !== null && customSubAPI.trim() !== '') {
-				// 如果KV中有SUBAPI设置，使用KV中的设置
 				subConverter = customSubAPI.trim().split('\n')[0];
 			} else if (env.SUBAPI) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				subConverter = env.SUBAPI;
 			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
 				subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 			}
 
 			// 读取自定义SUBCONFIG设置
 			const customSubConfig = settings.subconfig;
 			if (customSubConfig !== null && customSubConfig.trim() !== '') {
-				// 如果KV中有SUBCONFIG设置，使用KV中的设置
 				subConfig = customSubConfig.trim().split('\n')[0];
 			} else if (env.SUBCONFIG) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
 				subConfig = env.SUBCONFIG;
 			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
 				subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 			}
 		} catch (error) {
@@ -2616,7 +2531,6 @@ async function handlePostRequest(request, env, txt) {
         const url = new URL(request.url);
         const type = url.searchParams.get('type');
 
-        // 根据类型保存到不同的KV
         if (type === 'advanced') {
             const settings = JSON.parse(content);
             await env.KV.put('settinggs.txt', JSON.stringify(settings, null, 2));
@@ -2847,7 +2761,6 @@ async function handleGetRequest(env, txt) {
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
-                <!-- 修改高级设置部分 -->
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
                         <h3 style="margin: 0;">⚙️ 高级设置</h3>
@@ -2935,7 +2848,6 @@ async function handleGetRequest(env, txt) {
                     </div>
                 </div>
 
-                <!-- 保持现有内容 -->
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                     ℹ️ 注意事项 ∨
                 </a>
@@ -3010,19 +2922,6 @@ async function handleGetRequest(env, txt) {
                 }
             }
 
-            function toggleAdvancedSettings() {
-                const content = document.getElementById('advanced-settings-content');
-                const toggle = document.getElementById('advanced-settings-toggle');
-                if (content.style.display === 'none' || !content.style.display) {
-                    content.style.display = 'block';
-                    toggle.textContent = '∧';
-                } else {
-                    content.style.display = 'none';
-                    toggle.textContent = '∨';
-                }
-            }
-
-            // 修改保存设置函数
             async function saveSettings() {
                 const saveStatus = document.getElementById('settings-save-status');
                 saveStatus.textContent = '保存中...';
