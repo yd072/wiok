@@ -306,7 +306,7 @@ class WebSocketManager {
 }
 
 // =================================================================
-//  服务状态页 (Status Page) - 最终版 (日期强制英文，时分秒不翻译)
+//  服务状态页 (Status Page) 
 // =================================================================
 async function statusPage() {
     const html = `
@@ -439,6 +439,7 @@ async function statusPage() {
             <div class="footer">
                 <p>
                     Last Updated:
+                    <span id="date-container"></span>
                     <span id="time-container" class="notranslate"></span>
                 </p>
                 <a href="#" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
@@ -447,17 +448,19 @@ async function statusPage() {
         <script>
             let lastDate = '';
             function updateTimestamp() {
-                const now = new Date();
+                const now = new Date();   
                 const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-                const currentDate = now.toLocaleDateString('en-US', dateOptions);
+                const currentDate = now.toLocaleDateString('en-US', dateOptions);               
                 if (currentDate !== lastDate) {
                     document.getElementById('date-container').textContent = currentDate;
                     lastDate = currentDate;
-                }
-                const currentTime = now.toLocaleTimeString();
-                document.getElementById('time-container').textContent = ' ' + currentTime;
+                }          
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                const currentTimeString = ' ' + hours + ':' + minutes + ':' + seconds;
+                document.getElementById('time-container').textContent = currentTimeString;
             }
-
             setInterval(updateTimestamp, 1000);
             updateTimestamp();
         </script>
