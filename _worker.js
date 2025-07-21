@@ -2761,6 +2761,7 @@ async function handleGetRequest(env, txt) {
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
+                <!-- 修改高级设置部分 -->
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
                         <h3 style="margin: 0;">⚙️ 高级设置</h3>
@@ -2848,6 +2849,7 @@ async function handleGetRequest(env, txt) {
                     </div>
                 </div>
 
+                <!-- 保持现有内容 -->
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                     ℹ️ 注意事项 ∨
                 </a>
@@ -2922,6 +2924,19 @@ async function handleGetRequest(env, txt) {
                 }
             }
 
+            function toggleAdvancedSettings() {
+                const content = document.getElementById('advanced-settings-content');
+                const toggle = document.getElementById('advanced-settings-toggle');
+                if (content.style.display === 'none' || !content.style.display) {
+                    content.style.display = 'block';
+                    toggle.textContent = '∧';
+                } else {
+                    content.style.display = 'none';
+                    toggle.textContent = '∨';
+                }
+            }
+
+            // 修改保存设置函数
             async function saveSettings() {
                 const saveStatus = document.getElementById('settings-save-status');
                 saveStatus.textContent = '保存中...';
