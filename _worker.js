@@ -373,7 +373,7 @@ async function resolveToIPv6(target) {
  * 返回一个静态的 Nginx 欢迎页面响应。
  * @returns {Promise<Response>}
  */
-async function nginxWelcomePage() {
+async function nginx() {
 
     const text = `
 	<!DOCTYPE html>
@@ -428,7 +428,7 @@ export default {
                 if (env.URL302) return Response.redirect(env.URL302, 302);
                 if (env.URL) return 代理URL(request, env.URL, url);
                 // 默认显示 Nginx 欢迎页面
-                return nginxWelcomePage();
+                return nginx();
 			}
 
 			const currentDate = new Date();
@@ -564,7 +564,7 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					if (env.URL) return await 代理URL(request, env.URL, url);
                     // 访问根路径时，显示 Nginx 欢迎页面
-                    return nginxWelcomePage();
+                    return nginx();
 
 				} else if (路径 === `/${fakeUserID}`) {
 					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
@@ -614,7 +614,7 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					if (env.URL) return await 代理URL(request, env.URL, url);
                     // 对于所有其他未知路径，显示 Nginx 欢迎页面
-                    return nginxWelcomePage();
+                    return nginx();
 				}
 			} else {
 				socks5Address = url.searchParams.get('socks5') || socks5Address;
