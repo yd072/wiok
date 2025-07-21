@@ -374,7 +374,7 @@ async function resolveToIPv6(target) {
  * @returns {Promise<Response>}
  */
 async function nginxWelcomePage() {
-    const html = `
+    const text = `
 	<!DOCTYPE html>
 	<html>
 	<head>
