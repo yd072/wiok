@@ -134,7 +134,7 @@ async function statusPage() {
 
             <div class="footer">
                 <p id="last-updated"></p>
-                <a href="#">Powered by Uptime Engine</a>
+                <a href="https://github.com/cmliu/edgetunnel" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
             </div>
         </div>
         <script>
@@ -535,16 +535,10 @@ async function resolveToIPv6(target) {
 export default {
 	async fetch(request, env, ctx) {
 		try {
-            // ---------------------------------------------------
-            //  核心修改：统一伪装页面逻辑
-            // ---------------------------------------------------
-			const url = new URL(request.url);
 			const upgradeHeader = request.headers.get('Upgrade');
-
-            // 1. WebSocket 代理请求：这是最高优先级的，直接处理
 			if (upgradeHeader && upgradeHeader === 'websocket') {
-                // 在进入代理处理器之前，先加载必要的环境变量
-                userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
+                // 如果是 WebSocket 请求，直接处理，无需加载所有 HTTP 变量
+				userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || '';
                 if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
                     动态UUID = env.KEY || env.TOKEN || userID;
                     const userIDs = await 生成动态UUID(动态UUID);
@@ -552,17 +546,16 @@ export default {
                     userIDLow = userIDs[1];
                 }
                 proxyIP = env.PROXYIP || env.proxyip || '';
-                socks5Address = env.SOCKS5 || '';
-                if (socks5Address) {
-                    try {
-                        parsedSocks5Address = socks5AddressParser(socks5Address);
-                        enableSocks = true;
-                    } catch (err) {
-                        enableSocks = false;
-                    }
-                }
-                
-                // 处理 WebSocket 请求
+				socks5Address = env.SOCKS5 || '';
+				if (socks5Address) {
+					try {
+						parsedSocks5Address = socks5AddressParser(socks5Address);
+						enableSocks = true;
+					} catch (err) {
+						enableSocks = false;
+					}
+				}
+				const url = new URL(request.url);
 				socks5Address = url.searchParams.get('socks5') || socks5Address;
 				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
 				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
@@ -574,7 +567,6 @@ export default {
 						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
 					}
 				}
-
 				if (socks5Address) {
 					try {
 						parsedSocks5Address = socks5AddressParser(socks5Address);
@@ -586,7 +578,6 @@ export default {
 				} else {
 					enableSocks = false;
 				}
-
 				if (url.searchParams.has('proxyip')) {
 					proxyIP = url.searchParams.get('proxyip');
 					enableSocks = false;
@@ -600,14 +591,14 @@ export default {
 					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
 					enableSocks = false;
 				}
-
 				return await secureProtoOverWSHandler(request);
 			}
 
-            // 2. 加载所有需要的环境变量，为订阅和编辑页做准备
+            // 对于所有 HTTP 请求
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
-			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
+			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || '';
+
 			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
 				动态UUID = env.KEY || env.TOKEN || userID;
 				有效时间 = Number(env.TIME) || 有效时间;
@@ -617,50 +608,48 @@ export default {
 				userIDLow = userIDs[1];
 				userIDTime = userIDs[2];
 			}
-            
-            // 如果没有设置 UUID，直接显示伪装页
+
 			if (!userID) {
 				return await statusPage();
 			}
 
-            // 订阅和编辑页面的必要变量加载
-            if (env.ADD) addresses = await 整理(env.ADD);
-            if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
-            if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
-            if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
-            if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
-            DLS = Number(env.DLS) || DLS;
-            remarkIndex = Number(env.CSVREMARK) || remarkIndex;
-            BotToken = env.TGTOKEN || BotToken;
-            ChatID = env.TGID || ChatID;
-            FileName = env.SUBNAME || FileName;
-            subEmoji = env.SUBEMOJI || env.EMOJI || subEmoji;
-            if (subEmoji == '0') subEmoji = 'false';
-            if (env.LINK) link = await 整理(env.LINK);
-            let sub = env.SUB || '';
-            subConverter = env.SUBAPI || subConverter;
-            if (subConverter.includes("http://")) {
-                subConverter = subConverter.split("//")[1];
-                subProtocol = 'http';
-            } else {
-                subConverter = subConverter.split("//")[1] || subConverter;
-            }
-            subConfig = env.SUBCONFIG || subConfig;
-            if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
-            if (url.searchParams.has('notls')) noTLS = 'true';
+			const url = new URL(request.url);
+			if (env.ADD) addresses = await 整理(env.ADD);
+			if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
+			if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
+			if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
+			if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
+			DLS = Number(env.DLS) || DLS;
+			remarkIndex = Number(env.CSVREMARK) || remarkIndex;
+			BotToken = env.TGTOKEN || BotToken;
+			ChatID = env.TGID || ChatID;
+			FileName = env.SUBNAME || FileName;
+			subEmoji = env.SUBEMOJI || env.EMOJI || subEmoji;
+			if (subEmoji == '0') subEmoji = 'false';
+			if (env.LINK) link = await 整理(env.LINK);
+			let sub = env.SUB || '';
+			subConverter = env.SUBAPI || subConverter;
+			if (subConverter.includes("http://")) {
+				subConverter = subConverter.split("//")[1];
+				subProtocol = 'http';
+			} else {
+				subConverter = subConverter.split("//")[1] || subConverter;
+			}
+			subConfig = env.SUBCONFIG || subConfig;
+			if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
+			if (url.searchParams.has('notls')) noTLS = 'true';
 
-            if (url.searchParams.has('proxyip')) {
-                path = `/?proxyip=${url.searchParams.get('proxyip')}`;
-                RproxyIP = 'false';
-            } else if (url.searchParams.has('socks5')) {
-                path = `/?socks5=${url.searchParams.get('socks5')}`;
-                RproxyIP = 'false';
-            } else if (url.searchParams.has('socks')) {
-                path = `/?socks5=${url.searchParams.get('socks')}`;
-                RproxyIP = 'false';
-            }
+			if (url.searchParams.has('proxyip')) {
+				path = `/?proxyip=${url.searchParams.get('proxyip')}`;
+				RproxyIP = 'false';
+			} else if (url.searchParams.has('socks5')) {
+				path = `/?socks5=${url.searchParams.get('socks5')}`;
+				RproxyIP = 'false';
+			} else if (url.searchParams.has('socks')) {
+				path = `/?socks5=${url.searchParams.get('socks')}`;
+				RproxyIP = 'false';
+			}
 
-            // 生成用于伪装订阅链接的假信息
 			const currentDate = new Date();
 			currentDate.setHours(0, 0, 0, 0);
 			const timestamp = Math.ceil(currentDate.getTime() / 1000);
@@ -674,8 +663,7 @@ export default {
 			].join('-');
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
-            // PROXYIP/SOCKS5/NAT64 等高级配置加载
-            // 修改PROXYIP初始化逻辑
+			// 修改PROXYIP初始化逻辑
 			if (env.KV) {
 				try {
 					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
@@ -695,7 +683,7 @@ export default {
 			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 
 			// 修改SOCKS5地址初始化逻辑
-            if (env.KV) {
+			if (env.KV) {
 				try {
 					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
 					if (advancedSettingsJSON) {
@@ -735,19 +723,16 @@ export default {
 			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
 			RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 
-            // 3. 匹配特定的功能路径 (订阅、编辑页、伪装订阅)
 			const 路径 = url.pathname.toLowerCase();
 
-            // 伪装订阅路径
+            // 检查功能性路径
 			if (路径 === `/${fakeUserID}`) {
 				const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 				return new Response(`${fakeConfig}`, { status: 200 });
 			} 
-            // 编辑页路径
 			else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
 				return await KV(request, env);
 			} 
-            // 真实订阅路径
             else if ((动态UUID && url.pathname === `/${动态UUID}`) || 路径 === `/${userID}`) {
 				await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 				
@@ -785,25 +770,22 @@ export default {
 				}
 			}
 
-            // 4. 如果以上路径都不匹配，则显示统一的伪装页面
-            // 检查是否有重定向或反代URL的设置，如果没有，则显示状态页
-			if (env.URL302) {
+            // 如果不是任何已知的功能路径，则显示伪装页面
+            if (env.URL302) {
                 return Response.redirect(env.URL302, 302);
-            } else if (env.URL) {
+            }
+            if (env.URL) {
                 return await 代理URL(request, env.URL, url);
-            } else {
-                return await statusPage();
             }
 
+            // 默认情况下返回状态页
+			return await statusPage();
 		} catch (err) {
 			let e = err;
 			return new Response(e.toString());
 		}
 	},
 };
-
-
-// --- 以下是原始脚本的其余辅助函数，无需改动 ---
 
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
@@ -2635,12 +2617,11 @@ async function handlePostRequest(request, env, txt) {
         const type = url.searchParams.get('type');
 
         // 根据类型保存到不同的KV
-        switch(type) {
-            case 'advanced':
-                await env.KV.put('settinggs.txt', content);
-                break;
-            default: // 主列表内容保存到ADD.txt
-                await env.KV.put(txt, content);
+        if (type === 'advanced') {
+            const settings = JSON.parse(content);
+            await env.KV.put('settinggs.txt', JSON.stringify(settings, null, 2));
+        } else {
+            await env.KV.put(txt, content);
         }
         
         return new Response("保存成功");
@@ -3058,17 +3039,13 @@ async function handleGetRequest(env, txt) {
 
                     const response = await fetch(window.location.href + '?type=advanced', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(advancedSettings)
                     });
 
                     if (response.ok) {
                         saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => {
-                            saveStatus.textContent = '';
-                        }, 3000);
+                        setTimeout(() => { saveStatus.textContent = ''; }, 3000);
                     } else {
                         throw new Error('保存失败: ' + await response.text());
                     }
