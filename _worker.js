@@ -1335,9 +1335,27 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 abort(reason) {
                     log(`远程 Socket (readable) 被中止: ${reason}`);
                 }
-            }), { signal: controller.signal }); // 传入 AbortSignal
+                }),
+                {
+                    signal,
+                    preventCancel: false
+                }
+            )
+            .catch((error) => {
+                log(`数据传输异常: ${error.message}`);
+                if (!isSocketClosed) {
+                    safeCloseWebSocket(webSocket);
+                }
+                
+                // 仅在未收到数据时尝试重试，并限制重试次数
+                if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
+                    retryAttempted = true;
+                    retryCount++;
+                    log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
+                    retry();
+                }
+            });
 
-        log('数据流 (Remote -> WS) 正常结束。');
     } catch (error) {
         clearTimeout(timeout);
         log(`连接处理异常: ${error.message}`);
