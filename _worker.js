@@ -1339,17 +1339,25 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
 
         log('数据流 (Remote -> WS) 正常结束。');
     } catch (error) {
-        log(`数据流 (Remote -> WS) 出现错误: ${error.message}`);
-    } finally {
-        // 无论成功还是失败，最终都要执行清理。
-        cleanup();
+        clearTimeout(timeout);
+        log(`连接处理异常: ${error.message}`);
+        if (!isSocketClosed) {
+            safeCloseWebSocket(webSocket);
+        }
         
-        // **关键的重试逻辑**
-        // 只有在连接已建立、但从未收到任何数据的情况下（hasIncomingData 为 false），
-        // 并且提供了 retry 回调函数时，才触发重试。
-        if (!hasIncomingData && retry) {
-            log('连接已关闭但未收到任何数据，触发重试机制...');
+        // 仅在发生异常且未收到数据时尝试重试，并限制重试次数
+        if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
+            retryAttempted = true;
+            retryCount++;
+            log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
             retry();
+        }
+        
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+        if (signal.aborted) {
+            safeCloseWebSocket(webSocket);
         }
     }
 }
