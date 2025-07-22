@@ -1030,14 +1030,8 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
     }
 }
 
-/**
- * [RESTORED & OPTIMIZED] handleTCPOutBound (已恢复并优化)
- * 恢复了原始代码的连接和重试逻辑，以确保 PROXYIP/SOCKS5/NAT64 的功能正确。
- * 同时，集成了优化的 remoteSocketToWS 函数来处理数据转发，以提高健壮性。
- */
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
-
-    // 检查目标地址是否应通过 SOCKS5 代理。
+    // 优化 SOCKS5 模式检查
     const checkSocks5Mode = async (address) => {
         const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
@@ -1048,7 +1042,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return !!pattern;
     };
 
-    // 内部的连接创建函数，与原始代码逻辑保持一致。
+    // 优化连接处理
     const createConnection = async (address, port, socks = false) => {
         log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
@@ -1063,6 +1057,8 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                         hostname: address,
                         port: port,
                         allowHalfOpen: false,
+                        keepAlive: true,
+                        keepAliveInitialDelay: 60000,
                         signal: controller.signal
                     })
                 ,
@@ -1074,7 +1070,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             clearTimeout(timeoutId);
             remoteSocket.value = tcpSocket;
 
-            // 连接成功后，立即写入客户端的初始数据。
+            // 写入数据
             const writer = tcpSocket.writable.getWriter();
             try {
                 await writer.write(rawClientData);
@@ -1089,11 +1085,11 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     };
 
-    // 重试逻辑，与原始代码逻辑保持一致。
+    // 优化重试逻辑
     const retryConnection = async () => {
-        let tcpSocket;
+            let tcpSocket;
 
-        if (enableSocks) {
+            if (enableSocks) {
             try {              
                 log('重试：尝试使用 SOCKS5...');
                 tcpSocket = await createConnection(addressRemote, portRemote, true);               
@@ -1103,7 +1099,8 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 safeCloseWebSocket(webSocket);
                 return;
             }
-        } else {            
+            } else {            
+            // 定义所有回退策略，按优先级排序
             const strategies = [
                 {
                     name: '用户配置的 PROXYIP',
@@ -1124,7 +1121,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 },
                 {
                     name: '内置的默认 PROXYIP',
-                    enabled: true, 
+                    enabled: true, // 总是启用作为回退
                     execute: async () => {
                         const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
                         const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
@@ -1133,7 +1130,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 },
                 {
                     name: '内置的默认 NAT64',
-                    enabled: true, 
+                    enabled: true, // 总是启用作为最终回退
                     execute: async () => {
                         if (!DNS64Server || DNS64Server.trim() === '') {
                            DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
@@ -1145,6 +1142,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
                 }
             ];
 
+            // 按顺序尝试所有策略
             for (const strategy of strategies) {
                 if (strategy.enabled && !tcpSocket) {
                     try {
@@ -1166,24 +1164,21 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         
         if (tcpSocket) {
             log('建立从远程服务器到客户端的数据流...');
-            // 在重试流程中，不再需要提供重试回调，所以第三个参数是 null
             remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
         }
     };
 
-    // --- 主连接逻辑开始 ---
     try {
+        // 主连接逻辑
         log('主流程：第一阶段 - 尝试直接连接...');
         const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
             await checkSocks5Mode(addressRemote) : false;
 
         const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
         log('直接连接成功！');
-        // 初次连接成功，调用优化的数据转发函数，并传入重试函数作为回调
         return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
     } catch (error) {
         log(`主连接失败 (${error.message})，将启动重试流程...`);
-        // 初次连接失败，启动重试流程
         return retryConnection();
     }
 }
@@ -1260,81 +1255,75 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     };
 }
 
-/**
- * [OPTIMIZED] remoteSocketToWS (已优化)
- * 此函数健壮地将数据从远程服务器（remoteSocket）通过管道传输到客户端（webSocket）。
- * 它包含了统一的清理逻辑以防止资源泄露，并实现了一个更精确的重试机制。
- */
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
+    let hasIncomingData = false;
     let header = responseHeader;
-    let hasIncomingData = false; // 标志位，用于判断是否收到过数据
+    let isSocketClosed = false;
+    let retryAttempted = false;
+    let retryCount = 0; // 记录重试次数
+    const MAX_RETRIES = 3; // 限制最大重试次数
+
+    // 控制超时
     const controller = new AbortController();
+    const signal = controller.signal;
 
-    /**
-     * 统一的清理函数，用于关闭所有资源并中止正在进行的操作。
-     */
-    const cleanup = () => {
-        log('开始清理连接...');
-        // 如果 abort 操作尚未被调用，则调用它来中止 pipeTo
-        if (!controller.signal.aborted) {
-            controller.abort('Connection closing');
+    // 设置全局超时
+    const timeout = setTimeout(() => {
+        if (!hasIncomingData) {
+            controller.abort('连接超时');
         }
-        // 安全地关闭 WebSocket 和远程 Socket
-        safeCloseWebSocket(webSocket);
-        try {
-            if (remoteSocket && typeof remoteSocket.close === 'function') {
-                remoteSocket.close();
-            }
-        } catch (e) {
-            log(`关闭远程 Socket 时出错: ${e.message}`);
-        }
-    };
-
-    // 监听 WebSocket 的关闭和错误事件，以便主动触发清理。
-    webSocket.addEventListener('close', event => {
-        log(`WebSocket 已关闭: code=${event.code}, reason=${event.reason}`);
-        cleanup();
-    });
-    webSocket.addEventListener('error', error => {
-        log(`WebSocket 发生错误: ${error.message}`);
-        cleanup();
-    });
+    }, 5000);
 
     try {
-        // 使用 pipeTo 将远程 socket 的可读流高效地传输到 WebSocket。
+        // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
+    const writeData = async (chunk) => {
+        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                throw new Error('WebSocket 未连接');
+        }
+
+        if (header) {
+                // 预分配足够的 buffer，避免重复分配
+                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                combinedData.set(new Uint8Array(header), 0);
+                combinedData.set(new Uint8Array(chunk), header.byteLength);
+                webSocket.send(combinedData);
+                header = null; // 清除 header 引用
+        } else {
+            webSocket.send(chunk);
+        }
+        
+            hasIncomingData = true;
+        };
+
         await remoteSocket.readable
-            .pipeTo(new WritableStream({
-                start() {
-                    // 在流开始时，如果存在响应头，则立即发送。
-                    if (header) {
-                        if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                            webSocket.send(header);
-                            header = null; // 发送后清空
-                        } else {
-                            throw new Error('WebSocket is not open, cannot send header.');
+            .pipeTo(
+                new WritableStream({
+                    async write(chunk, controller) {
+                        try {
+                            await writeData(chunk);
+                        } catch (error) {
+                            log(`数据写入错误: ${error.message}`);
+                            controller.error(error);
                         }
+                    },
+                    close() {
+                        isSocketClosed = true;
+                        clearTimeout(timeout);
+                        log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
+                        
+                        // 仅在没有数据时尝试重试，且不超过最大重试次数
+                        if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
+                            retryAttempted = true;
+                            retryCount++;
+                            log(`未收到数据, 正在进行第 ${retryCount} 次重试...`);
+                            retry();
+                        }
+                    },
+                    abort(reason) {
+                        isSocketClosed = true;
+                        clearTimeout(timeout);
+                        log(`远程连接被中断: ${reason}`);
                     }
-                },
-                write(chunk) {
-                    // 当第一个数据块到达时，将 hasIncomingData 设为 true。
-                    // 这标志着连接是真正成功的。
-                    if (!hasIncomingData) {
-                        hasIncomingData = true;
-                        log('首次收到远程数据，连接被视为成功。');
-                    }
-                    // 将数据块发送到 WebSocket。
-                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                        webSocket.send(chunk);
-                    } else {
-                        throw new Error('WebSocket is not open, cannot send chunk.');
-                    }
-                },
-                close() {
-                    log('远程 Socket (readable) 已关闭。');
-                },
-                abort(reason) {
-                    log(`远程 Socket (readable) 被中止: ${reason}`);
-                }
                 }),
                 {
                     signal,
@@ -2851,7 +2840,7 @@ async function handleGetRequest(env, txt) {
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFJTNDYnIlM0UKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
