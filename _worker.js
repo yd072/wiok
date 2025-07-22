@@ -1265,8 +1265,9 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     const controller = new AbortController();
     const signal = controller.signal;
 
-    // 封装重试逻辑，避免代码重复
+    // 封装重试逻辑，以确保只在适当条件下执行，并避免重复代码。
     const attemptRetry = () => {
+        // 核心条件：从未收到数据、存在重试函数、且未超过最大重试次数。
         if (!hasIncomingData && retry && retryCount < MAX_RETRIES) {
             retryCount++;
             log(`连接未收到数据，正在进行第 ${retryCount}/${MAX_RETRIES} 次重试...`);
@@ -1274,77 +1275,78 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         }
     };
 
-    // 设置连接超时定时器
+    // 设置连接超时定时器。如果在指定时间内没有数据流入，则中止连接。
     const timeoutId = setTimeout(() => {
         if (!hasIncomingData) {
             log('连接在5秒内无数据流入，超时中止。');
-            controller.abort('连接超时');
+            controller.abort('Connection timeout');
         }
     }, 5000);
 
     try {
-        // 优化的数据发送函数
-        const writeData = (chunk) => {
-            if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                throw new Error('WebSocket is not in OPEN state.');
-            }
-
-            if (header) {
-                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-                combinedData.set(new Uint8Array(header), 0);
-                combinedData.set(new Uint8Array(chunk), header.byteLength);
-                webSocket.send(combinedData);
-                header = null; // 清除 header，确保只发送一次
-            } else {
-                webSocket.send(chunk);
-            }
-            hasIncomingData = true; // 标记已收到数据
-        };
-
         await remoteSocket.readable.pipeTo(
             new WritableStream({
-                async write(chunk, streamController) {
-                    try {
-                        writeData(chunk);
-                    } catch (error) {
-                        log(`数据写入 WebSocket 错误: ${error.message}`);
-                        streamController.error(error); // 将错误传递给 pipeTo 的 catch 块
+                // 写入数据到WebSocket
+                write(chunk) {
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        throw new Error('WebSocket is not in OPEN state.');
+                    }
+                    
+                    // 标记已收到数据，并取消超时定时器
+                    if (!hasIncomingData) {
+                        hasIncomingData = true;
+                        clearTimeout(timeoutId); 
+                    }
+
+                    if (header) {
+                        const combinedData = new Uint8Array(header.length + chunk.length);
+                        combinedData.set(header, 0);
+                        combinedData.set(chunk, header.length);
+                        webSocket.send(combinedData);
+                        header = null; // 清除header，确保只发送一次
+                    } else {
+                        webSocket.send(chunk);
                     }
                 },
+                // 当远程连接正常关闭时调用
                 close() {
                     isSocketClosed = true;
-                    log(`远程连接已正常关闭, 是否接收到数据: ${hasIncomingData}`);
-                    attemptRetry(); // 在关闭时检查是否需要重试
+                    log(`远程连接已正常关闭。是否接收到数据: ${hasIncomingData}`);
+                    attemptRetry(); // 检查是否需要重试
                 },
+                // 当远程连接被中止时调用
                 abort(reason) {
                     isSocketClosed = true;
                     log(`远程连接被中止: ${reason}`);
-                    // 中止通常由外部触发，这里一般不主动重试
                 }
             }),
             {
-                signal,
-                preventCancel: false // 允许 pipeTo 取消上游的 readable stream
+                signal, // 允许通过AbortController从外部中止
+                preventCancel: false
             }
         );
-
     } catch (error) {
-        if (error.name !== 'AbortError') { // AbortError 是我们主动触发的，可以忽略
+        // 捕获管道传输过程中的任何错误
+        if (error.name !== 'AbortError') { // AbortError是我们主动触发的，通常不需要作为严重错误记录
             log(`数据管道传输异常: ${error.message}`);
         }
         
-        // 仅在非主动中止且未收到数据时重试
-        if (!isSocketClosed && error.name !== 'AbortError') {
-             attemptRetry();
-        }
-
+        // 【关键修正】: 移除了错误的 `!isSocketClosed` 判断。
+        // 只要发生错误且未收到数据，就应该尝试重试。
+        attemptRetry();
     } finally {
-        clearTimeout(timeoutId); // 确保定时器被清理
-        if (isSocketClosed || signal.aborted) {
+        // 无论成功还是失败，最后都清理资源
+        if (!hasIncomingData) {
+            clearTimeout(timeoutId); // 确保即使没有数据，定时器也被清理
+        }
+        
+        // 安全关闭WebSocket，防止重复关闭
+        if (signal.aborted || isSocketClosed) {
             safeCloseWebSocket(webSocket);
         }
     }
 }
+
 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
