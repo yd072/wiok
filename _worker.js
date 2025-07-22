@@ -1346,16 +1346,6 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }
 }
 
-function safeCloseWebSocket(socket) {
-    try {
-        if (socket && (socket.readyState === WS_READY_STATE_OPEN || socket.readyState === 2 /*CLOSING*/)) {
-            socket.close();
-        }
-    } catch (error) {
-        // 在关闭一个已经关闭的 socket 时可能会出错，这里可以安全地忽略
-    }
-}
-
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
 
