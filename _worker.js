@@ -1030,137 +1030,188 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
     }
 }
 
-// ... [文件顶部的所有代码保持不变] ...
-
 /**
- * [FINAL CORRECTED & ANNOTATED] handleTCPOutBound (最终修正并添加中文注释)
- * 这是最终的、经过验证的修复版本。它解决了所有连接问题，同时保持了与原始逻辑的兼容性。
+ * [CORRECTED & OPTIMIZED] handleTCPOutBound (已修正和优化)
+ * 该函数负责处理出站TCP连接的创建，包括直接连接、SOCKS5代理以及多种回退策略。
+ * 关键修正：将写入初始数据的操作从连接创建函数中分离，确保只在连接成功后执行。
  */
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
 
-    // 检查是否应使用SOCKS5模式
+    /**
+     * 创建连接的辅助函数，职责单一：只建立连接并返回 socket。
+     * @param {object} options 连接选项
+     * @returns {Promise<Socket>} 返回一个成功的 socket 连接
+     */
+    async function createConnection(options) {
+        const { address, port, socks = false } = options;
+        log(`尝试建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            log(`连接超时: ${address}:${port}`);
+            controller.abort('Connection timeout');
+        }, 5000);
+
+        try {
+            const connectOptions = {
+                hostname: address,
+                port: port,
+                allowHalfOpen: false,
+                signal: controller.signal
+            };
+
+            const tcpSocket = socks ?
+                await socks5Connect(addressType, address, port, log) :
+                await connect(connectOptions);
+
+            log(`连接成功: ${address}:${port}`);
+            return tcpSocket; // **修正点**：只返回 socket，不在此处写入数据
+        } catch (error) {
+            log(`连接失败: ${address}:${port} - ${error.message}`);
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    /**
+     * 检查目标地址是否应通过 SOCKS5 代理。
+     */
     const checkSocks5Mode = async (address) => {
         const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
-        const pattern = go2Socks5s.find(p => new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address));
+
+        const pattern = go2Socks5s.find(p =>
+            new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address)
+        );
         return !!pattern;
     };
 
     /**
-     * [关键修复] 一个可靠的、带有超时的连接函数。
-     * 它只负责“连接”，不处理数据写入，以保持逻辑分离。
-     * @param {string} address 目标地址
-     * @param {number} port 目标端口
-     * @param {boolean} socks 是否使用SOCKS5
-     * @returns {Promise<Socket>}
+     * 当主连接失败时，此函数包含所有备用连接策略的逻辑。
      */
-    const connectWithTimeout = async (address, port, socks = false) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 4000); // 4秒超时
-
-        try {
-            log(`正在建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
-            const tcpSocket = socks ?
-                await socks5Connect(addressType, address, port, log) :
-                await connect({ hostname: address, port, signal: controller.signal });
-            log(`连接成功: ${address}:${port}`);
-            return tcpSocket;
-        } finally {
-            clearTimeout(timeoutId);
-        }
-    };
-
-    // 重试逻辑，当主连接失败时被调用
     const retryConnection = async () => {
-        log('主连接失败，启动重试流程...');
         let tcpSocket;
-        
-        // SOCKS5 作为一种特殊的代理，如果它失败了，我们通常不进行其他类型的重试。
-        if (enableSocks && (await checkSocks5Mode(addressRemote))) {
-            log('SOCKS5 模式，无其他回退策略。');
-            safeCloseWebSocket(webSocket);
-            return;
-        }
 
-        // 定义所有回退策略
-        const strategies = [
-            {
-                name: '用户配置的 PROXYIP',
-                enabled: proxyIP && proxyIP.trim() !== '',
-                connect: () => {
-                    const { address, port } = parseProxyIP(proxyIP, portRemote);
-                    return connectWithTimeout(address, port);
+        if (enableSocks) {
+            try {
+                log('重试：尝试使用 SOCKS5...');
+                // SOCKS5 也是一种连接方式，由 createConnection 处理
+                tcpSocket = await createConnection({ address: addressRemote, port: portRemote, socks: true });
+                log('SOCKS5 连接成功！');
+            } catch (socksError) {
+                log(`SOCKS5 连接失败: ${socksError.message}`);
+                // SOCKS5 失败后不再尝试其他，直接关闭
+                safeCloseWebSocket(webSocket);
+                return;
+            }
+        } else {
+            // 定义所有回退策略
+            const strategies = [
+                {
+                    name: '用户配置的 PROXYIP',
+                    enabled: proxyIP && proxyIP.trim() !== '',
+                    execute: async () => {
+                        const { address, port } = parseProxyIP(proxyIP, portRemote);
+                        return createConnection({ address, port });
+                    }
+                },
+                {
+                    name: '用户配置的 NAT64',
+                    enabled: DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="),
+                    execute: async () => {
+                        const nat64Address = await resolveToIPv6(addressRemote);
+                        return createConnection({ address: `[${nat64Address}]`, port: 443 });
+                    }
+                },
+                {
+                    name: '内置的默认 PROXYIP',
+                    enabled: true,
+                    execute: async () => {
+                        const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                        const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
+                        return createConnection({ address, port });
+                    }
+                },
+                {
+                    name: '内置的默认 NAT64',
+                    enabled: true,
+                    execute: async () => {
+                        if (!DNS64Server || DNS64Server.trim() === '') {
+                           DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+                        }
+                        const nat64Address = await resolveToIPv6(addressRemote);
+                        return createConnection({ address: `[${nat64Address}]`, port: 443 });
+                    }
                 }
-            },
-            {
-                name: '用户配置的 NAT64',
-                enabled: DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="),
-                connect: async () => {
-                    const nat64Address = await resolveToIPv6(addressRemote);
-                    return connectWithTimeout(`[${nat64Address}]`, 443);
-                }
-            },
-            // ... 可以添加更多内置的回退策略
-        ];
+            ];
 
-        // 依次尝试所有启用的策略
-        for (const strategy of strategies) {
-            if (strategy.enabled) {
-                try {
-                    log(`重试：尝试策略 '${strategy.name}'...`);
-                    tcpSocket = await strategy.connect();
-                    log(`策略 '${strategy.name}' 连接成功！`);
-                    break; // 任意一个策略成功，即跳出循环
-                } catch (error) {
-                    log(`策略 '${strategy.name}' 失败: ${error.message}`);
+            // 按顺序尝试每种策略
+            for (const strategy of strategies) {
+                if (strategy.enabled) {
+                    try {
+                        log(`重试：尝试策略 '${strategy.name}'...`);
+                        tcpSocket = await strategy.execute();
+                        log(`策略 '${strategy.name}' 连接成功！`);
+                        break; // 成功后跳出循环
+                    } catch (error) {
+                        log(`策略 '${strategy.name}' 失败: ${error.message}`);
+                    }
                 }
             }
         }
 
-        // 如果所有重试都失败了
+        // 如果经过所有重试后，tcpSocket 仍然为空，则表示所有方法都失败了。
         if (!tcpSocket) {
             log('所有回退尝试均已失败，关闭连接。');
             safeCloseWebSocket(webSocket);
             return;
         }
 
-        // 重试成功后，写入初始数据并开始转发
+        // **修正点**：在重试成功后，写入初始数据。
         try {
-            if (rawClientData && rawClientData.byteLength > 0) {
-                const writer = tcpSocket.writable.getWriter();
-                await writer.write(rawClientData);
-                writer.releaseLock();
-            }
+            const writer = tcpSocket.writable.getWriter();
+            await writer.write(rawClientData);
+            writer.releaseLock();
+            
+            log('重试连接成功，已写入初始数据，开始转发。');
             remoteSocket.value = tcpSocket;
-            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log); // 重试成功后不再需要重试
+            // 在重试场景中，不再需要提供重试回调，所以第三个参数是 null。
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
         } catch (error) {
-            log(`重试连接后写入或转发数据失败: ${error.message}`);
+            log(`在重试连接上写入初始数据失败: ${error.message}`);
             safeCloseWebSocket(webSocket);
         }
     };
 
-    // --- 主流程开始 ---
+    // --- 主连接逻辑开始 ---
     try {
-        const shouldUseSocks = enableSocks && await checkSocks5Mode(addressRemote);
-        const tcpSocket = await connectWithTimeout(addressRemote, portRemote, shouldUseSocks);
+        log('主流程：尝试直接连接...');
+        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ?
+            await checkSocks5Mode(addressRemote) : false;
 
-        // [关键] 只有在连接成功后，才写入初始数据
-        if (rawClientData && rawClientData.byteLength > 0) {
-            const writer = tcpSocket.writable.getWriter();
-            await writer.write(rawClientData);
-            writer.releaseLock();
-        }
+        const tcpSocket = await createConnection({
+            address: addressRemote,
+            port: portRemote,
+            socks: shouldUseSocks
+        });
 
+        // **修正点**：在初次连接成功后，写入初始数据。
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(rawClientData);
+        writer.releaseLock();
+        
+        log('直接连接成功，已写入初始数据，开始转发。');
         remoteSocket.value = tcpSocket;
-        // 开始数据转发，并传入 `retryConnection` 作为失败时的回调
+        // 对于初次尝试，将 retryConnection 函数作为回调传递，以便在失败时调用。
         remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
 
     } catch (error) {
-        // 如果主流程中的任何步骤（连接或初次写入）失败，则调用重试逻辑
+        log(`主连接失败 (${error.message})，将启动重试流程...`);
+        // 如果初次尝试失败（createConnection 抛出错误），则调用重试逻辑。
         await retryConnection();
     }
 }
-
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
@@ -1235,19 +1286,25 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
 }
 
 /**
- * [OPTIMIZED & ANNOTATED] remoteSocketToWS (已优化并添加中文注释)
- * 此函数保持优化状态，因为它能提供健壮的数据转发和精确的重试触发。
+ * [OPTIMIZED] remoteSocketToWS (已优化)
+ * 此函数健壮地将数据从远程服务器（remoteSocket）通过管道传输到客户端（webSocket）。
+ * 它包含了统一的清理逻辑以防止资源泄露，并实现了一个更精确的重试机制。
  */
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let header = responseHeader;
-    let hasIncomingData = false;
+    let hasIncomingData = false; // 标志位，用于判断是否收到过数据
     const controller = new AbortController();
 
+    /**
+     * 统一的清理函数，用于关闭所有资源并中止正在进行的操作。
+     */
     const cleanup = () => {
         log('开始清理连接...');
+        // 如果 abort 操作尚未被调用，则调用它来中止 pipeTo
         if (!controller.signal.aborted) {
             controller.abort('Connection closing');
         }
+        // 安全地关闭 WebSocket 和远程 Socket
         safeCloseWebSocket(webSocket);
         try {
             if (remoteSocket && typeof remoteSocket.close === 'function') {
@@ -1258,6 +1315,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         }
     };
 
+    // 监听 WebSocket 的关闭和错误事件，以便主动触发清理。
     webSocket.addEventListener('close', event => {
         log(`WebSocket 已关闭: code=${event.code}, reason=${event.reason}`);
         cleanup();
@@ -1268,23 +1326,28 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     });
 
     try {
+        // 使用 pipeTo 将远程 socket 的可读流高效地传输到 WebSocket。
         await remoteSocket.readable
             .pipeTo(new WritableStream({
                 start() {
+                    // 在流开始时，如果存在响应头，则立即发送。
                     if (header) {
                         if (webSocket.readyState === WS_READY_STATE_OPEN) {
                             webSocket.send(header);
-                            header = null;
+                            header = null; // 发送后清空
                         } else {
                             throw new Error('WebSocket is not open, cannot send header.');
                         }
                     }
                 },
                 write(chunk) {
+                    // 当第一个数据块到达时，将 hasIncomingData 设为 true。
+                    // 这标志着连接是真正成功的。
                     if (!hasIncomingData) {
                         hasIncomingData = true;
                         log('首次收到远程数据，连接被视为成功。');
                     }
+                    // 将数据块发送到 WebSocket。
                     if (webSocket.readyState === WS_READY_STATE_OPEN) {
                         webSocket.send(chunk);
                     } else {
@@ -1297,13 +1360,18 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 abort(reason) {
                     log(`远程 Socket (readable) 被中止: ${reason}`);
                 }
-            }), { signal: controller.signal });
+            }), { signal: controller.signal }); // 传入 AbortSignal
 
         log('数据流 (Remote -> WS) 正常结束。');
     } catch (error) {
         log(`数据流 (Remote -> WS) 出现错误: ${error.message}`);
     } finally {
+        // 无论成功还是失败，最终都要执行清理。
         cleanup();
+        
+        // **关键的重试逻辑**
+        // 只有在连接已建立、但从未收到任何数据的情况下（hasIncomingData 为 false），
+        // 并且提供了 retry 回调函数时，才触发重试。
         if (!hasIncomingData && retry) {
             log('连接已关闭但未收到任何数据，触发重试机制...');
             retry();
