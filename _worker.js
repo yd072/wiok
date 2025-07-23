@@ -646,6 +646,119 @@ async function resolveToIPv6(target) {
 	}
 }
 
+
+/**
+ * [REFACTORED] HTTP请求的路由器
+ * @param {Request} request
+ * @param {object} env
+ * @returns {Promise<Response>}
+ */
+async function routeHttpRequest(request, env) {
+    const url = new URL(request.url);
+    const 路径 = url.pathname.toLowerCase();
+
+    // 伪装信息
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    const timestamp = Math.ceil(currentDate.getTime() / 1000);
+    const fakeUserIDSHA256 = await 双重哈希(`${userID}${timestamp}`);
+    const fakeUserID = [
+        fakeUserIDSHA256.slice(0, 8),
+        fakeUserIDSHA256.slice(8, 12),
+        fakeUserIDSHA256.slice(12, 16),
+        fakeUserIDSHA256.slice(16, 20),
+        fakeUserIDSHA256.slice(20, 32)
+    ].join('-');
+    const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
+
+    // 订阅相关参数
+    let sub = env.SUB || '';
+    if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
+    if (url.searchParams.has('notls')) noTLS = 'true';
+
+    if (url.searchParams.has('proxyip')) {
+        path = `/?proxyip=${url.searchParams.get('proxyip')}`;
+        RproxyIP = 'false';
+    } else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
+        path = `/?socks5=${url.searchParams.get('socks5') || url.searchParams.get('socks')}`;
+        RproxyIP = 'false';
+    }
+
+    if (路径 === '/') {
+        if (env.URL302) return Response.redirect(env.URL302, 302);
+        if (env.URL) return await 代理URL(request, env.URL, url);
+        return await statusPage();
+    }
+
+    if (路径 === `/${fakeUserID}`) {
+        const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
+        return new Response(`${fakeConfig}`, { status: 200 });
+    }
+
+    if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
+        return await KV(request, env);
+    }
+    
+    if ((动态UUID && url.pathname === `/${动态UUID}`) || 路径 === `/${userID}`) {
+        return await handleSubscriptionRequest(request, env, sub, fakeUserID, fakeHostName);
+    }
+
+    // 默认行为
+    if (env.URL302) return Response.redirect(env.URL302, 302);
+    if (env.URL) return await 代理URL(request, env.URL, url);
+    return await statusPage();
+}
+
+/**
+ * [NEW] 处理订阅请求
+ * @param {Request} request
+ * @param {object} env
+ * @param {string} sub
+ * @param {string} fakeUserID
+ * @param {string} fakeHostName
+ * @returns {Promise<Response>}
+ */
+async function handleSubscriptionRequest(request, env, sub, fakeUserID, fakeHostName) {
+    const url = new URL(request.url);
+    const UA = request.headers.get('User-Agent') || 'null';
+    await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
+
+    const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
+    const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
+
+    const now = Date.now();
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+    const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
+    let pagesSum = UD;
+    let workersSum = UD;
+    let total = 24 * 1099511627776;
+    const userAgent = UA.toLowerCase();
+
+    if (userAgent && userAgent.includes('mozilla')) {
+        return new Response(`<div style="font-size:13px;">${secureProtoConfig}</div>`, {
+            status: 200,
+            headers: {
+                "Content-Type": "text/html;charset=utf-8",
+                "Profile-Update-Interval": "6",
+                "Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+                "Cache-Control": "no-store",
+            }
+        });
+    } else {
+        return new Response(`${secureProtoConfig}`, {
+            status: 200,
+            headers: {
+                "Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
+                "Content-Type": "text/plain;charset=utf-8",
+                "Profile-Update-Interval": "6",
+                "Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+            }
+        });
+    }
+}
+
+
 export default {
 	async fetch(request, env, ctx) {
 		try {
@@ -654,7 +767,6 @@ export default {
 
             // 2. 处理动态 UUID
 			const UA = request.headers.get('User-Agent') || 'null';
-			const userAgent = UA.toLowerCase();
 			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
 				动态UUID = env.KEY || env.TOKEN || userID;
 				有效时间 = Number(env.TIME) || 有效时间;
@@ -665,27 +777,12 @@ export default {
 				userIDTime = userIDs[2];
 			}
 
-            // 3. 检查 UUID 是否有效，若无效则显示新的伪装页面
+            // 3. 检查 UUID 是否有效
 			if (!userID) {
 				return await statusPage();
 			}
-
-            // 4. 生成伪装信息
-			const currentDate = new Date();
-			currentDate.setHours(0, 0, 0, 0);
-			const timestamp = Math.ceil(currentDate.getTime() / 1000);
-			const fakeUserIDSHA256 = await 双重哈希(`${userID}${timestamp}`);
-			const fakeUserID = [
-                fakeUserIDSHA256.slice(0, 8),
-                fakeUserIDSHA256.slice(8, 12),
-                fakeUserIDSHA256.slice(12, 16),
-                fakeUserIDSHA256.slice(16, 20),
-                fakeUserIDSHA256.slice(20, 32) 
-			].join('-');
-
-			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
-
-            // 5. 处理 SOCKS5
+            
+            // 4. 处理 SOCKS5
 			if (socks5Address) {
 				try {
 					parsedSocks5Address = socks5AddressParser(socks5Address);
@@ -700,80 +797,12 @@ export default {
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 
-            // 6. 根据请求类型（WebSocket 或 HTTP）进行路由
+            // 5. 根据请求类型（WebSocket 或 HTTP）进行路由
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
 				// HTTP 请求处理
-                let sub = env.SUB || '';
-				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
-				if (url.searchParams.has('notls')) noTLS = 'true';
-
-				if (url.searchParams.has('proxyip')) {
-					path = `/?proxyip=${url.searchParams.get('proxyip')}`;
-					RproxyIP = 'false';
-				} else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
-					path = `/?socks5=${url.searchParams.get('socks5') || url.searchParams.get('socks')}`;
-					RproxyIP = 'false';
-				}
-
-				const 路径 = url.pathname.toLowerCase();
-				if (路径 == '/') {
-					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(env.URL, url);
-					else {
-						// 显示新的伪装页面
-						return await statusPage();
-					}
-				} else if (路径 === `/${fakeUserID}`) {
-					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
-					return new Response(`${fakeConfig}`, { status: 200 });
-				} 
-				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
-					return await KV(request, env);
-				} else if ((动态UUID && url.pathname === `/${动态UUID}`) || 路径 === `/${userID}`) {
-					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
-					
-					const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
-					const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
-
-					const now = Date.now();
-					const today = new Date(now);
-					today.setHours(0, 0, 0, 0);
-					const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
-					let pagesSum = UD;
-					let workersSum = UD;
-					let total = 24 * 1099511627776;
-
-					if (userAgent && userAgent.includes('mozilla')) {
-						return new Response(`<div style="font-size:13px;">${secureProtoConfig}</div>`, {
-							status: 200,
-							headers: {
-								"Content-Type": "text/html;charset=utf-8",
-								"Profile-Update-Interval": "6",
-								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
-								"Cache-Control": "no-store",
-							}
-						});
-					} else {
-						return new Response(`${secureProtoConfig}`, {
-							status: 200,
-							headers: {
-								"Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
-								"Content-Type": "text/plain;charset=utf-8",
-								"Profile-Update-Interval": "6",
-								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
-							}
-						});
-					}
-				} else {
-					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(env.URL, url);
-					else {
-						// 对于所有其他未知路径，显示新的伪装页面
-						return await statusPage();
-					}
-				}
+                return await routeHttpRequest(request, env);
 			} else {
                 // WebSocket 请求处理
 				socks5Address = url.searchParams.get('socks5') || socks5Address;
@@ -1030,8 +1059,12 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
     }
 }
 
+
+/**
+ * [REFACTORED] 连接重试与回退逻辑
+ */
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
-    // 优化 SOCKS5 模式检查
+    
     const checkSocks5Mode = async (address) => {
         const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
@@ -1042,7 +1075,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return !!pattern;
     };
 
-    // 优化连接处理
     const createConnection = async (address, port, socks = false) => {
         log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
@@ -1069,7 +1101,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             clearTimeout(timeoutId);
             remoteSocket.value = tcpSocket;
 
-            // 写入数据
             const writer = tcpSocket.writable.getWriter();
             try {
                 await writer.write(rawClientData);
@@ -1084,102 +1115,103 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     };
 
-    // 优化重试逻辑
-    const retryConnection = async () => {
-            let tcpSocket;
+    /**
+     * [NEW] 创建一个包含所有连接策略的数组
+     */
+    const createConnectionStrategies = async () => {
+        const strategies = [];
 
-            if (enableSocks) {
-            try {              
-                log('重试：尝试使用 SOCKS5...');
-                tcpSocket = await createConnection(addressRemote, portRemote, true);               
-                log('SOCKS5 连接成功！');
-            } catch (socksError) {
-                log(`SOCKS5 连接失败: ${socksError.message}`);
-                safeCloseWebSocket(webSocket);
-                return;
-            }
-            } else {            
-            // 定义所有回退策略，按优先级排序
-            const strategies = [
-                {
-                    name: '用户配置的 PROXYIP',
-                    enabled: proxyIP && proxyIP.trim() !== '',
-                    execute: async () => {
-                        const { address, port } = parseProxyIP(proxyIP, portRemote);
-                        return createConnection(address, port);
-                    }
-                },
-                {
-                    name: '用户配置的 NAT64',
-                    enabled: DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="),
-                    execute: async () => {
-                        const nat64Address = await resolveToIPv6(addressRemote);
-                        const nat64Proxyip = `[${nat64Address}]`;
-                        return createConnection(nat64Proxyip, 443);
-                    }
-                },
-                {
-                    name: '内置的默认 PROXYIP',
-                    enabled: true, // 总是启用作为回退
-                    execute: async () => {
-                        const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-                        const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
-                        return createConnection(address, port);
-                    }
-                },
-                {
-                    name: '内置的默认 NAT64',
-                    enabled: true, // 总是启用作为最终回退
-                    execute: async () => {
-                        if (!DNS64Server || DNS64Server.trim() === '') {
-                           DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
-                        }
-                        const nat64Address = await resolveToIPv6(addressRemote);
-                        const nat64Proxyip = `[${nat64Address}]`;
-                        return createConnection(nat64Proxyip, 443);
-                    }
-                }
-            ];
+        // 策略0: 直连或根据规则使用SOCKS5
+        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? await checkSocks5Mode(addressRemote) : false;
+        strategies.push({
+            name: shouldUseSocks ? `直连 (SOCKS5)` : `直连 (TCP)`,
+            execute: () => createConnection(addressRemote, portRemote, shouldUseSocks)
+        });
 
-            // 按顺序尝试所有策略
-            for (const strategy of strategies) {
-                if (strategy.enabled && !tcpSocket) {
-                    try {
-                        log(`重试：尝试策略 '${strategy.name}'...`);
-                        tcpSocket = await strategy.execute();
-                        log(`策略 '${strategy.name}' 连接成功！`);
-                    } catch (error) {
-                        log(`策略 '${strategy.name}' 失败: ${error.message}`);
-                    }
-                }
-            }
-
-            if (!tcpSocket) {
-                log('所有回退尝试均已失败，关闭连接。');
-                    safeCloseWebSocket(webSocket);
-                return;
-            }
+        // 策略1: SOCKS5 (如果启用了SOCKS5但直连失败)
+        if (enableSocks) {
+            strategies.push({
+                name: 'SOCKS5 回退',
+                execute: () => createConnection(addressRemote, portRemote, true)
+            });
         }
         
-        if (tcpSocket) {
-            log('建立从远程服务器到客户端的数据流...');
-            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
+        // 策略2: 用户配置的 PROXYIP
+        if (proxyIP && proxyIP.trim() !== '') {
+            strategies.push({
+                name: '用户配置的 PROXYIP',
+                execute: () => {
+                    const { address, port } = parseProxyIP(proxyIP, portRemote);
+                    return createConnection(address, port);
+                }
+            });
         }
+        
+        // 策略3: 用户配置的 NAT64
+        const userDns64 = DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+        if (userDns64) {
+            strategies.push({
+                name: '用户配置的 NAT64',
+                execute: async () => {
+                    const nat64Address = await resolveToIPv6(addressRemote);
+                    return createConnection(`[${nat64Address}]`, 443);
+                }
+            });
+        }
+
+        // 策略4: 内置的默认 PROXYIP
+        strategies.push({
+            name: '内置的默认 PROXYIP',
+            execute: () => {
+                const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
+                return createConnection(address, port);
+            }
+        });
+        
+        // 策略5: 内置的默认 NAT64
+        strategies.push({
+            name: '内置的默认 NAT64',
+            execute: async () => {
+                if (!DNS64Server || DNS64Server.trim() === '') {
+                   DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+                }
+                const nat64Address = await resolveToIPv6(addressRemote);
+                return createConnection(`[${nat64Address}]`, 443);
+            }
+        });
+
+        return strategies;
     };
 
-    try {
-        // 主连接逻辑
-        log('主流程：第一阶段 - 尝试直接连接...');
-        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
-            await checkSocks5Mode(addressRemote) : false;
+    /**
+     * [REFACTORED] 使用策略数组进行连接和重试
+     */
+    const connectAndRetry = async () => {
+        const strategies = await createConnectionStrategies();
+        let lastError = null;
 
-        const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
-        log('直接连接成功！');
-        return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
-    } catch (error) {
-        log(`主连接失败 (${error.message})，将启动重试流程...`);
-        return retryConnection();
-    }
+        for (const strategy of strategies) {
+            try {
+                log(`尝试连接策略: '${strategy.name}'...`);
+                const tcpSocket = await strategy.execute();
+                log(`策略 '${strategy.name}' 连接成功！`);
+                // 将成功的连接传递给数据流处理器
+                remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log); // 不再需要retry回调
+                return; // 连接成功，退出循环
+            } catch (error) {
+                log(`策略 '${strategy.name}' 失败: ${error.message}`);
+                lastError = error;
+            }
+        }
+
+        // 如果所有策略都失败了
+        log('所有连接尝试均已失败，关闭连接。', lastError ? lastError.message : '无具体错误');
+        safeCloseWebSocket(webSocket);
+    };
+
+    // 启动连接过程
+    await connectAndRetry();
 }
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
@@ -1619,8 +1651,25 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
+/**
+ * [REFACTORED] 配置信息生成的主调度函数
+ */
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-	
+    const userAgent = UA.toLowerCase();
+    const isBrowser = userAgent.includes('mozilla');
+    const hasSubParams = subParams.some(_searchParams => _url.searchParams.has(_searchParams));
+
+    if (isBrowser && !hasSubParams) {
+        return await generateHtmlPageForBrowser(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env);
+    } else {
+        return await generateSubscriptionForClient(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env);
+    }
+}
+
+/**
+ * [NEW] 为浏览器生成HTML配置页面
+ */
+async function generateHtmlPageForBrowser(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
@@ -1683,7 +1732,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 	    }
     }
 
-	const userAgent = UA.toLowerCase();
 	const Config = 配置信息(uuid, hostName);
 	const proxyConfig = Config[0];
 	const clash = Config[1];
@@ -1710,415 +1758,427 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		if (proxyhosts.length != 0) proxyhost = proxyhosts[Math.floor(Math.random() * proxyhosts.length)] + "/";
 	}
 
-	const isUserAgentMozilla = userAgent.includes('mozilla');
-	if (isUserAgentMozilla && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
-		const newSocks5s = socks5s.map(socks5Address => {
-			if (socks5Address.includes('@')) return socks5Address.split('@')[1];
-			else if (socks5Address.includes('//')) return socks5Address.split('//')[1];
-			else return socks5Address;
-		});
+    const newSocks5s = socks5s.map(socks5Address => {
+        if (socks5Address.includes('@')) return socks5Address.split('@')[1];
+        else if (socks5Address.includes('//')) return socks5Address.split('//')[1];
+        else return socks5Address;
+    });
 
-		let socks5List = '';
-		if (go2Socks5s.length > 0 && enableSocks) {
-			socks5List = `${decodeURIComponent('SOCKS5%EF%BC%88%E7%99%BD%E5%90%8D%E5%8D%95%EF%BC%89%3A%20')}`;
-			if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) socks5List += `${decodeURIComponent('%E6%89%80%E6%9C%89%E6%B5%81%E9%87%8F')}<br>`;
-			else socks5List += `<br>&nbsp;&nbsp;${go2Socks5s.join('<br>&nbsp;&nbsp;')}<br>`;
-		}
+    let socks5List = '';
+    if (go2Socks5s.length > 0 && enableSocks) {
+        socks5List = `${decodeURIComponent('SOCKS5%EF%BC%88%E7%99%BD%E5%90%8D%E5%8D%95%EF%BC%89%3A%20')}`;
+        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) socks5List += `${decodeURIComponent('%E6%89%80%E6%9C%89%E6%B5%81%E9%87%8F')}<br>`;
+        else socks5List += `<br>&nbsp;&nbsp;${go2Socks5s.join('<br>&nbsp;&nbsp;')}<br>`;
+    }
 
-		let 订阅器 = '<br>';
-		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
-		
-		if (sub) {
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
-			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
-			else if (RproxyIP == 'true') 订阅器 += `CFCDN（访问方式）: 自动获取ProxyIP<br>`;
-			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`
-			订阅器 += `<br>SUB（优选订阅生成器）: ${sub}${判断是否绑定KV空间}<br>`;
-		} else {
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
-			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
-			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
-			订阅器 += `<br>您的订阅内容由 内置 addresses/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
-			if (addresses.length > 0) 订阅器 += `ADD（TLS优选域名&IP）: <br>&nbsp;&nbsp;${addresses.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesnotls.length > 0) 订阅器 += `ADDNOTLS（noTLS优选域名&IP）: <br>&nbsp;&nbsp;${addressesnotls.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesapi.length > 0) 订阅器 += `ADDAPI（TLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesapi.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLSAPI（noTLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesnotlsapi.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressescsv.length > 0) 订阅器 += `ADDCSV（IPTest测速csv文件 限速 ${DLS} ）: <br>&nbsp;&nbsp;${addressescsv.join('<br>&nbsp;&nbsp;')}<br>`;
-		}
+    let 订阅器 = '<br>';
+    let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
+    
+    if (sub) {
+        if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+        else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
+        else if (RproxyIP == 'true') 订阅器 += `CFCDN（访问方式）: 自动获取ProxyIP<br>`;
+        else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`
+        订阅器 += `<br>SUB（优选订阅生成器）: ${sub}${判断是否绑定KV空间}<br>`;
+    } else {
+        if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+        else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
+        else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
+        订阅器 += `<br>您的订阅内容由 内置 addresses/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
+        if (addresses.length > 0) 订阅器 += `ADD（TLS优选域名&IP）: <br>&nbsp;&nbsp;${addresses.join('<br>&nbsp;&nbsp;')}<br>`;
+        if (addressesnotls.length > 0) 订阅器 += `ADDNOTLS（noTLS优选域名&IP）: <br>&nbsp;&nbsp;${addressesnotls.join('<br>&nbsp;&nbsp;')}<br>`;
+        if (addressesapi.length > 0) 订阅器 += `ADDAPI（TLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesapi.join('<br>&nbsp;&nbsp;')}<br>`;
+        if (addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLSAPI（noTLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesnotlsapi.join('<br>&nbsp;&nbsp;')}<br>`;
+        if (addressescsv.length > 0) 订阅器 += `ADDCSV（IPTest测速csv文件 限速 ${DLS} ）: <br>&nbsp;&nbsp;${addressescsv.join('<br>&nbsp;&nbsp;')}<br>`;
+    }
 
-		if (动态UUID && _url.pathname !== `/${动态UUID}`) 订阅器 = '';
-		else 订阅器 += `<br>SUBAPI（订阅转换后端）: ${subProtocol}://${subConverter}<br>SUBCONFIG（订阅转换配置文件）: ${subConfig}`;
-		const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${有效时间} 天<br>UPTIME（动态UUID更新时间）: ${更新时间} 时（北京时间）<br><br>` : `${userIDTime}`;
-		const 节点配置页 = `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<meta charset="utf-8">
-				<meta name="viewport" content="width=device-width, initial-scale=1">
-				<title>${FileName} 配置信息</title>
-				<style>
-					:root {
-						--primary-color: #4CAF50;
-						--secondary-color: #45a049;
-						--border-color: #e0e0e0;
-						--text-color: #333;
-						--background-color: #f5f5f5;
-						--section-bg: #ffffff;
-					}
-					
-					body {
-						margin: 0;
-						padding: 20px;
-						font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-						line-height: 1.6;
-						color: var(--text-color);
-						background-color: var(--background-color);
-					}
+    if (动态UUID && _url.pathname !== `/${动态UUID}`) 订阅器 = '';
+    else 订阅器 += `<br>SUBAPI（订阅转换后端）: ${subProtocol}://${subConverter}<br>SUBCONFIG（订阅转换配置文件）: ${subConfig}`;
+    const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${有效时间} 天<br>UPTIME（动态UUID更新时间）: ${更新时间} 时（北京时间）<br><br>` : `${userIDTime}`;
+    const 节点配置页 = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>${FileName} 配置信息</title>
+            <style>
+                :root {
+                    --primary-color: #4CAF50;
+                    --secondary-color: #45a049;
+                    --border-color: #e0e0e0;
+                    --text-color: #333;
+                    --background-color: #f5f5f5;
+                    --section-bg: #ffffff;
+                }
+                
+                body {
+                    margin: 0;
+                    padding: 20px;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    line-height: 1.6;
+                    color: var(--text-color);
+                    background-color: var(--background-color);
+                }
 
-					.container {
-						max-width: 1000px;
-						margin: 0 auto;
-						background: var(--section-bg);
-						padding: 25px;
-						border-radius: 10px;
-						box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-					}
+                .container {
+                    max-width: 1000px;
+                    margin: 0 auto;
+                    background: var(--section-bg);
+                    padding: 25px;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
 
-					.section {
-						margin: 20px 0;
-						padding: 20px;
-						background: var(--section-bg);
-						border-radius: 8px;
-						border: 1px solid var(--border-color);
-					}
+                .section {
+                    margin: 20px 0;
+                    padding: 20px;
+                    background: var(--section-bg);
+                    border-radius: 8px;
+                    border: 1px solid var(--border-color);
+                }
 
-					.section-title {
-						font-size: 1.2em;
-						color: var(--primary-color);
-						margin-bottom: 15px;
-						padding-bottom: 10px;
-						border-bottom: 2px solid var(--border-color);
-					}
+                .section-title {
+                    font-size: 1.2em;
+                    color: var(--primary-color);
+                    margin-bottom: 15px;
+                    padding-bottom: 10px;
+                    border-bottom: 2px solid var(--border-color);
+                }
 
-					.divider {
-						height: 1px;
-						background: var(--border-color);
-						margin: 15px 0;
-					}
+                .divider {
+                    height: 1px;
+                    background: var(--border-color);
+                    margin: 15px 0;
+                }
 
-					.subscription-link {
-						display: block;
-						margin: 10px 0;
-						padding: 12px;
-						background: #f8f9fa;
-						border-radius: 6px;
-						border: 1px solid var(--border-color);
-						word-break: break-all;
-					}
+                .subscription-link {
+                    display: block;
+                    margin: 10px 0;
+                    padding: 12px;
+                    background: #f8f9fa;
+                    border-radius: 6px;
+                    border: 1px solid var(--border-color);
+                    word-break: break-all;
+                }
 
-					.subscription-link a {
-						color: #0066cc;
-						text-decoration: none;
-					}
+                .subscription-link a {
+                    color: #0066cc;
+                    text-decoration: none;
+                }
 
-					.subscription-link a:hover {
-						text-decoration: underline;
-					}
+                .subscription-link a:hover {
+                    text-decoration: underline;
+                }
 
-					.qrcode-container {
-						margin: 10px 0;
-						text-align: center;
-					}
+                .qrcode-container {
+                    margin: 10px 0;
+                    text-align: center;
+                }
 
-					.notice-toggle {
-						color: var(--primary-color);
-						cursor: pointer;
-						text-decoration: none;
-						display: inline-block;
-						margin: 10px 0;
-						font-weight: 500;
-					}
+                .notice-toggle {
+                    color: var(--primary-color);
+                    cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                    margin: 10px 0;
+                    font-weight: 500;
+                }
 
-					.notice-content {
-						background: #f8f9fa;
-						border-left: 4px solid var(--primary-color);
-						padding: 15px;
-						margin: 10px 0;
-						border-radius: 0 8px 8px 0;
-					}
+                .notice-content {
+                    background: #f8f9fa;
+                    border-left: 4px solid var(--primary-color);
+                    padding: 15px;
+                    margin: 10px 0;
+                    border-radius: 0 8px 8px 0;
+                }
 
-					.config-info {
-						background: #f8f9fa;
-						padding: 15px;
-						border-radius: 6px;
-						font-family: Monaco, Consolas, "Courier New", monospace;
-						font-size: 13px;
-						overflow-x: auto;
-					}
+                .config-info {
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 6px;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
+                    font-size: 13px;
+                    overflow-x: auto;
+                }
 
-					.copy-button {
-						display: inline-block;
-						padding: 6px 12px;
-						background: var(--primary-color);
-						color: white;
-						border: none;
-						border-radius: 4px;
-						cursor: pointer;
-						font-size: 14px;
-						margin: 5px 0;
-					}
+                .copy-button {
+                    display: inline-block;
+                    padding: 6px 12px;
+                    background: var(--primary-color);
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    margin: 5px 0;
+                }
 
-					.copy-button:hover {
-						background: var(--secondary-color);
-					}
+                .copy-button:hover {
+                    background: var(--secondary-color);
+                }
 
-					@media (max-width: 768px) {
-						body {
-							padding: 10px;
-						}
-						
-						.container {
-							padding: 15px;
-						}
-						
-						.section {
-							padding: 15px;
-						}
-					}
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<div class="section">
-						<div class="section-title">📋 订阅信息</div>
-						<div class="subscription-link">
-							自适应订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
-								https://${proxyhost}${hostName}/${uuid}
-							</a>
-							<div id="qrcode_0" class="qrcode-container"></div>
-						</div>
+                @media (max-width: 768px) {
+                    body {
+                        padding: 10px;
+                    }
+                    
+                    .container {
+                        padding: 15px;
+                    }
+                    
+                    .section {
+                        padding: 15px;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="section">
+                    <div class="section-title">📋 订阅信息</div>
+                    <div class="subscription-link">
+                        自适应订阅地址:<br>
+                        <a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
+                            https://${proxyhost}${hostName}/${uuid}
+                        </a>
+                        <div id="qrcode_0" class="qrcode-container"></div>
+                    </div>
 
-						<div class="subscription-link">
-							Base64订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
-								https://${proxyhost}${hostName}/${uuid}?b64
-							</a>
-							<div id="qrcode_1" class="qrcode-container"></div>
-						</div>
+                    <div class="subscription-link">
+                        Base64订阅地址:<br>
+                        <a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
+                            https://${proxyhost}${hostName}/${uuid}?b64
+                        </a>
+                        <div id="qrcode_1" class="qrcode-container"></div>
+                    </div>
 
-						<div class="subscription-link">
-							clash订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;">
-								https://${proxyhost}${hostName}/${uuid}?clash
-							</a>
-							<div id="qrcode_2" class="qrcode-container"></div>
-						</div>
+                    <div class="subscription-link">
+                        clash订阅地址:<br>
+                        <a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;">
+                            https://${proxyhost}${hostName}/${uuid}?clash
+                        </a>
+                        <div id="qrcode_2" class="qrcode-container"></div>
+                    </div>
 
-						<div class="subscription-link">
-							singbox订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;">
-								https://${proxyhost}${hostName}/${uuid}?sb
-							</a>
-							<div id="qrcode_3" class="qrcode-container"></div>
-						</div>
+                    <div class="subscription-link">
+                        singbox订阅地址:<br>
+                        <a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;">
+                            https://${proxyhost}${hostName}/${uuid}?sb
+                        </a>
+                        <div id="qrcode_3" class="qrcode-container"></div>
+                    </div>
 
-						<div class="subscription-link">
-							Loon订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;">
-								https://${proxyhost}${hostName}/${uuid}?loon
-							</a>
-							<div id="qrcode_4" class="qrcode-container"></div>
-						</div>
-					</div>
+                    <div class="subscription-link">
+                        Loon订阅地址:<br>
+                        <a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;">
+                            https://${proxyhost}${hostName}/${uuid}?loon
+                        </a>
+                        <div id="qrcode_4" class="qrcode-container"></div>
+                    </div>
+                </div>
 
-					<div class="section">
-						<div class="section-title">ℹ️ 使用说明</div>
-						<a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
-							实用订阅技巧 ∨
-						</a>
-						<div id="noticeContent" class="notice-content" style="display: none">
-							<strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br><br>
-							<strong>2.</strong> 如您使用的是 SSR+ 等路由插件，推荐使用 <strong>Base64订阅地址</strong> 进行订阅；<br><br>
-							<strong>3.</strong> 快速切换 <a href='${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}'>优选订阅生成器</a> 至：sub.google.com，您可将"?sub=sub.google.com"参数添加到链接末尾，例如：<br>
-							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br><br>
-							<strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
-							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?proxyip=proxyip.fxxk.dedyn.io:443</strong><br><br>
-							<strong>5.</strong> 快速更换 SOCKS5 至：user:password@127.0.0.1:1080，您可将"?socks5=user:password@127.0.0.1:1080"参数添加到链接末尾，例如：<br>
-							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?socks5=user:password@127.0.0.1:1080</strong><br><br>
-							<strong>6.</strong> 如需指定多个参数则需要使用'&'做间隔，例如：<br>
-							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}?sub=sub.google.com<strong>&</strong>proxyip=proxyip.fxxk.dedyn.io
-						</div>
-					</div>
+                <div class="section">
+                    <div class="section-title">ℹ️ 使用说明</div>
+                    <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                        实用订阅技巧 ∨
+                    </a>
+                    <div id="noticeContent" class="notice-content" style="display: none">
+                        <strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br><br>
+                        <strong>2.</strong> 如您使用的是 SSR+ 等路由插件，推荐使用 <strong>Base64订阅地址</strong> 进行订阅；<br><br>
+                        <strong>3.</strong> 快速切换 <a href='${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}'>优选订阅生成器</a> 至：sub.google.com，您可将"?sub=sub.google.com"参数添加到链接末尾，例如：<br>
+                        &nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br><br>
+                        <strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
+                        &nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?proxyip=proxyip.fxxk.dedyn.io:443</strong><br><br>
+                        <strong>5.</strong> 快速更换 SOCKS5 至：user:password@127.0.0.1:1080，您可将"?socks5=user:password@127.0.0.1:1080"参数添加到链接末尾，例如：<br>
+                        &nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?socks5=user:password@127.0.0.1:1080</strong><br><br>
+                        <strong>6.</strong> 如需指定多个参数则需要使用'&'做间隔，例如：<br>
+                        &nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}?sub=sub.google.com<strong>&</strong>proxyip=proxyip.fxxk.dedyn.io
+                    </div>
+                </div>
 
-					<div class="section">
-						<div class="section-title">🔧 配置信息</div>
-						<div class="config-info">
-							${动态UUID信息.replace(/\n/g, '<br>')}
-							HOST: ${hostName}<br>
-							UUID: ${userID}<br>
-							FKID: ${fakeUserID}<br>
-							UA: ${UA}<br>
-							${订阅器.replace(/\n/g, '<br>')}
-						</div>
-					</div>
+                <div class="section">
+                    <div class="section-title">🔧 配置信息</div>
+                    <div class="config-info">
+                        ${动态UUID信息.replace(/\n/g, '<br>')}
+                        HOST: ${hostName}<br>
+                        UUID: ${userID}<br>
+                        FKID: ${fakeUserID}<br>
+                        UA: ${UA}<br>
+                        ${订阅器.replace(/\n/g, '<br>')}
+                    </div>
+                </div>
 
-					<div class="section">
-						<div class="section-title">📝 proxyConfig</div>
-						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
-							<div style="word-break: break-all; overflow-wrap: anywhere;">${proxyConfig}</div>
-							<div id="qrcode_proxyConfig" class="qrcode-container"></div>
-						</div>
-					</div>
+                <div class="section">
+                    <div class="section-title">📝 proxyConfig</div>
+                    <div class="config-info" style="overflow-x: auto; max-width: 100%;">
+                        <button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
+                        <div style="word-break: break-all; overflow-wrap: anywhere;">${proxyConfig}</div>
+                        <div id="qrcode_proxyConfig" class="qrcode-container"></div>
+                    </div>
+                </div>
 
-					<div class="section">
-						<div class="section-title">⚙️ Clash Meta 配置</div>
-						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<div style="word-break: break-all; overflow-wrap: anywhere;">${clash}</div>
-						</div>
-					</div>
+                <div class="section">
+                    <div class="section-title">⚙️ Clash Meta 配置</div>
+                    <div class="config-info" style="overflow-x: auto; max-width: 100%;">
+                        <div style="word-break: break-all; overflow-wrap: anywhere;">${clash}</div>
+                    </div>
+                </div>
 
-					<div class="divider"></div>
-					${cmad}
-				</div>
+                <div class="divider"></div>
+                ${cmad}
+            </div>
 
-				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
-				<script>
-					function copyToClipboard(text, qrcode) {
-						navigator.clipboard.writeText(text).then(() => {
-							alert('已复制到剪贴板');
-						}).catch(err => {
-							console.error('复制失败:', err);
-						});
-						const qrcodeDiv = document.getElementById(qrcode);
-						qrcodeDiv.innerHTML = '';
-						new QRCode(qrcodeDiv, {
-							text: text,
-							width: 220,
-							height: 220,
-							colorDark: "#000000",
-							colorLight: "#ffffff",
-							correctLevel: QRCode.CorrectLevel.Q,
-							scale: 1
-						});
-					}
+            <script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
+            <script>
+                function copyToClipboard(text, qrcode) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        alert('已复制到剪贴板');
+                    }).catch(err => {
+                        console.error('复制失败:', err);
+                    });
+                    const qrcodeDiv = document.getElementById(qrcode);
+                    qrcodeDiv.innerHTML = '';
+                    new QRCode(qrcodeDiv, {
+                        text: text,
+                        width: 220,
+                        height: 220,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.Q,
+                        scale: 1
+                    });
+                }
 
-					function toggleNotice() {
-						const noticeContent = document.getElementById('noticeContent');
-						const noticeToggle = document.getElementById('noticeToggle');
-						if (noticeContent.style.display === 'none') {
-							noticeContent.style.display = 'block';
-							noticeToggle.textContent = '实用订阅技巧 ∧';
-						} else {
-							noticeContent.style.display = 'none';
-							noticeToggle.textContent = '实用订阅技巧 ∨';
-						}
-					}
-				</script>
-			</body>
-			</html>
-		`;
-		return 节点配置页;
-	} else {
-		if (typeof fetch != 'function') {
-			return 'Error: fetch is not available in this environment.';
-		}
-
-		let newAddressesapi = [];
-		let newAddressescsv = [];
-		let newAddressesnotlsapi = [];
-		let newAddressesnotlscsv = [];
-
-		if (hostName.includes(".workers.dev")) {
-			noTLS = 'true';
-			fakeHostName = `${fakeHostName}.workers.dev`;
-			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-			newAddressesnotlscsv = await 整理测速结果('FALSE');
-		} else if (hostName.includes(".pages.dev")) {
-			fakeHostName = `${fakeHostName}.pages.dev`;
-		} else if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
-			noTLS = 'true';
-			fakeHostName = `notls${fakeHostName}.net`;
-			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-			newAddressesnotlscsv = await 整理测速结果('FALSE');
-		} else {
-			fakeHostName = `${fakeHostName}.xyz`
-		}
-		console.log(`虚假HOST: ${fakeHostName}`);
-		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}`;
-		let isBase64 = true;
-
-		if (!sub || sub == "") {
-			if (hostName.includes('workers.dev')) {
-				if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
-					try {
-						const response = await fetch(proxyhostsURL);
-
-						if (!response.ok) {
-							console.error('获取地址时出错:', response.status, response.statusText);
-							return; 
-						}
-
-						const text = await response.text();
-						const lines = text.split('\n');
-						const nonEmptyLines = lines.filter(line => line.trim() !== '');
-
-						proxyhosts = proxyhosts.concat(nonEmptyLines);
-					} catch (error) {
-						console.error('获取地址时出错:', error);
-					}
-				}
-				proxyhosts = [...new Set(proxyhosts)];
-			}
-
-			newAddressesapi = await 整理优选列表(addressesapi);
-			newAddressescsv = await 整理测速结果('TRUE');
-			url = `https://${hostName}/${fakeUserID + _url.search}`;
-			if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
-				if (_url.search) url += '&notls';
-				else url += '?notls';
-			}
-			console.log(`虚假订阅: ${url}`);
-		}
-
-		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
-			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
-				url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
-				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			} else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
-				// 添加Loon支持
-				url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			}
-		}
-
-		try {
-			let content;
-			if ((!sub || sub == "") && isBase64 == true) {
-				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
-			} else {
-				const response = await fetch(url, {
-					headers: {
-						'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
-					}
-				});
-				content = await response.text();
-			}
-
-			if (_url.pathname == `/${fakeUserID}`) return content;
-
-			return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
-
-		} catch (error) {
-			console.error('Error fetching content:', error);
-			return `Error fetching content: ${error.message}`;
-		}
-	}
+                function toggleNotice() {
+                    const noticeContent = document.getElementById('noticeContent');
+                    const noticeToggle = document.getElementById('noticeToggle');
+                    if (noticeContent.style.display === 'none') {
+                        noticeContent.style.display = 'block';
+                        noticeToggle.textContent = '实用订阅技巧 ∧';
+                    } else {
+                        noticeContent.style.display = 'none';
+                        noticeToggle.textContent = '实用订阅技巧 ∨';
+                    }
+                }
+            </script>
+        </body>
+        </html>
+    `;
+    return 节点配置页;
 }
+
+/**
+ * [NEW] 为客户端（Clash, Sing-box等）生成订阅内容
+ */
+async function generateSubscriptionForClient(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
+    if (typeof fetch != 'function') {
+        return 'Error: fetch is not available in this environment.';
+    }
+    
+	if (sub) {
+		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
+		sub = match ? match[1] : sub;
+		const subs = await 整理(sub);
+		sub = subs.length > 1 ? subs[0] : sub;
+	}
+
+    let newAddressesapi = [];
+    let newAddressescsv = [];
+    let newAddressesnotlsapi = [];
+    let newAddressesnotlscsv = [];
+    
+	const userAgent = UA.toLowerCase();
+    
+    if (hostName.includes(".workers.dev")) {
+        noTLS = 'true';
+        fakeHostName = `${fakeHostName}.workers.dev`;
+        newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+        newAddressesnotlscsv = await 整理测速结果('FALSE');
+    } else if (hostName.includes(".pages.dev")) {
+        fakeHostName = `${fakeHostName}.pages.dev`;
+    } else if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
+        noTLS = 'true';
+        fakeHostName = `notls${fakeHostName}.net`;
+        newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+        newAddressesnotlscsv = await 整理测速结果('FALSE');
+    } else {
+        fakeHostName = `${fakeHostName}.xyz`
+    }
+    console.log(`虚假HOST: ${fakeHostName}`);
+    let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}`;
+    let isBase64 = true;
+
+    if (!sub || sub == "") {
+        if (hostName.includes('workers.dev')) {
+            if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
+                try {
+                    const response = await fetch(proxyhostsURL);
+
+                    if (!response.ok) {
+                        console.error('获取地址时出错:', response.status, response.statusText);
+                        return; 
+                    }
+
+                    const text = await response.text();
+                    const lines = text.split('\n');
+                    const nonEmptyLines = lines.filter(line => line.trim() !== '');
+
+                    proxyhosts = proxyhosts.concat(nonEmptyLines);
+                } catch (error) {
+                    console.error('获取地址时出错:', error);
+                }
+            }
+            proxyhosts = [...new Set(proxyhosts)];
+        }
+
+        newAddressesapi = await 整理优选列表(addressesapi);
+        newAddressescsv = await 整理测速结果('TRUE');
+        url = `https://${hostName}/${fakeUserID + _url.search}`;
+        if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
+            if (_url.search) url += '&notls';
+            else url += '?notls';
+        }
+        console.log(`虚假订阅: ${url}`);
+    }
+
+    if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
+        if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
+            url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+            isBase64 = false;
+        } else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
+            url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+            isBase64 = false;
+        } else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
+            // 添加Loon支持
+            url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+            isBase64 = false;
+        }
+    }
+
+    try {
+        let content;
+        if ((!sub || sub == "") && isBase64 == true) {
+            content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
+        } else {
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
+                }
+            });
+            content = await response.text();
+        }
+
+        if (_url.pathname == `/${fakeUserID}`) return content;
+
+        return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
+
+    } catch (error) {
+        console.error('Error fetching content:', error);
+        return `Error fetching content: ${error.message}`;
+    }
+}
+
 
 async function 整理优选列表(api) {
 	if (!api || api.length === 0) return [];
