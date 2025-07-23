@@ -1059,12 +1059,8 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
     }
 }
 
-
-/**
- * [REFACTORED] 连接重试与回退逻辑
- */
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
-    
+    // 优化 SOCKS5 模式检查
     const checkSocks5Mode = async (address) => {
         const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
@@ -1075,6 +1071,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return !!pattern;
     };
 
+    // 优化连接处理
     const createConnection = async (address, port, socks = false) => {
         log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
@@ -1101,6 +1098,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             clearTimeout(timeoutId);
             remoteSocket.value = tcpSocket;
 
+            // 写入数据
             const writer = tcpSocket.writable.getWriter();
             try {
                 await writer.write(rawClientData);
@@ -1115,103 +1113,102 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     };
 
-    /**
-     * [NEW] 创建一个包含所有连接策略的数组
-     */
-    const createConnectionStrategies = async () => {
-        const strategies = [];
+    // 优化重试逻辑
+    const retryConnection = async () => {
+            let tcpSocket;
 
-        // 策略0: 直连或根据规则使用SOCKS5
-        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? await checkSocks5Mode(addressRemote) : false;
-        strategies.push({
-            name: shouldUseSocks ? `直连 (SOCKS5)` : `直连 (TCP)`,
-            execute: () => createConnection(addressRemote, portRemote, shouldUseSocks)
-        });
-
-        // 策略1: SOCKS5 (如果启用了SOCKS5但直连失败)
         if (enableSocks) {
-            strategies.push({
-                name: 'SOCKS5 回退',
-                execute: () => createConnection(addressRemote, portRemote, true)
-            });
-        }
-        
-        // 策略2: 用户配置的 PROXYIP
-        if (proxyIP && proxyIP.trim() !== '') {
-            strategies.push({
+            try {              
+                log('重试：尝试使用 SOCKS5...');
+                tcpSocket = await createConnection(addressRemote, portRemote, true);               
+                log('SOCKS5 连接成功！');
+            } catch (socksError) {
+                log(`SOCKS5 连接失败: ${socksError.message}`);
+                safeCloseWebSocket(webSocket);
+                return;
+            }
+            } else {            
+            // 定义所有回退策略，按优先级排序
+            const strategies = [
+                {
                 name: '用户配置的 PROXYIP',
-                execute: () => {
+                    enabled: proxyIP && proxyIP.trim() !== '',
+                    execute: async () => {
                     const { address, port } = parseProxyIP(proxyIP, portRemote);
                     return createConnection(address, port);
                 }
-            });
-        }
-        
-        // 策略3: 用户配置的 NAT64
-        const userDns64 = DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
-        if (userDns64) {
-            strategies.push({
+                },
+                {
                 name: '用户配置的 NAT64',
+                    enabled: DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="),
                 execute: async () => {
                     const nat64Address = await resolveToIPv6(addressRemote);
-                    return createConnection(`[${nat64Address}]`, 443);
+                        const nat64Proxyip = `[${nat64Address}]`;
+                        return createConnection(nat64Proxyip, 443);
                 }
-            });
-        }
-
-        // 策略4: 内置的默认 PROXYIP
-        strategies.push({
+                },
+                {
             name: '内置的默认 PROXYIP',
-            execute: () => {
+                    enabled: true, // 总是启用作为回退
+                    execute: async () => {
                 const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
                 const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
                 return createConnection(address, port);
             }
-        });
-        
-        // 策略5: 内置的默认 NAT64
-        strategies.push({
+                },
+                {
             name: '内置的默认 NAT64',
+                    enabled: true, // 总是启用作为最终回退
             execute: async () => {
                 if (!DNS64Server || DNS64Server.trim() === '') {
                    DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
                 }
                 const nat64Address = await resolveToIPv6(addressRemote);
-                return createConnection(`[${nat64Address}]`, 443);
+                        const nat64Proxyip = `[${nat64Address}]`;
+                        return createConnection(nat64Proxyip, 443);
             }
-        });
+                }
+            ];
 
-        return strategies;
-    };
-
-    /**
-     * [REFACTORED] 使用策略数组进行连接和重试
-     */
-    const connectAndRetry = async () => {
-        const strategies = await createConnectionStrategies();
-        let lastError = null;
-
+            // 按顺序尝试所有策略
         for (const strategy of strategies) {
+                if (strategy.enabled && !tcpSocket) {
             try {
-                log(`尝试连接策略: '${strategy.name}'...`);
-                const tcpSocket = await strategy.execute();
+                        log(`重试：尝试策略 '${strategy.name}'...`);
+                        tcpSocket = await strategy.execute();
                 log(`策略 '${strategy.name}' 连接成功！`);
-                // 将成功的连接传递给数据流处理器
-                remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log); // 不再需要retry回调
-                return; // 连接成功，退出循环
             } catch (error) {
                 log(`策略 '${strategy.name}' 失败: ${error.message}`);
-                lastError = error;
+                    }
             }
         }
 
-        // 如果所有策略都失败了
-        log('所有连接尝试均已失败，关闭连接。', lastError ? lastError.message : '无具体错误');
+            if (!tcpSocket) {
+                log('所有回退尝试均已失败，关闭连接。');
         safeCloseWebSocket(webSocket);
+                return;
+            }
+        }
+        
+        if (tcpSocket) {
+            log('建立从远程服务器到客户端的数据流...');
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
+        }
     };
 
-    // 启动连接过程
-    await connectAndRetry();
+    try {
+        // 主连接逻辑
+        log('主流程：第一阶段 - 尝试直接连接...');
+        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
+            await checkSocks5Mode(addressRemote) : false;
+
+        const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
+        log('直接连接成功！');
+        return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
+    } catch (error) {
+        log(`主连接失败 (${error.message})，将启动重试流程...`);
+        return retryConnection();
+    }
 }
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
