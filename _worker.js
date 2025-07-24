@@ -172,7 +172,6 @@ async function loadConfigurations(env) {
             enableHttpProxy = false;
         }
     }
-    // --- 结束 ---
 }
 
 
@@ -869,7 +868,7 @@ async function secureProtoOverWSHandler(request) {
                     return handleDNSQuery(chunk, webSocket, null, log);
                 }
                 if (remoteSocketWrapper.value) {
-                    const writer = remoteSocketWrapper.value.getWriter();
+                    const writer = remoteSocketWrapper.value.writable.getWriter();
                     await writer.write(chunk);
                     writer.releaseLock();
                     return;
