@@ -2915,7 +2915,7 @@ async function handleGetRequest(env, txt) {
                 
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
-                        <h3 style="margin: 0;">⚙️ 高级设置 (HTTP和SOCKS5代理二选一)</h3>
+                        <h3 style="margin: 0;">⚙️ 高级设置</h3>
                         <span id="advanced-settings-toggle">∨</span>
                     </div>
                     <div id="advanced-settings-content" class="advanced-settings-content">
@@ -2932,7 +2932,7 @@ async function handleGetRequest(env, txt) {
 
                         <!-- HTTP 代理设置 -->
                         <div style="margin-bottom: 20px;">
-                            <label for="http"><strong>HTTP 代理设置 (优先于SOCKS5)</strong></label>
+                            <label for="http"><strong>HTTP 代理设置</strong></label>
                             <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
                             <textarea id="http" class="proxyip-editor" 
                             placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIucGFzc0AxMjcuMC4wLjElM0E3ODkwCjEyNy4wLjAuMSUzQTc4OTA='))}"
