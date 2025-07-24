@@ -1464,7 +1464,7 @@ function stringify(arr, offset = 0) {
 }
 
 /**
- * 建立 HTTP 代理连接 (移植自 _worker.js)
+ *   HTTP 代理连接 
  */
 async function httpConnect(addressRemote, portRemote, log) {
     const { username, password, hostname, port } = parsedHttpAddress;
@@ -1865,7 +1865,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 	const isUserAgentMozilla = userAgent.includes('mozilla');
 	if (isUserAgentMozilla && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
-		// 修改这里以支持显示HTTP代理
+		//支持显示HTTP代理
         let proxyList = '';
         let proxyRuleList = '';
         if (enableHttp) {
@@ -2913,6 +2913,7 @@ async function handleGetRequest(env, txt) {
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
+                <!-- 修改高级设置部分 -->
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
                         <h3 style="margin: 0;">⚙️ 高级设置</h3>
