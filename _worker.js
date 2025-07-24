@@ -89,7 +89,7 @@ async function loadConfigurations(env) {
     if (env.SUBAPI) subConverter = atob(env.SUBAPI);
     if (env.SUBCONFIG) subConfig = atob(env.SUBCONFIG);
     if (env.SUBNAME) FileName = atob(env.SUBNAME);
-    if (env.DNS64 || env.NAT64) DNS64Server = env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
+    if (env.DNS64 || env.NAT64) DNS64Server = env.DNS64 || env.NAT64;
     
     if (env.ADD) addresses = await 整理(env.ADD);
     if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
