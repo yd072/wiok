@@ -2834,9 +2834,9 @@ async function handleGetRequest(env, txt) {
                     display: none;
                 }
 
-                .proxy-editor { /* 更通用的类名 */
+                .proxyip-editor {
                     width: 100%;
-                    height: 80px; /* 调整高度 */
+                    height: 100px;
                     margin-top: 10px;
                     padding: 10px;
                     border: 1px solid var(--border-color);
@@ -2869,15 +2869,15 @@ async function handleGetRequest(env, txt) {
                             >${proxyIPContent}</textarea>
                         </div>
                         
-                        <!-- SUBCONFIG设置 -->
+                        <!-- HTTP Proxy 设置 -->
                         <div style="margin-bottom: 20px;">
-                            <label for="subconfig"><strong>SUBCONFIG 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
+                            <label for="httpproxy"><strong>HTTP 代理设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">仅支持单个地址，格式：[用户名:密码@]主机:端口</p>
                             <textarea 
-                                id="subconfig" 
+                                id="httpproxy" 
                                 class="proxy-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTJGZGV2ZWxvcCUyRkNsYXNoJTJGY29uZmlnJTJGY2xhc2gucHJlbWl1bS55YW1s'))}"
-                            >${subConfigContent}</textarea>
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIucGFzc0AxMjcuMC4wLjE6Nzg5MAoxMjcuMC4wLjE6Nzg5MA=='))}"
+                            >${httpProxyContent}</textarea>
                         </div>
 
                         <!-- SOCKS5设置 -->
