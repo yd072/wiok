@@ -676,10 +676,10 @@ async function resolveToIPv6(target) {
 export default {
 	async fetch(request, env, ctx) {
 		try {
-            // 1. 统一加载所有配置
+            // 1. 统一加载所有配置 (这部分不变)
             await loadConfigurations(env);
 
-            // 2. 处理动态 UUID
+            // 2. 处理动态 UUID (这部分不变)
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
 			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
@@ -692,12 +692,12 @@ export default {
 				userIDTime = userIDs[2];
 			}
 
-            // 3. 检查 UUID 是否有效，若无效则显示新的伪装页面
+            // 3. 检查 UUID 是否有效 (这部分不变)
 			if (!userID) {
 				return await statusPage();
 			}
 
-            // 4. 生成伪装信息
+            // 4. 生成伪装信息 (这部分不变)
 			const currentDate = new Date();
 			currentDate.setHours(0, 0, 0, 0);
 			const timestamp = Math.ceil(currentDate.getTime() / 1000);
@@ -709,40 +709,41 @@ export default {
                 fakeUserIDSHA256.slice(16, 20),
                 fakeUserIDSHA256.slice(20, 32) 
 			].join('-');
-
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
-            // 5. HTTP 请求部分的处理 (代理参数等)
+            // 5. 处理代理 (这部分不变)
+            if (enableHttp) {
+                RproxyIP = env.RPROXYIP || 'false';
+            } else if (enableSocks) {
+                RproxyIP = env.RPROXYIP || 'false';
+            } else {
+				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+			}
+
+            // 6. 根据请求类型（WebSocket 或 HTTP）进行路由
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
-				// HTTP 请求处理
+				// HTTP 请求处理 (这部分不变)
                 let sub = env.SUB || '';
 				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
 				if (url.searchParams.has('notls')) noTLS = 'true';
 
 				if (url.searchParams.has('proxyip')) {
 					path = `/?proxyip=${url.searchParams.get('proxyip')}`;
+					RproxyIP = 'false';
 				} else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
 					path = `/?socks5=${url.searchParams.get('socks5') || url.searchParams.get('socks')}`;
+					RproxyIP = 'false';
 				} else if (url.searchParams.has('http')) {
                     path = `/?http=${url.searchParams.get('http')}`;
-                }
-
-                if (httpAddress) {
-                    enableHttp = true;
                     RproxyIP = 'false';
-                } else if (socks5Address) {
-                    enableSocks = true;
-                    RproxyIP = 'false';
-                } else {
-                    RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
                 }
 
 				const 路径 = url.pathname.toLowerCase();
 				if (路径 == '/') {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(env.URL, url);
+					else if (env.URL) return await 代理URL(request, env.URL, url); // 修正了参数
 					else {
 						return await statusPage();
 					}
@@ -789,120 +790,82 @@ export default {
 					}
 				} else {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(env.URL, url);
+					else if (env.URL) return await 代理URL(request, env.URL, url); // 修正了参数
 					else {
 						return await statusPage();
 					}
 				}
 			} else {
-                // #################################################
-                // ### WebSocket 请求处理 - 核心修改区域 ###
-                // #################################################
+                // =================================================================
+                //  WebSocket 请求处理 - **修改的核心区域**
+                // =================================================================
 
-                let onTheFlyHttp = null;
-                let onTheFlySocks = null;
+                let urlOverride = false; // 标记URL是否覆盖了环境变量的代理设置
 
-                // 1. 优先从 URL 参数中解析
-                onTheFlyHttp = url.searchParams.get('http');
-                onTheFlySocks = url.searchParams.get('socks5') || url.searchParams.get('socks');
-                
-                // 2. 其次从 URL 路径中解析 
-                if (new RegExp('/http=', 'i').test(url.pathname)) {
-                    onTheFlyHttp = url.pathname.split(/http=/i)[1];
+                // 优先级 1: PROXYIP (会覆盖其他所有代理)
+                if (url.searchParams.has('proxyip')) {
+                    proxyIP = url.searchParams.get('proxyip');
+                    enableSocks = false; enableHttp = false; urlOverride = true;
+                } else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
+                    proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
+                    enableSocks = false; enableHttp = false; urlOverride = true;
+                } else if (new RegExp('/proxyip\\.', 'i').test(url.pathname)) {
+                    proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
+                    enableSocks = false; enableHttp = false; urlOverride = true;
                 }
-                if (new RegExp('/socks5?=', 'i').test(url.pathname)) {
-                    onTheFlySocks = url.pathname.split(/socks5?=/i)[1];
-                }
-                
-                // 3. 最后解析路径模式 ，这种模式会覆盖前面的设置
-                const pathProxyMatch = url.pathname.match(/\/((http|socks5?)\/(.+))/i);
-                if (pathProxyMatch) {
-                    const proxyType = pathProxyMatch[2].toLowerCase();
-                    let proxyAddress = pathProxyMatch[3];
-                    
-                    // 为路径模式启用全局代理规则
-                    go2Socks5s = ['all in'];
 
-                    // 兼容 base64 编码的密码
-                    if (proxyAddress.includes('@')) {
-                        const lastAtIndex = proxyAddress.lastIndexOf('@');
-                        let userPass = proxyAddress.substring(0, lastAtIndex);
-                        const hostPort = proxyAddress.substring(lastAtIndex + 1);
-                        
-                        const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
-                        if (base64Regex.test(userPass) && !userPass.includes(':')) {
-                            try {
-                                userPass = atob(userPass);
-                            } catch(e) { /* 不是合法的base64, 保持原样 */ }
-                        }
-                        proxyAddress = `${userPass}@${hostPort}`;
-                    }
-                    
-                    if (proxyType === 'http') {
-                        onTheFlyHttp = proxyAddress;
-                        onTheFlySocks = null; // 确保互斥
-                    } else { // socks or socks5
-                        onTheFlySocks = proxyAddress;
-                        onTheFlyHttp = null;
-                    }
-                }
-                
-                // 4. 根据解析结果设置最终的代理
-                if (onTheFlyHttp) {
-                    try {
-                        parsedHttpAddress = proxyAddressParser(onTheFlyHttp);
-                        enableHttp = true;
-                        enableSocks = false;
-                    } catch (err) {
-                        console.log(`On-the-fly HTTP proxy parse error: ${err.toString()}`);
-                        enableHttp = false;
-                    }
-                } else if (onTheFlySocks) {
-                    try {
-                        parsedSocks5Address = proxyAddressParser(onTheFlySocks);
-                        enableSocks = true;
-                        enableHttp = false;
-                    } catch (err) {
-                        console.log(`On-the-fly SOCKS5 proxy parse error: ${err.toString()}`);
-                        enableSocks = false;
-                    }
-                } else {
-                    // 如果URL中没有代理信息, 则使用全局配置
-                    if (httpAddress) {
-                        try {
-                            parsedHttpAddress = proxyAddressParser(httpAddress);
-                            enableHttp = true;
-                            enableSocks = false;
-                        } catch (err) {
-                            console.log(`Global HTTP proxy parse error: ${err.toString()}`);
-                            enableHttp = false;
-                        }
-                    } else if (socks5Address) {
-                        try {
-                            parsedSocks5Address = proxyAddressParser(socks5Address);
-                            enableSocks = true;
-                            enableHttp = false;
-                        } catch (err) {
-                            console.log(`Global SOCKS5 proxy parse error: ${err.toString()}`);
-                            enableSocks = false;
+                // 如果未被 PROXYIP 覆盖，则检查 HTTP/SOCKS5 代理
+                if (!urlOverride) {
+                    // 优先级 2: Path-based schemes (e.g., /http/user:pass@host:port)
+                    // 为了兼容性，我们允许 /http/ 和 /http:// 两种格式
+                    if (new RegExp('^/http(s)?://', 'i').test(url.pathname)) {
+                        httpAddress = url.pathname.substring(1); // 结果为 http://...
+                        enableHttp = true; enableSocks = false; urlOverride = true;
+                    } else if (new RegExp('^/http/', 'i').test(url.pathname)) {
+						httpAddress = url.pathname.substring(6); // 移除 /http/
+						enableHttp = true; enableSocks = false; urlOverride = true;
+					} else if (new RegExp('^/socks(5)?://', 'i').test(url.pathname)) {
+                        socks5Address = url.pathname.substring(1); // 结果为 socks5://...
+                        enableSocks = true; enableHttp = false; urlOverride = true;
+                    } else if (new RegExp('^/socks(5)?/', 'i').test(url.pathname)) {
+						const match = url.pathname.match(new RegExp('^/socks(5)?/(.*)', 'i'));
+						if (match) {
+							socks5Address = match[2];
+							enableSocks = true; enableHttp = false; urlOverride = true;
+						}
+					}
+
+                    // 优先级 3: Query parameters (只有在路径中未找到时才检查)
+                    if (!urlOverride) {
+                        if (url.searchParams.has('http')) {
+                            httpAddress = url.searchParams.get('http');
+                            enableHttp = true; enableSocks = false; urlOverride = true;
+                        } else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
+                            socks5Address = url.searchParams.get('socks5') || url.searchParams.get('socks');
+                            enableSocks = true; enableHttp = false; urlOverride = true;
                         }
                     }
                 }
 
-                // 5. PROXYIP 具有最高优先级, 会覆盖所有代理设置
-				if (url.searchParams.has('proxyip') || new RegExp('/(proxy|py)ip[=.]', 'i').test(url.pathname)) {
-                    if (url.searchParams.has('proxyip')) {
-                        proxyIP = url.searchParams.get('proxyip');
-                    } else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
-                        proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
-                    } else if (new RegExp('/proxyip.', 'i').test(url.pathname)) {
-                        proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
-                    } else if (new RegExp('/pyip=', 'i').test(url.pathname)) {
-                        proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
+                // URL中指定了代理
+                
+                try {
+                    if (urlOverride) {
+                        if (enableHttp && httpAddress) {
+                            // proxyAddressParser 需要的是 user:pass@host:port 格式
+                            const addressToParse = httpAddress.includes('://') ? httpAddress.split('://')[1] : httpAddress;
+                            parsedHttpAddress = proxyAddressParser(addressToParse);
+                        } else if (enableSocks && socks5Address) {
+                            const addressToParse = socks5Address.includes('://') ? socks5Address.split('://')[1] : socks5Address;
+                            parsedSocks5Address = proxyAddressParser(addressToParse);
+                        }
                     }
-					enableSocks = false;
+                } catch (err) {
+                    console.log(`解析URL中的代理地址时出错: ${err.toString()}`);
+                    // 解析失败，禁用代理以防出错
                     enableHttp = false;
-				}
+                    enableSocks = false;
+                }
 
 				return await secureProtoOverWSHandler(request);
 			}
