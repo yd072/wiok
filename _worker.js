@@ -1,9 +1,9 @@
 
 import { connect } from 'cloudflare:sockets';
 
+// 全局变量声明
 let userID = '';
 let proxyIP = '';
-//let sub = '';
 let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
@@ -12,10 +12,12 @@ let socks5Address = '';
 let parsedSocks5Address = {};
 let enableSocks = false;
 
-// 新增：HTTP 代理相关变量
+// --- 新增: HTTP代理相关变量 ---
 let httpProxyAddress = '';
 let parsedHttpProxyAddress = {};
 let enableHttpProxy = false;
+// --------------------------------
+
 let noTLS = 'false';
 const expire = -1;
 let proxyIPs = [];
@@ -83,9 +85,10 @@ async function loadConfigurations(env) {
     // 1. 从环境变量加载，如果存在则覆盖默认值
     if (env.UUID || env.uuid || env.PASSWORD || env.pswd) userID = env.UUID || env.uuid || env.PASSWORD || env.pswd;
     if (env.PROXYIP || env.proxyip) proxyIP = env.PROXYIP || env.proxyip;
-	// 新增：读取 HTTP_PROXY 环境变量
-    if (env.HTTP_PROXY) httpProxyAddress = env.HTTP_PROXY;
     if (env.SOCKS5) socks5Address = env.SOCKS5;
+	// --- 新增: 从环境变量加载HTTP代理 ---
+	if (env.HTTPPROXY) httpProxyAddress = env.HTTPPROXY;
+	// ------------------------------------
     if (env.SUBAPI) subConverter = atob(env.SUBAPI);
     if (env.SUBCONFIG) subConfig = atob(env.SUBCONFIG);
     if (env.SUBNAME) FileName = atob(env.SUBNAME);
@@ -115,9 +118,10 @@ async function loadConfigurations(env) {
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
                 if (settings.proxyip && settings.proxyip.trim()) proxyIP = settings.proxyip;
-				// 新增：从 KV 加载 HTTP 和 SOCKS5 代理配置
-                if (settings.httpproxy && settings.httpproxy.trim()) httpProxyAddress = settings.httpproxy.split('\n')[0].trim();
                 if (settings.socks5 && settings.socks5.trim()) socks5Address = settings.socks5.split('\n')[0].trim();
+				// --- 新增: 从KV加载HTTP代理 ---
+				if (settings.httpproxy && settings.httpproxy.trim()) httpProxyAddress = settings.httpproxy.split('\n')[0].trim();
+				// ---------------------------------
                 if (settings.sub && settings.sub.trim()) env.SUB = settings.sub.trim().split('\n')[0];
                 if (settings.subapi && settings.subapi.trim()) subConverter = settings.subapi.trim().split('\n')[0];
                 if (settings.subconfig && settings.subconfig.trim()) subConfig = settings.subconfig.trim().split('\n')[0];
@@ -158,30 +162,9 @@ async function loadConfigurations(env) {
     proxyIPs = await 整理(proxyIP);
     proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
     
-	// 新增：处理 HTTP 代理
-    if (httpProxyAddress) {
-        try {
-            parsedHttpProxyAddress = proxyAddressParser(httpProxyAddress);
-            enableHttpProxy = true;
-        } catch (err) {
-            console.error("HTTP 代理地址解析失败: ", err);
-            enableHttpProxy = false;
-        }
-    }
-
-	// 处理 SOCKS5 代理
     socks5s = await 整理(socks5Address);
     socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-    if (socks5Address) {
-        try {
-			socks5Address = socks5Address.split('//')[1] || socks5Address;
-            parsedSocks5Address = proxyAddressParser(socks5Address);
-            enableSocks = true;
-        } catch (err) {
-            console.error("SOCKS5 代理地址解析失败: ", err);
-            enableSocks = false;
-        }
-    }
+	socks5Address = socks5Address.split('//')[1] || socks5Address;
 }
 
 
@@ -714,9 +697,30 @@ export default {
 
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
-            // 5. 处理代理（此部分已移至 loadConfigurations）
-			// 仅保留 RproxyIP 的最终判断
-            RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+            // 5. 处理 SOCKS5 和 HTTP 代理
+			if (httpProxyAddress) { // 优先处理 HTTP 代理
+				try {
+					parsedHttpProxyAddress = httpProxyAddressParser(httpProxyAddress);
+					enableHttpProxy = true;
+				} catch (err) {
+					console.log(`HTTP Proxy address invalid: ${err.toString()}`);
+					enableHttpProxy = false;
+				}
+			}
+
+			if (socks5Address && !enableHttpProxy) { // 如果未启用HTTP代理，则处理SOCKS5
+				try {
+					parsedSocks5Address = socks5AddressParser(socks5Address);
+					RproxyIP = env.RPROXYIP || 'false';
+					enableSocks = true;
+				} catch (err) {
+					console.log(err.toString());
+					RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+					enableSocks = false;
+				}
+			} else if (!enableHttpProxy) {
+				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+			}
 
             // 6. 根据请求类型（WebSocket 或 HTTP）进行路由
 			const upgradeHeader = request.headers.get('Upgrade');
@@ -730,9 +734,7 @@ export default {
 				if (url.searchParams.has('proxyip')) {
 					path = `/?proxyip=${url.searchParams.get('proxyip')}`;
 					RproxyIP = 'false';
-				} else if (url.searchParams.has('httpproxy')) { // 新增
-                    path = `/?httpproxy=${url.searchParams.get('httpproxy')}`;
-                } else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
+				} else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
 					path = `/?socks5=${url.searchParams.get('socks5') || url.searchParams.get('socks')}`;
 					RproxyIP = 'false';
 				}
@@ -796,59 +798,64 @@ export default {
 				}
 			} else {
                 // WebSocket 请求处理
-				// 优先处理 HTTP 代理
-                httpProxyAddress = url.searchParams.get('httpproxy') || httpProxyAddress;
-                if (httpProxyAddress) {
-                    try {
-                        parsedHttpProxyAddress = proxyAddressParser(httpProxyAddress);
-                        enableHttpProxy = true;
-                        // 如果设置了 HTTP 代理，则禁用 SOCKS5
-                        enableSocks = false;
-                    } catch (err) {
-                        console.error('WebSocket 请求中的 HTTP 代理地址解析失败:', err);
-                        enableHttpProxy = false;
-                    }
-                } else {
-                    // 如果没有 HTTP 代理，再处理 SOCKS5
-                    socks5Address = url.searchParams.get('socks5') || socks5Address;
-                    if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
-                    else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
-                        socks5Address = url.pathname.split('://')[1].split('#')[0];
-                        if (socks5Address.includes('@')) {
-                            let userPassword = socks5Address.split('@')[0];
-                            const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
-                            if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
-                            socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
-                        }
-                    }
+				// --- 新增: WebSocket请求也支持代理配置 ---
+				if (url.searchParams.has('httpproxy')) {
+					httpProxyAddress = url.searchParams.get('httpproxy');
+				}
+				// ------------------------------------------
 
-                    if (socks5Address) {
-                        try {
-                            parsedSocks5Address = proxyAddressParser(socks5Address);
-                            enableSocks = true;
-                        } catch (err) {
-                            console.error('WebSocket 请求中的 SOCKS5 代理地址解析失败:', err);
-                            enableSocks = false;
-                        }
-                    }
-                }
+				socks5Address = url.searchParams.get('socks5') || socks5Address;
+				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
+				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
+					socks5Address = url.pathname.split('://')[1].split('#')[0];
+					if (socks5Address.includes('@')) {
+						let userPassword = socks5Address.split('@')[0];
+						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
+						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
+						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
+					}
+				}
+				
+				// --- 新增: 重新检查代理设置 ---
+				if (httpProxyAddress) {
+					try {
+						parsedHttpProxyAddress = httpProxyAddressParser(httpProxyAddress);
+						enableHttpProxy = true;
+						enableSocks = false; // HTTP 代理优先
+					} catch (err) {
+						console.log(err.toString());
+						enableHttpProxy = false;
+					}
+				}
+
+				if (socks5Address && !enableHttpProxy) {
+					try {
+						parsedSocks5Address = socks5AddressParser(socks5Address);
+						enableSocks = true;
+					} catch (err) {
+						console.log(err.toString());
+						enableSocks = false;
+					}
+				} else if (!enableHttpProxy) {
+					enableSocks = false;
+				}
 
 				if (url.searchParams.has('proxyip')) {
 					proxyIP = url.searchParams.get('proxyip');
-                    enableHttpProxy = false;
 					enableSocks = false;
+					enableHttpProxy = false;
 				} else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
 					proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
-                    enableHttpProxy = false;
 					enableSocks = false;
+					enableHttpProxy = false;
 				} else if (new RegExp('/proxyip.', 'i').test(url.pathname)) {
 					proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
-                    enableHttpProxy = false;
 					enableSocks = false;
+					enableHttpProxy = false;
 				} else if (new RegExp('/pyip=', 'i').test(url.pathname)) {
 					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
-                    enableHttpProxy = false;
 					enableSocks = false;
+					enableHttpProxy = false;
 				}
 
 				return await secureProtoOverWSHandler(request);
@@ -1067,8 +1074,8 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
     }
 }
 
+// --- 修改: handleTCPOutBound 函数以支持HTTP代理 ---
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
-    // 优化 SOCKS5 模式检查
     const checkSocks5Mode = async (address) => {
         const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
@@ -1079,30 +1086,34 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return !!pattern;
     };
 
-    // 优化连接处理
-    const createConnection = async (address, port, options = {}) => {
-        const { socks = false, http = false } = options;
-        log(`建立连接: ${address}:${port} ${http ? '(HTTP Proxy)' : ''}${socks ? '(SOCKS5)' : ''}`);
+    // 优化连接处理, 增加 proxyType 参数
+    const createConnection = async (address, port, proxyType = 'direct') => {
+        log(`建立连接: ${address}:${port} (代理类型: ${proxyType})`);
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort('连接超时'), 5000);
 
         try {
+			const connectionPromise = (() => {
+				switch (proxyType) {
+					case 'http':
+						return httpConnect(address, port, log);
+					case 'socks5':
+						return socks5Connect(addressType, address, port, log);
+					default: // 'direct'
+						return connect({ 
+							hostname: address,
+							port: port,
+							allowHalfOpen: false,
+							signal: controller.signal
+						});
+				}
+			})();
+
             const tcpSocket = await Promise.race([
-                http ?
-                    httpConnect(addressRemote, portRemote, log) :
-                socks ? 
-                    socks5Connect(addressType, address, port, log) :
-                    connect({ 
-                        hostname: address,
-                        port: port,
-                        allowHalfOpen: false,
-                        keepAlive: true,
-                        signal: controller.signal
-                    })
-                ,
+                connectionPromise,
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('连接超时')), 3000)
+                    setTimeout(() => reject(new Error('连接操作超时')), 3000)
                 )
             ]);
 
@@ -1112,10 +1123,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             // 写入数据
             const writer = tcpSocket.writable.getWriter();
             try {
-                // HTTP 代理的 CONNECT 方法后不需要再写入原始数据，因为隧道已建立
-                if (!http) {
-                    await writer.write(rawClientData);
-                }
+                await writer.write(rawClientData);
             } finally {
                 writer.releaseLock();
             }
@@ -1126,107 +1134,103 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             throw error;
         }
     };
-
-    // 优化重试逻辑
+	
+	// 优化重试逻辑
     const retryConnection = async () => {
-        let tcpSocket;
+		let tcpSocket;
+		
+		// 注意: 重试逻辑目前不包括HTTP/SOCKS5代理, 仅回退到 PROXYIP 和 NAT64。
+		// 这是原始设计，保持不变。
+		const strategies = [
+			{
+				name: '用户配置的 PROXYIP',
+				enabled: proxyIP && proxyIP.trim() !== '',
+				execute: async () => {
+					const { address, port } = parseProxyIP(proxyIP, portRemote);
+					return createConnection(address, port, 'direct'); // proxyip是直接连接
+				}
+			},
+			{
+				name: '用户配置的 NAT64',
+				enabled: DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="),
+				execute: async () => {
+					const nat64Address = await resolveToIPv6(addressRemote);
+					const nat64Proxyip = `[${nat64Address}]`;
+					return createConnection(nat64Proxyip, 443, 'direct');
+				}
+			},
+			{
+				name: '内置的默认 PROXYIP',
+				enabled: true, // 总是启用作为回退
+				execute: async () => {
+					const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+					const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
+					return createConnection(address, port, 'direct');
+				}
+			},
+			{
+				name: '内置的默认 NAT64',
+				enabled: true, // 总是启用作为最终回退
+				execute: async () => {
+					if (!DNS64Server || DNS64Server.trim() === '') {
+					   DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+					}
+					const nat64Address = await resolveToIPv6(addressRemote);
+					const nat64Proxyip = `[${nat64Address}]`;
+					return createConnection(nat64Proxyip, 443, 'direct');
+				}
+			}
+		];
 
-        // 重试逻辑不使用代理，直接尝试回退IP和NAT64
-        // 定义所有回退策略，按优先级排序
-        const strategies = [
-            {
-                name: '用户配置的 PROXYIP',
-                enabled: proxyIP && proxyIP.trim() !== '',
-                execute: async () => {
-                    const { address, port } = parseProxyIP(proxyIP, portRemote);
-                    return createConnection(address, port);
-                }
-            },
-            {
-                name: '用户配置的 NAT64',
-                enabled: DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="),
-                execute: async () => {
-                    const nat64Address = await resolveToIPv6(addressRemote);
-                    const nat64Proxyip = `[${nat64Address}]`;
-                    return createConnection(nat64Proxyip, 443);
-                }
-            },
-            {
-                name: '内置的默认 PROXYIP',
-                enabled: true, // 总是启用作为回退
-                execute: async () => {
-                    const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-                    const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
-                    return createConnection(address, port);
-                }
-            },
-            {
-                name: '内置的默认 NAT64',
-                enabled: true, // 总是启用作为最终回退
-                execute: async () => {
-                    if (!DNS64Server || DNS64Server.trim() === '') {
-                        DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
-                    }
-                    const nat64Address = await resolveToIPv6(addressRemote);
-                    const nat64Proxyip = `[${nat64Address}]`;
-                    return createConnection(nat64Proxyip, 443);
-                }
-            }
-        ];
+		// 按顺序尝试所有策略
+		for (const strategy of strategies) {
+			if (strategy.enabled && !tcpSocket) {
+				try {
+					log(`重试：尝试策略 '${strategy.name}'...`);
+					tcpSocket = await strategy.execute();
+					log(`策略 '${strategy.name}' 连接成功！`);
+					break; // 成功后跳出循环
+				} catch (error) {
+					log(`策略 '${strategy.name}' 失败: ${error.message}`);
+				}
+			}
+		}
 
-        // 按顺序尝试所有策略
-        for (const strategy of strategies) {
-            if (strategy.enabled && !tcpSocket) {
-                try {
-                    log(`重试：尝试策略 '${strategy.name}'...`);
-                    tcpSocket = await strategy.execute();
-                    log(`策略 '${strategy.name}' 连接成功！`);
-                    break; // 成功后跳出循环
-                } catch (error) {
-                    log(`策略 '${strategy.name}' 失败: ${error.message}`);
-                }
-            }
-        }
-
-        if (!tcpSocket) {
-            log('所有回退尝试均已失败，关闭连接。');
-            safeCloseWebSocket(webSocket);
-            return;
-        }
-        
+		if (!tcpSocket) {
+			log('所有回退尝试均已失败，关闭连接。');
+				safeCloseWebSocket(webSocket);
+			return;
+		}
+		
         if (tcpSocket) {
             log('建立从远程服务器到客户端的数据流...');
-            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log); // 重试不再提供重试函数
         }
     };
 
     try {
         // 主连接逻辑
-        let tcpSocket;
-        if (enableHttpProxy) {
-            log('主流程：第一阶段 - 尝试使用 HTTP 代理...');
-            tcpSocket = await createConnection(addressRemote, portRemote, { http: true });
-        } else if (enableSocks) {
-            log('主流程：第一阶段 - 尝试使用 SOCKS5 代理...');
-            const shouldUseSocks = await checkSocks5Mode(addressRemote);
-            if (shouldUseSocks) {
-                tcpSocket = await createConnection(addressRemote, portRemote, { socks: true });
-            } else {
-                 tcpSocket = await createConnection(addressRemote, portRemote);
-            }
-        } else {
-            log('主流程：第一阶段 - 尝试直接连接...');
-            tcpSocket = await createConnection(addressRemote, portRemote);
-        }
+        log('主流程：第一阶段 - 尝试连接...');
+		let tcpSocket;
+		
+		if (enableHttpProxy) {
+			log('尝试使用 HTTP 代理...');
+			tcpSocket = await createConnection(addressRemote, portRemote, 'http');
+		} else {
+			const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? await checkSocks5Mode(addressRemote) : false;
+			const proxyType = shouldUseSocks ? 'socks5' : 'direct';
+			log(`尝试使用 ${proxyType} 方式连接...`);
+			tcpSocket = await createConnection(addressRemote, portRemote, proxyType);
+		}
         
         log('第一阶段连接成功！');
         return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
-
     } catch (error) {
         log(`主连接失败 (${error.message})，将启动重试流程...`);
         return retryConnection();
     }
 }
+// ------------------------------------------
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
@@ -1306,7 +1310,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let isSocketClosed = false;
     let retryAttempted = false;
     let retryCount = 0; // 记录重试次数
-    const MAX_RETRIES = 1; // 限制重试次数为1次
+    const MAX_RETRIES = 3; // 限制最大重试次数
 
     // 控制超时
     const controller = new AbortController();
@@ -1321,24 +1325,24 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
 
     try {
         // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
-		const writeData = async (chunk) => {
-			if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-					throw new Error('WebSocket 未连接');
-			}
+    const writeData = async (chunk) => {
+        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                throw new Error('WebSocket 未连接');
+        }
 
-			if (header) {
-					// 预分配足够的 buffer，避免重复分配
-					const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-					combinedData.set(new Uint8Array(header), 0);
-					combinedData.set(new Uint8Array(chunk), header.byteLength);
-					webSocket.send(combinedData);
-					header = null; // 清除 header 引用
-			} else {
-				webSocket.send(chunk);
-			}
-			
-			hasIncomingData = true;
-		};
+        if (header) {
+                // 预分配足够的 buffer，避免重复分配
+                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                combinedData.set(new Uint8Array(header), 0);
+                combinedData.set(new Uint8Array(chunk), header.byteLength);
+                webSocket.send(combinedData);
+                header = null; // 清除 header 引用
+        } else {
+            webSocket.send(chunk);
+        }
+        
+            hasIncomingData = true;
+        };
 
         await remoteSocket.readable
             .pipeTo(
@@ -1362,9 +1366,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                             retryCount++;
                             log(`未收到数据, 正在进行第 ${retryCount} 次重试...`);
                             retry();
-                        } else {
-							safeCloseWebSocket(webSocket);
-						}
+                        }
                     },
                     abort(reason) {
                         isSocketClosed = true;
@@ -1379,6 +1381,9 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             )
             .catch((error) => {
                 log(`数据传输异常: ${error.message}`);
+                if (!isSocketClosed) {
+                    safeCloseWebSocket(webSocket);
+                }
                 
                 // 仅在未收到数据时尝试重试，并限制重试次数
                 if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
@@ -1386,16 +1391,15 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     retryCount++;
                     log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
                     retry();
-                } else {
-					if (!isSocketClosed) {
-						safeCloseWebSocket(webSocket);
-					}
-				}
+                }
             });
 
     } catch (error) {
         clearTimeout(timeout);
         log(`连接处理异常: ${error.message}`);
+        if (!isSocketClosed) {
+            safeCloseWebSocket(webSocket);
+        }
         
         // 仅在发生异常且未收到数据时尝试重试，并限制重试次数
         if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
@@ -1403,12 +1407,9 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
             retryCount++;
             log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
             retry();
-        } else {
-			if (!isSocketClosed) {
-				safeCloseWebSocket(webSocket);
-			}
-			throw error;
-		}
+        }
+        
+        throw error;
     } finally {
         clearTimeout(timeout);
         if (signal.aborted) {
@@ -1449,45 +1450,6 @@ function stringify(arr, offset = 0) {
     return uuid;
 }
 
-/**
- * 新增：建立 HTTP 代理连接
- * @param {string} addressRemote 目标地址
- * @param {number} portRemote 目标端口
- * @param {function} log 日志记录函数
- */
-async function httpConnect(addressRemote, portRemote, log) {
-    const { username, password, hostname, port } = parsedHttpProxyAddress;
-    const proxySocket = await connect({
-        hostname: hostname,
-        port: port
-    });
-
-    const writer = proxySocket.writable.getWriter();
-    let connectRequest = `CONNECT ${addressRemote}:${portRemote} HTTP/1.1\r\nHost: ${addressRemote}:${portRemote}\r\n`;
-
-    if (username && password) {
-        const auth = btoa(`${username}:${password}`);
-        connectRequest += `Proxy-Authorization: Basic ${auth}\r\n`;
-    }
-    connectRequest += '\r\n';
-
-    await writer.write(new TextEncoder().encode(connectRequest));
-    writer.releaseLock();
-    
-    const reader = proxySocket.readable.getReader();
-    const { value } = await reader.read();
-    reader.releaseLock();
-
-    const responseText = new TextDecoder().decode(value);
-    if (!responseText.startsWith('HTTP/1.1 200')) {
-        throw new Error(`HTTP proxy connection failed: ${responseText.split('\r\n')[0]}`);
-    }
-
-    log(`HTTP 代理连接成功: ${addressRemote}:${portRemote} via ${hostname}:${port}`);
-    return proxySocket;
-}
-
-
 async function socks5Connect(addressType, addressRemote, portRemote, log) {
     const { username, password, hostname, port } = parsedSocks5Address;
     const socket = connect({ hostname, port });
@@ -1503,18 +1465,18 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
 
     if (res[0] !== 0x05) {
         log(`SOCKS5 version error: received ${res[0]}, expected 5`);
-        throw new Error('SOCKS5 version error');
+        return;
     }
     if (res[1] === 0xff) {
         log("No acceptable authentication methods");
-        throw new Error('SOCKS5 no acceptable authentication methods');
+        return;
     }
 
     if (res[1] === 0x02) {
         log("SOCKS5 requires authentication");
         if (!username || !password) {
             log("Username and password required");
-            throw new Error('SOCKS5 username/password required');
+            return;
         }
         const authRequest = new Uint8Array([
             1,
@@ -1527,7 +1489,7 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
         res = (await reader.read()).value;
         if (res[0] !== 0x01 || res[1] !== 0x00) {
             log("SOCKS5 authentication failed");
-            throw new Error('SOCKS5 authentication failed');
+            return;
         }
     }
 
@@ -1540,14 +1502,11 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
             DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
             break;
         case 3:
-            DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => {
-                const parts = x.padStart(4, '0');
-                return [parseInt(parts.slice(0, 2), 16), parseInt(parts.slice(2), 16)];
-            })]);
+            DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
             break;
         default:
             log(`Invalid address type: ${addressType}`);
-            throw new Error(`Invalid address type: ${addressType}`);
+            return;
     }
     const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
     await writer.write(socksRequest);
@@ -1558,22 +1517,21 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
         log("SOCKS5 connection established");
     } else {
         log("SOCKS5 connection failed");
-        throw new Error('SOCKS5 connection failed');
+        return;
     }
     writer.releaseLock();
     reader.releaseLock();
     return socket;
 }
 
-// 重命名，使其更通用
-function proxyAddressParser(address) {
+function socks5AddressParser(address) {
     let [latter, former] = address.split("@").reverse();
     let username, password, hostname, port;
 
     if (former) {
         const formers = former.split(":");
         if (formers.length !== 2) {
-            throw new Error('Invalid proxy address format: "username:password" required');
+            throw new Error('Invalid SOCKS address format: "username:password" required');
         }
         [username, password] = formers;
     }
@@ -1581,14 +1539,14 @@ function proxyAddressParser(address) {
     const latters = latter.split(":");
     port = Number(latters.pop());
     if (isNaN(port)) {
-        throw new Error('Invalid proxy address format: port must be a number');
+        throw new Error('Invalid SOCKS address format: port must be a number');
     }
 
     hostname = latters.join(":");
 
     const regex = /^\[.*\]$/;
     if (hostname.includes(":") && !regex.test(hostname)) {
-        hostname = `[${hostname}]`; // 自动为IPv6地址添加括号
+        throw new Error('Invalid SOCKS address format: IPv6 must be in brackets');
     }
 
     return {
@@ -1598,6 +1556,173 @@ function proxyAddressParser(address) {
         port,
     }
 }
+
+// --- 新增: httpConnect 函数 和 httpProxyAddressParser 解析器 ---
+/**
+ * 解析HTTP代理地址
+ * @param {string} address - 格式: [username:password@]hostname:port
+ * @returns {{username?: string, password?: string, hostname: string, port: number}}
+ */
+function httpProxyAddressParser(address) {
+    let [latter, former] = address.split("@").reverse();
+    let username, password, hostname, port;
+
+    if (former) {
+        const formers = former.split(":");
+        if (formers.length !== 2) {
+            throw new Error('无效的 HTTP 代理格式: 需要 "username:password"');
+        }
+        [username, password] = formers;
+    }
+
+    const latters = latter.split(":");
+    port = Number(latters.pop());
+    if (isNaN(port)) {
+        throw new Error('无效的 HTTP 代理格式: 端口必须是数字');
+    }
+
+    hostname = latters.join(":");
+
+    const regex = /^\[.*\]$/;
+    if (hostname.includes(":") && !regex.test(hostname)) {
+        throw new Error('无效的 HTTP 代理格式: IPv6 地址必须在方括号内');
+    }
+
+    return {
+        username,
+        password,
+        hostname,
+        port,
+    };
+}
+
+
+/**
+ * 通过 HTTP CONNECT 方法连接到远程主机
+ * @param {string} addressRemote 目标主机地址
+ * @param {number} portRemote 目标主机端口
+ * @param {(info: string, event?: any) => void} log 日志函数
+ * @returns {Promise<any>} 返回建立连接后的套接字
+ */
+async function httpConnect(addressRemote, portRemote, log) {
+	const { username, password, hostname, port } = parsedHttpProxyAddress;
+	const sock = await connect({
+		hostname: hostname,
+		port: port
+	});
+
+	// 构建HTTP CONNECT请求
+	let connectRequest = `CONNECT ${addressRemote}:${portRemote} HTTP/1.1\r\n`;
+	connectRequest += `Host: ${addressRemote}:${portRemote}\r\n`;
+
+	// 添加代理认证（如果需要）
+	if (username && password) {
+		const authString = `${username}:${password}`;
+		const base64Auth = btoa(authString);
+		connectRequest += `Proxy-Authorization: Basic ${base64Auth}\r\n`;
+	}
+
+	connectRequest += `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\n`;
+	connectRequest += `Proxy-Connection: Keep-Alive\r\n`;
+	connectRequest += `Connection: Keep-Alive\r\n`; // 添加标准 Connection 头
+	connectRequest += `\r\n`;
+
+	log(`正在连接到 ${addressRemote}:${portRemote} 通过 HTTP 代理 ${hostname}:${port}`);
+
+	try {
+		// 发送连接请求
+		const writer = sock.writable.getWriter();
+		await writer.write(new TextEncoder().encode(connectRequest));
+		writer.releaseLock();
+	} catch (err) {
+		console.error('发送HTTP CONNECT请求失败:', err);
+		throw new Error(`发送HTTP CONNECT请求失败: ${err.message}`);
+	}
+
+	// 读取HTTP响应
+	const reader = sock.readable.getReader();
+	let connected = false;
+	let responseBuffer = new Uint8Array(0);
+	const maxHeaderSize = 8192; // 8KB
+
+	try {
+		while (responseBuffer.length < maxHeaderSize) {
+			const { value, done } = await reader.read();
+			if (done) {
+				throw new Error('HTTP代理在响应完成前中断了连接');
+			}
+
+			// 合并接收到的数据
+			const newBuffer = new Uint8Array(responseBuffer.length + value.length);
+			newBuffer.set(responseBuffer);
+			newBuffer.set(value, responseBuffer.length);
+			responseBuffer = newBuffer;
+			
+			const respText = new TextDecoder().decode(responseBuffer);
+
+			// 检查是否收到完整的HTTP响应头
+			const headersEndPos = respText.indexOf('\r\n\r\n');
+			if (headersEndPos !== -1) {
+				const headers = respText.substring(0, headersEndPos);
+				log(`收到HTTP代理响应: ${headers.split('\r\n')[0]}`);
+
+				// 检查响应状态
+				if (headers.startsWith('HTTP/1.1 200') || headers.startsWith('HTTP/1.0 200')) {
+					connected = true;
+
+					// 如果响应头之后还有数据，我们需要将这些数据“推回”到流中
+					if (headersEndPos + 4 < responseBuffer.length) {
+						const remainingData = responseBuffer.slice(headersEndPos + 4);
+						const originalReadable = sock.readable;
+
+						// 创建一个新的可读流，首先推送剩余数据，然后是原始流的数据
+						const newReadable = new ReadableStream({
+							async start(controller) {
+								controller.enqueue(remainingData);
+								// 将原始流的剩余部分管道输送到新流
+								const originalReader = originalReadable.getReader();
+								while (true) {
+									const { value, done } = await originalReader.read();
+									if (done) {
+										controller.close();
+										break;
+									}
+									controller.enqueue(value);
+								}
+							}
+						});
+						// @ts-ignore
+						sock.readable = newReadable;
+					}
+				} else {
+					const errorMsg = `HTTP代理连接失败: ${headers.split('\r\n')[0]}`;
+					throw new Error(errorMsg);
+				}
+				break; 
+			}
+		}
+
+		if (!connected) {
+			throw new Error('HTTP代理响应头过大或不完整');
+		}
+
+	} catch (err) {
+		reader.releaseLock();
+		sock.close().catch(()=>{});
+		throw err;
+	} finally {
+		reader.releaseLock();
+	}
+	
+	if (!connected) {
+		sock.close().catch(()=>{});
+		throw new Error('HTTP代理连接失败: 未收到成功响应');
+	}
+
+	log(`HTTP代理连接成功: ${addressRemote}:${portRemote}`);
+	return sock;
+}
+// --------------------------------------------------------
 
 function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64) {
     if (isBase64) {
@@ -1677,13 +1802,6 @@ async function 代理URL(request, 代理网址, 目标网址, 调试模式 = fal
         return new Response(`代理请求失败: ${error.message}`, { status: 500 });
     }
 }
-
-// ... 后续的 `配置信息`, `生成配置信息`, `KV` 等函数基本保持不变 ...
-// ... 为了简洁，这里省略了未做修改的大段函数 ...
-// ... 只需修改 KV 函数中的 HTML 和 JS 部分即可 ...
-
-
-// --- 以下是未改变的函数，为保证完整性而保留 ---
 
 const protocolEncodedFlag = atob('ZG14bGMzTT0=');
 function 配置信息(UUID, 域名地址) {
@@ -1828,13 +1946,15 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
 		
 		if (sub) {
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+			if (enableHttpProxy) 订阅器 += `CFCDN（访问方式）: HTTP 代理<br>&nbsp;&nbsp;${httpProxyAddress}<br>`;
+			else if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			else if (RproxyIP == 'true') 订阅器 += `CFCDN（访问方式）: 自动获取ProxyIP<br>`;
 			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`
 			订阅器 += `<br>SUB（优选订阅生成器）: ${sub}${判断是否绑定KV空间}<br>`;
 		} else {
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+			if (enableHttpProxy) 订阅器 += `CFCDN（访问方式）: HTTP 代理<br>&nbsp;&nbsp;${httpProxyAddress}<br>`;
+			else if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
 			订阅器 += `<br>您的订阅内容由 内置 addresses/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
@@ -2043,9 +2163,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br><br>
 							<strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
 							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?proxyip=proxyip.fxxk.dedyn.io:443</strong><br><br>
-                            <strong>5. (新增)</strong> 快速更换 HTTP 代理，您可将"?httpproxy=user:pass@host:port"参数添加到链接末尾。<br><br>
-							<strong>6.</strong> 快速更换 SOCKS5 至：user:password@127.0.0.1:1080，您可将"?socks5=user:password@127.0.0.1:1080"参数添加到链接末尾，例如：<br>
+							<strong>5.</strong> 快速更换 SOCKS5 至：user:password@127.0.0.1:1080，您可将"?socks5=user:password@127.0.0.1:1080"参数添加到链接末尾，例如：<br>
 							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?socks5=user:password@127.0.0.1:1080</strong><br><br>
+							<strong>6.</strong> 快速更换 HTTP 代理至：user:password@127.0.0.1:8080，您可将"?httpproxy=user:password@127.0.0.1:8080"参数添加到链接末尾，例如：<br>
+							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?httpproxy=user:password@127.0.0.1:8080</strong><br><br>
 							<strong>7.</strong> 如需指定多个参数则需要使用'&'做间隔，例如：<br>
 							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}?sub=sub.google.com<strong>&</strong>proxyip=proxyip.fxxk.dedyn.io
 						</div>
@@ -2589,8 +2710,6 @@ async function 迁移地址列表(env, txt = 'ADD.txt') {
 	return false;
 }
 
-// --- KV 函数是唯一需要大幅修改的非核心逻辑函数 ---
-
 async function KV(request, env, txt = 'ADD.txt') {
 	try {
 		if (request.method === "POST") {
@@ -2631,13 +2750,13 @@ async function handlePostRequest(request, env, txt) {
     }
 }
 
+// --- 修改: handleGetRequest 和 HTML 模板以支持HTTP代理 ---
 async function handleGetRequest(env, txt) {
     let content = '';
     let hasKV = !!env.KV;
     let proxyIPContent = '';
-    // 新增
-    let httpProxyContent = '';
     let socks5Content = '';
+	let httpProxyContent = ''; // 新增变量
     let subContent = ''; 
     let subAPIContent = '';
     let subConfigContent = '';
@@ -2651,9 +2770,8 @@ async function handleGetRequest(env, txt) {
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
                 proxyIPContent = settings.proxyip || '';
-                // 新增
-                httpProxyContent = settings.httpproxy || '';
                 socks5Content = settings.socks5 || '';
+				httpProxyContent = settings.httpproxy || ''; // 新增读取
                 subContent = settings.sub || '';
                 subAPIContent = settings.subapi || '';
                 subConfigContent = settings.subconfig || '';
@@ -2863,20 +2981,20 @@ async function handleGetRequest(env, txt) {
                             <label for="proxyip"><strong>PROXYIP 设置</strong></label>
                             <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
                             <textarea 
-                            id="proxyip" 
+                                id="proxyip" 
                                 class="proxyip-editor" 
                                 placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}"
                             >${proxyIPContent}</textarea>
                         </div>
-                        
-                        <!-- HTTP Proxy 设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="httpproxy"><strong>HTTP 代理设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">仅支持单个地址，格式：[用户名:密码@]主机:端口</p>
+
+						<!-- 新增: HTTP 代理设置 -->
+						<div style="margin-bottom: 20px;">
+                            <label for="httpproxy"><strong>HTTP 代理设置 (优先于 SOCKS5)</strong></label>
+                            <p style="margin: 5px 0; color: #666;">只支持单个地址，格式：[用户名:密码@]主机:端口</p>
                             <textarea 
                                 id="httpproxy" 
-                                class="proxy-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIucGFzc0AxMjcuMC4wLjE6Nzg5MAoxMjcuMC4wLjE6Nzg5MA=='))}"
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXJuYW1lJTNBcGFzc3dvcmQlNDAxMjcuMC4wLjElM0E4MDgwCmh0dHAtcHJveHkuZXhhbXBsZS5jb20lM0E4ODg4'))}"
                             >${httpProxyContent}</textarea>
                         </div>
 
@@ -2956,7 +3074,7 @@ async function handleGetRequest(env, txt) {
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JThBJUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
@@ -3036,18 +3154,17 @@ async function handleGetRequest(env, txt) {
                     toggle.textContent = '∨';
                 }
             }
-            
+
             // 修改保存设置函数
             async function saveSettings() {
                 const saveStatus = document.getElementById('settings-save-status');
                 saveStatus.textContent = '保存中...';
                 
                 try {
-                    // 更新：将所有设置项收集到一个对象中
                     const advancedSettings = {
                         proxyip: document.getElementById('proxyip').value,
-                        httpproxy: document.getElementById('httpproxy').value, // 新增
                         socks5: document.getElementById('socks5').value,
+						httpproxy: document.getElementById('httpproxy').value, // 新增
                         sub: document.getElementById('sub').value,
                         subapi: document.getElementById('subapi').value,
                         subconfig: document.getElementById('subconfig').value,
