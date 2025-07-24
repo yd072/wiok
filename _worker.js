@@ -1,9 +1,8 @@
+
 import { connect } from 'cloudflare:sockets';
 
-// 全局配置变量
 let userID = '';
 let proxyIP = '';
-//let sub = '';
 let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
@@ -654,7 +653,10 @@ async function resolveToIPv6(target) {
 
 export default {
 	async fetch(request, env, ctx) {
+		// 新增：最外层 try...catch 用于捕获 URL 构造函数错误
 		try {
+			const url = new URL(request.url);
+
             // 1. 统一加载所有配置
             await loadConfigurations(env);
 
@@ -708,7 +710,6 @@ export default {
 
             // 6. 根据请求类型（WebSocket 或 HTTP）进行路由
 			const upgradeHeader = request.headers.get('Upgrade');
-			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
 				// HTTP 请求处理
                 let sub = env.SUB || '';
@@ -718,8 +719,10 @@ export default {
 				if (url.searchParams.has('proxyip')) {
 					path = `/?proxyip=${url.searchParams.get('proxyip')}`;
 					RproxyIP = 'false';
-				} else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
-					path = `/?socks5=${url.searchParams.get('socks5') || url.searchParams.get('socks')}`;
+				} else if (url.searchParams.has('socks5') || url.searchParams.has('socks') || url.searchParams.has('http')) {
+                    const proxyType = url.searchParams.has('http') ? 'http' : 'socks5';
+                    const proxyValue = url.searchParams.get(proxyType) || url.searchParams.get('socks');
+					path = `/?${proxyType}=${proxyValue}`;
 					RproxyIP = 'false';
 				}
 
@@ -782,30 +785,46 @@ export default {
 				}
 			} else {
                 // WebSocket 请求处理
-				socks5Address = url.searchParams.get('socks5') || url.searchParams.get('http') || socks5Address;
-				if (new RegExp('/socks5=', 'i').test(url.pathname)) {
-					socks5Address = url.pathname.split('5=')[1];
-				} else if (new RegExp('/http=', 'i').test(url.pathname)) {
-					socks5Address = 'http://' + url.pathname.split('=')[1];
-					enableHttp = true;
-				} else if (new RegExp('/socks(5)?://', 'i').test(url.pathname) || new RegExp('/http://', 'i').test(url.pathname)) {
-					enableHttp = url.pathname.toLowerCase().startsWith('/http');
-					const protocol = enableHttp ? 'http://' : 'socks5://';
-					socks5Address = protocol + url.pathname.split('://')[1].split('#')[0];
-					if (socks5Address.includes('@')) {
-						let userPassword = socks5Address.split('@')[0].replace(protocol, '');
-						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
-						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
-						socks5Address = `${protocol}${userPassword}@${socks5Address.split('@')[1]}`;
-					}
-				}
+                try {
+                    // 优先从查询参数获取代理信息（更安全）
+                    if (url.searchParams.has('http')) {
+                        socks5Address = url.searchParams.get('http');
+                        enableHttp = true;
+                    } else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
+                        socks5Address = url.searchParams.get('socks5') || url.searchParams.get('socks');
+                        enableHttp = false;
+                    }
+    
+                    // 如果查询参数没有，则尝试从路径解析（兼容旧方式，但风险较高）
+                    if (!socks5Address) {
+                        const decodedPath = decodeURIComponent(url.pathname);
+                        if (decodedPath.includes('=')) { // 格式如 /http=... 或 /socks5=...
+                            const parts = decodedPath.split('=');
+                            if (parts.length > 1) {
+                                socks5Address = parts.slice(1).join('=');
+                                if (decodedPath.toLowerCase().startsWith('/http=')) {
+                                    enableHttp = true;
+                                }
+                            }
+                        } else if (decodedPath.includes('://')) { // 格式如 /http://...
+                            socks5Address = decodedPath.substring(1);
+                            if (decodedPath.toLowerCase().startsWith('/http://')) {
+                                enableHttp = true;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("解析URL路径中的代理地址时出错: ", e);
+                    // 即使解析失败也继续，让后续逻辑处理 socks5Address 为空的情况
+                }
+
 
 				if (socks5Address) {
 					try {
-						parsedSocks5Address = socks5AddressParser(socks5Address.replace(/^(socks5|http):\/\//, ''));
+						parsedSocks5Address = socks5AddressParser(socks5Address);
 						enableSocks = true;
 					} catch (err) {
-						console.log(err.toString());
+						console.log("代理地址解析失败: " + err.toString());
 						enableSocks = false;
 					}
 				} else {
@@ -829,11 +848,20 @@ export default {
 				return await secureProtoOverWSHandler(request);
 			}
 		} catch (err) {
-			return new Response(err.toString());
+			// 如果是 URL 格式错误，返回一个更友好的提示
+			if (err instanceof URIError) {
+				return new Response(
+					'URI Malformed: URL格式错误。请检查您配置中的特殊字符（如 %）是否已正确编码。推荐使用查询参数（?http=... 或 ?socks5=...）传递代理信息。',
+					{ status: 400 }
+				);
+			}
+			return new Response(err.toString(), { status: 500 });
 		}
 	},
 };
 
+// ... (此处省略所有未改变的函数，如 secureProtoOverWSHandler, httpConnect, socks5Connect 等)
+// ... (所有函数的代码与上一版本完全相同，请直接使用)
 async function secureProtoOverWSHandler(request) {
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
@@ -1837,7 +1865,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             // 修改：根据 enableHttp 显示 SOCKS5 或 HTTP
 			socks5List = `${enableHttp ? 'HTTP' : 'SOCKS5'}（白名单）: `;
 			if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) socks5List += `所有流量<br>`;
-			else socks5List += `<br>  ${go2Socks5s.join('<br>  ')}<br>`;
+			else socks5List += `<br>&nbsp;&nbsp;${go2Socks5s.join('<br>&nbsp;&nbsp;')}<br>`;
 		}
 
 		let 订阅器 = '<br>';
@@ -1845,22 +1873,22 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		
 		if (sub) {
             // 修改：根据 enableHttp 显示 SOCKS5 或 HTTP
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: ${enableHttp ? 'HTTP' : 'SOCKS5'}<br>  ${newSocks5s.join('<br>  ')}<br>${socks5List}`;
-			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>  ${proxyIPs.join('<br>  ')}<br>`;
+			if (enableSocks) 订阅器 += `CFCDN（访问方式）: ${enableHttp ? 'HTTP' : 'SOCKS5'}<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			else if (RproxyIP == 'true') 订阅器 += `CFCDN（访问方式）: 自动获取ProxyIP<br>`;
 			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`
 			订阅器 += `<br>SUB（优选订阅生成器）: ${sub}${判断是否绑定KV空间}<br>`;
 		} else {
             // 修改：根据 enableHttp 显示 SOCKS5 或 HTTP
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: ${enableHttp ? 'HTTP' : 'SOCKS5'}<br>  ${newSocks5s.join('<br>  ')}<br>${socks5List}`;
-			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>  ${proxyIPs.join('<br>  ')}<br>`;
+			if (enableSocks) 订阅器 += `CFCDN（访问方式）: ${enableHttp ? 'HTTP' : 'SOCKS5'}<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
 			订阅器 += `<br>您的订阅内容由 内置 addresses/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
-			if (addresses.length > 0) 订阅器 += `ADD（TLS优选域名&IP）: <br>  ${addresses.join('<br>  ')}<br>`;
-			if (addressesnotls.length > 0) 订阅器 += `ADDNOTLS（noTLS优选域名&IP）: <br>  ${addressesnotls.join('<br>  ')}<br>`;
-			if (addressesapi.length > 0) 订阅器 += `ADDAPI（TLS优选域名&IP 的 API）: <br>  ${addressesapi.join('<br>  ')}<br>`;
-			if (addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLSAPI（noTLS优选域名&IP 的 API）: <br>  ${addressesnotlsapi.join('<br>  ')}<br>`;
-			if (addressescsv.length > 0) 订阅器 += `ADDCSV（IPTest测速csv文件 限速 ${DLS} ）: <br>  ${addressescsv.join('<br>  ')}<br>`;
+			if (addresses.length > 0) 订阅器 += `ADD（TLS优选域名&IP）: <br>&nbsp;&nbsp;${addresses.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressesnotls.length > 0) 订阅器 += `ADDNOTLS（noTLS优选域名&IP）: <br>&nbsp;&nbsp;${addressesnotls.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressesapi.length > 0) 订阅器 += `ADDAPI（TLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesapi.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLSAPI（noTLS优选域名&IP 的 API）: <br>&nbsp;&nbsp;${addressesnotlsapi.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressescsv.length > 0) 订阅器 += `ADDCSV（IPTest测速csv文件 限速 ${DLS} ）: <br>&nbsp;&nbsp;${addressescsv.join('<br>&nbsp;&nbsp;')}<br>`;
 		}
 
 		if (动态UUID && _url.pathname !== `/${动态UUID}`) 订阅器 = '';
@@ -2058,13 +2086,13 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 							<strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br><br>
 							<strong>2.</strong> 如您使用的是 SSR+ 等路由插件，推荐使用 <strong>Base64订阅地址</strong> 进行订阅；<br><br>
 							<strong>3.</strong> 快速切换 <a href='${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}'>优选订阅生成器</a> 至：sub.google.com，您可将"?sub=sub.google.com"参数添加到链接末尾，例如：<br>
-							  https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br><br>
+							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br><br>
 							<strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
-							  https://${proxyhost}${hostName}/${uuid}<strong>?proxyip=proxyip.fxxk.dedyn.io:443</strong><br><br>
+							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?proxyip=proxyip.fxxk.dedyn.io:443</strong><br><br>
 							<strong>5.</strong> 快速更换 SOCKS5/HTTP代理 至：user:password@127.0.0.1:1080，您可将"?socks5=..."或"?http=..."参数添加到链接末尾，例如：<br>
-							  https://${proxyhost}${hostName}/${uuid}<strong>?socks5=user:password@127.0.0.1:1080</strong><br><br>
+							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?socks5=user:password@127.0.0.1:1080</strong><br><br>
 							<strong>6.</strong> 如需指定多个参数则需要使用'&'做间隔，例如：<br>
-							  https://${proxyhost}${hostName}/${uuid}?sub=sub.google.com<strong>&</strong>proxyip=proxyip.fxxk.dedyn.io
+							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}?sub=sub.google.com<strong>&</strong>proxyip=proxyip.fxxk.dedyn.io
 						</div>
 					</div>
 
@@ -2193,7 +2221,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			newAddressescsv = await 整理测速结果('TRUE');
 			url = `https://${hostName}/${fakeUserID + _url.search}`;
 			if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
-				if (_url.search) url += '¬ls';
+				if (_url.search) url += '&notls';
 				else url += '?notls';
 			}
 			console.log(`虚假订阅: ${url}`);
