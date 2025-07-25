@@ -75,6 +75,14 @@ const utils = {
 	},
 };
 
+function safeAtob(str) {
+    try {
+        return atob(str);
+    } catch (e) {
+        return str;
+    }
+}
+
 /**
  * 集中加载所有配置，严格执行 KV > 环境变量 > 默认值的优先级
  * @param {any} env 
@@ -86,9 +94,9 @@ async function loadConfigurations(env) {
     if (env.SOCKS5) socks5Address = env.SOCKS5;
     // --- [修改] 从环境变量加载 HTTP  ---
     if (env.HTTP) httpProxyAddress = env.HTTP;
-    if (env.SUBAPI) subConverter = atob(env.SUBAPI);
-    if (env.SUBCONFIG) subConfig = atob(env.SUBCONFIG);
-    if (env.SUBNAME) FileName = atob(env.SUBNAME);
+    if (env.SUBAPI) subConverter = safeAtob(env.SUBAPI);
+    if (env.SUBCONFIG) subConfig = safeAtob(env.SUBCONFIG);
+    if (env.SUBNAME) FileName = safeAtob(env.SUBNAME);
     if (env.DNS64 || env.NAT64) DNS64Server = env.DNS64 || env.NAT64;
     
     if (env.ADD) addresses = await 整理(env.ADD);
@@ -802,7 +810,7 @@ export default {
 					if (socks5Address.includes('@')) {
 						let userPassword = socks5Address.split('@')[0];
 						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
-						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
+						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = safeAtob(userPassword);
 						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
 					}
 				}
@@ -1682,7 +1690,7 @@ async function httpConnect(addressRemote, portRemote, log) {
 
 function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64) {
     if (isBase64) {
-        content = atob(content);
+        content = safeAtob(content);
     }
 
     const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
