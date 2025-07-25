@@ -1052,6 +1052,12 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
 
 	const createConnection = async (address, port, proxyOptions = null) => {
+		if (!address || address.trim() === '') {
+        // 如果主机地址为空或只有空格，立即抛出错误。
+        // 这会强制让 retryConnection 的 catch 块捕获到失败，从而继续下一个策略。
+        throw new Error('Hostname cannot be empty.');
+    }
+		
 		const proxyType = proxyOptions ? proxyOptions.type : 'direct';
 		log(`建立连接: ${address}:${port} (方式: ${proxyType})`);
 
@@ -1134,7 +1140,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 					name: '内置的默认 PROXYIP',
 					enabled: true,
 					execute: async () => {
-						const defaultProxyIP = '';
+						const defaultProxyIP = 'kodi.tv';
 						const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
 						return createConnection(address, port);
 					}
