@@ -1779,7 +1779,7 @@ function 配置信息(UUID, 域名地址) {
 	const 指纹 = 'randomized';
 
 	if (域名地址.includes('.workers.dev')) {
-		地址 = atob('ZXhhbXBsZS5jb20=');
+		地址 = atob('dmlzYS5jbg==');
 		端口 = 80;
 		传输层安全 = ['', false];
 	}
@@ -2679,33 +2679,39 @@ async function KV(request, env, txt = 'ADD.txt') {
 
 async function handlePostRequest(request, env, txt) {
     if (!env.KV) {
-        return new Response("未绑定KV空间", { status: 400, headers: { "Content-Type": "text/plain;charset=utf-8" } });
+        return new Response("未绑定KV空间", { status: 400 });
     }
     try {
+        const content = await request.text();
         const url = new URL(request.url);
         const type = url.searchParams.get('type');
-        const content = await request.text();
 
         // 根据类型保存到不同的KV
-        if (type === 'advanced') {
-            // 解析JSON并保存到 'settinggs.txt'
-            await env.KV.put('settinggs.txt', content);
-        } else {
-            // 默认保存主列表内容到 ADD.txt
-            await env.KV.put(txt, content);
+        switch(type) {
+            case 'advanced':
+                await env.KV.put('settinggs.txt', content);
+                break;
+            default: // 主列表内容保存到ADD.txt
+                await env.KV.put(txt, content);
         }
         
-        return new Response("保存成功", { status: 200, headers: { "Content-Type": "text/plain;charset=utf-8" } });
+        return new Response("保存成功");
     } catch (error) {
         console.error('保存KV时发生错误:', error);
-        return new Response("保存失败: " + error.message, { status: 500, headers: { "Content-Type": "text/plain;charset=utf-8" } });
+        return new Response("保存失败: " + error.message, { status: 500 });
     }
 }
 
 async function handleGetRequest(env, txt) {
     let content = '';
     let hasKV = !!env.KV;
-    let advancedSettings = {};
+    let proxyIPContent = '';
+    let socks5Content = '';
+    let httpProxyContent = '';
+    let subContent = ''; 
+    let subAPIContent = '';
+    let subConfigContent = '';
+    let nat64Content = '';
 
     if (hasKV) {
         try {
@@ -2713,7 +2719,14 @@ async function handleGetRequest(env, txt) {
 			
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
-                advancedSettings = JSON.parse(advancedSettingsJSON);
+                const settings = JSON.parse(advancedSettingsJSON);
+                proxyIPContent = settings.proxyip || '';
+                socks5Content = settings.socks5 || '';
+                httpProxyContent = settings.httpproxy || '';
+                subContent = settings.sub || '';
+                subAPIContent = settings.subapi || '';
+                subConfigContent = settings.subconfig || '';
+                nat64Content = settings.nat64 || '';
             }
         } catch (error) {
             console.error('读取KV时发生错误:', error);
@@ -2721,20 +2734,11 @@ async function handleGetRequest(env, txt) {
         }
     }
 
-    // 从解析的JSON或默认值填充内容
-    const proxyIPContent = advancedSettings.proxyip || '';
-    const socks5Content = advancedSettings.socks5 || '';
-    const httpProxyContent = advancedSettings.httpproxy || '';
-    const subContent = advancedSettings.sub || '';
-    const subAPIContent = advancedSettings.subapi || '';
-    const subConfigContent = advancedSettings.subconfig || '';
-    const nat64Content = advancedSettings.nat64 || '';
-
     const html = `
         <!DOCTYPE html>
-        <html lang="zh-CN">
+        <html>
         <head>
-            <title>${FileName} 配置中心</title>
+            <title>优选订阅列表</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
@@ -2743,10 +2747,7 @@ async function handleGetRequest(env, txt) {
                     --secondary-color: #45a049;
                     --border-color: #e0e0e0;
                     --text-color: #333;
-                    --background-color: #f4f7f9;
-                    --card-bg-color: #ffffff;
-                    --input-bg-color: #fdfdfd;
-                    --btn-text-color: #ffffff;
+                    --background-color: #f5f5f5;
                 }
                 
                 body {
@@ -2761,25 +2762,23 @@ async function handleGetRequest(env, txt) {
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                }
-
-                .card {
-                    background: var(--card-bg-color);
+                    background: white;
                     padding: 25px;
                     border-radius: 10px;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-                    margin-bottom: 20px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                 }
 
-                .card-title {
+                .title {
                     font-size: 1.5em;
                     color: var(--text-color);
-                    margin: 0 0 20px 0;
+                    margin-bottom: 20px;
                     padding-bottom: 10px;
                     border-bottom: 2px solid var(--border-color);
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
+                }
+
+                .editor-container {
+                    width: 100%;
+                    margin: 20px 0;
                 }
 
                 .editor {
@@ -2793,7 +2792,6 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     line-height: 1.5;
                     resize: vertical;
-                    background-color: var(--input-bg-color);
                     transition: border-color 0.3s ease;
                 }
 
@@ -2807,18 +2805,16 @@ async function handleGetRequest(env, txt) {
                     display: flex;
                     gap: 12px;
                     margin-top: 15px;
-                    align-items: center;
                 }
 
                 .btn {
-                    padding: 10px 22px;
+                    padding: 8px 20px;
                     border: none;
                     border-radius: 6px;
                     font-size: 14px;
                     font-weight: 500;
                     cursor: pointer;
                     transition: all 0.3s ease;
-                    text-transform: uppercase;
                 }
 
                 .btn:disabled {
@@ -2828,80 +2824,28 @@ async function handleGetRequest(env, txt) {
 
                 .btn-primary {
                     background: var(--primary-color);
-                    color: var(--btn-text-color);
+                    color: white;
                 }
 
                 .btn-primary:hover:not(:disabled) {
                     background: var(--secondary-color);
-                    transform: translateY(-1px);
                 }
 
                 .btn-secondary {
-                    background: #6c757d;
-                    color: var(--btn-text-color);
+                    background: #666;
+                    color: white;
                 }
 
                 .btn-secondary:hover:not(:disabled) {
-                    background: #5a6268;
+                    background: #555;
                 }
 
                 .save-status {
+                    margin-left: 10px;
                     font-size: 14px;
                     color: #666;
-                    font-weight: 500;
                 }
 
-                .setting-item {
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    margin-bottom: 15px;
-                    overflow: hidden;
-                }
-
-                .setting-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 12px 15px;
-                    background-color: #f8f9fa;
-                    cursor: pointer;
-                    font-weight: 500;
-                }
-                
-                .setting-content {
-                    display: none;
-                    padding: 15px;
-                    background-color: var(--card-bg-color);
-                }
-
-                .setting-content p {
-                    margin: 0 0 10px 0;
-                    color: #666;
-                    font-size: 14px;
-                }
-                
-                .toggle-arrow {
-                    font-size: 1.2em;
-                    transition: transform 0.2s ease-in-out;
-                }
-
-                .setting-header.open .toggle-arrow {
-                    transform: rotate(180deg);
-                }
-
-                .setting-editor {
-                    width: 100%;
-                    min-height: 100px;
-                    padding: 10px;
-                    box-sizing: border-box;
-                    border: 1px solid var(--border-color);
-                    border-radius: 4px;
-                    font-family: Monaco, Consolas, "Courier New", monospace;
-                    font-size: 14px;
-                    resize: vertical;
-                    background-color: var(--input-bg-color);
-                }
-                
                 .notice-toggle {
                     color: var(--primary-color);
                     cursor: pointer;
@@ -2915,136 +2859,227 @@ async function handleGetRequest(env, txt) {
                     background: #f8f9fa;
                     border-left: 4px solid var(--primary-color);
                     padding: 15px;
-                    margin-top: 15px;
+                    margin: 10px 0;
                     border-radius: 0 8px 8px 0;
                 }
 
-                .cmad-footer {
-                    margin-top: 20px;
-                    padding-top: 20px;
-                    border-top: 1px solid var(--border-color);
-                    text-align: left;
-                    font-size: 14px;
+                .divider {
+                    height: 1px;
+                    background: var(--border-color);
+                    margin: 20px 0;
                 }
 
+                .advanced-settings {
+                    margin: 20px 0;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    border: 1px solid var(--border-color);
+                }
+
+                .advanced-settings-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 15px;
+                    cursor: pointer;
+                }
+
+                #advanced-settings-content {
+                    display: none;
+                }
+
+                .setting-item {
+                    margin-bottom: 10px;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    overflow: hidden;
+                }
+
+                .setting-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 10px 15px;
+                    background-color: #f0f0f0;
+                    cursor: pointer;
+                    font-weight: 500;
+                }
+                
+                .setting-content {
+                    display: none; /* Initially hidden */
+                    padding: 15px;
+                    background-color: #fafafa;
+                }
+
+                .toggle-arrow {
+                    font-size: 1.2em;
+                    transition: transform 0.2s ease-in-out;
+                }
+
+                .setting-header.open .toggle-arrow {
+                    transform: rotate(180deg);
+                }
+
+                .setting-editor {
+                    width: 100%;
+                    min-height: 80px;
+                    margin-top: 10px;
+                    padding: 10px;
+                    box-sizing: border-box;
+                    border: 1px solid var(--border-color);
+                    border-radius: 4px;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
+                    font-size: 14px;
+                    resize: vertical;
+                }
+
+                @media (max-width: 768px) {
+                    body {
+                        padding: 10px;
+                    }
+                    
+                    .container {
+                        padding: 15px;
+                    }
+                    
+                    .editor {
+                        height: 400px;
+                    }
+                }
             </style>
         </head>
         <body>
             <div class="container">
-                <div class="card">
-                    <h1 class="card-title">📝 ${FileName} 优选订阅列表</h1>
-                     ${hasKV ? `
-                        <textarea class="editor" id="content" placeholder="${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}">${content}</textarea>
-                        <div class="button-group">
-                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent('content', '')">保存列表</button>
-                            <span class="save-status" id="saveStatus_content"></span>
-                        </div>
-                        <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
-                            ℹ️ 说明 ∨
-                        </a>
-                        <div id="noticeContent" class="notice-content" style="display: none">
-                            ${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}
-                        </div>
-                    ` : '<p>⚠️ 未绑定KV空间，无法编辑。</p>'}
-                </div>
-
-                <div class="card">
-                    <h1 class="card-title">⚙️ 高级设置</h1>
-                    ${hasKV ? `
+                <div class="title">📝 ${FileName} 优选订阅列表</div>
+                
+                <div class="advanced-settings">
+                    <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
+                        <h3 style="margin: 0;">⚙️ 高级设置</h3>
+                        <span id="advanced-settings-toggle">∨</span>
+                    </div>
+                    <div id="advanced-settings-content">
                         <!-- PROXYIP设置 -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>PROXYIP 设置</strong> (TLS 流量回落)</span>
+                                <span><strong>PROXYIP 设置</strong></span>
                                 <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
-                                <p>每行一个IP，格式：IP:端口(可不添加端口)。用于TLS连接失败时的回退尝试。</p>
-                                <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBMS4yLjMuNCUzQTQ0MyUwQXByb3h5LmV4YW1wbGUuY29tJTNBODQ0Mw=='))}">${proxyIPContent}</textarea>
+                                <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
+                                <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${proxyIPContent}</textarea>
                             </div>
                         </div>
 
                         <!-- SOCKS5设置 -->
                         <div class="setting-item">
                              <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SOCKS5 代理</strong> (出站代理)</span>
+                                <span><strong>SOCKS5 设置</strong></span>
                                 <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
-                                <p>每行一个地址，格式：[用户名:密码@]主机:端口。用于Worker出站连接。</p>
-                                <textarea id="socks5" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBdXNlciUzQXBhc3MlNDAxMjcuMC4wLjElM0ExMDgwJTBBMTI3LjAuMC4xJTNBMTA4MA=='))}">${socks5Content}</textarea>
+                                <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <textarea id="socks5" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
                             </div>
                         </div>
                         
                         <!-- HTTP Proxy 设置 -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>HTTP 代理</strong> (出站代理)</span>
+                                <span><strong>HTTP 设置</strong></span>
                                 <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
-                                <p>每行一个地址，格式：[用户名:密码@]主机:端口。Worker将通过此代理连接目标。</p>
-                                <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBdXNlciUzQXBhc3MlNDEuMi4zLjQlM0E4MDgwJTBBMS4yLjMuNCUzQTgwODA='))}">${httpProxyContent}</textarea>
+                                <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
                             </div>
                         </div>
 
                         <!-- SUB设置 -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SUB 优选订阅</strong> (外部节点源)</span>
+                                <span><strong>SUB 设置</strong> (优选订阅生成器)</span>
                                 <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
-                                <p>只支持单个优选订阅生成器地址。如果此处留空，则使用上方的“优选订阅列表”。</p>
-                                <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBc3ViLmdvb2dsZS5jb20lMEFzdWIuZXhhbXBsZS5jb20='))}">${subContent}</textarea>
+                                <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
+                                <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
                             </div>
                         </div>
                         
                         <!-- SUBAPI设置 -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SUBAPI 订阅转换后端</strong></span>
+                                <span><strong>SUBAPI 设置</strong> (订阅转换后端)</span>
                                 <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
-                                <p>用于将节点列表转换为客户端支持的格式 (Clash, Sing-box 等)。</p>
-                                <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBYXBpLnYxLm1rJTBBc3ViLnhldG9uLmRldg=='))}">${subAPIContent}</textarea>
+                                <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
+                                <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
                             </div>
                         </div>
                         
                         <!-- SUBCONFIG设置 -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SUBCONFIG 订阅转换配置</strong></span>
+                                <span><strong>SUBCONFIG 设置</strong> (订阅转换配置)</span>
                                 <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
-                                <p>订阅转换时使用的配置文件地址。</p>
-                                <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGQUNMNFNTUiUyRkFDTDRTU1IlMkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
+                                <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
+                                <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
                             </div>
                         </div>
 
                         <!-- NAT64/DNS64 设置 -->
                         <div class="setting-item">
                            <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>NAT64/DNS64 设置</strong> (IPv6-Only 环境)</span>
+                                <span><strong>NAT64/DNS64 设置</strong></span>
                                 <span class="toggle-arrow">∨</span>
                             </div>
                              <div class="setting-content">
-                                <p>用于在纯IPv6服务器上访问IPv4地址。可以填写 DNS64 服务器地址或 NAT64 前缀。参考 <a href="https://nat64.xyz/" target="_blank" rel="noopener">nat64.xyz</a></p>
-                                <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
+                                <p style="margin: 5px 0; color: #666;">
+                                    <a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
+                                </p>
+                                <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmRuczY0LmV4YW1wbGUuY29tJTBDMmEwMSUzQTRmOCUzQWMyYyUzQTEyM2YlM0ElM0ElMkY5Ng=='))}">${nat64Content}</textarea>
                             </div>
                         </div>
-                        
-                        <div class="button-group">
-                            <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存高级设置</button>
-                            <span id="saveStatus_advanced" class="save-status"></span>
+						<script>
+  							const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
+  							const decodedURL = atob(encodedURL);
+  							document.getElementById('nat64-link').setAttribute('href', decodedURL);
+						</script>
+
+                        <!-- 统一的保存按钮 -->
+                        <div style="margin-top: 20px;">
+                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+                            <span id="settings-save-status" class="save-status"></span>
                         </div>
-                    ` : '<p>⚠️ 未绑定KV空间，无法编辑。</p>'}
+                    </div>
                 </div>
+
+                <!-- 保持现有内容 -->
+                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                    ℹ️ 说明 ∨
+                </a>
                 
-                <div class="cmad-footer">
-                    ${cmad}
+                <div id="noticeContent" class="notice-content" style="display: none">
+				    ${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBJTBBZXhhbXBsZS5jb20lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEExMjcuMC4wLjElM0ExMjM0JTIzQ0ZuYXQlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjNJUHY2JTBBJTBBJUU4JUFGJTlEJUU2JTk4JThFJUVGJUJDJTkBJTBBdmxlc3MlRTUlOEYlOEYlRTglQUUlQUUlRTclOUElODQlRTUlOEYlOUYlRTUlOUQlODAlM0ElRTclQUIlOUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglMkMlMjBJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTlDJTgwRTclOTQlQTglNUI1NUQlRTUlOEMlODUlRTglQTMlQjglMkMlMjAlRTglODclQUElRTUlOEElOEIlRTglQUYlODYlRTUlODglQUIlMjIlM0ElMjIlMkMlMjIlRTQlQkMlOTglRTklODAlODklMjIlRTUlOTIlOEMlMjIlMjMlRTUlQTQlODclRTYlQjMlQThJJTIyJTJDJUU1JTlGJTlGJUU1JTkwJThEJUU0JUI4JThEJUU1JTkxJUEwJUU3JUFEJUFGJUU1JThGJUEzJUU5JUJCJTlCJUU4JUFFJUEwJTIyNDQzJTIyJTJDJUU1JThGJUEyJUU2JUI3JUJCJUU1JThDJUEwJUVGJUJDJTkBZXhhbXBsZS5jb20lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEElMEFBRERBUEklRTclOUMlODglRTUlOEIlOUElRTUlOEMlOEE='))}
+                </div>
+
+                <div class="editor-container">
+                    ${hasKV ? `
+                        <textarea class="editor" 
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBJTBBZXhhbXBsZS5jb20lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEExMjcuMC4wLjElM0ExMjM0JTIzQ0ZuYXQlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjNJUHY2JTBBJTBBJUU4JUFGJTlEJUU2JTk4JThFJUVGJUJDJTkBJTBBdmxlc3MlRTUlOEYlOEYlRTglQUUlQUUlRTclOUElODQlRTUlOEYlOUYlRTUlOUQlODAlM0ElRTclQUIlOUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglMkMlMjBJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTlDJTgwRTclOTQlQTglNUI1NUQlRTUlOEMlODUlRTglQTMlQjglMkMlMjAlRTglODclQUElRTUlOEElOEIlRTglQUYlODYlRTUlODglQUIlMjIlM0ElMjIlMkMlMjIlRTQlQkMlOTglRTklODAlODklMjIlRTUlOTIlOEMlMjIlMjMlRTUlQTQlODclRTYlQjMlQThJJTIyJTJDJUU1JTlGJTlGJUU1JTkwJThEJUU0JUI4JThEJUU1JTkxJUEwJUU3JUFEJUFGJUU1JThGJUEzJUU5JUJCJTlCJUU4JUFFJUEwJTIyNDQzJTIyJTJDJUU1JThGJUEyJUU2JUI3JUJCJUU1JThDJUEwJUVGJUJDJTkBZXhhbXBsZS5jb20lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEElMEFBRERBUEklRTclOUMlODglRTUlOEIlOUElRTUlOEMlOEE='))}"
+                            id="content">${content}</textarea>
+                        <div class="button-group">
+                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <span class="save-status" id="saveStatus"></span>
+                        </div>
+                        <div class="divider"></div>
+                        ${cmad}
+                    ` : '<p>未绑定KV空间</p>'}
                 </div>
             </div>
 
@@ -3053,73 +3088,36 @@ async function handleGetRequest(env, txt) {
                     const pathParts = window.location.pathname.split('/');
                     pathParts.pop(); // 移除 "edit"
                     const newPath = pathParts.join('/');
-                    window.location.href = newPath || '/';
+                    window.location.href = newPath;
                 }
 
-                async function saveContent(elementId, type) {
-                    const button = event.target;
-                    const saveStatus = document.getElementById('saveStatus_content');
+                async function saveContent(button) {
                     try {
                         button.disabled = true;
+                        const content = document.getElementById('content').value;
+                        const saveStatus = document.getElementById('saveStatus');
+                        
                         saveStatus.textContent = '保存中...';
                         
-                        const content = document.getElementById(elementId).value;
-                        const response = await fetch(window.location.href + '?type=' + type, {
+                        const response = await fetch(window.location.href, {
                             method: 'POST',
                             body: content
                         });
 
                         if (response.ok) {
                             saveStatus.textContent = '✅ 保存成功';
+                            setTimeout(() => {
+                                saveStatus.textContent = '';
+                            }, 3000);
                         } else {
-                            throw new Error(await response.text());
+                            throw new Error('保存失败');
                         }
                     } catch (error) {
-                        saveStatus.textContent = '❌ 保存失败: ' + error.message;
+                        const saveStatus = document.getElementById('saveStatus');
+                        saveStatus.textContent = '❌ ' + error.message;
+                        console.error('保存时发生错误:', error);
                     } finally {
                         button.disabled = false;
-                        setTimeout(() => {
-                            saveStatus.textContent = '';
-                        }, 3000);
-                    }
-                }
-
-                async function saveAdvancedSettings() {
-                    const button = event.target;
-                    const saveStatus = document.getElementById('saveStatus_advanced');
-                    try {
-                        button.disabled = true;
-                        saveStatus.textContent = '保存中...';
-                        
-                        const settings = {
-                            proxyip: document.getElementById('proxyip').value,
-                            socks5: document.getElementById('socks5').value,
-                            httpproxy: document.getElementById('httpproxy').value,
-                            sub: document.getElementById('sub').value,
-                            subapi: document.getElementById('subapi').value,
-                            subconfig: document.getElementById('subconfig').value,
-                            nat64: document.getElementById('nat64').value
-                        };
-
-                        const response = await fetch(window.location.href + '?type=advanced', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(settings)
-                        });
-
-                        if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
-                        } else {
-                            throw new Error(await response.text());
-                        }
-
-                    } catch (error) {
-                         saveStatus.textContent = '❌ 保存失败: ' + error.message;
-                    } finally {
-                        button.disabled = false;
-                        setTimeout(() => {
-                           saveStatus.textContent = '';
-                        }, 3000);
                     }
                 }
 
@@ -3131,10 +3129,22 @@ async function handleGetRequest(env, txt) {
                         noticeToggle.textContent = 'ℹ️ 说明 ∧';
                     } else {
                         noticeContent.style.display = 'none';
-                        noticeToggle.textContent = 'ℹ️ 说明 ∨';
+                        noticeToggle.textContent = 'ℹ️ 说明∨';
                     }
                 }
-                
+
+                function toggleAdvancedSettings() {
+                    const content = document.getElementById('advanced-settings-content');
+                    const toggle = document.getElementById('advanced-settings-toggle');
+                    if (content.style.display === 'none' || !content.style.display) {
+                        content.style.display = 'block';
+                        toggle.textContent = '∧';
+                    } else {
+                        content.style.display = 'none';
+                        toggle.textContent = '∨';
+                    }
+                }
+
                 function toggleSetting(headerElement) {
                     const content = headerElement.nextElementSibling;
                     const arrow = headerElement.querySelector('.toggle-arrow');
@@ -3145,6 +3155,43 @@ async function handleGetRequest(env, txt) {
                     } else {
                         content.style.display = 'none';
                         arrow.textContent = '∨';
+                    }
+                }
+
+                async function saveSettings() {
+                    const saveStatus = document.getElementById('settings-save-status');
+                    saveStatus.textContent = '保存中...';
+                    
+                    try {
+                        const advancedSettings = {
+                            proxyip: document.getElementById('proxyip').value,
+                            socks5: document.getElementById('socks5').value,
+                            httpproxy: document.getElementById('httpproxy').value,
+                            sub: document.getElementById('sub').value,
+                            subapi: document.getElementById('subapi').value,
+                            subconfig: document.getElementById('subconfig').value,
+                            nat64: document.getElementById('nat64').value
+                        };
+
+                        const response = await fetch(window.location.href + '?type=advanced', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(advancedSettings)
+                        });
+
+                        if (response.ok) {
+                            saveStatus.textContent = '✅ 保存成功';
+                            setTimeout(() => {
+                                saveStatus.textContent = '';
+                            }, 3000);
+                        } else {
+                            throw new Error('保存失败: ' + await response.text());
+                        }
+                    } catch (error) {
+                        saveStatus.textContent = '❌ ' + error.message;
+                        console.error('保存设置时发生错误:', error);
                     }
                 }
             </script>
