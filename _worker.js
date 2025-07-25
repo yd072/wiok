@@ -1130,27 +1130,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 						return createConnection(nat64Proxyip, 443);
 					}
 				},
-				{
-					name: '内置的默认 PROXYIP',
-					enabled: true,
-					execute: async () => {
-						const defaultProxyIP = kodi.tv;
-						const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
-						return createConnection(address, port);
-					}
-				},
-				{
-					name: '内置的默认 NAT64',
-					enabled: true,
-					execute: async () => {
-						if (!DNS64Server || DNS64Server.trim() === '') {
-						   DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
-						}
-						const nat64Address = await resolveToIPv6(addressRemote);
-						const nat64Proxyip = `[${nat64Address}]`;
-						return createConnection(nat64Proxyip, 443);
-					}
-				}
+
 			];
 
             // 按顺序尝试所有策略
