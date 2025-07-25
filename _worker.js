@@ -1144,7 +1144,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 					enabled: true,
 					execute: async () => {
 						if (!DNS64Server || DNS64Server.trim() === '') {
-						   DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+						   DNS64Server = [2001:67c:2960::6464];
 						}
 						const nat64Address = await resolveToIPv6(addressRemote);
 						const nat64Proxyip = `[${nat64Address}]`;
