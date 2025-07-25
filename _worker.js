@@ -3041,7 +3041,7 @@ async function handleGetRequest(env, txt) {
                                 <p style="margin: 5px 0; color: #666;">
                                     <a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
                                 </p>
-                                <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmRuczY0LmV4YW1wbGUuY29tJTBDMmEwMSUzQTRmOCUzQWMyYyUzQTEyM2YlM0ElM0ElMkY5Ng=='))}">${nat64Content}</textarea>
+                                <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
                             </div>
                         </div>
 						<script>
