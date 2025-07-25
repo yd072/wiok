@@ -3060,7 +3060,7 @@ async function handleGetRequest(env, txt) {
 
                 <!-- 保持现有内容 -->
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
-                    ℹ️ 注意事项 ∨
+                    ℹ️ 说明 ∨
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
@@ -3126,10 +3126,10 @@ async function handleGetRequest(env, txt) {
                     const noticeToggle = document.getElementById('noticeToggle');
                     if (noticeContent.style.display === 'none') {
                         noticeContent.style.display = 'block';
-                        noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                        noticeToggle.textContent = 'ℹ️ 说明 ∧';
                     } else {
                         noticeContent.style.display = 'none';
-                        noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                        noticeToggle.textContent = 'ℹ️ 说明 ∨';
                     }
                 }
 
