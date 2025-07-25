@@ -1102,8 +1102,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 	// 按指定优先级定义所有连接策略
 	const connectionStrategies = [
         {
-            name: '直接连接 (首选)',
-            enabled: true, 
+            name: '直接连接 (首选)', 
             execute: () => createConnection(addressRemote, portRemote, null),
         },
 		{
