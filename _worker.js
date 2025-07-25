@@ -3052,7 +3052,7 @@ async function handleGetRequest(env, txt) {
 
                         <!-- 统一的保存按钮 -->
                         <div style="margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="saveSettings()">保存高级设置</button>
+                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
