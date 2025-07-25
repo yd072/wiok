@@ -1174,7 +1174,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 		
 		if (tcpSocket) {
 			log('建立从远程服务器到客户端的数据流...');
-			remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
+			remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, log);
 		}
 	};
 
@@ -1197,7 +1197,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 		}
 		
 		log('主连接成功！');
-		return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
+		return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, log);
 	} catch (error) {
 		log(`主连接失败 (${error.message})，将启动重试流程...`);
 		return retryConnection();
@@ -1276,118 +1276,61 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     };
 }
 
-async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
-    let hasIncomingData = false;
+
+async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, log) {
+    // 初始响应头只发送一次
     let header = responseHeader;
-    let isSocketClosed = false;
-    let retryAttempted = false;
-    let retryCount = 0; // 记录重试次数
-    const MAX_RETRIES = 3; // 限制最大重试次数
 
-    // 控制超时
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    // 设置全局超时
-    const timeout = setTimeout(() => {
-        if (!hasIncomingData) {
-            controller.abort('连接超时');
-        }
-    }, 5000);
-
-    try {
-        // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
-    const writeData = async (chunk) => {
-        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                throw new Error('WebSocket 未连接');
-        }
-
-        if (header) {
-                // 预分配足够的 buffer，避免重复分配
-                const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-                combinedData.set(new Uint8Array(header), 0);
-                combinedData.set(new Uint8Array(chunk), header.byteLength);
-                webSocket.send(combinedData);
-                header = null; // 清除 header 引用
-        } else {
-            webSocket.send(chunk);
-        }
-        
-            hasIncomingData = true;
-        };
-
-        await remoteSocket.readable
-            .pipeTo(
-                new WritableStream({
-                    async write(chunk, controller) {
-                        try {
-                            await writeData(chunk);
-                        } catch (error) {
-                            log(`数据写入错误: ${error.message}`);
-                            controller.error(error);
-                        }
-                    },
-                    close() {
-                        isSocketClosed = true;
-                        clearTimeout(timeout);
-                        log(`远程连接已关闭, 接收数据: ${hasIncomingData}`);
-                        
-                        // 仅在没有数据时尝试重试，且不超过最大重试次数
-                        if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-                            retryAttempted = true;
-                            retryCount++;
-                            log(`未收到数据, 正在进行第 ${retryCount} 次重试...`);
-                            retry();
-                        }
-                    },
-                    abort(reason) {
-                        isSocketClosed = true;
-                        clearTimeout(timeout);
-                        log(`远程连接被中断: ${reason}`);
+    // readable.pipeTo(writable) 会自动处理背压和数据块的流动。
+    // 这是在 Worker 中处理流的最高效方式。
+    await remoteSocket.readable
+        .pipeTo(
+            new WritableStream({
+                /**
+                 * 当从远程服务器接收到数据块时调用
+                 * @param {Uint8Array} chunk 数据块
+                 */
+                async write(chunk) {
+                    // 确保 WebSocket 仍然处于打开状态
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        // 如果 WebSocket 已关闭，则中止流
+                        remoteSocket.close();
+                        return;
                     }
-                }),
-                {
-                    signal,
-                    preventCancel: false
-                }
-            )
-            .catch((error) => {
-                log(`数据传输异常: ${error.message}`);
-                if (!isSocketClosed) {
-                    safeCloseWebSocket(webSocket);
-                }
-                
-                // 仅在未收到数据时尝试重试，并限制重试次数
-                if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-                    retryAttempted = true;
-                    retryCount++;
-                    log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
-                    retry();
-                }
-            });
 
-    } catch (error) {
-        clearTimeout(timeout);
-        log(`连接处理异常: ${error.message}`);
-        if (!isSocketClosed) {
-            safeCloseWebSocket(webSocket);
-        }
-        
-        // 仅在发生异常且未收到数据时尝试重试，并限制重试次数
-        if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-            retryAttempted = true;
-            retryCount++;
-            log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
-            retry();
-        }
-        
-        throw error;
-    } finally {
-        clearTimeout(timeout);
-        if (signal.aborted) {
-            safeCloseWebSocket(webSocket);
-        }
-    }
+                    // 如果是第一个数据块，则合并响应头
+                    if (header) {
+                        const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                        combinedData.set(new Uint8Array(header), 0);
+                        combinedData.set(new Uint8Array(chunk), header.byteLength);
+                        webSocket.send(combinedData);
+                        header = null; 
+                    } else {
+                        webSocket.send(chunk);
+                    }
+                },
+                /**
+                 * 当远程服务器正常关闭连接时调用
+                 */
+                close() {
+                    log(`远程连接已正常关闭。`);
+                    // 远程连接关闭后，也安全地关闭与客户端的 WebSocket 连接
+                    safeCloseWebSocket(webSocket);
+                },
+
+                abort(reason) {
+                    log(`远程连接被中断: ${reason}`);
+                    // 发生中止时，以错误状态关闭 WebSocket
+                    safeCloseWebSocket(webSocket, 1011, 'Remote connection aborted');
+                }
+            })
+        )
+        .catch((error) => {
+            // 捕获在管道传输过程中发生的任何未处理错误
+            log(`数据传输管道发生错误: ${error.message}`);
+            // 发生错误时，以错误状态关闭 WebSocket
+            safeCloseWebSocket(webSocket, 1011, 'Pipe error');
+        });
 }
 
 const WS_READY_STATE_OPEN = 1;
@@ -3047,7 +2990,7 @@ async function handleGetRequest(env, txt) {
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFJTNDYnIlM0UKCglMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
