@@ -2986,7 +2986,7 @@ async function handleGetRequest(env, txt) {
                         <!-- HTTP Proxy 设置 -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>HTTP 代理设置</strong></span>
+                                <span><strong>HTTP 设置</strong></span>
                                 <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
