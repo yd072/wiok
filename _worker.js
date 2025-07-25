@@ -1102,7 +1102,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 		},
 		{
 			name: '内置的默认 PROXYIP',
-			enabled: true, // 作为回退选项，总是启用
 			execute: () => {
 				const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
 				const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
@@ -1170,9 +1169,26 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 		}
 	};
 
-	// 启动连接过程
-	attemptConnection();
+	try {
+		log('主流程：第一阶段 - 尝试连接...');
+		const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ?
+			(new RegExp('^' + go2Socks5s.find(p => new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(addressRemote)) + '$', 'i')).test(addressRemote) : false;
+
+		let tcpSocket;
+
+  
+			log('首选方式: 直接连接');
+			tcpSocket = await createConnection(addressRemote, portRemote, null);
+		
+		
+		log('主连接成功！');
+		return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
+	} catch (error) {
+		log(`主连接失败 (${error.message})，将启动重试流程...`);
+		return retryConnection();
+	}
 }
+
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
