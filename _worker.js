@@ -2912,15 +2912,6 @@ async function handleGetRequest(env, txt) {
                     background-color: #fafafa;
                 }
 
-                .toggle-arrow {
-                    font-size: 1.2em;
-                    transition: transform 0.2s ease-in-out;
-                }
-
-                .setting-header.open .toggle-arrow {
-                    transform: rotate(180deg);
-                }
-
                 .setting-editor {
                     width: 100%;
                     min-height: 80px;
@@ -2956,14 +2947,12 @@ async function handleGetRequest(env, txt) {
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
                         <h3 style="margin: 0;">⚙️ 高级设置</h3>
-                        <span id="advanced-settings-toggle">∨</span>
                     </div>
                     <div id="advanced-settings-content">
                         <!-- PROXYIP设置 -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
                                 <span><strong>PROXYIP 设置</strong></span>
-                                <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
                                 <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
@@ -2975,7 +2964,6 @@ async function handleGetRequest(env, txt) {
                         <div class="setting-item">
                              <div class="setting-header" onclick="toggleSetting(this)">
                                 <span><strong>SOCKS5 设置</strong></span>
-                                <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
                                 <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
@@ -2987,7 +2975,6 @@ async function handleGetRequest(env, txt) {
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
                                 <span><strong>HTTP 设置</strong></span>
-                                <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
                                 <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
@@ -2999,7 +2986,6 @@ async function handleGetRequest(env, txt) {
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
                                 <span><strong>SUB 设置</strong> (优选订阅生成器)</span>
-                                <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
                                 <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
@@ -3011,7 +2997,6 @@ async function handleGetRequest(env, txt) {
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
                                 <span><strong>SUBAPI 设置</strong> (订阅转换后端)</span>
-                                <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
                                 <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
@@ -3023,7 +3008,6 @@ async function handleGetRequest(env, txt) {
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
                                 <span><strong>SUBCONFIG 设置</strong> (订阅转换配置)</span>
-                                <span class="toggle-arrow">∨</span>
                             </div>
                             <div class="setting-content">
                                 <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
@@ -3035,7 +3019,6 @@ async function handleGetRequest(env, txt) {
                         <div class="setting-item">
                            <div class="setting-header" onclick="toggleSetting(this)">
                                 <span><strong>NAT64/DNS64 设置</strong></span>
-                                <span class="toggle-arrow">∨</span>
                             </div>
                              <div class="setting-content">
                                 <p style="margin: 5px 0; color: #666;">
@@ -3064,7 +3047,7 @@ async function handleGetRequest(env, txt) {
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFJTBBJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMi4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlRTYlOTglQUYlRTQlQkIlQTMlRTQlQkQlOUNJUCVFRiVCQyU4QyVFNSU4RiU5RSVFNCVCRCU5Q0lQJUU0JUI4JUJBQVJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRSUwQSUwOSUwOSUwOSUwOSUwOSUzQ3N0cm9uZyUzRTMuJTNDJTJGYnIlM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
@@ -3135,26 +3118,20 @@ async function handleGetRequest(env, txt) {
 
                 function toggleAdvancedSettings() {
                     const content = document.getElementById('advanced-settings-content');
-                    const toggle = document.getElementById('advanced-settings-toggle');
                     if (content.style.display === 'none' || !content.style.display) {
                         content.style.display = 'block';
-                        toggle.textContent = '∧';
                     } else {
                         content.style.display = 'none';
-                        toggle.textContent = '∨';
                     }
                 }
 
                 function toggleSetting(headerElement) {
                     const content = headerElement.nextElementSibling;
-                    const arrow = headerElement.querySelector('.toggle-arrow');
                     headerElement.classList.toggle('open');
                     if (content.style.display === 'none' || content.style.display === '') {
                         content.style.display = 'block';
-                        arrow.textContent = '∧';
                     } else {
                         content.style.display = 'none';
-                        arrow.textContent = '∨';
                     }
                 }
 
