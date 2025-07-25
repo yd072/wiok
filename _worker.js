@@ -1185,10 +1185,16 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
 		let tcpSocket;
 
-  
+		if (enableHttpProxy) {
+			log('首选方式: HTTP 代理');
+			tcpSocket = await createConnection(addressRemote, portRemote, { type: 'http' });
+		} else if (shouldUseSocks) {
+			log('首选方式: SOCKS5 代理 (go2Socks5s)');
+			tcpSocket = await createConnection(addressRemote, portRemote, { type: 'socks5' });
+		} else {
 			log('首选方式: 直接连接');
 			tcpSocket = await createConnection(addressRemote, portRemote, null);
-		
+		}
 		
 		log('主连接成功！');
 		return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
