@@ -1175,7 +1175,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     connectionStrategies.push({
         name: '内置的默认 PROXYIP',
         execute: () => {
-            const defaultProxyIP = 'kodi.tv';
+            const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
             const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
             return createConnection(address, port);
         }
