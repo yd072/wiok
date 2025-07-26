@@ -1153,7 +1153,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
     if (proxyIP && proxyIP.trim() !== '') {
         connectionStrategies.push({
-            name: 'User-configured PROXYIP',
+            name: '用户配置的 PROXYIP',
             execute: () => {
                 const { address, port } = parseProxyIP(proxyIP, portRemote);
                 return createConnection(address, port);
@@ -1164,7 +1164,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     const userNat64Server = DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
     if (userNat64Server) {
         connectionStrategies.push({
-            name: 'User-configured NAT64',
+            name: '用户配置的 NAT64',
             execute: async () => {
                 const nat64Address = await resolveToIPv6(addressRemote);
                 return createConnection(`[${nat64Address}]`, 443);
@@ -1173,7 +1173,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     }
     
     connectionStrategies.push({
-        name: 'Built-in Default PROXYIP',
+        name: '内置的默认 PROXYIP',
         execute: () => {
             const defaultProxyIP = 'kodi.tv';
             const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
@@ -1182,11 +1182,8 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     });
 
     connectionStrategies.push({
-        name: 'Built-in Default NAT64',
+        name: '内置的默认 NAT64',
         execute: async () => {
-            if (!DNS64Server || DNS64Server.trim() === '') {
-                DNS64Server = 'dns64.abq.ztvi.org';
-            }
             const nat64Address = await resolveToIPv6(addressRemote);
             return createConnection(`[${nat64Address}]`, 443);
         }
