@@ -1251,47 +1251,121 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     };
 }
 
-async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, log) {
+async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
+    let hasIncomingData = false;
     let header = responseHeader;
+    let isSocketClosed = false;
+    let retryAttempted = false; // 重新引入，防止单次失败触发多次重试
 
-    // 从 remoteSocket 读取数据并写入 webSocket
+    // 为本次连接尝试创建一个独立的中止控制器
+    const controller = new AbortController();
+    const signal = controller.signal;
+
+    // 清理函数，但现在它只清理与当前 remoteSocket 相关的资源
+    const cleanupCurrentAttempt = () => {
+        isSocketClosed = true;
+        clearTimeout(timeoutId);
+        controller.abort(); // 中止正在进行的 pipeTo 操作
+        // 注意：不再关闭 webSocket
+    };
+    
+    // 全局超时：如果5秒内没有收到任何数据，则中止当前尝试
+    const timeoutId = setTimeout(() => {
+        if (!hasIncomingData) {
+            log('连接超时，未收到任何数据');
+            cleanupCurrentAttempt();
+            // 触发重试
+            if (retry && !retryAttempted) {
+                retryAttempted = true;
+                log('因超时触发重试...');
+                retry();
+            }
+        }
+    }, 3000);
+
+    try {
     await remoteSocket.readable
         .pipeTo(
             new WritableStream({
                 write(chunk) {
-                    // 检查 WebSocket 是否仍然开放
+                        if (!hasIncomingData) {
+                            hasIncomingData = true;
+                            // 收到数据后，清除超时定时器
+                            clearTimeout(timeoutId);
+                        }
+
+                        // 检查 WebSocket 状态
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        // 如果 WebSocket 意外关闭，则中止 pipe
-                        remoteSocket.close();
+                            cleanupCurrentAttempt(); // 如果WebSocket意外关闭，则清理
                         return;
                     }
 
-                    // 如果有头部，则合并数据并发送
                     if (header) {
                         const combinedData = new Uint8Array(header.length + chunk.length);
                         combinedData.set(header, 0);
                         combinedData.set(chunk, header.length);
                         webSocket.send(combinedData);
-                        header = null; // 只发送一次
+                            header = null;
                     } else {
                         webSocket.send(chunk);
                     }
                 },
                 close() {
-                    log(`远程连接已关闭。同时关闭 WebSocket。`);
+                        isSocketClosed = true;
+                        clearTimeout(timeoutId);
+                        log(`远程连接已关闭, 是否接收到数据: ${hasIncomingData}`);
+                        if (!hasIncomingData && retry && !retryAttempted) {
+                            retryAttempted = true;
+                            log(`未收到数据, 连接关闭，触发重试...`);
+                            retry();
+                        } else {
+                            // 如果收到了数据或不需要重试，则安全关闭 WebSocket
                     safeCloseWebSocket(webSocket);
+                        }
                 },
                 abort(reason) {
-                    log(`远程连接被中断: ${reason}。同时关闭 WebSocket。`);
+                        isSocketClosed = true;
+                        clearTimeout(timeoutId);
+                        log(`远程连接被中断: ${reason}`);
+                        // 中断通常意味着最终失败，也尝试重试
+                        if (!hasIncomingData && retry && !retryAttempted) {
+                            retryAttempted = true;
+                            log(`连接被中断，触发重试...`);
+                            retry();
+                        } else {
                     safeCloseWebSocket(webSocket);
+                        }
                 },
-            })
+                }), { signal }
         )
         .catch((error) => {
-            // 这个 catch 捕获 pipeTo 过程中的写入错误
-            log(`数据从远程 socket 转发到 WebSocket 时发生错误: ${error.message}`);
+                // 这个 catch 捕获 pipeTo 过程中的错误
+                if (!isSocketClosed) {
+                    clearTimeout(timeoutId);
+                    log(`数据传输异常: ${error.message}`);
+                    if (!hasIncomingData && retry && !retryAttempted) {
+                        retryAttempted = true;
+                        log(`因传输异常触发重试...`);
+                        retry();
+                    } else {
             safeCloseWebSocket(webSocket);
-        });
+                    }
+                }
+            });
+    } catch (error) {
+        // 这个 catch 捕获 pipeTo 之外的、更早的错误（虽然可能性较小）
+        if (!isSocketClosed) {
+            clearTimeout(timeoutId);
+            log(`连接处理异常: ${error.message}`);
+            if (!hasIncomingData && retry && !retryAttempted) {
+                retryAttempted = true;
+                log(`因处理异常触发重试...`);
+                retry();
+            } else {
+                safeCloseWebSocket(webSocket);
+            }
+        }
+    }
 }
 
 const WS_READY_STATE_OPEN = 1;
