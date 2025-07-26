@@ -1185,7 +1185,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         name: 'Built-in Default NAT64',
         execute: async () => {
             if (!DNS64Server || DNS64Server.trim() === '') {
-                DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+                DNS64Server = 'dns64.abq.ztvi.org';
             }
             const nat64Address = await resolveToIPv6(addressRemote);
             return createConnection(`[${nat64Address}]`, 443);
