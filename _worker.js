@@ -1180,15 +1180,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             return createConnection(address, port);
         }
     });
-
-    connectionStrategies.push({
-        name: '内置的默认 NAT64',
-        execute: async () => {
-            const nat64Address = await resolveToIPv6(addressRemote);
-            return createConnection(`[${nat64Address}]`, 443);
-        }
-    });
-
     // --- 启动策略链 ---
     await tryConnectionStrategies(connectionStrategies);
 }
