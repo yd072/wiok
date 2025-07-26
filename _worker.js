@@ -1048,14 +1048,12 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
 
-    // 内部函数，用于创建连接。现在它只负责连接，失败则抛出异常。
 	const createConnection = async (address, port, proxyOptions = null) => {
 		const proxyType = proxyOptions ? proxyOptions.type : 'direct';
 		log(`建立连接: ${address}:${port} (方式: ${proxyType})`);
 
-        // 使用 AbortController 为连接设置超时
 		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort('Connection setup timeout'), 4000); // 4秒连接建立超时
+		const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 5000);
 
 		try {
 			let tcpSocketPromise;
@@ -1067,21 +1065,20 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 				tcpSocketPromise = connect({
 					hostname: address,
 					port: port,
-                    // 将 signal 传递给 connect API
-                    signal: controller.signal 
+					allowHalfOpen: false,
+                    keepAlive: true,
+                    signal: controller.signal
 				});
 			}
 
-            // 等待连接成功
-			const tcpSocket = await tcpSocketPromise;
-			
-            // 连接成功，清除超时定时器
-			clearTimeout(timeoutId);
+			const tcpSocket = await Promise.race([
+				tcpSocketPromise,
+				new Promise((_, reject) => setTimeout(() => reject(new Error('连接超时')), 3000))
+			]);
 
-            // 将 socket 存入包装器
+			clearTimeout(timeoutId);
 			remoteSocket.value = tcpSocket;
 
-            // 发送初始数据
 			const writer = tcpSocket.writable.getWriter();
 			try {
 				await writer.write(rawClientData);
@@ -1091,88 +1088,106 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
 			return tcpSocket;
 		} catch (error) {
-            // 任何连接错误（包括超时）都会在这里被捕获
 			clearTimeout(timeoutId);
-			// 将错误向上抛出，由 tryConnectionStrategies 处理
 			throw error;
 		}
 	};
 
-    /**
-     * 新的策略尝试函数。它使用一个简单的 for-loop 和 try-catch 来处理重试。
-     * @param {Array} strategies - 连接策略对象数组。
-     */
+    // 新的递归函数，用于按顺序尝试所有连接策略
     async function tryConnectionStrategies(strategies) {
-        // 依次尝试每种策略
-        for (const strategy of strategies) {
-            try {
-                log(`尝试策略: '${strategy.name}'`);
-                // 执行策略，如果成功，它会返回一个完全可用的 socket
-                const tcpSocket = await strategy.execute();
-                
-                log(`策略 '${strategy.name}' 连接成功。开始转发数据。`);
-                
-                // 一旦连接成功，就将 socket 交给数据转发函数处理
-                // 注意：这里不再传递重试回调
-                remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, log);
-                
-                // 成功后立即返回，不再尝试其他策略
-                return;
-
-            } catch (error) {
-                // 如果当前策略失败，记录错误并自动进入下一次循环以尝试下一个策略
-                log(`策略 '${strategy.name}' 失败: ${error.message}.`);
-            }
+        if (!strategies || strategies.length === 0) {
+            log('All connection strategies failed. Closing WebSocket.');
+            safeCloseWebSocket(webSocket);
+            return;
         }
 
-        // 如果循环走完，意味着所有策略都已失败
-        log('所有连接策略均失败。关闭 WebSocket。');
-        safeCloseWebSocket(webSocket);
+        const [currentStrategy, ...nextStrategies] = strategies;
+        log(`Attempting connection with strategy: '${currentStrategy.name}'`);
+
+        try {
+            const tcpSocket = await currentStrategy.execute();
+            log(`Strategy '${currentStrategy.name}' connected successfully. Piping data.`);
+            
+            // 关键点：如果本次连接失败，重试函数将用剩余的策略继续尝试
+            const retryNext = () => tryConnectionStrategies(nextStrategies);
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
+
+        } catch (error) {
+            log(`Strategy '${currentStrategy.name}' failed: ${error.message}. Trying next strategy...`);
+            await tryConnectionStrategies(nextStrategies); // 立即尝试下一个策略
+        }
     }
 
-    // --- 组装策略列表 (与原代码相同) ---
+    // --- 组装策略列表 ---
     const connectionStrategies = [];
     const shouldUseSocks = enableSocks && go2Socks5s.some(pattern => new RegExp(`^${pattern.replace(/\*/g, '.*')}$`, 'i').test(addressRemote));
 
+    // 1. 主要连接策略
     if (enableHttpProxy) {
-        connectionStrategies.push({ name: 'HTTP Proxy', execute: () => createConnection(addressRemote, portRemote, { type: 'http' }) });
+        connectionStrategies.push({
+            name: 'HTTP Proxy',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'http' })
+        });
     } else if (shouldUseSocks) {
-        connectionStrategies.push({ name: 'SOCKS5 Proxy (go2Socks5s)', execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' }) });
+        connectionStrategies.push({
+            name: 'SOCKS5 Proxy (go2Socks5s)',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
+        });
     } else {
-        connectionStrategies.push({ name: 'Direct Connection', execute: () => createConnection(addressRemote, portRemote, null) });
+        connectionStrategies.push({
+            name: 'Direct Connection',
+            execute: () => createConnection(addressRemote, portRemote, null)
+        });
     }
     
+    // 2. 备用 (Fallback) 策略
     if (enableSocks && !shouldUseSocks) {
-        connectionStrategies.push({ name: 'SOCKS5 Proxy (Fallback)', execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' }) });
+        connectionStrategies.push({
+            name: 'SOCKS5 Proxy (Fallback)',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
+        });
     }
 
     if (proxyIP && proxyIP.trim() !== '') {
-        connectionStrategies.push({ name: '用户配置的 PROXYIP', execute: () => {
+        connectionStrategies.push({
+            name: '用户配置的 PROXYIP',
+            execute: () => {
                 const { address, port } = parseProxyIP(proxyIP, portRemote);
                 return createConnection(address, port);
-            }});
+            }
+        });
     }
     
     const userNat64Server = DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
     if (userNat64Server) {
-        connectionStrategies.push({ name: '用户配置的 NAT64', execute: async () => {
+        connectionStrategies.push({
+            name: '用户配置的 NAT64',
+            execute: async () => {
                 const nat64Address = await resolveToIPv6(addressRemote);
                 return createConnection(`[${nat64Address}]`, 443);
-            }});
+            }
+        });
     }
     
-    connectionStrategies.push({ name: '内置的默认 PROXYIP', execute: () => {
+    connectionStrategies.push({
+        name: '内置的默认 PROXYIP',
+        execute: () => {
             const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
             const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
             return createConnection(address, port);
-        }});
+        }
+    });
 
-    connectionStrategies.push({ name: '内置的默认 NAT64', execute: async () => {
-            if (!DNS64Server || DNS64Server.trim() === '') DNS64Server = '2001:67c:2960::6464';
+    connectionStrategies.push({
+        name: '内置的默认 NAT64',
+        execute: async () => {
+            if (!DNS64Server || DNS64Server.trim() === '') {
+                DNS64Server = '2001:67c:2960::6464';
+            }
             const nat64Address = await resolveToIPv6(addressRemote);
             return createConnection(`[${nat64Address}]`, 443);
-        }});
-    // --- 策略列表组装完毕 ---
+        }
+    });
 
     // --- 启动策略链 ---
     await tryConnectionStrategies(connectionStrategies);
@@ -1284,10 +1299,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }, 3000);
 
     try {
-    await remoteSocket.readable
-        .pipeTo(
-            new WritableStream({
-                write(chunk) {
+        await remoteSocket.readable
+            .pipeTo(
+                new WritableStream({
+                    write(chunk) {
                         if (!hasIncomingData) {
                             hasIncomingData = true;
                             // 收到数据后，清除超时定时器
@@ -1295,22 +1310,22 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                         }
 
                         // 检查 WebSocket 状态
-                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                             cleanupCurrentAttempt(); // 如果WebSocket意外关闭，则清理
-                        return;
-                    }
+                            return;
+                        }
 
-                    if (header) {
-                        const combinedData = new Uint8Array(header.length + chunk.length);
-                        combinedData.set(header, 0);
-                        combinedData.set(chunk, header.length);
-                        webSocket.send(combinedData);
+                        if (header) {
+                            const combinedData = new Uint8Array(header.length + chunk.length);
+                            combinedData.set(header, 0);
+                            combinedData.set(chunk, header.length);
+                            webSocket.send(combinedData);
                             header = null;
-                    } else {
-                        webSocket.send(chunk);
-                    }
-                },
-                close() {
+                        } else {
+                            webSocket.send(chunk);
+                        }
+                    },
+                    close() {
                         isSocketClosed = true;
                         clearTimeout(timeoutId);
                         log(`远程连接已关闭, 是否接收到数据: ${hasIncomingData}`);
@@ -1320,10 +1335,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                             retry();
                         } else {
                             // 如果收到了数据或不需要重试，则安全关闭 WebSocket
-                    safeCloseWebSocket(webSocket);
+                            safeCloseWebSocket(webSocket);
                         }
-                },
-                abort(reason) {
+                    },
+                    abort(reason) {
                         isSocketClosed = true;
                         clearTimeout(timeoutId);
                         log(`远程连接被中断: ${reason}`);
@@ -1333,12 +1348,12 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                             log(`连接被中断，触发重试...`);
                             retry();
                         } else {
-                    safeCloseWebSocket(webSocket);
+                           safeCloseWebSocket(webSocket);
                         }
-                },
+                    },
                 }), { signal }
-        )
-        .catch((error) => {
+            )
+            .catch((error) => {
                 // 这个 catch 捕获 pipeTo 过程中的错误
                 if (!isSocketClosed) {
                     clearTimeout(timeoutId);
@@ -1348,7 +1363,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                         log(`因传输异常触发重试...`);
                         retry();
                     } else {
-            safeCloseWebSocket(webSocket);
+                        safeCloseWebSocket(webSocket);
                     }
                 }
             });
