@@ -1175,7 +1175,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     connectionStrategies.push({
         name: 'Built-in Default PROXYIP',
         execute: () => {
-            const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+            const defaultProxyIP = 'kodi.tv';
             const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
             return createConnection(address, port);
         }
