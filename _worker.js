@@ -1175,7 +1175,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     connectionStrategies.push({
         name: 'Built-in Default PROXYIP',
         execute: () => {
-            const defaultProxyIP = 'kodi.tv';
+            const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
             const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
             return createConnection(address, port);
         }
@@ -1185,7 +1185,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         name: 'Built-in Default NAT64',
         execute: async () => {
             if (!DNS64Server || DNS64Server.trim() === '') {
-                DNS64Server = 'dns64.abq.ztvi.org';
+                DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
             }
             const nat64Address = await resolveToIPv6(addressRemote);
             return createConnection(`[${nat64Address}]`, 443);
