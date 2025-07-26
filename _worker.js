@@ -144,9 +144,6 @@ async function loadConfigurations(env) {
     }
     
     // 3. 最终处理
-    if (!DNS64Server) {
-        DNS64Server = '2001:67c:2960::6464';
-    }
 
     if (subConverter.includes("http://")) {
         subConverter = subConverter.split("//")[1];
@@ -1153,7 +1150,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
     if (proxyIP && proxyIP.trim() !== '') {
         connectionStrategies.push({
-            name: '用户配置的 PROXYIP',
+            name: '用户配置的 NAT64 PROXYIP',
             execute: () => {
                 const { address, port } = parseProxyIP(proxyIP, portRemote);
                 return createConnection(address, port);
@@ -1164,7 +1161,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     const userNat64Server = DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
     if (userNat64Server) {
         connectionStrategies.push({
-            name: '用户配置的 NAT64',
+            name: '用户配置的 NAT64 NAT64',
             execute: async () => {
                 const nat64Address = await resolveToIPv6(addressRemote);
                 return createConnection(`[${nat64Address}]`, 443);
@@ -1180,6 +1177,18 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             return createConnection(address, port);
         }
     });
+
+    connectionStrategies.push({
+        name: '内置的默认 NAT64',
+        execute: async () => {
+            if (!DNS64Server || DNS64Server.trim() === '') {
+                DNS64Server = '2001:67c:2960::6464';
+            }
+            const nat64Address = await resolveToIPv6(addressRemote);
+            return createConnection(`[${nat64Address}]`, 443);
+        }
+    });
+
     // --- 启动策略链 ---
     await tryConnectionStrategies(connectionStrategies);
 }
