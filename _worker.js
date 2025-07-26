@@ -145,7 +145,7 @@ async function loadConfigurations(env) {
     
     // 3. 最终处理
     if (!DNS64Server) {
-        DNS64Server = 'dns64.abq.ztvi.org';
+        DNS64Server = '2001:67c:2960::6464';
     }
 
     if (subConverter.includes("http://")) {
