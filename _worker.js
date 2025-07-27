@@ -1,5 +1,4 @@
 
-
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -1931,7 +1930,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--text-color: #333;
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
-						--link-color: #0066cc;
+						--link-color: #1a0dab;
 					}
 
 					body.dark-mode {
@@ -2857,7 +2856,7 @@ async function handleGetRequest(env, txt) {
                     --border-color: #e0e0e0;
                     --text-color: #333;
                     --background-color: #f5f5f5;
-					--link-color: #0066cc;
+					--link-color: #1a0dab;
                 }
 
                 body.dark-mode {
@@ -3067,7 +3066,7 @@ async function handleGetRequest(env, txt) {
 						background: #222;
 				}
 				 
-				 body.dark-mode .setting-content a {
+				 .setting-content a {
 					color: var(--link-color) !important;
 				 }
 				 
