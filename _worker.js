@@ -1,4 +1,5 @@
 
+
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -332,13 +333,13 @@ async function statusPage() {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Service Status</title>
-        <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0ZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiIGZpbGw9IiMwZDZlZmQiLz48L3N2Zz4=">
+        <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0ZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiIGZpbGw9IiMyZGNlODkiLz48L3N2Zz4=">
         <style>
             :root {
                 --bg-color: #f4f7f9;
                 --card-bg-color: #ffffff;
                 --text-color: #333;
-                --primary-color: #0d6efd; 
+                --primary-color: #0d6efd;
                 --secondary-color: #8898aa;
                 --border-color: #e9ecef;
                 --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1931,12 +1932,12 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
 						--link-color: #1a0dab;
-						--visited-link-color: #551a8b;
+						--visited-link-color: #6c00a2;
 					}
 
 					body.dark-mode {
-						--primary-color: #589cfd;
-						--secondary-color: #4a88e8;
+						--primary-color: #589bff;
+						--secondary-color: #458cff;
 						--border-color: #333;
 						--text-color: #f8f9fa;
 						--background-color: #121212;
@@ -1959,7 +1960,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						color: var(--link-color);
 						text-decoration: none;
 					}
-					
+
 					a:visited {
 						color: var(--visited-link-color);
 					}
@@ -2077,9 +2078,9 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 					.theme-switch {
 						display: inline-block;
-						height: 28px;
+						height: 24px;
 						position: relative;
-						width: 50px;
+						width: 44px;
 					}
 
 					.theme-switch input {
@@ -2099,13 +2100,13 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 					.slider:before {
 						background-color: #fff;
-						bottom: 4px;
+						bottom: 3px;
 						content: "";
-						height: 20px;
-						left: 4px;
+						height: 18px;
+						left: 3px;
 						position: absolute;
 						transition: .4s;
-						width: 20px;
+						width: 18px;
 					}
 
 					input:checked + .slider {
@@ -2113,11 +2114,11 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 
 					input:checked + .slider:before {
-						transform: translateX(22px);
+						transform: translateX(20px);
 					}
 
 					.slider.round {
-						border-radius: 28px;
+						border-radius: 24px;
 					}
 
 					.slider.round:before {
@@ -2859,12 +2860,12 @@ async function handleGetRequest(env, txt) {
                     --text-color: #212529;
                     --background-color: #f5f5f5;
 					--link-color: #1a0dab;
-					--visited-link-color: #551a8b;
+					--visited-link-color: #6c00a2;
                 }
 
                 body.dark-mode {
-                    --primary-color: #589cfd;
-                    --secondary-color: #4a88e8;
+                    --primary-color: #589bff;
+                    --secondary-color: #458cff;
                     --border-color: #333;
                     --text-color: #f8f9fa;
                     --background-color: #121212;
@@ -3045,7 +3046,7 @@ async function handleGetRequest(env, txt) {
 
                 .setting-item {
                     margin-bottom: 10px;
-                    border: 1px solid var(--border-color);
+                    border: 1px solid #ddd;
                     border-radius: 6px;
                     overflow: hidden;
                 }
@@ -3075,7 +3076,7 @@ async function handleGetRequest(env, txt) {
 				}
 				 
 				 .setting-content a {
-					color: var(--link-color);
+					color: var(--link-color) !important;
 				 }
 				 
                 .setting-editor {
@@ -3103,9 +3104,9 @@ async function handleGetRequest(env, txt) {
 
 					.theme-switch {
 						display: inline-block;
-						height: 28px;
+						height: 24px;
 						position: relative;
-						width: 50px;
+						width: 44px;
 					}
 
 					.theme-switch input {
@@ -3125,13 +3126,13 @@ async function handleGetRequest(env, txt) {
 
 					.slider:before {
 						background-color: #fff;
-						bottom: 4px;
+						bottom: 3px;
 						content: "";
-						height: 20px;
-						left: 4px;
+						height: 18px;
+						left: 3px;
 						position: absolute;
 						transition: .4s;
-						width: 20px;
+						width: 18px;
 					}
 
 					input:checked + .slider {
@@ -3139,11 +3140,11 @@ async function handleGetRequest(env, txt) {
 					}
 
 					input:checked + .slider:before {
-						transform: translateX(22px);
+						transform: translateX(20px);
 					}
 
 					.slider.round {
-						border-radius: 28px;
+						border-radius: 24px;
 					}
 
 					.slider.round:before {
@@ -3319,7 +3320,7 @@ async function handleGetRequest(env, txt) {
                         });
 
                         if (response.ok) {
-                            saveStatus.innerHTML = `<span style="color: var(--primary-color)">✔️</span> 保存成功`;
+                            saveStatus.textContent = '保存成功';
                             setTimeout(() => {
                                 saveStatus.textContent = '';
                             }, 3000);
@@ -3390,7 +3391,7 @@ async function handleGetRequest(env, txt) {
                         });
 
                         if (response.ok) {
-                            saveStatus.innerHTML = `<span style="color: var(--primary-color)">✔️</span> 保存成功`;
+                            saveStatus.textContent = '保存成功';
                             setTimeout(() => {
                                 saveStatus.textContent = '';
                             }, 3000);
