@@ -2071,55 +2071,47 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						position: fixed;
 						top: 15px;
 						right: 15px;
+						z-index: 100;
 					}
-
 					.theme-switch {
-						display: inline-block;
-						height: 34px;
 						position: relative;
-						width: 60px;
+						display: inline-block;
+						width: 40px;
+						height: 20px;
 					}
-
 					.theme-switch input {
-						display:none;
+						opacity: 0;
+						width: 0;
+						height: 0;
 					}
-
 					.slider {
-						background-color: #ccc;
-						bottom: 0;
+						position: absolute;
 						cursor: pointer;
-						left: 0;
-						position: absolute;
-						right: 0;
 						top: 0;
-						transition: .4s;
+						left: 0;
+						right: 0;
+						bottom: 0;
+						background-color: #ccc;
+						transition: .2s;
+						border-radius: 20px;
 					}
-
 					.slider:before {
-						background-color: #fff;
-						bottom: 4px;
-						content: "";
-						height: 26px;
-						left: 4px;
 						position: absolute;
-						transition: .4s;
-						width: 26px;
+						content: "";
+						height: 14px;
+						width: 14px;
+						left: 3px;
+						bottom: 3px;
+						background-color: white;
+						transition: .2s;
+						border-radius: 50%;
+						box-shadow: 0 1px 2px rgba(0,0,0,0.4);
 					}
-
 					input:checked + .slider {
 						background-color: var(--primary-color);
 					}
-
 					input:checked + .slider:before {
-						transform: translateX(26px);
-					}
-
-					.slider.round {
-						border-radius: 34px;
-					}
-
-					.slider.round:before {
-						border-radius: 50%;
+						transform: translateX(20px);
 					}
 
 
@@ -3091,55 +3083,47 @@ async function handleGetRequest(env, txt) {
 						position: fixed;
 						top: 15px;
 						right: 15px;
+						z-index: 100;
 					}
-
 					.theme-switch {
-						display: inline-block;
-						height: 34px;
 						position: relative;
-						width: 60px;
+						display: inline-block;
+						width: 40px;
+						height: 20px;
 					}
-
 					.theme-switch input {
-						display:none;
+						opacity: 0;
+						width: 0;
+						height: 0;
 					}
-
 					.slider {
-						background-color: #ccc;
-						bottom: 0;
+						position: absolute;
 						cursor: pointer;
-						left: 0;
-						position: absolute;
-						right: 0;
 						top: 0;
-						transition: .4s;
+						left: 0;
+						right: 0;
+						bottom: 0;
+						background-color: #ccc;
+						transition: .2s;
+						border-radius: 20px;
 					}
-
 					.slider:before {
-						background-color: #fff;
-						bottom: 4px;
-						content: "";
-						height: 26px;
-						left: 4px;
 						position: absolute;
-						transition: .4s;
-						width: 26px;
+						content: "";
+						height: 14px;
+						width: 14px;
+						left: 3px;
+						bottom: 3px;
+						background-color: white;
+						transition: .2s;
+						border-radius: 50%;
+						box-shadow: 0 1px 2px rgba(0,0,0,0.4);
 					}
-
 					input:checked + .slider {
 						background-color: var(--primary-color);
 					}
-
 					input:checked + .slider:before {
-						transform: translateX(26px);
-					}
-
-					.slider.round {
-						border-radius: 34px;
-					}
-
-					.slider.round:before {
-						border-radius: 50%;
+						transform: translateX(20px);
 					}
 
                 @media (max-width: 768px) {
