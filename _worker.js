@@ -1939,20 +1939,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
-						transition: background-color 0.3s, color 0.3s;
-					}
-
-					a {
-						color: var(--link-color);
-						text-decoration: none;
-					}
-
-					a:visited {
-						color: var(--visited-link-color);
-					}
-
-					a:hover {
-						text-decoration: underline;
 					}
 
 					.container {
@@ -3042,8 +3028,8 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>NAT64/DNS64 设置</strong></span>
                             </div>
                              <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">
-                                    <a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
+                                <p>
+                                    <a id="nat64-link" target="_blank">自行查询</a>
                                 </p>
                                 <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
                             </div>
