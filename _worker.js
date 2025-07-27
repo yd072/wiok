@@ -1,5 +1,4 @@
 
-
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -2001,6 +2000,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						color: #0066cc;
 						text-decoration: none;
 					}
+					
+					body.dark-mode .subscription-link a {
+						color: #fff;
+					}
 
 					.subscription-link a:hover {
 						text-decoration: underline;
@@ -2031,6 +2034,15 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					body.dark-mode .notice-content {
 						background: #2a2a2a;
 					}
+					
+					body.dark-mode a {
+						color: #fff;
+					}
+					
+					body.dark-mode .notice-toggle {
+						color: var(--primary-color);
+					}
+
 
 					.config-info {
 						background: #f8f9fa;
@@ -2146,7 +2158,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						<div class="section-title">📋 订阅信息</div>
 						<div class="subscription-link">
 							自适应订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')">
 								https://${proxyhost}${hostName}/${uuid}
 							</a>
 							<div id="qrcode_0" class="qrcode-container"></div>
@@ -2154,7 +2166,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 						<div class="subscription-link">
 							Base64订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')">
 								https://${proxyhost}${hostName}/${uuid}?b64
 							</a>
 							<div id="qrcode_1" class="qrcode-container"></div>
@@ -2162,7 +2174,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 						<div class="subscription-link">
 							clash订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')">
 								https://${proxyhost}${hostName}/${uuid}?clash
 							</a>
 							<div id="qrcode_2" class="qrcode-container"></div>
@@ -2170,7 +2182,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 						<div class="subscription-link">
 							singbox订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')">
 								https://${proxyhost}${hostName}/${uuid}?sb
 							</a>
 							<div id="qrcode_3" class="qrcode-container"></div>
@@ -2178,7 +2190,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 						<div class="subscription-link">
 							Loon订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')">
 								https://${proxyhost}${hostName}/${uuid}?loon
 							</a>
 							<div id="qrcode_4" class="qrcode-container"></div>
@@ -3051,7 +3063,19 @@ async function handleGetRequest(env, txt) {
                  body.dark-mode .setting-content {
 						background: #222;
 				}
+				
+				 body.dark-mode a {
+					color: #fff;
+				 }
+				 
+				 body.dark-mode .notice-toggle {
+					color: var(--primary-color);
+				 }
 
+				 body.dark-mode .setting-content a {
+					color: #fff !important;
+				 }
+				 
                 .setting-editor {
                     width: 100%;
                     min-height: 80px;
