@@ -1922,6 +1922,19 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				<meta charset="utf-8">
 				<meta name="viewport" content="width=device-width, initial-scale=1">
 				<title>${FileName} 配置信息</title>
+				<script>
+					// IIFE to set the theme before the page renders
+					(function() {
+						try {
+							const theme = localStorage.getItem('theme');
+							if (theme === 'dark-mode') {
+								document.documentElement.classList.add('dark-mode');
+							}
+						} catch (e) {
+							console.error('Could not set theme from localStorage', e);
+						}
+					})();
+				</script>
 				<style>
 					:root {
 						--primary-color: #0d6efd;
@@ -1934,7 +1947,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--visited-link-color: #6c00a2;
 					}
 
-					body.dark-mode {
+					html.dark-mode {
 						--primary-color: #589bff;
 						--secondary-color: #458cff;
 						--border-color: #444;
@@ -2009,7 +2022,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						word-break: break-all;
 					}
 
-					body.dark-mode .subscription-link {
+					html.dark-mode .subscription-link {
 						background: #2a2a2a;
 					}
 
@@ -2034,7 +2047,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						border-radius: 0 8px 8px 0;
 					}
 					
-					body.dark-mode .notice-content {
+					html.dark-mode .notice-content {
 						background: #2a2a2a;
 					}
 					
@@ -2047,7 +2060,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						overflow-x: auto;
 					}
 					
-					body.dark-mode .config-info {
+					html.dark-mode .config-info {
 						background: #2a2a2a;
 					}
 
@@ -2276,11 +2289,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 					
 					const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
-					const currentTheme = localStorage.getItem('theme');
-
-					if (currentTheme) {
-						document.body.classList.add(currentTheme);
 					
+					// This script block remains to handle the toggle switch state and clicks
+					const currentTheme = localStorage.getItem('theme');
+					if (currentTheme) {
 						if (currentTheme === 'dark-mode') {
 							toggleSwitch.checked = true;
 						}
@@ -2288,10 +2300,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 					function switchTheme(e) {
 						if (e.target.checked) {
-							document.body.classList.add('dark-mode');
+							document.documentElement.classList.add('dark-mode');
 							localStorage.setItem('theme', 'dark-mode');
 						} else {
-							document.body.classList.remove('dark-mode');
+							document.documentElement.classList.remove('dark-mode');
 							localStorage.setItem('theme', 'light-mode');
 						}    
 					}
@@ -2851,6 +2863,17 @@ async function handleGetRequest(env, txt) {
             <title>优选订阅列表</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
+			<script>
+				// IIFE to set the theme before the page renders
+				(function() {
+					try {
+						const theme = localStorage.getItem('theme');
+						if (theme === 'dark-mode') {
+							document.documentElement.classList.add('dark-mode');
+						}
+					} catch (e) { /* ignore */ }
+				})();
+			</script>
             <style>
                 :root {
                     --primary-color: #0d6efd;
@@ -2862,7 +2885,7 @@ async function handleGetRequest(env, txt) {
 					--visited-link-color: #6c00a2;
                 }
 
-                body.dark-mode {
+                html.dark-mode {
                     --primary-color: #589bff;
                     --secondary-color: #458cff;
                     --border-color: #444;
@@ -2904,7 +2927,7 @@ async function handleGetRequest(env, txt) {
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                 }
                 
-                body.dark-mode .container {
+                html.dark-mode .container {
                     background: #242526;
                 }
 
@@ -2937,7 +2960,7 @@ async function handleGetRequest(env, txt) {
                     color: var(--text-color);
                 }
                 
-                body.dark-mode .editor {
+                html.dark-mode .editor {
                     background-color: #2a2a2a;
                 }
 
@@ -2993,7 +3016,7 @@ async function handleGetRequest(env, txt) {
                     color: #666;
                 }
 				
-				body.dark-mode .save-status {
+				html.dark-mode .save-status {
                     color: var(--text-color);
                 }
 
@@ -3013,7 +3036,7 @@ async function handleGetRequest(env, txt) {
                     border-radius: 0 8px 8px 0;
                 }
                 
-                body.dark-mode .notice-content {
+                html.dark-mode .notice-content {
 						background: #2a2a2a;
 				}
 
@@ -3031,7 +3054,7 @@ async function handleGetRequest(env, txt) {
                     border: 1px solid var(--border-color);
                 }
                 
-                 body.dark-mode .advanced-settings {
+                 html.dark-mode .advanced-settings {
 						background: #2a2a2a;
 				}
 
@@ -3064,7 +3087,7 @@ async function handleGetRequest(env, txt) {
                     font-weight: 500;
                 }
                 
-                 body.dark-mode .setting-header {
+                 html.dark-mode .setting-header {
 						background: #333;
 				}
 
@@ -3074,7 +3097,7 @@ async function handleGetRequest(env, txt) {
                     background-color: #fafafa;
                 }
                 
-                 body.dark-mode .setting-content {
+                 html.dark-mode .setting-content {
 						background: #222;
 				}
 				 
@@ -3083,7 +3106,7 @@ async function handleGetRequest(env, txt) {
 					 color: #666;
 				 }
 
-				 body.dark-mode .setting-content p {
+				 html.dark-mode .setting-content p {
 					 color: #9e9e9e;
 				 }
 				 
@@ -3102,7 +3125,7 @@ async function handleGetRequest(env, txt) {
                     color: var(--text-color);
                 }
 				
-				body.dark-mode .setting-editor {
+				html.dark-mode .setting-editor {
 					background-color: #2d2d2d;
 					border-color: #555;
 					color: #e0e0e0;
@@ -3112,7 +3135,7 @@ async function handleGetRequest(env, txt) {
 					color: #aaa;
 				}
 				
-				body.dark-mode .setting-editor::placeholder {
+				html.dark-mode .setting-editor::placeholder {
 					color: #666;
 				}
 
@@ -3427,11 +3450,10 @@ async function handleGetRequest(env, txt) {
                 }
 
                 const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
-                const currentTheme = localStorage.getItem('theme');
-
-                if (currentTheme) {
-                    document.body.classList.add(currentTheme);
                 
+                // This script block remains to handle the toggle switch state and clicks
+                const currentTheme = localStorage.getItem('theme');
+                if (currentTheme) {
                     if (currentTheme === 'dark-mode') {
                         toggleSwitch.checked = true;
                     }
@@ -3439,10 +3461,10 @@ async function handleGetRequest(env, txt) {
 
                 function switchTheme(e) {
                     if (e.target.checked) {
-                        document.body.classList.add('dark-mode');
+                        document.documentElement.classList.add('dark-mode');
                         localStorage.setItem('theme', 'dark-mode');
                     } else {
-                        document.body.classList.remove('dark-mode');
+                        document.documentElement.classList.remove('dark-mode');
                         localStorage.setItem('theme', 'light-mode');
                     }    
                 }
