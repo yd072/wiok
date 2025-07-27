@@ -332,7 +332,7 @@ async function statusPage() {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Service Status</title>
-        <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0ZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS4०MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiIGZpbGw9IiMwZDZlZmQiLz48L3N2Zz4=">
+        <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0ZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiIGZpbGw9IiMwZDZlZmQiLz48L3N2Zz4=">
         <style>
             :root {
                 --bg-color: #f4f7f9;
@@ -1931,16 +1931,18 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
 						--link-color: #1a0dab;
+						--visited-link-color: #551a8b;
 					}
 
 					body.dark-mode {
-						--primary-color: #0d6efd;
-						--secondary-color: #0b5ed7;
+						--primary-color: #589cfd;
+						--secondary-color: #4a88e8;
 						--border-color: #333;
 						--text-color: #f8f9fa;
 						--background-color: #121212;
 						--section-bg: #1e1e1e;
 						--link-color: #8ab4f8;
+						--visited-link-color: #c58af9;
 					}
 
 					body {
@@ -1953,15 +1955,19 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						transition: background-color 0.3s, color 0.3s;
 					}
 
-					a, a:visited {
+					a {
 						color: var(--link-color);
 						text-decoration: none;
+					}
+					
+					a:visited {
+						color: var(--visited-link-color);
 					}
 
 					a:hover {
 						text-decoration: underline;
 					}
-					
+
 					.container {
 						max-width: 1000px;
 						margin: 0 auto;
@@ -2853,15 +2859,17 @@ async function handleGetRequest(env, txt) {
                     --text-color: #212529;
                     --background-color: #f5f5f5;
 					--link-color: #1a0dab;
+					--visited-link-color: #551a8b;
                 }
 
                 body.dark-mode {
-                    --primary-color: #0d6efd;
-                    --secondary-color: #0b5ed7;
+                    --primary-color: #589cfd;
+                    --secondary-color: #4a88e8;
                     --border-color: #333;
                     --text-color: #f8f9fa;
                     --background-color: #121212;
 					--link-color: #8ab4f8;
+					--visited-link-color: #c58af9;
                 }
 
                 body {
@@ -2874,9 +2882,13 @@ async function handleGetRequest(env, txt) {
                     transition: background-color 0.3s, color 0.3s;
                 }
 				
-				a, a:visited {
+				a {
 					color: var(--link-color);
 					text-decoration: none;
+				}
+				
+				a:visited {
+					color: var(--visited-link-color);
 				}
 
 				a:hover {
@@ -3033,7 +3045,7 @@ async function handleGetRequest(env, txt) {
 
                 .setting-item {
                     margin-bottom: 10px;
-                    border: 1px solid #ddd;
+                    border: 1px solid var(--border-color);
                     border-radius: 6px;
                     overflow: hidden;
                 }
@@ -3061,6 +3073,10 @@ async function handleGetRequest(env, txt) {
                  body.dark-mode .setting-content {
 						background: #222;
 				}
+				 
+				 .setting-content a {
+					color: var(--link-color);
+				 }
 				 
                 .setting-editor {
                     width: 100%;
@@ -3290,32 +3306,29 @@ async function handleGetRequest(env, txt) {
                 }
 
                 async function saveContent(button) {
-                    const saveStatus = document.getElementById('saveStatus');
-					try {
+                    try {
                         button.disabled = true;
                         const content = document.getElementById('content').value;
-                        
+                        const saveStatus = document.getElementById('saveStatus');
+
                         saveStatus.textContent = '保存中...';
-                        saveStatus.style.color = '';
-                        
+
                         const response = await fetch(window.location.href, {
                             method: 'POST',
                             body: content
                         });
 
                         if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
-							saveStatus.style.color = 'var(--primary-color)';
+                            saveStatus.innerHTML = `<span style="color: var(--primary-color)">✔️</span> 保存成功`;
                             setTimeout(() => {
                                 saveStatus.textContent = '';
-								saveStatus.style.color = '';
                             }, 3000);
                         } else {
                             throw new Error('保存失败');
                         }
                     } catch (error) {
+                        const saveStatus = document.getElementById('saveStatus');
                         saveStatus.textContent = '❌ ' + error.message;
-						saveStatus.style.color = '#dc3545';
                         console.error('保存时发生错误:', error);
                     } finally {
                         button.disabled = false;
@@ -3356,7 +3369,6 @@ async function handleGetRequest(env, txt) {
                 async function saveSettings() {
                     const saveStatus = document.getElementById('settings-save-status');
                     saveStatus.textContent = '保存中...';
-					saveStatus.style.color = '';
 
                     try {
                         const advancedSettings = {
@@ -3378,18 +3390,15 @@ async function handleGetRequest(env, txt) {
                         });
 
                         if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
-							saveStatus.style.color = 'var(--primary-color)';
+                            saveStatus.innerHTML = `<span style="color: var(--primary-color)">✔️</span> 保存成功`;
                             setTimeout(() => {
                                 saveStatus.textContent = '';
-								saveStatus.style.color = '';
                             }, 3000);
                         } else {
                             throw new Error('保存失败: ' + await response.text());
                         }
                     } catch (error) {
                         saveStatus.textContent = '❌ ' + error.message;
-						saveStatus.style.color = '#dc3545';
                         console.error('保存设置时发生错误:', error);
                     }
                 }
