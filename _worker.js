@@ -1922,19 +1922,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				<meta charset="utf-8">
 				<meta name="viewport" content="width=device-width, initial-scale=1">
 				<title>${FileName} 配置信息</title>
-				<script>
-					// IIFE to set the theme before the page renders
-					(function() {
-						try {
-							const theme = localStorage.getItem('theme');
-							if (theme === 'dark-mode') {
-								document.documentElement.classList.add('dark-mode');
-							}
-						} catch (e) {
-							console.error('Could not set theme from localStorage', e);
-						}
-					})();
-				</script>
 				<style>
 					:root {
 						--primary-color: #0d6efd;
@@ -1943,19 +1930,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--text-color: #212529;
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
-						--link-color: #1a0dab;
-						--visited-link-color: #6c00a2;
-					}
-
-					html.dark-mode {
-						--primary-color: #589bff;
-						--secondary-color: #458cff;
-						--border-color: #444;
-						--text-color: #e0e0e0;
-						--background-color: #1c1c1e;
-						--section-bg: #2a2a2a;
-						--link-color: #8ab4f8;
-						--visited-link-color: #c58af9;
 					}
 
 					body {
@@ -2022,10 +1996,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						word-break: break-all;
 					}
 
-					html.dark-mode .subscription-link {
-						background: #2a2a2a;
-					}
-
 					.qrcode-container {
 						margin: 10px 0;
 						text-align: center;
@@ -2046,11 +2016,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						margin: 10px 0;
 						border-radius: 0 8px 8px 0;
 					}
-					
-					html.dark-mode .notice-content {
-						background: #2a2a2a;
-					}
-					
+
 					.config-info {
 						background: #f8f9fa;
 						padding: 15px;
@@ -2058,10 +2024,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						font-family: Monaco, Consolas, "Courier New", monospace;
 						font-size: 13px;
 						overflow-x: auto;
-					}
-					
-					html.dark-mode .config-info {
-						background: #2a2a2a;
 					}
 
 					.copy-button {
@@ -2079,64 +2041,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					.copy-button:hover {
 						background: var(--secondary-color);
 					}
-					
-					.theme-switch-wrapper {
-						display: flex;
-						align-items: center;
-						position: fixed;
-						top: 15px;
-						right: 15px;
-					}
-
-					.theme-switch {
-						display: inline-block;
-						height: 22px;
-						position: relative;
-						width: 40px;
-					}
-
-					.theme-switch input {
-						display:none;
-					}
-
-					.slider {
-						background-color: #ccc;
-						bottom: 0;
-						cursor: pointer;
-						left: 0;
-						position: absolute;
-						right: 0;
-						top: 0;
-						transition: .4s;
-					}
-
-					.slider:before {
-						background-color: #fff;
-						bottom: 3px;
-						content: "";
-						height: 16px;
-						left: 3px;
-						position: absolute;
-						transition: .4s;
-						width: 16px;
-					}
-
-					input:checked + .slider {
-						background-color: var(--primary-color);
-					}
-
-					input:checked + .slider:before {
-						transform: translateX(18px);
-					}
-
-					.slider.round {
-						border-radius: 22px;
-					}
-
-					.slider.round:before {
-						border-radius: 50%;
-					}
-
 
 					@media (max-width: 768px) {
 						body {
@@ -2154,12 +2058,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				</style>
 			</head>
 			<body>
-				<div class="theme-switch-wrapper">
-					<label class="theme-switch" for="checkbox">
-						<input type="checkbox" id="checkbox" />
-						<div class="slider round"></div>
-					</label>
-				</div>
 				<div class="container">
 					<div class="section">
 						<div class="section-title">📋 订阅信息</div>
@@ -2287,29 +2185,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 							noticeToggle.textContent = '实用订阅技巧 ∨';
 						}
 					}
-					
-					const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
-					
-					// This script block remains to handle the toggle switch state and clicks
-					const currentTheme = localStorage.getItem('theme');
-					if (currentTheme) {
-						if (currentTheme === 'dark-mode') {
-							toggleSwitch.checked = true;
-						}
-					}
-
-					function switchTheme(e) {
-						if (e.target.checked) {
-							document.documentElement.classList.add('dark-mode');
-							localStorage.setItem('theme', 'dark-mode');
-						} else {
-							document.documentElement.classList.remove('dark-mode');
-							localStorage.setItem('theme', 'light-mode');
-						}    
-					}
-
-					toggleSwitch.addEventListener('change', switchTheme, false);
-
 				</script>
 			</body>
 			</html>
@@ -2863,17 +2738,6 @@ async function handleGetRequest(env, txt) {
             <title>优选订阅列表</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-			<script>
-				// IIFE to set the theme before the page renders
-				(function() {
-					try {
-						const theme = localStorage.getItem('theme');
-						if (theme === 'dark-mode') {
-							document.documentElement.classList.add('dark-mode');
-						}
-					} catch (e) { /* ignore */ }
-				})();
-			</script>
             <style>
                 :root {
                     --primary-color: #0d6efd;
@@ -2881,18 +2745,9 @@ async function handleGetRequest(env, txt) {
                     --border-color: #e0e0e0;
                     --text-color: #212529;
                     --background-color: #f5f5f5;
-					--link-color: #1a0dab;
+                    --section-bg: white;
+                    --link-color: #1a0dab;
 					--visited-link-color: #6c00a2;
-                }
-
-                html.dark-mode {
-                    --primary-color: #589bff;
-                    --secondary-color: #458cff;
-                    --border-color: #444;
-                    --text-color: #e0e0e0;
-                    --background-color: #1c1c1e;
-					--link-color: #8ab4f8;
-					--visited-link-color: #c58af9;
                 }
 
                 body {
@@ -2902,10 +2757,9 @@ async function handleGetRequest(env, txt) {
                     line-height: 1.6;
                     color: var(--text-color);
                     background-color: var(--background-color);
-                    transition: background-color 0.3s, color 0.3s;
                 }
-				
-				a {
+                
+                a {
 					color: var(--link-color);
 					text-decoration: none;
 				}
@@ -2921,14 +2775,10 @@ async function handleGetRequest(env, txt) {
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: var(--section-bg, white);
+                    background: var(--section-bg);
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }
-                
-                html.dark-mode .container {
-                    background: #242526;
                 }
 
                 .title {
@@ -2956,14 +2806,9 @@ async function handleGetRequest(env, txt) {
                     line-height: 1.5;
                     resize: vertical;
                     transition: border-color 0.3s ease;
-                    background-color: var(--section-bg, white);
+                    background-color: var(--section-bg);
                     color: var(--text-color);
                 }
-                
-                html.dark-mode .editor {
-                    background-color: #2a2a2a;
-                }
-
 
                 .editor:focus {
                     outline: none;
@@ -3015,10 +2860,6 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     color: #666;
                 }
-				
-				html.dark-mode .save-status {
-                    color: var(--text-color);
-                }
 
                 .notice-toggle {
                     color: var(--primary-color);
@@ -3035,10 +2876,6 @@ async function handleGetRequest(env, txt) {
                     margin: 10px 0;
                     border-radius: 0 8px 8px 0;
                 }
-                
-                html.dark-mode .notice-content {
-						background: #2a2a2a;
-				}
 
                 .divider {
                     height: 1px;
@@ -3053,10 +2890,6 @@ async function handleGetRequest(env, txt) {
                     border-radius: 8px;
                     border: 1px solid var(--border-color);
                 }
-                
-                 html.dark-mode .advanced-settings {
-						background: #2a2a2a;
-				}
 
                 .advanced-settings-header {
                     display: flex;
@@ -3086,28 +2919,16 @@ async function handleGetRequest(env, txt) {
                     cursor: pointer;
                     font-weight: 500;
                 }
-                
-                 html.dark-mode .setting-header {
-						background: #333;
-				}
 
                 .setting-content {
                     display: none; /* Initially hidden */
                     padding: 15px;
                     background-color: #fafafa;
                 }
-                
-                 html.dark-mode .setting-content {
-						background: #222;
-				}
 				 
 				 .setting-content p {
 					 margin: 5px 0;
 					 color: #666;
-				 }
-
-				 html.dark-mode .setting-content p {
-					 color: #9e9e9e;
 				 }
 				 
                 .setting-editor {
@@ -3124,77 +2945,6 @@ async function handleGetRequest(env, txt) {
                     background-color: #fff;
                     color: var(--text-color);
                 }
-				
-				html.dark-mode .setting-editor {
-					background-color: #2d2d2d;
-					border-color: #555;
-					color: #e0e0e0;
-				}
-
-				.setting-editor::placeholder {
-					color: #aaa;
-				}
-				
-				html.dark-mode .setting-editor::placeholder {
-					color: #666;
-				}
-
-                .theme-switch-wrapper {
-						display: flex;
-						align-items: center;
-						position: fixed;
-						top: 15px;
-						right: 15px;
-					}
-
-					.theme-switch {
-						display: inline-block;
-						height: 22px;
-						position: relative;
-						width: 40px;
-					}
-
-					.theme-switch input {
-						display:none;
-					}
-
-					.slider {
-						background-color: #ccc;
-						bottom: 0;
-						cursor: pointer;
-						left: 0;
-						position: absolute;
-						right: 0;
-						top: 0;
-						transition: .4s;
-					}
-
-					.slider:before {
-						background-color: #fff;
-						bottom: 3px;
-						content: "";
-						height: 16px;
-						left: 3px;
-						position: absolute;
-						transition: .4s;
-						width: 16px;
-					}
-
-					input:checked + .slider {
-						background-color: var(--primary-color);
-					}
-
-					input:checked + .slider:before {
-						transform: translateX(18px);
-					}
-
-					.slider.round {
-						border-radius: 22px;
-					}
-
-					.slider.round:before {
-						border-radius: 50%;
-					}
 
                 @media (max-width: 768px) {
                     body {
@@ -3212,12 +2962,6 @@ async function handleGetRequest(env, txt) {
             </style>
         </head>
         <body>
-            <div class="theme-switch-wrapper">
-                <label class="theme-switch" for="checkbox">
-                    <input type="checkbox" id="checkbox" />
-                    <div class="slider round"></div>
-                </label>
-            </div>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
 
@@ -3232,7 +2976,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>PROXYIP 设置</strong></span>
                             </div>
                             <div class="setting-content">
-                                <p>每行一个IP，格式：IP:端口(可不添加端口)</p>
+                                <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
                                 <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${proxyIPContent}</textarea>
                             </div>
                         </div>
@@ -3243,7 +2987,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>SOCKS5 设置</strong></span>
                             </div>
                             <div class="setting-content">
-                                <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
                                 <textarea id="socks5" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
                             </div>
                         </div>
@@ -3254,7 +2998,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>HTTP 设置</strong></span>
                             </div>
                             <div class="setting-content">
-                                <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
                                 <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
                             </div>
                         </div>
@@ -3265,7 +3009,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>SUB 设置</strong> (优选订阅生成器)</span>
                             </div>
                             <div class="setting-content">
-                                <p>只支持单个优选订阅生成器地址</p>
+                                <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
                                 <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
                             </div>
                         </div>
@@ -3276,7 +3020,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>SUBAPI 设置</strong> (订阅转换后端)</span>
                             </div>
                             <div class="setting-content">
-                                <p>订阅转换后端地址</p>
+                                <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
                                 <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
                             </div>
                         </div>
@@ -3287,7 +3031,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>SUBCONFIG 设置</strong> (订阅转换配置)</span>
                             </div>
                             <div class="setting-content">
-                                <p>订阅转换配置文件地址</p>
+                                <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
                                 <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
                             </div>
                         </div>
@@ -3298,8 +3042,8 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>NAT64/DNS64 设置</strong></span>
                             </div>
                              <div class="setting-content">
-                                <p>
-                                    <a id="nat64-link" target="_blank">自行查询</a>
+                                <p style="margin: 5px 0; color: #666;">
+                                    <a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
                                 </p>
                                 <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
                             </div>
@@ -3448,28 +3192,6 @@ async function handleGetRequest(env, txt) {
                         console.error('保存设置时发生错误:', error);
                     }
                 }
-
-                const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
-                
-                // This script block remains to handle the toggle switch state and clicks
-                const currentTheme = localStorage.getItem('theme');
-                if (currentTheme) {
-                    if (currentTheme === 'dark-mode') {
-                        toggleSwitch.checked = true;
-                    }
-                }
-
-                function switchTheme(e) {
-                    if (e.target.checked) {
-                        document.documentElement.classList.add('dark-mode');
-                        localStorage.setItem('theme', 'dark-mode');
-                    } else {
-                        document.documentElement.classList.remove('dark-mode');
-                        localStorage.setItem('theme', 'light-mode');
-                    }    
-                }
-
-                toggleSwitch.addEventListener('change', switchTheme, false);
             </script>
         </body>
         </html>
