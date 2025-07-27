@@ -2792,8 +2792,6 @@ async function handleGetRequest(env, txt) {
                     line-height: 1.5;
                     resize: vertical;
                     transition: border-color 0.3s ease;
-                    background-color: var(--section-bg);
-                    color: var(--text-color);
                 }
 
                 .editor:focus {
@@ -2804,7 +2802,6 @@ async function handleGetRequest(env, txt) {
 
                 .button-group {
                     display: flex;
-					align-items: center;
                     gap: 12px;
                     margin-top: 15px;
                 }
@@ -2826,7 +2823,7 @@ async function handleGetRequest(env, txt) {
 
                 .btn-primary {
                     background: var(--primary-color);
-                    color: #fff;
+                    color: white;
                 }
 
                 .btn-primary:hover:not(:disabled) {
@@ -2843,6 +2840,7 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .save-status {
+                    margin-left: 10px;
                     font-size: 14px;
                     color: #666;
                 }
@@ -2850,6 +2848,7 @@ async function handleGetRequest(env, txt) {
                 .notice-toggle {
                     color: var(--primary-color);
                     cursor: pointer;
+                    text-decoration: none;
                     display: inline-block;
                     margin: 10px 0;
                     font-weight: 500;
@@ -2891,7 +2890,7 @@ async function handleGetRequest(env, txt) {
 
                 .setting-item {
                     margin-bottom: 10px;
-                    border: 1px solid var(--border-color);
+                    border: 1px solid #ddd;
                     border-radius: 6px;
                     overflow: hidden;
                 }
@@ -2910,11 +2909,6 @@ async function handleGetRequest(env, txt) {
                     display: none; /* Initially hidden */
                     padding: 15px;
                     background-color: #fafafa;
-                }
-				 
-				 .setting-content p {
-					 margin: 5px 0;
-					 color: #666;
 				 }
 				 
                 .setting-editor {
@@ -2928,8 +2922,6 @@ async function handleGetRequest(env, txt) {
                     font-family: Monaco, Consolas, "Courier New", monospace;
                     font-size: 14px;
                     resize: vertical;
-                    background-color: #fff;
-                    color: var(--text-color);
                 }
 
                 @media (max-width: 768px) {
