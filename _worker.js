@@ -3079,6 +3079,7 @@ async function handleGetRequest(env, txt) {
 				}
 				 
 				 .setting-content p {
+					 margin: 5px 0;
 					 color: #666;
 				 }
 
@@ -3104,6 +3105,7 @@ async function handleGetRequest(env, txt) {
 				body.dark-mode .setting-editor {
 					background-color: #2d2d2d;
 					border-color: #555;
+					color: #e0e0e0;
 				}
 
 				.setting-editor::placeholder {
