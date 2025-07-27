@@ -1,5 +1,4 @@
 
-
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -1939,7 +1938,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--primary-color: #589bff;
 						--secondary-color: #458cff;
 						--border-color: #333;
-						--text-color: #f8f9fa;
+						--text-color: #e0e0e0;
 						--background-color: #121212;
 						--section-bg: #1e1e1e;
 						--link-color: #8ab4f8;
@@ -2063,6 +2062,11 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						font-size: 14px;
 						margin: 5px 0;
 					}
+					
+					body.dark-mode .copy-button {
+						color: #fff;
+					}
+
 
 					.copy-button:hover {
 						background: var(--secondary-color);
@@ -2866,8 +2870,8 @@ async function handleGetRequest(env, txt) {
                 body.dark-mode {
                     --primary-color: #589bff;
                     --secondary-color: #458cff;
-                    --border-color: #333;
-                    --text-color: #f8f9fa;
+                    --border-color: #444;
+                    --text-color: #e0e0e0;
                     --background-color: #121212;
 					--link-color: #8ab4f8;
 					--visited-link-color: #c58af9;
@@ -2951,6 +2955,7 @@ async function handleGetRequest(env, txt) {
 
                 .button-group {
                     display: flex;
+					align-items: center;
                     gap: 12px;
                     margin-top: 15px;
                 }
@@ -2972,7 +2977,7 @@ async function handleGetRequest(env, txt) {
 
                 .btn-primary {
                     background: var(--primary-color);
-                    color: white;
+                    color: #fff;
                 }
 
                 .btn-primary:hover:not(:disabled) {
@@ -2981,7 +2986,7 @@ async function handleGetRequest(env, txt) {
 
                 .btn-secondary {
                     background: #6c757d;
-                    color: white;
+                    color: #fff;
                 }
 
                 .btn-secondary:hover:not(:disabled) {
@@ -2992,6 +2997,10 @@ async function handleGetRequest(env, txt) {
                     margin-left: 10px;
                     font-size: 14px;
                     color: #666;
+                }
+				
+				body.dark-mode .save-status {
+                    color: var(--text-color);
                 }
 
                 .notice-toggle {
@@ -3046,7 +3055,7 @@ async function handleGetRequest(env, txt) {
 
                 .setting-item {
                     margin-bottom: 10px;
-                    border: 1px solid #ddd;
+                    border: 1px solid var(--border-color);
                     border-radius: 6px;
                     overflow: hidden;
                 }
