@@ -338,7 +338,7 @@ async function statusPage() {
                 --bg-color: #f4f7f9;
                 --card-bg-color: #ffffff;
                 --text-color: #333;
-                --primary-color: #2dce89; /* Green for operational */
+                --primary-color: #0d6efd;
                 --secondary-color: #8898aa;
                 --border-color: #e9ecef;
                 --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1924,20 +1924,20 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				<title>${FileName} 配置信息</title>
 				<style>
 					:root {
-						--primary-color: #4CAF50;
-						--secondary-color: #45a049;
+						--primary-color: #0d6efd;
+						--secondary-color: #0b5ed7;
 						--border-color: #e0e0e0;
-						--text-color: #333;
+						--text-color: #212529;
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
 						--link-color: #1a0dab;
 					}
 
 					body.dark-mode {
-						--primary-color: #2dce89;
-						--secondary-color: #2dce89;
+						--primary-color: #0d6efd;
+						--secondary-color: #0b5ed7;
 						--border-color: #333;
-						--text-color: #f5f5f5;
+						--text-color: #f8f9fa;
 						--background-color: #121212;
 						--section-bg: #1e1e1e;
 						--link-color: #8ab4f8;
@@ -1981,7 +1981,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 					.section-title {
 						font-size: 1.2em;
-						color: var(--primary-color);
+						color: var(--text-color);
 						margin-bottom: 15px;
 						padding-bottom: 10px;
 						border-bottom: 2px solid var(--border-color);
@@ -2103,7 +2103,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 
 					input:checked + .slider {
-						background-color: #0d6efd;
+						background-color: var(--primary-color);
 					}
 
 					input:checked + .slider:before {
@@ -2847,19 +2847,19 @@ async function handleGetRequest(env, txt) {
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
                 :root {
-                    --primary-color: #4CAF50;
-                    --secondary-color: #45a049;
+                    --primary-color: #0d6efd;
+                    --secondary-color: #0b5ed7;
                     --border-color: #e0e0e0;
-                    --text-color: #333;
+                    --text-color: #212529;
                     --background-color: #f5f5f5;
 					--link-color: #1a0dab;
                 }
 
                 body.dark-mode {
-                    --primary-color: #2dce89;
-                    --secondary-color: #2dce89;
+                    --primary-color: #0d6efd;
+                    --secondary-color: #0b5ed7;
                     --border-color: #333;
-                    --text-color: #f5f5f5;
+                    --text-color: #f8f9fa;
                     --background-color: #121212;
 					--link-color: #8ab4f8;
                 }
@@ -2933,7 +2933,7 @@ async function handleGetRequest(env, txt) {
                 .editor:focus {
                     outline: none;
                     border-color: var(--primary-color);
-                    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+                    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
                 }
 
                 .button-group {
@@ -2967,12 +2967,12 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .btn-secondary {
-                    background: #666;
+                    background: #6c757d;
                     color: white;
                 }
 
                 .btn-secondary:hover:not(:disabled) {
-                    background: #555;
+                    background: #5c636a;
                 }
 
                 .save-status {
@@ -3123,7 +3123,7 @@ async function handleGetRequest(env, txt) {
 					}
 
 					input:checked + .slider {
-						background-color: #0d6efd;
+						background-color: var(--primary-color);
 					}
 
 					input:checked + .slider:before {
