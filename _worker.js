@@ -1,4 +1,5 @@
 
+
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -1930,6 +1931,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--text-color: #333;
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
+						--link-color: #0066cc;
 					}
 
 					body.dark-mode {
@@ -1939,6 +1941,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--text-color: #f5f5f5;
 						--background-color: #121212;
 						--section-bg: #1e1e1e;
+						--link-color: #8ab4f8;
 					}
 
 					body {
@@ -1949,6 +1952,15 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						color: var(--text-color);
 						background-color: var(--background-color);
 						transition: background-color 0.3s, color 0.3s;
+					}
+
+					a {
+						color: var(--link-color);
+						text-decoration: none;
+					}
+
+					a:hover {
+						text-decoration: underline;
 					}
 
 					.container {
@@ -1997,16 +2009,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 
 					.subscription-link a {
-						color: #0066cc;
-						text-decoration: none;
-					}
-					
-					body.dark-mode .subscription-link a {
-						color: #fff;
-					}
-
-					.subscription-link a:hover {
-						text-decoration: underline;
+						color: var(--link-color);
 					}
 
 					.qrcode-container {
@@ -2017,7 +2020,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					.notice-toggle {
 						color: var(--primary-color);
 						cursor: pointer;
-						text-decoration: none;
 						display: inline-block;
 						margin: 10px 0;
 						font-weight: 500;
@@ -2035,15 +2037,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						background: #2a2a2a;
 					}
 					
-					body.dark-mode a {
-						color: #fff;
-					}
-					
-					body.dark-mode .notice-toggle {
-						color: var(--primary-color);
-					}
-
-
 					.config-info {
 						background: #f8f9fa;
 						padding: 15px;
@@ -2115,7 +2108,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 
 					input:checked + .slider {
-						background-color: #2196F3;
+						background-color: var(--primary-color);
 					}
 
 					input:checked + .slider:before {
@@ -2864,6 +2857,7 @@ async function handleGetRequest(env, txt) {
                     --border-color: #e0e0e0;
                     --text-color: #333;
                     --background-color: #f5f5f5;
+					--link-color: #0066cc;
                 }
 
                 body.dark-mode {
@@ -2872,6 +2866,7 @@ async function handleGetRequest(env, txt) {
                     --border-color: #333;
                     --text-color: #f5f5f5;
                     --background-color: #121212;
+					--link-color: #8ab4f8;
                 }
 
                 body {
@@ -2883,6 +2878,15 @@ async function handleGetRequest(env, txt) {
                     background-color: var(--background-color);
                     transition: background-color 0.3s, color 0.3s;
                 }
+				
+				a {
+					color: var(--link-color);
+					text-decoration: none;
+				}
+
+				a:hover {
+					text-decoration: underline;
+				}
 
                 .container {
                     max-width: 1000px;
@@ -2985,7 +2989,6 @@ async function handleGetRequest(env, txt) {
                 .notice-toggle {
                     color: var(--primary-color);
                     cursor: pointer;
-                    text-decoration: none;
                     display: inline-block;
                     margin: 10px 0;
                     font-weight: 500;
@@ -3063,17 +3066,9 @@ async function handleGetRequest(env, txt) {
                  body.dark-mode .setting-content {
 						background: #222;
 				}
-				
-				 body.dark-mode a {
-					color: #fff;
-				 }
 				 
-				 body.dark-mode .notice-toggle {
-					color: var(--primary-color);
-				 }
-
 				 body.dark-mode .setting-content a {
-					color: #fff !important;
+					color: var(--link-color) !important;
 				 }
 				 
                 .setting-editor {
@@ -3133,7 +3128,7 @@ async function handleGetRequest(env, txt) {
 					}
 
 					input:checked + .slider {
-						background-color: #2196F3;
+						background-color: var(--primary-color);
 					}
 
 					input:checked + .slider:before {
@@ -3251,7 +3246,7 @@ async function handleGetRequest(env, txt) {
                             </div>
                              <div class="setting-content">
                                 <p style="margin: 5px 0; color: #666;">
-                                    <a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
+                                    <a id="nat64-link" target="_blank">自行查询</a>
                                 </p>
                                 <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
                             </div>
