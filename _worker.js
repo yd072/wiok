@@ -726,7 +726,7 @@ export default {
 				if (url.searchParams.has('notls')) noTLS = 'true';
 
 				if (url.searchParams.has('proxyip')) {
-					path = `/?proxyip=${url.searchParams.get('proxyip')}`;
+					path = `/proxyip=${url.searchParams.get('proxyip')}`;
 					RproxyIP = 'false';
 				} else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
 					path = `/?socks5=${url.searchParams.get('socks5') || url.searchParams.get('socks')}`;
