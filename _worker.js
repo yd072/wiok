@@ -1930,6 +1930,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--text-color: #212529;
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
+						--link-color: #1a0dab;
+						--visited-link-color: #6c00a2;
 					}
 
 					body {
@@ -1939,6 +1941,20 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
+						transition: background-color 0.3s, color 0.3s;
+					}
+
+					a {
+						color: var(--link-color);
+						text-decoration: none;
+					}
+
+					a:visited {
+						color: var(--visited-link-color);
+					}
+
+					a:hover {
+						text-decoration: underline;
 					}
 
 					.container {
@@ -2733,7 +2749,7 @@ async function handleGetRequest(env, txt) {
                     --background-color: #f5f5f5;
                     --section-bg: white;
                     --link-color: #1a0dab;
-					--visited-link-color: #6c00a2;
+                    --visited-link-color: #6c00a2;
                 }
 
                 body {
@@ -2744,19 +2760,19 @@ async function handleGetRequest(env, txt) {
                     color: var(--text-color);
                     background-color: var(--background-color);
                 }
-                
-                a {
-					color: var(--link-color);
-					text-decoration: none;
-				}
-				
-				a:visited {
-					color: var(--visited-link-color);
-				}
 
-				a:hover {
-					text-decoration: underline;
-				}
+                a {
+                    color: var(--link-color);
+                    text-decoration: none;
+                }
+
+                a:visited {
+                    color: var(--visited-link-color);
+                }
+
+                a:hover {
+                    text-decoration: underline;
+                }
 
                 .container {
                     max-width: 1000px;
@@ -2792,6 +2808,8 @@ async function handleGetRequest(env, txt) {
                     line-height: 1.5;
                     resize: vertical;
                     transition: border-color 0.3s ease;
+                    background-color: var(--section-bg);
+                    color: var(--text-color);
                 }
 
                 .editor:focus {
@@ -2802,6 +2820,7 @@ async function handleGetRequest(env, txt) {
 
                 .button-group {
                     display: flex;
+                    align-items: center;
                     gap: 12px;
                     margin-top: 15px;
                 }
@@ -2823,7 +2842,7 @@ async function handleGetRequest(env, txt) {
 
                 .btn-primary {
                     background: var(--primary-color);
-                    color: white;
+                    color: #fff;
                 }
 
                 .btn-primary:hover:not(:disabled) {
@@ -2840,7 +2859,6 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .save-status {
-                    margin-left: 10px;
                     font-size: 14px;
                     color: #666;
                 }
@@ -2848,7 +2866,6 @@ async function handleGetRequest(env, txt) {
                 .notice-toggle {
                     color: var(--primary-color);
                     cursor: pointer;
-                    text-decoration: none;
                     display: inline-block;
                     margin: 10px 0;
                     font-weight: 500;
@@ -2890,7 +2907,7 @@ async function handleGetRequest(env, txt) {
 
                 .setting-item {
                     margin-bottom: 10px;
-                    border: 1px solid #ddd;
+                    border: 1px solid var(--border-color);
                     border-radius: 6px;
                     overflow: hidden;
                 }
@@ -2906,11 +2923,16 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .setting-content {
-                    display: none; /* Initially hidden */
+                    display: none;
                     padding: 15px;
                     background-color: #fafafa;
-				 }
-				 
+                }
+
+                 .setting-content p {
+                     margin: 5px 0;
+                     color: #666;
+                 }
+
                 .setting-editor {
                     width: 100%;
                     min-height: 80px;
@@ -2922,17 +2944,21 @@ async function handleGetRequest(env, txt) {
                     font-family: Monaco, Consolas, "Courier New", monospace;
                     font-size: 14px;
                     resize: vertical;
+                    background-color: #fff;
+                    color: var(--text-color);
+                }
+
+                .setting-editor::placeholder {
+                    color: #aaa;
                 }
 
                 @media (max-width: 768px) {
                     body {
                         padding: 10px;
                     }
-
                     .container {
                         padding: 15px;
                     }
-
                     .editor {
                         height: 400px;
                     }
@@ -2954,7 +2980,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>PROXYIP 设置</strong></span>
                             </div>
                             <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
+                                <p>每行一个IP，格式：IP:端口(可不添加端口)</p>
                                 <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${proxyIPContent}</textarea>
                             </div>
                         </div>
@@ -2965,7 +2991,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>SOCKS5 设置</strong></span>
                             </div>
                             <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
                                 <textarea id="socks5" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
                             </div>
                         </div>
@@ -2976,7 +3002,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>HTTP 设置</strong></span>
                             </div>
                             <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
                                 <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
                             </div>
                         </div>
@@ -2987,7 +3013,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>SUB 设置</strong> (优选订阅生成器)</span>
                             </div>
                             <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
+                                <p>只支持单个优选订阅生成器地址</p>
                                 <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
                             </div>
                         </div>
@@ -2998,7 +3024,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>SUBAPI 设置</strong> (订阅转换后端)</span>
                             </div>
                             <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
+                                <p>订阅转换后端地址</p>
                                 <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
                             </div>
                         </div>
@@ -3009,7 +3035,7 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>SUBCONFIG 设置</strong> (订阅转换配置)</span>
                             </div>
                             <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
+                                <p>订阅转换配置文件地址</p>
                                 <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
                             </div>
                         </div>
