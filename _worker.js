@@ -1926,9 +1926,9 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					:root {
 						--primary-color: #0d6efd;
 						--secondary-color: #0b5ed7;
-						--border-color: #dee2e6;
+						--border-color: #e0e0e0;
 						--text-color: #212529;
-						--background-color: #f8f9fa;
+						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
 						--link-color: #1a0dab;
 						--visited-link-color: #6c00a2;
@@ -1939,8 +1939,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--secondary-color: #458cff;
 						--border-color: #444;
 						--text-color: #e0e0e0;
-						--background-color: #202124;
-						--section-bg: #2d2d30;
+						--background-color: #1c1c1e;
+						--section-bg: #2a2a2a;
 						--link-color: #8ab4f8;
 						--visited-link-color: #c58af9;
 					}
@@ -1959,7 +1959,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						color: var(--link-color);
 						text-decoration: none;
 					}
-					
+
 					a:visited {
 						color: var(--visited-link-color);
 					}
@@ -2010,7 +2010,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 
 					body.dark-mode .subscription-link {
-						background: #3c4043;
+						background: #2a2a2a;
 					}
 
 					.qrcode-container {
@@ -2035,7 +2035,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 					
 					body.dark-mode .notice-content {
-						background: #3c4043;
+						background: #2a2a2a;
 					}
 					
 					.config-info {
@@ -2048,7 +2048,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 					
 					body.dark-mode .config-info {
-						background: #3c4043;
+						background: #2a2a2a;
 					}
 
 					.copy-button {
@@ -2077,9 +2077,9 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 					.theme-switch {
 						display: inline-block;
-						height: 24px;
+						height: 22px;
 						position: relative;
-						width: 44px;
+						width: 40px;
 					}
 
 					.theme-switch input {
@@ -2101,11 +2101,11 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						background-color: #fff;
 						bottom: 3px;
 						content: "";
-						height: 18px;
+						height: 16px;
 						left: 3px;
 						position: absolute;
 						transition: .4s;
-						width: 18px;
+						width: 16px;
 					}
 
 					input:checked + .slider {
@@ -2113,11 +2113,11 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 
 					input:checked + .slider:before {
-						transform: translateX(20px);
+						transform: translateX(18px);
 					}
 
 					.slider.round {
-						border-radius: 24px;
+						border-radius: 22px;
 					}
 
 					.slider.round:before {
@@ -2855,12 +2855,9 @@ async function handleGetRequest(env, txt) {
                 :root {
                     --primary-color: #0d6efd;
                     --secondary-color: #0b5ed7;
-                    --border-color: #dee2e6;
+                    --border-color: #e0e0e0;
                     --text-color: #212529;
-                    --muted-text-color: #6c757d;
-                    --background-color: #f8f9fa;
-					--section-bg: #ffffff;
-					--input-bg: #ffffff;
+                    --background-color: #f5f5f5;
 					--link-color: #1a0dab;
 					--visited-link-color: #6c00a2;
                 }
@@ -2870,10 +2867,7 @@ async function handleGetRequest(env, txt) {
                     --secondary-color: #458cff;
                     --border-color: #444;
                     --text-color: #e0e0e0;
-					--muted-text-color: #9aa0a6;
-                    --background-color: #202124;
-					--section-bg: #2d2d30;
-					--input-bg: #3c4043;
+                    --background-color: #1c1c1e;
 					--link-color: #8ab4f8;
 					--visited-link-color: #c58af9;
                 }
@@ -2904,10 +2898,14 @@ async function handleGetRequest(env, txt) {
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: var(--section-bg);
+                    background: var(--section-bg, white);
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                
+                body.dark-mode .container {
+                    background: #242526;
                 }
 
                 .title {
@@ -2923,8 +2921,9 @@ async function handleGetRequest(env, txt) {
                     margin: 20px 0;
                 }
 
-                .editor, .setting-editor {
+                .editor {
                     width: 100%;
+                    height: 520px;
                     padding: 15px;
                     box-sizing: border-box;
                     border: 1px solid var(--border-color);
@@ -2933,29 +2932,21 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     line-height: 1.5;
                     resize: vertical;
-                    transition: border-color 0.3s, box-shadow 0.3s;
-                    background-color: var(--input-bg);
+                    transition: border-color 0.3s ease;
+                    background-color: var(--section-bg, white);
                     color: var(--text-color);
                 }
-				
-				.editor {
-					height: 520px;
-				}
-				
-				.setting-editor {
-					min-height: 80px;
-				}
+                
+                body.dark-mode .editor {
+                    background-color: #2a2a2a;
+                }
 
-                .editor:focus, .setting-editor:focus {
+
+                .editor:focus {
                     outline: none;
                     border-color: var(--primary-color);
-                    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+                    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
                 }
-				
-				body.dark-mode .editor:focus, body.dark-mode .setting-editor:focus {
-					box-shadow: 0 0 0 2px rgba(88, 155, 255, 0.25);
-				}
-
 
                 .button-group {
                     display: flex;
@@ -2998,9 +2989,12 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .save-status {
-                    margin-left: 10px;
                     font-size: 14px;
-                    color: var(--muted-text-color);
+                    color: #666;
+                }
+				
+				body.dark-mode .save-status {
+                    color: var(--text-color);
                 }
 
                 .notice-toggle {
@@ -3020,7 +3014,7 @@ async function handleGetRequest(env, txt) {
                 }
                 
                 body.dark-mode .notice-content {
-						background: #3c4043;
+						background: #2a2a2a;
 				}
 
                 .divider {
@@ -3038,7 +3032,7 @@ async function handleGetRequest(env, txt) {
                 }
                 
                  body.dark-mode .advanced-settings {
-						background: #303134;
+						background: #2a2a2a;
 				}
 
                 .advanced-settings-header {
@@ -3071,7 +3065,7 @@ async function handleGetRequest(env, txt) {
                 }
                 
                  body.dark-mode .setting-header {
-						background: #3c4043;
+						background: #333;
 				}
 
                 .setting-content {
@@ -3081,14 +3075,45 @@ async function handleGetRequest(env, txt) {
                 }
                 
                  body.dark-mode .setting-content {
-						background: #303134;
+						background: #222;
+				}
+				 
+				 .setting-content p {
+					 color: #666;
+				 }
+
+				 body.dark-mode .setting-content p {
+					 color: #9e9e9e;
+				 }
+				 
+                .setting-editor {
+                    width: 100%;
+                    min-height: 80px;
+                    margin-top: 10px;
+                    padding: 10px;
+                    box-sizing: border-box;
+                    border: 1px solid var(--border-color);
+                    border-radius: 4px;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
+                    font-size: 14px;
+                    resize: vertical;
+                    background-color: #fff;
+                    color: var(--text-color);
+                }
+				
+				body.dark-mode .setting-editor {
+					background-color: #2d2d2d;
+					border-color: #555;
+				}
+
+				.setting-editor::placeholder {
+					color: #aaa;
 				}
 				
-				.setting-content p {
-					margin: 5px 0; 
-					color: var(--muted-text-color);
+				body.dark-mode .setting-editor::placeholder {
+					color: #666;
 				}
-				
+
                 .theme-switch-wrapper {
 						display: flex;
 						align-items: center;
@@ -3099,9 +3124,9 @@ async function handleGetRequest(env, txt) {
 
 					.theme-switch {
 						display: inline-block;
-						height: 24px;
+						height: 22px;
 						position: relative;
-						width: 44px;
+						width: 40px;
 					}
 
 					.theme-switch input {
@@ -3123,11 +3148,11 @@ async function handleGetRequest(env, txt) {
 						background-color: #fff;
 						bottom: 3px;
 						content: "";
-						height: 18px;
+						height: 16px;
 						left: 3px;
 						position: absolute;
 						transition: .4s;
-						width: 18px;
+						width: 16px;
 					}
 
 					input:checked + .slider {
@@ -3135,11 +3160,11 @@ async function handleGetRequest(env, txt) {
 					}
 
 					input:checked + .slider:before {
-						transform: translateX(20px);
+						transform: translateX(18px);
 					}
 
 					.slider.round {
-						border-radius: 24px;
+						border-radius: 22px;
 					}
 
 					.slider.round:before {
