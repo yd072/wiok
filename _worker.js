@@ -1753,34 +1753,53 @@ async function 代理URL(request, 代理网址, 目标网址, 调试模式 = fal
 }
 
 const protocolEncodedFlag = atob('ZG14bGMzTT0=');
-function 配置信息(UUID, 域名地址) {
-	const 协议类型 = atob(protocolEncodedFlag);
 
+/**
+ * 【V2版】生成包含多种传输协议的配置信息对象
+ * @param {string} UUID 
+ * @param {string} 域名地址 
+ * @param {string} 节点备注后缀 
+ * @returns {{v2ray_ws: string, v2ray_webrtc: string, clash_ws: string, clash_webrtc: string}}
+ */
+function 配置信息(UUID, 域名地址, 节点备注后缀 = '') {
+	const 协议类型 = atob(protocolEncodedFlag);
 	const 别名 = FileName;
 	let 地址 = 域名地址;
 	let 端口 = 443;
-
 	const 用户ID = UUID;
 	const 加密方式 = 'none';
-
-	const 传输层协议 = 'ws';
-	const 伪装域名 = 域名地址;
-	const 路径 = path;
-
-	let 传输层安全 = ['tls', true];
 	const SNI = 域名地址;
 	const 指纹 = 'randomized';
+	let 伪装域名 = 域名地址;
 
+	// --- WebSocket 配置 ---
+	let ws传输层安全 = ['tls', true];
+	let ws地址 = 地址;
+	let ws端口 = 端口;
+	// 仅针对WebSocket
 	if (域名地址.includes('.workers.dev')) {
-		地址 = atob('dmlzYS5jbg==');
-		端口 = 80;
-		传输层安全 = ['', false];
+		ws地址 = atob('dmlzYS5jbg=='); 
+		ws端口 = 80;
+		ws传输层安全 = ['', false];
 	}
+	const ws路径 = path; 
+	const 威图瑞_ws = `${协议类型}://${用户ID}@${ws地址}:${ws端口}?encryption=${加密方式}&security=${ws传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=ws&host=${伪装域名}&path=${encodeURIComponent(ws路径)}#${encodeURIComponent(别名 + 节点备注后缀 + '-WS')}`;
+	const 猫猫猫_ws = `- {name: "${FileName + 节点备注后缀}-WS", server: ${ws地址}, port: ${ws端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${ws传输层安全[1]}, network: ws, ws-opts: {path: "${ws路径}", headers: {Host: ${伪装域名}}}, udp: false, sni: ${SNI}, client-fingerprint: ${指纹}}`;
 
-	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
-	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
-	return [威图瑞, 猫猫猫];
+
+	// --- WebRTC 配置 ---
+	const webrtc路径 = '/webrtc'; 
+	const 威图瑞_webrtc = `${协议类型}://${用户ID}@${地址}:${端口}?encryption=${加密方式}&security=tls&sni=${SNI}&fp=${指纹}&type=webrtc&host=${伪装域名}&path=${encodeURIComponent(webrtc路径)}#${encodeURIComponent(别名 + 节点备注后缀 + '-WebRTC')}`;
+	const 猫猫猫_webrtc = `- {name: "${FileName + 节点备注后缀}-WebRTC", server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: true, network: webrtc, "webrtc-opts": {path: "${webrtc路径}", headers: {Host: ${伪装域名}}}, udp: false, sni: ${SNI}, client-fingerprint: ${指纹}}`;
+
+	return {
+		v2ray_ws: 威图瑞_ws,
+		v2ray_webrtc: 威图瑞_webrtc,
+		clash_ws: 猫猫猫_ws,
+		clash_webrtc: 猫猫猫_webrtc
+	};
 }
+
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
@@ -1850,9 +1869,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
     }
 
 	const userAgent = UA.toLowerCase();
-	const Config = 配置信息(uuid, hostName);
-	const proxyConfig = Config[0];
-	const clash = Config[1];
+	const Configs = 配置信息(uuid, hostName);
+	const proxyConfig_ws = Configs.v2ray_ws;
+	const proxyConfig_webrtc = Configs.v2ray_webrtc;
+	const clash_config_snippet = Configs.clash_ws;
 	let proxyhost = "";
 	if (hostName.includes(".workers.dev")) {
 		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
@@ -2132,16 +2152,25 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					<div class="section">
 						<div class="section-title">📝 proxyConfig</div>
 						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<button class="copy-button" onclick="copyToClipboard('${proxyConfig}','qrcode_proxyConfig')">复制配置</button>
-							<div style="word-break: break-all; overflow-wrap: anywhere;">${proxyConfig}</div>
-							<div id="qrcode_proxyConfig" class="qrcode-container"></div>
+							<button class="copy-button" onclick="copyToClipboard('${proxyConfig_webrtc}','qrcode_proxyConfig_webrtc')">复制配置</button>
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${proxyConfig_webrtc}</div>
+							<div id="qrcode_proxyConfig_webrtc" class="qrcode-container"></div>
 						</div>
 					</div>
 
 					<div class="section">
-						<div class="section-title">⚙️ Clash Meta 配置</div>
+						<div class="section-title">📝 proxyConfig (WebSocket)</div>
 						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
-							<div style="word-break: break-all; overflow-wrap: anywhere;">${clash}</div>
+							<button class="copy-button" onclick="copyToClipboard('${proxyConfig_ws}','qrcode_proxyConfig_ws')">复制配置</button>
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${proxyConfig_ws}</div>
+							<div id="qrcode_proxyConfig_ws" class="qrcode-container"></div>
+						</div>
+					</div>
+
+					<div class="section">
+						<div class="section-title">⚙️ Clash Meta 配置 (示例)</div>
+						<div class="config-info" style="overflow-x: auto; max-width: 100%;">
+							<div style="word-break: break-all; overflow-wrap: anywhere;">${clash_config_snippet}</div>
 						</div>
 					</div>
 
@@ -2422,152 +2451,115 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
+/**
+ * 【V2版】生成包含 WS 和 WebRTC 的本地订阅内容
+ */
+async function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
-	let notlsresponseBody;
+	let notlsResponseBody = '';
+
+	// 1. 处理 NoTLS (仅 WS)
 	if (noTLS == 'true') {
 		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
 		const uniqueAddressesnotls = [...new Set(addressesnotls)];
 
-		notlsresponseBody = uniqueAddressesnotls.map(address => {
-			let port = "-1";
-			let addressid = address;
+		notlsResponseBody = uniqueAddressesnotls.map(addressEntry => {
+			let address = addressEntry, port = "-1", addressid = addressEntry;
 
-			const match = addressid.match(regex);
+			const match = addressEntry.match(regex);
+			// ... (此处省略与原版相同的复杂地址解析逻辑)
 			if (!match) {
 				if (address.includes(':') && address.includes('#')) {
-					const parts = address.split(':');
-					address = parts[0];
-					const subParts = parts[1].split('#');
-					port = subParts[0];
-					addressid = subParts[1];
+					const parts = address.split(':'); address = parts[0]; const subParts = parts[1].split('#'); port = subParts[0]; addressid = subParts[1];
 				} else if (address.includes(':')) {
-					const parts = address.split(':');
-					address = parts[0];
-					port = parts[1];
+					const parts = address.split(':'); address = parts[0]; port = parts[1];
 				} else if (address.includes('#')) {
-					const parts = address.split('#');
-					address = parts[0];
-					addressid = parts[1];
+					const parts = address.split('#'); address = parts[0]; addressid = parts[1];
 				}
-
-				if (addressid.includes(':')) {
-					addressid = addressid.split(':')[0];
-				}
+				if (addressid.includes(':')) { addressid = addressid.split(':')[0]; }
 			} else {
-				address = match[1];
-				port = match[2] || port;
-				addressid = match[3] || address;
+				address = match[1]; port = match[2] || port; addressid = match[3] || address;
 			}
 
-			const httpPorts = ["8080", "8880", "2052", "2082", "2086", "2095"];
 			if (!isValidIPv4(address) && port == "-1") {
-				for (let httpPort of httpPorts) {
-					if (address.includes(httpPort)) {
-						port = httpPort;
-						break;
-					}
-				}
+				for (let httpPort of httpPorts) { if (address.includes(httpPort)) { port = httpPort; break; } }
 			}
 			if (port == "-1") port = "80";
 
-			let 伪装域名 = host;
-			let 最终路径 = path;
-			let 节点备注 = '';
 			const 协议类型 = atob(protocolEncodedFlag);
-
-            const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` + 
-                `encryption=none&` + 
-                `security=none&` + 
-                `type=ws&` + 
-                `host=${伪装域名}&` + 
-                `path=${encodeURIComponent(最终路径)}` + 
-                `#${encodeURIComponent(addressid + 节点备注)}`;
-
+			const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?encryption=none&security=none&type=ws&host=${host}&path=${encodeURIComponent(path)}#${encodeURIComponent(addressid + '-WS-NoTLS')}`;
 			return secureProtoLink;
-
 		}).join('\n');
-
 	}
 
+	// 2. 处理 TLS  (WS 和 WebRTC)
 	const uniqueAddresses = [...new Set(addresses)];
+	const 协议类型 = atob(protocolEncodedFlag);
+	const webrtcPath = '/webrtc'; // 保持路径一致
 
-	const responseBody = uniqueAddresses.map(address => {
-		let port = "-1";
-		let addressid = address;
+	const tlsNodes = [];
 
-		const match = addressid.match(regex);
+	uniqueAddresses.forEach(addressEntry => {
+		let address = addressEntry, port = "-1", addressid = addressEntry;
+		
+		// ... (此处省略与原版相同的复杂地址解析逻辑)
+		const match = addressEntry.match(regex);
 		if (!match) {
 			if (address.includes(':') && address.includes('#')) {
-				const parts = address.split(':');
-				address = parts[0];
-				const subParts = parts[1].split('#');
-				port = subParts[0];
-				addressid = subParts[1];
+				const parts = address.split(':'); address = parts[0]; const subParts = parts[1].split('#'); port = subParts[0]; addressid = subParts[1];
 			} else if (address.includes(':')) {
-				const parts = address.split(':');
-				address = parts[0];
-				port = parts[1];
+				const parts = address.split(':'); address = parts[0]; port = parts[1];
 			} else if (address.includes('#')) {
-				const parts = address.split('#');
-				address = parts[0];
-				addressid = parts[1];
+				const parts = address.split('#'); address = parts[0]; addressid = parts[1];
 			}
-
-			if (addressid.includes(':')) {
-				addressid = addressid.split(':')[0];
-			}
+			if (addressid.includes(':')) { addressid = addressid.split(':')[0]; }
 		} else {
-			address = match[1];
-			port = match[2] || port;
-			addressid = match[3] || address;
+			address = match[1]; port = match[2] || port; addressid = match[3] || address;
 		}
 
 		if (!isValidIPv4(address) && port == "-1") {
-			for (let httpsPort of httpsPorts) {
-				if (address.includes(httpsPort)) {
-					port = httpsPort;
-					break;
-				}
-			}
+			for (let httpsPort of httpsPorts) { if (address.includes(httpsPort)) { port = httpsPort; break; } }
 		}
 		if (port == "-1") port = "443";
 
 		let 伪装域名 = host;
-		let 最终路径 = path;
+		let ws路径 = path;
 		let 节点备注 = '';
 		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
+		if (matchingProxyIP) ws路径 = `/?proxyip=${matchingProxyIP}`;
 
 		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
-			最终路径 = `/${伪装域名}${最终路径}`;
+			ws路径 = `/${伪装域名}${ws路径}`;
 			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
 			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
 		}
 
-		const 协议类型 = atob(protocolEncodedFlag);
+		// 生成 WS 
+		const wsLink = `${协议类型}://${UUID}@${address}:${port}?encryption=none&security=tls&sni=${伪装域名}&fp=randomized&alpn=h3&type=ws&host=${伪装域名}&path=${encodeURIComponent(ws路径)}#${encodeURIComponent(addressid + 节点备注 + '-WS')}`;
+		
+		// 生成 WebRTC 
+		const webrtcLink = `${协议类型}://${UUID}@${address}:${port}?encryption=none&security=tls&sni=${伪装域名}&fp=randomized&alpn=h3&type=webrtc&host=${伪装域名}&path=${encodeURIComponent(webrtcPath)}#${encodeURIComponent(addressid + 节点备注 + '-WebRTC')}`;
 
-		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` + 
-			`encryption=none&` +
-			`security=tls&` +
-			`sni=${伪装域名}&` +
-			`fp=randomized&` +
-			`alpn=h3&` + 
-			`type=ws&` +
-			`host=${伪装域名}&` +
-            `path=${encodeURIComponent(最终路径)}` + 
-			`#${encodeURIComponent(addressid + 节点备注)}`;
+		// 优先添加 WebRTC 
+		tlsNodes.push(webrtcLink);
+		tlsNodes.push(wsLink);
+	});
+	
+	const tlsResponseBody = tlsNodes.join('\n');
 
-		return secureProtoLink;
-	}).join('\n');
-
-	let base64Response = responseBody; 
-	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
-	if (link.length > 0) base64Response += '\n' + link.join('\n');
-	return btoa(base64Response);
+	// 3. 组合所有节点
+	let finalResponseBody = tlsResponseBody;
+	if (notlsResponseBody) {
+		finalResponseBody += `\n${notlsResponseBody}`;
+	}
+	if (link.length > 0) {
+		finalResponseBody += '\n' + link.join('\n');
+	}
+	
+	return btoa(finalResponseBody);
 }
 
 async function 整理(内容) {
