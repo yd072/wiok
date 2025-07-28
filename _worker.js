@@ -1783,7 +1783,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQo='));
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 
@@ -1937,7 +1937,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					body.dark-mode {
 						--primary-color: #589bff;
 						--secondary-color: #458cff;
-						--border-color: #444;
+						--border-color: #3c3c3c;
 						--text-color: #e0e0e0;
 						--background-color: #1c1c1e;
 						--section-bg: #2a2a2a;
@@ -1954,6 +1954,13 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						background-color: var(--background-color);
 						transition: background-color 0.3s, color 0.3s;
 					}
+					
+                    .no-transition, .no-transition * {
+                        -webkit-transition: none !important;
+                        -moz-transition: none !important;
+                        -o-transition: none !important;
+                        transition: none !important;
+                    }
 
 					a {
 						color: var(--link-color);
@@ -2032,6 +2039,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						padding: 15px;
 						margin: 10px 0;
 						border-radius: 0 8px 8px 0;
+						word-break: break-all;
+						overflow-wrap: break-word;
 					}
 					
 					body.dark-mode .notice-content {
@@ -2140,7 +2149,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 				</style>
 			</head>
-			<body>
+			<body class="no-transition">
                 <script>
                     (function() {
                         const theme = localStorage.getItem('theme');
@@ -2252,6 +2261,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
 				<script>
+                    window.addEventListener('load', () => {
+                        document.body.classList.remove('no-transition');
+                    });
+
 					function copyToClipboard(text, qrcode) {
 						navigator.clipboard.writeText(text).then(() => {
 							alert('已复制到剪贴板');
@@ -2873,7 +2886,7 @@ async function handleGetRequest(env, txt) {
                 body.dark-mode {
                     --primary-color: #589bff;
                     --secondary-color: #458cff;
-                    --border-color: #444;
+                    --border-color: #3c3c3c;
                     --text-color: #e0e0e0;
                     --background-color: #1c1c1e;
                     --section-bg: #2a2a2a;
@@ -2887,24 +2900,34 @@ async function handleGetRequest(env, txt) {
                     line-height: 1.6;
                     color: var(--text-color);
                     background-color: var(--background-color);
+                    transition: background-color 0.3s, color 0.3s;
                 }
-                a {
-                    color: var(--link-color);
-                    text-decoration: none;
+                .no-transition, .no-transition * {
+                    -webkit-transition: none !important;
+                    -moz-transition: none !important;
+                    -o-transition: none !important;
+                    transition: none !important;
                 }
-                a:visited {
-                    color: var(--visited-link-color);
-                }
-                a:hover {
-                    text-decoration: underline;
-                }
+				a {
+					color: var(--link-color);
+					text-decoration: none;
+				}
+				a:visited {
+					color: var(--visited-link-color);
+				}
+				a:hover {
+					text-decoration: underline;
+				}
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: var(--section-bg);
+                    background: var(--section-bg, white);
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                body.dark-mode .container {
+                    background: #242526;
                 }
                 .title {
                     font-size: 1.5em;
@@ -2929,8 +2952,11 @@ async function handleGetRequest(env, txt) {
                     line-height: 1.5;
                     resize: vertical;
                     transition: border-color 0.3s ease;
-                    background-color: var(--section-bg);
+                    background-color: var(--section-bg, white);
                     color: var(--text-color);
+                }
+                body.dark-mode .editor {
+                    background-color: #2a2a2a;
                 }
                 .editor:focus {
                     outline: none;
@@ -2939,7 +2965,7 @@ async function handleGetRequest(env, txt) {
                 }
                 .button-group {
                     display: flex;
-                    align-items: center;
+					align-items: center;
                     gap: 12px;
                     margin-top: 15px;
                 }
@@ -2974,7 +3000,7 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     color: #666;
                 }
-                body.dark-mode .save-status {
+				body.dark-mode .save-status {
                     color: var(--text-color);
                 }
                 .notice-toggle {
@@ -2990,10 +3016,11 @@ async function handleGetRequest(env, txt) {
                     padding: 15px;
                     margin: 10px 0;
                     border-radius: 0 8px 8px 0;
+                    word-break: break-all;
                 }
                 body.dark-mode .notice-content {
-                    background: #3a3a3a;
-                }
+						background: #3a3a3a;
+				}
                 .divider {
                     height: 1px;
                     background: var(--border-color);
@@ -3006,9 +3033,9 @@ async function handleGetRequest(env, txt) {
                     border-radius: 8px;
                     border: 1px solid var(--border-color);
                 }
-                body.dark-mode .advanced-settings {
-                    background: #3a3a3a;
-                }
+                 body.dark-mode .advanced-settings {
+						background: #3a3a3a;
+				}
                 .advanced-settings-header {
                     display: flex;
                     justify-content: space-between;
@@ -3034,24 +3061,24 @@ async function handleGetRequest(env, txt) {
                     cursor: pointer;
                     font-weight: 500;
                 }
-                body.dark-mode .setting-header {
-                    background-color: #424242;
-                }
+                 body.dark-mode .setting-header {
+						background: #424242;
+				}
                 .setting-content {
-                    display: none;
+                    display: none; /* Initially hidden */
                     padding: 15px;
                     background-color: #fafafa;
                 }
-                body.dark-mode .setting-content {
-                    background-color: #3a3a3a;
-                }
-                .setting-content p {
-                    margin: 5px 0;
-                    color: #666;
-                }
-                body.dark-mode .setting-content p {
-                    color: #bbb;
-                }
+                 body.dark-mode .setting-content {
+						background: #3a3a3a;
+				}
+				 .setting-content p {
+					 margin: 5px 0;
+					 color: #666;
+				 }
+				 body.dark-mode .setting-content p {
+					 color: #bbb;
+				 }
                 .setting-editor {
                     width: 100%;
                     min-height: 80px;
@@ -3066,60 +3093,64 @@ async function handleGetRequest(env, txt) {
                     background-color: #fff;
                     color: var(--text-color);
                 }
-                body.dark-mode .setting-editor {
-                    background-color: #2a2a2a;
-                }
-                .setting-editor::placeholder {
-                    color: #aaa;
-                }
+				body.dark-mode .setting-editor {
+					background-color: #2a2a2a;
+					color: #e0e0e0;
+				}
+				.setting-editor::placeholder {
+					color: #aaa;
+				}
+				body.dark-mode .setting-editor::placeholder {
+					color: #666;
+				}
                 .theme-switch-wrapper {
-                    display: flex;
-                    align-items: center;
-                    position: fixed;
-                    top: 15px;
-                    right: 15px;
-                }
-                .theme-switch {
-                    display: inline-block;
-                    height: 20px;
-                    position: relative;
-                    width: 36px;
-                }
-                .theme-switch input {
-                    display:none;
-                }
-                .slider {
-                    background-color: #ccc;
-                    bottom: 0;
-                    cursor: pointer;
-                    left: 0;
-                    position: absolute;
-                    right: 0;
-                    top: 0;
-                    transition: .4s;
-                }
-                .slider:before {
-                    background-color: #fff;
-                    bottom: 3px;
-                    content: "";
-                    height: 14px;
-                    left: 3px;
-                    position: absolute;
-                    transition: .4s;
-                    width: 14px;
-                }
-                input:checked + .slider {
-                    background-color: var(--primary-color);
-                }
-                input:checked + .slider:before {
-                    transform: translateX(16px);
-                }
-                .slider.round {
-                    border-radius: 20px;
-                }
-                .slider.round:before {
-                    border-radius: 50%;
-                }
+						display: flex;
+						align-items: center;
+						position: fixed;
+						top: 15px;
+						right: 15px;
+					}
+					.theme-switch {
+						display: inline-block;
+						height: 20px;
+						position: relative;
+						width: 36px;
+					}
+					.theme-switch input {
+						display:none;
+					}
+					.slider {
+						background-color: #ccc;
+						bottom: 0;
+						cursor: pointer;
+						left: 0;
+						position: absolute;
+						right: 0;
+						top: 0;
+						transition: .4s;
+					}
+					.slider:before {
+						background-color: #fff;
+						bottom: 3px;
+						content: "";
+						height: 14px;
+						left: 3px;
+						position: absolute;
+						transition: .4s;
+						width: 14px;
+					}
+					input:checked + .slider {
+						background-color: var(--primary-color);
+					}
+					input:checked + .slider:before {
+						transform: translateX(16px);
+					}
+					.slider.round {
+						border-radius: 20px;
+					}
+					.slider.round:before {
+						border-radius: 50%;
+					}
                 @media (max-width: 768px) {
                     body {
                         padding: 10px;
@@ -3133,7 +3164,7 @@ async function handleGetRequest(env, txt) {
                 }
             </style>
         </head>
-        <body>
+        <body class="no-transition">
             <script>
                 (function() {
                     const theme = localStorage.getItem('theme');
@@ -3274,6 +3305,9 @@ async function handleGetRequest(env, txt) {
             </div>
 
             <script>
+                window.addEventListener('load', () => {
+                    document.body.classList.remove('no-transition');
+                });
                 function goBack() {
                     const pathParts = window.location.pathname.split('/');
                     pathParts.pop(); // 移除 "edit"
