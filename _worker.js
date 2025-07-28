@@ -1783,7 +1783,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQo='));
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 
@@ -1953,13 +1953,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						color: var(--text-color);
 						background-color: var(--background-color);
 					}
-					
-                    html.no-transition, html.no-transition * {
-                        -webkit-transition: none !important;
-                        -moz-transition: none !important;
-                        -o-transition: none !important;
-                        transition: none !important;
-                    }
 
 					a {
 						color: var(--link-color);
@@ -2038,6 +2031,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						padding: 15px;
 						margin: 10px 0;
 						border-radius: 0 8px 8px 0;
+						word-break: break-all;
+						overflow-wrap: break-word;
 					}
 					
 					html.dark-mode .notice-content {
@@ -2146,17 +2141,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						}
 					}
 				</style>
-                <script>
-                    (function() {
-                        document.documentElement.classList.add('no-transition');
-                        try {
-                            const theme = localStorage.getItem('theme');
-                            if (theme === 'dark-mode') {
-                                document.documentElement.classList.add('dark-mode');
-                            }
-                        } catch (e) { console.error(e); }
-                    })();
-                </script>
 			</head>
 			<body>
 				<div class="theme-switch-wrapper">
@@ -2262,10 +2246,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
 				<script>
-                    window.addEventListener('load', () => {
-                        document.documentElement.classList.remove('no-transition');
-                    });
-
 					function copyToClipboard(text, qrcode) {
 						navigator.clipboard.writeText(text).then(() => {
 							alert('已复制到剪贴板');
@@ -2302,6 +2282,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					(function() {
 						const currentTheme = localStorage.getItem('theme');
 						if (currentTheme === 'dark-mode') {
+							document.documentElement.classList.add('dark-mode');
 							toggleSwitch.checked = true;
 						}
 					})();
@@ -2904,13 +2885,6 @@ async function handleGetRequest(env, txt) {
                     background-color: var(--background-color);
                 }
 				
-				html.no-transition, html.no-transition * {
-					-webkit-transition: none !important;
-					-moz-transition: none !important;
-					-o-transition: none !important;
-					transition: none !important;
-				}
-				
 				a {
 					color: var(--link-color);
 					text-decoration: none;
@@ -2953,6 +2927,12 @@ async function handleGetRequest(env, txt) {
                 .editor, .setting-editor {
                     background-color: var(--section-bg, white);
                     color: var(--text-color);
+					border: 1px solid var(--border-color);
+					border-radius: 8px;
+					font-family: Monaco, Consolas, "Courier New", monospace;
+					font-size: 14px;
+					padding: 15px;
+					box-sizing: border-box;
                 }
                 
                 html.dark-mode .editor, html.dark-mode .setting-editor {
@@ -2975,14 +2955,15 @@ async function handleGetRequest(env, txt) {
                 .editor {
                     width: 100%;
                     height: 520px;
-                    padding: 15px;
-                    box-sizing: border-box;
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    font-family: Monaco, Consolas, "Courier New", monospace;
-                    font-size: 14px;
                     line-height: 1.5;
                     resize: vertical;
+                }
+				
+                .setting-editor {
+					width: 100%;
+					min-height: 80px;
+					margin-top: 10px;
+					resize: vertical;
                 }
 
                 .button-group {
@@ -3048,6 +3029,7 @@ async function handleGetRequest(env, txt) {
                     padding: 15px;
                     margin: 10px 0;
                     border-radius: 0 8px 8px 0;
+                    word-break: break-all;
                 }
                 
                 html.dark-mode .notice-content {
@@ -3123,19 +3105,6 @@ async function handleGetRequest(env, txt) {
 				 html.dark-mode .setting-content p {
 					 color: #bbb;
 				 }
-				 
-                .setting-editor {
-                    width: 100%;
-                    min-height: 80px;
-                    margin-top: 10px;
-                    padding: 10px;
-                    box-sizing: border-box;
-                    border: 1px solid var(--border-color);
-                    border-radius: 4px;
-                    font-family: Monaco, Consolas, "Courier New", monospace;
-                    font-size: 14px;
-                    resize: vertical;
-                }
 				
 				.setting-editor::placeholder {
 					color: #aaa;
@@ -3216,17 +3185,6 @@ async function handleGetRequest(env, txt) {
                     }
                 }
             </style>
-            <script>
-                (function() {
-                    document.documentElement.classList.add('no-transition');
-                    try {
-                        const theme = localStorage.getItem('theme');
-                        if (theme === 'dark-mode') {
-                            document.documentElement.classList.add('dark-mode');
-                        }
-                    } catch (e) { console.error(e); }
-                })();
-            </script>
         </head>
         <body>
             <div class="theme-switch-wrapper">
@@ -3361,10 +3319,6 @@ async function handleGetRequest(env, txt) {
             </div>
 
             <script>
-                window.addEventListener('load', () => {
-                    document.documentElement.classList.remove('no-transition');
-                });
-
                 function goBack() {
                     const pathParts = window.location.pathname.split('/');
                     pathParts.pop(); // 移除 "edit"
@@ -3474,6 +3428,7 @@ async function handleGetRequest(env, txt) {
                 (function() {
                     const currentTheme = localStorage.getItem('theme');
                     if (currentTheme === 'dark-mode') {
+						document.documentElement.classList.add('dark-mode');
                         toggleSwitch.checked = true;
                     }
                 })();
