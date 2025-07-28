@@ -2848,7 +2848,7 @@ async function handleGetRequest(env, txt) {
 
     const html = `
         <!DOCTYPE html>
-        <html lang="zh-CN">
+        <html>
         <head>
             <title>优选订阅列表</title>
             <meta charset="utf-8">
