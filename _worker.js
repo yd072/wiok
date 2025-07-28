@@ -1917,7 +1917,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${有效时间} 天<br>UPTIME（动态UUID更新时间）: ${更新时间} 时（北京时间）<br><br>` : `${userIDTime}`;
 		const 节点配置页 = `
 			<!DOCTYPE html>
-			<html>
+			<html lang="zh-CN">
 			<head>
 				<meta charset="utf-8">
 				<meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1934,10 +1934,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--visited-link-color: #6c00a2;
 					}
 
-					body.dark-mode {
+					html.dark-mode {
 						--primary-color: #589bff;
 						--secondary-color: #458cff;
-						--border-color: #333;
+						--border-color: #3c3c3c;
 						--text-color: #e0e0e0;
 						--background-color: #1c1c1e;
 						--section-bg: #2a2a2a;
@@ -1952,15 +1952,18 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
-						transition: background-color 0.3s, color 0.3s;
 					}
-
-                    .no-transition, .no-transition * {
+					
+                    html.no-transition, html.no-transition * {
                         -webkit-transition: none !important;
                         -moz-transition: none !important;
                         -o-transition: none !important;
                         transition: none !important;
                     }
+					
+					body {
+						transition: background-color 0.3s, color 0.3s;
+					}
 
 					a {
 						color: var(--link-color);
@@ -2016,7 +2019,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						word-break: break-all;
 					}
 
-					body.dark-mode .subscription-link {
+					html.dark-mode .subscription-link {
 						background: #3a3a3a;
 					}
 
@@ -2039,11 +2042,9 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						padding: 15px;
 						margin: 10px 0;
 						border-radius: 0 8px 8px 0;
-						word-break: break-all;
-						overflow-wrap: break-word;
 					}
 					
-					body.dark-mode .notice-content {
+					html.dark-mode .notice-content {
 						background: #3a3a3a;
 					}
 					
@@ -2056,7 +2057,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						overflow-x: auto;
 					}
 					
-					body.dark-mode .config-info {
+					html.dark-mode .config-info {
 						background: #3a3a3a;
 					}
 
@@ -2148,16 +2149,19 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						}
 					}
 				</style>
-			</head>
-			<body class="no-transition">
                 <script>
                     (function() {
-                        const theme = localStorage.getItem('theme');
-                        if (theme === 'dark-mode') {
-                            document.body.classList.add('dark-mode');
-                        }
+                        document.documentElement.classList.add('no-transition');
+                        try {
+                            const theme = localStorage.getItem('theme');
+                            if (theme === 'dark-mode') {
+                                document.documentElement.classList.add('dark-mode');
+                            }
+                        } catch (e) { console.error(e); }
                     })();
                 </script>
+			</head>
+			<body>
 				<div class="theme-switch-wrapper">
 					<label class="theme-switch" for="checkbox">
 						<input type="checkbox" id="checkbox" />
@@ -2262,7 +2266,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
 				<script>
                     window.addEventListener('load', () => {
-                        document.body.classList.remove('no-transition');
+                        document.documentElement.classList.remove('no-transition');
                     });
 
 					function copyToClipboard(text, qrcode) {
@@ -2307,10 +2311,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 					function switchTheme(e) {
 						if (e.target.checked) {
-							document.body.classList.add('dark-mode');
+							document.documentElement.classList.add('dark-mode');
 							localStorage.setItem('theme', 'dark-mode');
 						} else {
-							document.body.classList.remove('dark-mode');
+							document.documentElement.classList.remove('dark-mode');
 							localStorage.setItem('theme', 'light-mode');
 						}    
 					}
@@ -2865,7 +2869,7 @@ async function handleGetRequest(env, txt) {
 
     const html = `
         <!DOCTYPE html>
-        <html>
+        <html lang="zh-CN">
         <head>
             <title>优选订阅列表</title>
             <meta charset="utf-8">
@@ -2882,13 +2886,13 @@ async function handleGetRequest(env, txt) {
 					--visited-link-color: #6c00a2;
                 }
 
-                body.dark-mode {
+                html.dark-mode {
                     --primary-color: #589bff;
                     --secondary-color: #458cff;
-                    --border-color: #333;
+                    --border-color: #3c3c3c;
                     --text-color: #e0e0e0;
                     --background-color: #1c1c1e;
-                    --section-bg: #2a2a2a;
+					--section-bg: #2a2a2a;
 					--link-color: #8ab4f8;
 					--visited-link-color: #c58af9;
                 }
@@ -2900,16 +2904,19 @@ async function handleGetRequest(env, txt) {
                     line-height: 1.6;
                     color: var(--text-color);
                     background-color: var(--background-color);
-                    transition: background-color 0.3s, color 0.3s;
                 }
 				
-                .no-transition, .no-transition * {
-                    -webkit-transition: none !important;
-                    -moz-transition: none !important;
-                    -o-transition: none !important;
-                    transition: none !important;
-                }
+				html.no-transition, html.no-transition * {
+					-webkit-transition: none !important;
+					-moz-transition: none !important;
+					-o-transition: none !important;
+					transition: none !important;
+				}
 
+				body {
+					transition: background-color 0.3s, color 0.3s;
+				}
+				
 				a {
 					color: var(--link-color);
 					text-decoration: none;
@@ -2926,13 +2933,13 @@ async function handleGetRequest(env, txt) {
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: var(--section-bg);
+                    background: var(--section-bg, white);
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                 }
                 
-                body.dark-mode .container {
+                html.dark-mode .container {
                     background: #242526;
                 }
 
@@ -2960,21 +2967,28 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     line-height: 1.5;
                     resize: vertical;
-                    transition: border-color 0.3s ease;
-                    background-color: var(--section-bg);
+                    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+                    background-color: var(--section-bg, white);
                     color: var(--text-color);
                 }
                 
-                body.dark-mode .editor {
+                html.dark-mode .editor {
                     background-color: #2a2a2a;
                 }
-
 
                 .editor:focus {
                     outline: none;
                     border-color: var(--primary-color);
-                    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
+                    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
                 }
+				
+				html.dark-mode .editor:focus,
+				html.dark-mode .setting-editor:focus {
+					outline: none;
+					border-color: var(--primary-color);
+					box-shadow: 0 0 0 2px rgba(88, 155, 255, 0.25);
+				}
+
 
                 .button-group {
                     display: flex;
@@ -3021,7 +3035,7 @@ async function handleGetRequest(env, txt) {
                     color: #666;
                 }
 				
-				body.dark-mode .save-status {
+				html.dark-mode .save-status {
                     color: var(--text-color);
                 }
 
@@ -3039,10 +3053,9 @@ async function handleGetRequest(env, txt) {
                     padding: 15px;
                     margin: 10px 0;
                     border-radius: 0 8px 8px 0;
-                    word-break: break-all;
                 }
                 
-                body.dark-mode .notice-content {
+                html.dark-mode .notice-content {
 						background: #3a3a3a;
 				}
 
@@ -3060,7 +3073,7 @@ async function handleGetRequest(env, txt) {
                     border: 1px solid var(--border-color);
                 }
                 
-                 body.dark-mode .advanced-settings {
+                 html.dark-mode .advanced-settings {
 						background: #3a3a3a;
 				}
 
@@ -3093,7 +3106,7 @@ async function handleGetRequest(env, txt) {
                     font-weight: 500;
                 }
                 
-                 body.dark-mode .setting-header {
+                 html.dark-mode .setting-header {
 						background: #424242;
 				}
 
@@ -3103,7 +3116,7 @@ async function handleGetRequest(env, txt) {
                     background-color: #fafafa;
                 }
                 
-                 body.dark-mode .setting-content {
+                 html.dark-mode .setting-content {
 						background: #3a3a3a;
 				}
 				 
@@ -3112,7 +3125,7 @@ async function handleGetRequest(env, txt) {
 					 color: #666;
 				 }
 
-				 body.dark-mode .setting-content p {
+				 html.dark-mode .setting-content p {
 					 color: #bbb;
 				 }
 				 
@@ -3131,7 +3144,7 @@ async function handleGetRequest(env, txt) {
                     color: var(--text-color);
                 }
 				
-				body.dark-mode .setting-editor {
+				html.dark-mode .setting-editor {
 					background-color: #2a2a2a;
 					color: #e0e0e0;
 				}
@@ -3140,7 +3153,7 @@ async function handleGetRequest(env, txt) {
 					color: #aaa;
 				}
 				
-				body.dark-mode .setting-editor::placeholder {
+				html.dark-mode .setting-editor::placeholder {
 					color: #666;
 				}
 
@@ -3215,17 +3228,19 @@ async function handleGetRequest(env, txt) {
                     }
                 }
             </style>
-        </head>
-        <body class="no-transition">
             <script>
-                // Anti-flicker script
                 (function() {
-                    const theme = localStorage.getItem('theme');
-                    if (theme === 'dark-mode') {
-                        document.body.classList.add('dark-mode');
-                    }
+                    document.documentElement.classList.add('no-transition');
+                    try {
+                        const theme = localStorage.getItem('theme');
+                        if (theme === 'dark-mode') {
+                            document.documentElement.classList.add('dark-mode');
+                        }
+                    } catch (e) { console.error(e); }
                 })();
             </script>
+        </head>
+        <body>
             <div class="theme-switch-wrapper">
                 <label class="theme-switch" for="checkbox">
                     <input type="checkbox" id="checkbox" />
@@ -3358,9 +3373,8 @@ async function handleGetRequest(env, txt) {
             </div>
 
             <script>
-                // Re-enable transitions after page load
                 window.addEventListener('load', () => {
-                    document.body.classList.remove('no-transition');
+                    document.documentElement.classList.remove('no-transition');
                 });
                 function goBack() {
                     const pathParts = window.location.pathname.split('/');
@@ -3475,10 +3489,10 @@ async function handleGetRequest(env, txt) {
                 }
                 function switchTheme(e) {
                     if (e.target.checked) {
-                        document.body.classList.add('dark-mode');
+                        document.documentElement.classList.add('dark-mode');
                         localStorage.setItem('theme', 'dark-mode');
                     } else {
-                        document.body.classList.remove('dark-mode');
+                        document.documentElement.classList.remove('dark-mode');
                         localStorage.setItem('theme', 'light-mode');
                     }    
                 }
