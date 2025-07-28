@@ -3395,10 +3395,21 @@ async function handleGetRequest(env, txt) {
 
                 function toggleAdvancedSettings() {
                     const content = document.getElementById('advanced-settings-content');
-                    if (content.style.display === 'none' || !content.style.display) {
+                    const isOpening = content.style.display === 'none' || !content.style.display;
+
+                    if (isOpening) {
                         content.style.display = 'block';
                     } else {
                         content.style.display = 'none';
+                        
+                        const allSettings = document.querySelectorAll('.setting-content');
+                        allSettings.forEach(setting => {
+                            setting.style.display = 'none';
+                        });
+                        const allHeaders = document.querySelectorAll('.setting-header');
+                        allHeaders.forEach(header => {
+                            header.classList.remove('open');
+                        });
                     }
                 }
 
