@@ -2017,6 +2017,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						padding: 15px;
 						margin: 10px 0;
 						border-radius: 0 8px 8px 0;
+						word-break: break-all;
+						overflow-wrap: break-word;
 					}
 
 					.config-info {
@@ -2877,6 +2879,7 @@ async function handleGetRequest(env, txt) {
                     padding: 15px;
                     margin: 10px 0;
                     border-radius: 0 8px 8px 0;
+                    word-break: break-all;
                 }
 
                 .divider {
