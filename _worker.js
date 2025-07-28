@@ -1783,7 +1783,7 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQo='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 
@@ -1937,7 +1937,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					body.dark-mode {
 						--primary-color: #589bff;
 						--secondary-color: #458cff;
-						--border-color: #3c3c3c;
+						--border-color: #333;
 						--text-color: #e0e0e0;
 						--background-color: #1c1c1e;
 						--section-bg: #2a2a2a;
@@ -1954,7 +1954,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						background-color: var(--background-color);
 						transition: background-color 0.3s, color 0.3s;
 					}
-					
+
                     .no-transition, .no-transition * {
                         -webkit-transition: none !important;
                         -moz-transition: none !important;
@@ -2300,8 +2300,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					const currentTheme = localStorage.getItem('theme');
 
 					if (currentTheme) {
-						document.body.classList.add(currentTheme);
-					
 						if (currentTheme === 'dark-mode') {
 							toggleSwitch.checked = true;
 						}
@@ -2879,20 +2877,22 @@ async function handleGetRequest(env, txt) {
                     --border-color: #e0e0e0;
                     --text-color: #212529;
                     --background-color: #f5f5f5;
-                    --section-bg: white;
-                    --link-color: #1a0dab;
-                    --visited-link-color: #6c00a2;
+					--section-bg: white;
+					--link-color: #1a0dab;
+					--visited-link-color: #6c00a2;
                 }
+
                 body.dark-mode {
                     --primary-color: #589bff;
                     --secondary-color: #458cff;
-                    --border-color: #3c3c3c;
+                    --border-color: #333;
                     --text-color: #e0e0e0;
                     --background-color: #1c1c1e;
                     --section-bg: #2a2a2a;
-                    --link-color: #8ab4f8;
+					--link-color: #8ab4f8;
 					--visited-link-color: #c58af9;
                 }
+
                 body {
                     margin: 0;
                     padding: 20px;
@@ -2902,33 +2902,40 @@ async function handleGetRequest(env, txt) {
                     background-color: var(--background-color);
                     transition: background-color 0.3s, color 0.3s;
                 }
+				
                 .no-transition, .no-transition * {
                     -webkit-transition: none !important;
                     -moz-transition: none !important;
                     -o-transition: none !important;
                     transition: none !important;
                 }
+
 				a {
 					color: var(--link-color);
 					text-decoration: none;
 				}
+				
 				a:visited {
 					color: var(--visited-link-color);
 				}
+
 				a:hover {
 					text-decoration: underline;
 				}
+
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: var(--section-bg, white);
+                    background: var(--section-bg);
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                 }
+                
                 body.dark-mode .container {
                     background: #242526;
                 }
+
                 .title {
                     font-size: 1.5em;
                     color: var(--text-color);
@@ -2936,10 +2943,12 @@ async function handleGetRequest(env, txt) {
                     padding-bottom: 10px;
                     border-bottom: 2px solid var(--border-color);
                 }
+
                 .editor-container {
                     width: 100%;
                     margin: 20px 0;
                 }
+
                 .editor {
                     width: 100%;
                     height: 520px;
@@ -2952,23 +2961,28 @@ async function handleGetRequest(env, txt) {
                     line-height: 1.5;
                     resize: vertical;
                     transition: border-color 0.3s ease;
-                    background-color: var(--section-bg, white);
+                    background-color: var(--section-bg);
                     color: var(--text-color);
                 }
+                
                 body.dark-mode .editor {
                     background-color: #2a2a2a;
                 }
+
+
                 .editor:focus {
                     outline: none;
                     border-color: var(--primary-color);
                     box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
                 }
+
                 .button-group {
                     display: flex;
 					align-items: center;
                     gap: 12px;
                     margin-top: 15px;
                 }
+
                 .btn {
                     padding: 8px 20px;
                     border: none;
@@ -2978,31 +2992,39 @@ async function handleGetRequest(env, txt) {
                     cursor: pointer;
                     transition: all 0.3s ease;
                 }
+
                 .btn:disabled {
                     opacity: 0.6;
                     cursor: not-allowed;
                 }
+
                 .btn-primary {
                     background: var(--primary-color);
                     color: #fff;
                 }
+
                 .btn-primary:hover:not(:disabled) {
                     background: var(--secondary-color);
                 }
+
                 .btn-secondary {
                     background: #6c757d;
                     color: #fff;
                 }
+
                 .btn-secondary:hover:not(:disabled) {
                     background: #5c636a;
                 }
+
                 .save-status {
                     font-size: 14px;
                     color: #666;
                 }
+				
 				body.dark-mode .save-status {
                     color: var(--text-color);
                 }
+
                 .notice-toggle {
                     color: var(--primary-color);
                     cursor: pointer;
@@ -3010,6 +3032,7 @@ async function handleGetRequest(env, txt) {
                     margin: 10px 0;
                     font-weight: 500;
                 }
+
                 .notice-content {
                     background: #f8f9fa;
                     border-left: 4px solid var(--primary-color);
@@ -3018,14 +3041,17 @@ async function handleGetRequest(env, txt) {
                     border-radius: 0 8px 8px 0;
                     word-break: break-all;
                 }
+                
                 body.dark-mode .notice-content {
 						background: #3a3a3a;
 				}
+
                 .divider {
                     height: 1px;
                     background: var(--border-color);
                     margin: 20px 0;
                 }
+
                 .advanced-settings {
                     margin: 20px 0;
                     padding: 20px;
@@ -3033,9 +3059,11 @@ async function handleGetRequest(env, txt) {
                     border-radius: 8px;
                     border: 1px solid var(--border-color);
                 }
+                
                  body.dark-mode .advanced-settings {
 						background: #3a3a3a;
 				}
+
                 .advanced-settings-header {
                     display: flex;
                     justify-content: space-between;
@@ -3043,15 +3071,18 @@ async function handleGetRequest(env, txt) {
                     margin-bottom: 15px;
                     cursor: pointer;
                 }
+
                 #advanced-settings-content {
                     display: none;
                 }
+
                 .setting-item {
                     margin-bottom: 10px;
                     border: 1px solid var(--border-color);
                     border-radius: 6px;
                     overflow: hidden;
                 }
+
                 .setting-header {
                     display: flex;
                     justify-content: space-between;
@@ -3061,24 +3092,30 @@ async function handleGetRequest(env, txt) {
                     cursor: pointer;
                     font-weight: 500;
                 }
+                
                  body.dark-mode .setting-header {
 						background: #424242;
 				}
+
                 .setting-content {
                     display: none; /* Initially hidden */
                     padding: 15px;
                     background-color: #fafafa;
                 }
+                
                  body.dark-mode .setting-content {
 						background: #3a3a3a;
 				}
+				 
 				 .setting-content p {
 					 margin: 5px 0;
 					 color: #666;
 				 }
+
 				 body.dark-mode .setting-content p {
 					 color: #bbb;
 				 }
+				 
                 .setting-editor {
                     width: 100%;
                     min-height: 80px;
@@ -3093,16 +3130,20 @@ async function handleGetRequest(env, txt) {
                     background-color: #fff;
                     color: var(--text-color);
                 }
+				
 				body.dark-mode .setting-editor {
 					background-color: #2a2a2a;
 					color: #e0e0e0;
 				}
+
 				.setting-editor::placeholder {
 					color: #aaa;
 				}
+				
 				body.dark-mode .setting-editor::placeholder {
 					color: #666;
 				}
+
                 .theme-switch-wrapper {
 						display: flex;
 						align-items: center;
@@ -3110,15 +3151,18 @@ async function handleGetRequest(env, txt) {
 						top: 15px;
 						right: 15px;
 					}
+
 					.theme-switch {
 						display: inline-block;
 						height: 20px;
 						position: relative;
 						width: 36px;
 					}
+
 					.theme-switch input {
 						display:none;
 					}
+
 					.slider {
 						background-color: #ccc;
 						bottom: 0;
@@ -3129,6 +3173,7 @@ async function handleGetRequest(env, txt) {
 						top: 0;
 						transition: .4s;
 					}
+
 					.slider:before {
 						background-color: #fff;
 						bottom: 3px;
@@ -3139,25 +3184,32 @@ async function handleGetRequest(env, txt) {
 						transition: .4s;
 						width: 14px;
 					}
+
 					input:checked + .slider {
 						background-color: var(--primary-color);
 					}
+
 					input:checked + .slider:before {
 						transform: translateX(16px);
 					}
+
 					.slider.round {
 						border-radius: 20px;
 					}
+
 					.slider.round:before {
 						border-radius: 50%;
 					}
+
                 @media (max-width: 768px) {
                     body {
                         padding: 10px;
                     }
+
                     .container {
                         padding: 15px;
                     }
+
                     .editor {
                         height: 400px;
                     }
@@ -3166,6 +3218,7 @@ async function handleGetRequest(env, txt) {
         </head>
         <body class="no-transition">
             <script>
+                // Anti-flicker script
                 (function() {
                     const theme = localStorage.getItem('theme');
                     if (theme === 'dark-mode') {
@@ -3305,6 +3358,7 @@ async function handleGetRequest(env, txt) {
             </div>
 
             <script>
+                // Re-enable transitions after page load
                 window.addEventListener('load', () => {
                     document.body.classList.remove('no-transition');
                 });
@@ -3415,7 +3469,6 @@ async function handleGetRequest(env, txt) {
                 const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
                 const currentTheme = localStorage.getItem('theme');
                 if (currentTheme) {
-                    document.body.classList.add(currentTheme);
                     if (currentTheme === 'dark-mode') {
                         toggleSwitch.checked = true;
                     }
