@@ -762,7 +762,7 @@ export default {
 					let total = 24 * 1099511627776;
 
 					if (userAgent && userAgent.includes('mozilla')) {
-						return new Response(secureProtoConfig, {
+						return new Response(`<div style="font-size:13px;">${secureProtoConfig}</div>`, {
 							status: 200,
 							headers: {
 								"Content-Type": "text/html;charset=utf-8",
@@ -1917,7 +1917,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${有效时间} 天<br>UPTIME（动态UUID更新时间）: ${更新时间} 时（北京时间）<br><br>` : `${userIDTime}`;
 		const 节点配置页 = `
 			<!DOCTYPE html>
-			<html lang="zh-CN">
+			<html>
 			<head>
 				<meta charset="utf-8">
 				<meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1934,17 +1934,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						--visited-link-color: #6c00a2;
 					}
 
-					html.dark-mode {
-						--primary-color: #589bff;
-						--secondary-color: #458cff;
-						--border-color: #3c3c3c;
-						--text-color: #e0e0e0;
-						--background-color: #1c1c1e;
-						--section-bg: #2a2a2a;
-						--link-color: #8ab4f8;
-						--visited-link-color: #c58af9;
-					}
-
 					body {
 						margin: 0;
 						padding: 20px;
@@ -1952,6 +1941,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
+						transition: background-color 0.3s, color 0.3s;
 					}
 
 					a {
@@ -2008,10 +1998,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						word-break: break-all;
 					}
 
-					html.dark-mode .subscription-link {
-						background: #3a3a3a;
-					}
-
 					.qrcode-container {
 						margin: 10px 0;
 						text-align: center;
@@ -2034,11 +2020,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						word-break: break-all;
 						overflow-wrap: break-word;
 					}
-					
-					html.dark-mode .notice-content {
-						background: #3a3a3a;
-					}
-					
+
 					.config-info {
 						background: #f8f9fa;
 						padding: 15px;
@@ -2046,10 +2028,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						font-family: Monaco, Consolas, "Courier New", monospace;
 						font-size: 13px;
 						overflow-x: auto;
-					}
-					
-					html.dark-mode .config-info {
-						background: #3a3a3a;
 					}
 
 					.copy-button {
@@ -2062,70 +2040,11 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						cursor: pointer;
 						font-size: 14px;
 						margin: 5px 0;
-						transition: background-color 0.2s;
 					}
 
 					.copy-button:hover {
 						background: var(--secondary-color);
 					}
-					
-					.theme-switch-wrapper {
-						display: flex;
-						align-items: center;
-						position: fixed;
-						top: 15px;
-						right: 15px;
-					}
-
-					.theme-switch {
-						display: inline-block;
-						height: 20px;
-						position: relative;
-						width: 36px;
-					}
-
-					.theme-switch input {
-						display:none;
-					}
-
-					.slider {
-						background-color: #ccc;
-						bottom: 0;
-						cursor: pointer;
-						left: 0;
-						position: absolute;
-						right: 0;
-						top: 0;
-						transition: .4s;
-					}
-
-					.slider:before {
-						background-color: #fff;
-						bottom: 3px;
-						content: "";
-						height: 14px;
-						left: 3px;
-						position: absolute;
-						transition: .4s;
-						width: 14px;
-					}
-
-					input:checked + .slider {
-						background-color: var(--primary-color);
-					}
-
-					input:checked + .slider:before {
-						transform: translateX(16px);
-					}
-
-					.slider.round {
-						border-radius: 20px;
-					}
-
-					.slider.round:before {
-						border-radius: 50%;
-					}
-
 
 					@media (max-width: 768px) {
 						body {
@@ -2141,24 +2060,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						}
 					}
 				</style>
-                <script>
-                    (function() {
-                        try {
-                            const theme = localStorage.getItem('theme');
-                            if (theme === 'dark-mode') {
-                                document.documentElement.classList.add('dark-mode');
-                            }
-                        } catch (e) { console.error(e); }
-                    })();
-                </script>
 			</head>
 			<body>
-				<div class="theme-switch-wrapper">
-					<label class="theme-switch" for="checkbox">
-						<input type="checkbox" id="checkbox" />
-						<div class="slider round"></div>
-					</label>
-				</div>
 				<div class="container">
 					<div class="section">
 						<div class="section-title">📋 订阅信息</div>
@@ -2286,29 +2189,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 							noticeToggle.textContent = '实用订阅技巧 ∨';
 						}
 					}
-					
-					const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
-					
-					(function() {
-						const currentTheme = localStorage.getItem('theme');
-						if (currentTheme === 'dark-mode') {
-							toggleSwitch.checked = true;
-						}
-					})();
-					
-
-					function switchTheme(e) {
-						if (e.target.checked) {
-							document.documentElement.classList.add('dark-mode');
-							localStorage.setItem('theme', 'dark-mode');
-						} else {
-							document.documentElement.classList.remove('dark-mode');
-							localStorage.setItem('theme', 'light-mode');
-						}    
-					}
-
-					toggleSwitch.addEventListener('change', switchTheme, false);
-
 				</script>
 			</body>
 			</html>
@@ -2869,20 +2749,9 @@ async function handleGetRequest(env, txt) {
                     --border-color: #e0e0e0;
                     --text-color: #212529;
                     --background-color: #f5f5f5;
-					--section-bg: white;
-					--link-color: #1a0dab;
-					--visited-link-color: #6c00a2;
-                }
-
-                html.dark-mode {
-                    --primary-color: #589bff;
-                    --secondary-color: #458cff;
-                    --border-color: #3c3c3c;
-                    --text-color: #e0e0e0;
-                    --background-color: #1c1c1e;
-					--section-bg: #2a2a2a;
-					--link-color: #8ab4f8;
-					--visited-link-color: #c58af9;
+                    --section-bg: white;
+                    --link-color: #1a0dab;
+                    --visited-link-color: #6c00a2;
                 }
 
                 body {
@@ -2893,31 +2762,27 @@ async function handleGetRequest(env, txt) {
                     color: var(--text-color);
                     background-color: var(--background-color);
                 }
-				
-				a {
-					color: var(--link-color);
-					text-decoration: none;
-				}
-				
-				a:visited {
-					color: var(--visited-link-color);
-				}
 
-				a:hover {
-					text-decoration: underline;
-				}
+                a {
+                    color: var(--link-color);
+                    text-decoration: none;
+                }
+
+                a:visited {
+                    color: var(--visited-link-color);
+                }
+
+                a:hover {
+                    text-decoration: underline;
+                }
 
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: var(--section-bg, white);
+                    background: var(--section-bg);
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }
-                
-                html.dark-mode .container {
-                    background: #242526;
                 }
 
                 .title {
@@ -2933,28 +2798,6 @@ async function handleGetRequest(env, txt) {
                     margin: 20px 0;
                 }
 
-                .editor, .setting-editor {
-                    background-color: var(--section-bg, white);
-                    color: var(--text-color);
-                }
-                
-                html.dark-mode .editor, html.dark-mode .setting-editor {
-                    background-color: #2a2a2a;
-                }
-
-                .editor:focus, .setting-editor:focus {
-                    outline: none;
-                    border-color: var(--primary-color);
-                    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
-                }
-				
-				html.dark-mode .editor:focus,
-				html.dark-mode .setting-editor:focus {
-					outline: none;
-					border-color: var(--primary-color);
-					box-shadow: 0 0 0 2px rgba(88, 155, 255, 0.25);
-				}
-
                 .editor {
                     width: 100%;
                     height: 520px;
@@ -2966,11 +2809,20 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     line-height: 1.5;
                     resize: vertical;
+                    transition: border-color 0.3s ease;
+                    background-color: var(--section-bg);
+                    color: var(--text-color);
+                }
+
+                .editor:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
                 }
 
                 .button-group {
                     display: flex;
-					align-items: center;
+                    align-items: center;
                     gap: 12px;
                     margin-top: 15px;
                 }
@@ -2982,7 +2834,7 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     font-weight: 500;
                     cursor: pointer;
-                    transition: all 0.2s ease;
+                    transition: all 0.3s ease;
                 }
 
                 .btn:disabled {
@@ -3012,10 +2864,6 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     color: #666;
                 }
-				
-				html.dark-mode .save-status {
-                    color: var(--text-color);
-                }
 
                 .notice-toggle {
                     color: var(--primary-color);
@@ -3033,10 +2881,6 @@ async function handleGetRequest(env, txt) {
                     border-radius: 0 8px 8px 0;
                     word-break: break-all;
                 }
-                
-                html.dark-mode .notice-content {
-						background: #3a3a3a;
-				}
 
                 .divider {
                     height: 1px;
@@ -3051,10 +2895,6 @@ async function handleGetRequest(env, txt) {
                     border-radius: 8px;
                     border: 1px solid var(--border-color);
                 }
-                
-                 html.dark-mode .advanced-settings {
-						background: #3a3a3a;
-				}
 
                 .advanced-settings-header {
                     display: flex;
@@ -3084,30 +2924,18 @@ async function handleGetRequest(env, txt) {
                     cursor: pointer;
                     font-weight: 500;
                 }
-                
-                 html.dark-mode .setting-header {
-						background: #424242;
-				}
 
                 .setting-content {
-                    display: none; /* Initially hidden */
+                    display: none;
                     padding: 15px;
                     background-color: #fafafa;
                 }
-                
-                 html.dark-mode .setting-content {
-						background: #3a3a3a;
-				}
-				 
-				 .setting-content p {
-					 margin: 5px 0;
-					 color: #666;
-				 }
 
-				 html.dark-mode .setting-content p {
-					 color: #bbb;
-				 }
-				 
+                 .setting-content p {
+                     margin: 5px 0;
+                     color: #666;
+                 }
+
                 .setting-editor {
                     width: 100%;
                     min-height: 80px;
@@ -3119,105 +2947,28 @@ async function handleGetRequest(env, txt) {
                     font-family: Monaco, Consolas, "Courier New", monospace;
                     font-size: 14px;
                     resize: vertical;
+                    background-color: #fff;
+                    color: var(--text-color);
                 }
-				
-				.setting-editor::placeholder {
-					color: #aaa;
-				}
-				
-				html.dark-mode .setting-editor::placeholder {
-					color: #666;
-				}
 
-                .theme-switch-wrapper {
-						display: flex;
-						align-items: center;
-						position: fixed;
-						top: 15px;
-						right: 15px;
-					}
-
-					.theme-switch {
-						display: inline-block;
-						height: 20px;
-						position: relative;
-						width: 36px;
-					}
-
-					.theme-switch input {
-						display:none;
-					}
-
-					.slider {
-						background-color: #ccc;
-						bottom: 0;
-						cursor: pointer;
-						left: 0;
-						position: absolute;
-						right: 0;
-						top: 0;
-						transition: .4s;
-					}
-
-					.slider:before {
-						background-color: #fff;
-						bottom: 3px;
-						content: "";
-						height: 14px;
-						left: 3px;
-						position: absolute;
-						transition: .4s;
-						width: 14px;
-					}
-
-					input:checked + .slider {
-						background-color: var(--primary-color);
-					}
-
-					input:checked + .slider:before {
-						transform: translateX(16px);
-					}
-
-					.slider.round {
-						border-radius: 20px;
-					}
-
-					.slider.round:before {
-						border-radius: 50%;
-					}
+                .setting-editor::placeholder {
+                    color: #aaa;
+                }
 
                 @media (max-width: 768px) {
                     body {
                         padding: 10px;
                     }
-
                     .container {
                         padding: 15px;
                     }
-
                     .editor {
                         height: 400px;
                     }
                 }
             </style>
-            <script>
-                (function() {
-                    try {
-                        const theme = localStorage.getItem('theme');
-                        if (theme === 'dark-mode') {
-                            document.documentElement.classList.add('dark-mode');
-                        }
-                    } catch (e) { console.error(e); }
-                })();
-            </script>
         </head>
         <body>
-            <div class="theme-switch-wrapper">
-                <label class="theme-switch" for="checkbox">
-                    <input type="checkbox" id="checkbox" />
-                    <div class="slider round"></div>
-                </label>
-            </div>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
 
@@ -3413,7 +3164,6 @@ async function handleGetRequest(env, txt) {
                     }
                 }
 
-
                 function toggleSetting(headerElement) {
                     const content = headerElement.nextElementSibling;
                     headerElement.classList.toggle('open');
@@ -3460,25 +3210,6 @@ async function handleGetRequest(env, txt) {
                         console.error('保存设置时发生错误:', error);
                     }
                 }
-                const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
-                
-                (function() {
-                    const currentTheme = localStorage.getItem('theme');
-                    if (currentTheme === 'dark-mode') {
-                        toggleSwitch.checked = true;
-                    }
-                })();
-
-                function switchTheme(e) {
-                    if (e.target.checked) {
-                        document.documentElement.classList.add('dark-mode');
-                        localStorage.setItem('theme', 'dark-mode');
-                    } else {
-                        document.documentElement.classList.remove('dark-mode');
-                        localStorage.setItem('theme', 'light-mode');
-                    }    
-                }
-                toggleSwitch.addEventListener('change', switchTheme, false);
             </script>
         </body>
         </html>
