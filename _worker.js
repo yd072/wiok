@@ -1960,10 +1960,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                         -o-transition: none !important;
                         transition: none !important;
                     }
-					
-					body {
-						transition: background-color 0.3s, color 0.3s;
-					}
 
 					a {
 						color: var(--link-color);
@@ -2071,6 +2067,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						cursor: pointer;
 						font-size: 14px;
 						margin: 5px 0;
+						transition: background-color 0.2s;
 					}
 
 					.copy-button:hover {
@@ -2301,13 +2298,14 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					}
 					
 					const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
-					const currentTheme = localStorage.getItem('theme');
-
-					if (currentTheme) {
+					
+					(function() {
+						const currentTheme = localStorage.getItem('theme');
 						if (currentTheme === 'dark-mode') {
 							toggleSwitch.checked = true;
 						}
-					}
+					})();
+					
 
 					function switchTheme(e) {
 						if (e.target.checked) {
@@ -2912,10 +2910,6 @@ async function handleGetRequest(env, txt) {
 					-o-transition: none !important;
 					transition: none !important;
 				}
-
-				body {
-					transition: background-color 0.3s, color 0.3s;
-				}
 				
 				a {
 					color: var(--link-color);
@@ -2956,27 +2950,16 @@ async function handleGetRequest(env, txt) {
                     margin: 20px 0;
                 }
 
-                .editor {
-                    width: 100%;
-                    height: 520px;
-                    padding: 15px;
-                    box-sizing: border-box;
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    font-family: Monaco, Consolas, "Courier New", monospace;
-                    font-size: 14px;
-                    line-height: 1.5;
-                    resize: vertical;
-                    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+                .editor, .setting-editor {
                     background-color: var(--section-bg, white);
                     color: var(--text-color);
                 }
                 
-                html.dark-mode .editor {
+                html.dark-mode .editor, html.dark-mode .setting-editor {
                     background-color: #2a2a2a;
                 }
 
-                .editor:focus {
+                .editor:focus, .setting-editor:focus {
                     outline: none;
                     border-color: var(--primary-color);
                     box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
@@ -2989,6 +2972,18 @@ async function handleGetRequest(env, txt) {
 					box-shadow: 0 0 0 2px rgba(88, 155, 255, 0.25);
 				}
 
+                .editor {
+                    width: 100%;
+                    height: 520px;
+                    padding: 15px;
+                    box-sizing: border-box;
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
+                    font-size: 14px;
+                    line-height: 1.5;
+                    resize: vertical;
+                }
 
                 .button-group {
                     display: flex;
@@ -3004,7 +2999,7 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     font-weight: 500;
                     cursor: pointer;
-                    transition: all 0.3s ease;
+                    transition: all 0.2s ease;
                 }
 
                 .btn:disabled {
@@ -3140,15 +3135,8 @@ async function handleGetRequest(env, txt) {
                     font-family: Monaco, Consolas, "Courier New", monospace;
                     font-size: 14px;
                     resize: vertical;
-                    background-color: #fff;
-                    color: var(--text-color);
                 }
 				
-				html.dark-mode .setting-editor {
-					background-color: #2a2a2a;
-					color: #e0e0e0;
-				}
-
 				.setting-editor::placeholder {
 					color: #aaa;
 				}
@@ -3376,6 +3364,7 @@ async function handleGetRequest(env, txt) {
                 window.addEventListener('load', () => {
                     document.documentElement.classList.remove('no-transition');
                 });
+
                 function goBack() {
                     const pathParts = window.location.pathname.split('/');
                     pathParts.pop(); // 移除 "edit"
@@ -3481,12 +3470,14 @@ async function handleGetRequest(env, txt) {
                     }
                 }
                 const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
-                const currentTheme = localStorage.getItem('theme');
-                if (currentTheme) {
+                
+                (function() {
+                    const currentTheme = localStorage.getItem('theme');
                     if (currentTheme === 'dark-mode') {
                         toggleSwitch.checked = true;
                     }
-                }
+                })();
+
                 function switchTheme(e) {
                     if (e.target.checked) {
                         document.documentElement.classList.add('dark-mode');
