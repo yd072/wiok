@@ -1,3 +1,4 @@
+
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -10,11 +11,15 @@ let subEmoji = 'true';
 let socks5Address = '';
 let parsedSocks5Address = {};
 let enableSocks = false;
+// --- HTTP 代理相关变量 ---
+let httpProxyAddress = '';
+let parsedHttpProxyAddress = {};
+let enableHttpProxy = false;
 
 let noTLS = 'false';
 const expire = -1;
-let proxyIPs;
-let socks5s;
+let proxyIPs = [];
+let socks5s = [];
 let go2Socks5s = [
 	'*ttvnw.net',
 	'*tapecontent.net',
@@ -29,8 +34,8 @@ let addressescsv = [];
 let DLS = 8;
 let remarkIndex = 1;
 let FileName = atob('ZWRnZXR1bm5lbA==');
-let BotToken;
-let ChatID;
+let BotToken = '';
+let ChatID = '';
 let proxyhosts = [];
 let proxyhostsURL = '';
 let RproxyIP = 'false';
@@ -42,20 +47,19 @@ let userIDLow;
 let userIDTime = "";
 let proxyIPPool = [];
 let path = '/?ed=2560';
-let 动态UUID = null;  
+let 动态UUID = null;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 let DNS64Server = '';
 
-// 添加工具函数
+/**
+ * 辅助工具函数
+ */
 const utils = {
-	// UUID校验
 	isValidUUID(uuid) {
 		const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 		return uuidPattern.test(uuid);
 	},
-
-	// Base64处理
 	base64: {
 		toArrayBuffer(base64Str) {
 			if (!base64Str) return { earlyData: undefined, error: null };
@@ -70,6 +74,128 @@ const utils = {
 		}
 	},
 };
+
+/**
+ * 集中加载所有配置，严格执行 KV > 环境变量 > 默认值的优先级
+ * @param {any} env
+ */
+async function loadConfigurations(env) {
+    // 1. 从环境变量加载，如果存在则覆盖默认值
+    if (env.UUID || env.uuid || env.PASSWORD || env.pswd) userID = env.UUID || env.uuid || env.PASSWORD || env.pswd;
+    if (env.PROXYIP || env.proxyip) proxyIP = env.PROXYIP || env.proxyip;
+    if (env.SOCKS5) socks5Address = env.SOCKS5;
+    // --- [修改] 从环境变量加载 HTTP  ---
+    if (env.HTTP) httpProxyAddress = env.HTTP;
+    if (env.SUBAPI) subConverter = atob(env.SUBAPI);
+    if (env.SUBCONFIG) subConfig = atob(env.SUBCONFIG);
+    if (env.SUBNAME) FileName = atob(env.SUBNAME);
+    if (env.DNS64 || env.NAT64) DNS64Server = env.DNS64 || env.NAT64;
+
+    if (env.ADD) addresses = await 整理(env.ADD);
+    if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
+    if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
+    if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
+    if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
+    if (env.LINK) link = await 整理(env.LINK);
+    if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
+    if (env.BAN) banHosts = (await 整理(env.BAN)).map(h => atob(h));
+
+    if (env.DLS) DLS = Number(env.DLS);
+    if (env.CSVREMARK) remarkIndex = Number(env.CSVREMARK);
+    if (env.TGTOKEN) BotToken = env.TGTOKEN;
+    if (env.TGID) ChatID = env.TGID;
+    if (env.SUBEMOJI || env.EMOJI) subEmoji = env.SUBEMOJI || env.EMOJI;
+
+    // 2. 如果存在 KV，则使用 KV 的值覆盖所有之前的值
+    if (env.KV) {
+        try {
+            await 迁移地址列表(env, 'ADD.txt');
+
+            const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+            if (advancedSettingsJSON) {
+                const settings = JSON.parse(advancedSettingsJSON);
+                if (settings.proxyip && settings.proxyip.trim()) proxyIP = settings.proxyip;
+                if (settings.socks5 && settings.socks5.trim()) socks5Address = settings.socks5.split('\n')[0].trim();
+                // --- 从 KV 加载 httpproxy ---
+                if (settings.httpproxy && settings.httpproxy.trim()) httpProxyAddress = settings.httpproxy.split('\n')[0].trim();
+                if (settings.sub && settings.sub.trim()) env.SUB = settings.sub.trim().split('\n')[0];
+                if (settings.subapi && settings.subapi.trim()) subConverter = settings.subapi.trim().split('\n')[0];
+                if (settings.subconfig && settings.subconfig.trim()) subConfig = settings.subconfig.trim().split('\n')[0];
+                if (settings.nat64 && settings.nat64.trim()) DNS64Server = settings.nat64.trim().split('\n')[0];
+            }
+
+            const preferList = await env.KV.get('ADD.txt');
+            if (preferList) {
+                const 优选地址数组 = await 整理(preferList);
+                const 分类地址 = { 接口地址: new Set(), 链接地址: new Set(), 优选地址: new Set() };
+                for (const 元素 of 优选地址数组) {
+                    if (元素.startsWith('https://')) 分类地址.接口地址.add(元素);
+                    else if (元素.includes('://')) 分类地址.链接地址.add(元素);
+                    else 分类地址.优选地址.add(元素);
+                }
+                addressesapi = [...分类地址.接口地址];
+                link = [...分类地址.链接地址];
+                addresses = [...分类地址.优选地址];
+            }
+
+        } catch (e) {
+            console.error("从KV加载配置时出错: ", e);
+        }
+    }
+
+    // 3. 最终处理
+
+    if (subConverter.includes("http://")) {
+        subConverter = subConverter.split("//")[1];
+        subProtocol = 'http';
+    } else {
+        subConverter = subConverter.split("//")[1] || subConverter;
+    }
+
+    proxyIPs = await 整理(proxyIP);
+    proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+
+    socks5s = await 整理(socks5Address);
+    socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+	socks5Address = socks5Address.split('//')[1] || socks5Address;
+
+    // --- 解析和启用 HTTP 代理 ---
+    if (httpProxyAddress) {
+        try {
+            parsedHttpProxyAddress = httpProxyAddressParser(httpProxyAddress);
+            enableHttpProxy = true;
+        } catch (err) {
+            console.log(`解析HTTP代理地址时出错: ${err.toString()}`);
+            enableHttpProxy = false;
+        }
+    }
+}
+
+
+/**
+ * 解析 PROXYIP 字符串，提取地址和端口
+ * @param {string} proxyString
+ * @param {number} defaultPort
+ * @returns {{address: string, port: number}}
+ */
+function parseProxyIP(proxyString, defaultPort) {
+    let port = defaultPort;
+    let address = proxyString;
+
+    if (address.includes(']:')) {
+        [address, port] = address.split(']:');
+        address += ']';
+    } else if (address.includes(':')) {
+        [address, port] = address.split(':');
+    }
+
+    if (address.includes('.tp')) {
+        port = address.split('.tp')[1].split('.')[0] || port;
+    }
+
+    return { address: address.toLowerCase(), port: Number(port) };
+}
+
 
 // WebSocket连接管理类
 class WebSocketManager {
@@ -94,7 +220,7 @@ class WebSocketManager {
 		try {
 			this.webSocket.addEventListener('message', (event) => {
 				if (this.readableStreamCancel) return;
-				
+
 				if (!this.backpressure) {
 					this.processMessage(event.data, controller);
 				} else {
@@ -124,7 +250,7 @@ class WebSocketManager {
 		this.isProcessing = true;
 		try {
 			controller.enqueue(data);
-			
+
 			// 处理消息队列
 			while (this.messageQueue.length > 0 && !this.backpressure) {
 				const queuedData = this.messageQueue.shift();
@@ -153,7 +279,7 @@ class WebSocketManager {
 
 	handleStreamCancel(reason) {
 		if (this.readableStreamCancel) return;
-		
+
 		this.log(`Readable stream canceled, reason: ${reason}`);
 		this.readableStreamCancel = true;
 		this.cleanup();
@@ -193,6 +319,174 @@ class WebSocketManager {
 
 		safeCloseWebSocket(this.webSocket);
 	}
+}
+
+// =================================================================
+//  服务状态页 (Status Page)
+// =================================================================
+async function statusPage() {
+    const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Service Status</title>
+        <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0ZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiIGZpbGw9IiMyZGNlODkiLz48L3N2Zz4=">
+        <style>
+            :root {
+                --bg-color: #f4f7f9;
+                --card-bg-color: #ffffff;
+                --text-color: #333;
+                --primary-color: #0d6efd;
+                --secondary-color: #8898aa;
+                --border-color: #e9ecef;
+                --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            body {
+                margin: 0;
+                font-family: var(--font-family);
+                background-color: var(--bg-color);
+                color: var(--text-color);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                padding: 20px;
+                box-sizing: border-box;
+            }
+            .container {
+                max-width: 800px;
+                width: 100%;
+                background-color: var(--card-bg-color);
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                padding: 40px;
+                box-sizing: border-box;
+            }
+            .header {
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+            }
+            .header h1 {
+                margin: 0;
+                font-size: 24px;
+            }
+            .header .all-systems-operational {
+                color: var(--primary-color);
+                font-size: 18px;
+                font-weight: 600;
+                margin-top: 10px;
+            }
+            .service-group h2 {
+                font-size: 18px;
+                color: var(--text-color);
+                margin-bottom: 15px;
+            }
+            .service-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 15px 0;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .service-item:last-child {
+                border-bottom: none;
+            }
+            .service-name {
+                font-size: 16px;
+            }
+            .service-status {
+                font-size: 16px;
+                font-weight: 600;
+                color: var(--primary-color);
+            }
+            .footer {
+                margin-top: 30px;
+                text-align: center;
+                font-size: 14px;
+                color: var(--secondary-color);
+            }
+            .footer a {
+                color: var(--secondary-color);
+                text-decoration: none;
+            }
+            .footer a:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Service Status</h1>
+                <div class="all-systems-operational">✔ All Systems Operational</div>
+            </div>
+
+            <div class="service-group">
+                <h2>Backend Infrastructure</h2>
+                <div class="service-item">
+                    <span class="service-name">API Gateway</span>
+                    <span class="service-status">Operational</span>
+                </div>
+                <div class="service-item">
+                    <span class="service-name">Authentication Service</span>
+                    <span class="service-status">Operational</span>
+                </div>
+                 <div class="service-item">
+                    <span class="service-name">Storage Cluster</span>
+                    <span class="service-status">Operational</span>
+                </div>
+            </div>
+
+            <div class="service-group" style="margin-top: 30px;">
+                <h2>Real-time Data Services</h2>
+                <div class="service-item">
+                    <span class="service-name">WebSocket Push Service</span>
+                    <span class="service-status">Operational</span>
+                </div>
+                <div class="service-item">
+                    <span class="service-name">Real-time Data Pipeline</span>
+                    <span class="service-status">Operational</span>
+                </div>
+            </div>
+
+            <div class="footer">
+                <p>
+                    Last Updated:
+                    <span id="date-container"></span>
+                    <span id="time-container" class="notranslate"></span>
+                </p>
+                <a href="#" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
+            </div>
+        </div>
+        <script>
+            let lastDate = '';
+            function updateTimestamp() {
+                const now = new Date();
+                const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+                const currentDate = now.toLocaleDateString('en-US', dateOptions);
+                if (currentDate !== lastDate) {
+                    document.getElementById('date-container').textContent = currentDate;
+                    lastDate = currentDate;
+                }
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                const currentTimeString = ' ' + hours + ':' + minutes + ':' + seconds;
+                document.getElementById('time-container').textContent = currentTimeString;
+            }
+            setInterval(updateTimestamp, 1000);
+            updateTimestamp();
+        </script>
+    </body>
+    </html>
+    `;
+    return new Response(html, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
 }
 
 async function resolveToIPv6(target) {
@@ -357,17 +651,13 @@ async function resolveToIPv6(target) {
         if (isIPv6(target)) return target;
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
         const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
-        
-        // --- 关键修改 ---
+
         if (isIPv6(nat64)) {
             return nat64;
         } else {
-            // 如果没得到合法的IPv6，就抛出错误
             throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
         }
     } catch (error) {
-        // --- 关键修改 ---
-        // 将底层的错误继续向上抛出，而不是返回一个默认值
         throw new Error(`NAT64 resolution failed: ${error.message}`);
 	}
 }
@@ -375,9 +665,12 @@ async function resolveToIPv6(target) {
 export default {
 	async fetch(request, env, ctx) {
 		try {
+            // 1. 统一加载所有配置
+            await loadConfigurations(env);
+
+            // 2. 处理动态 UUID
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
-			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
 			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
 				动态UUID = env.KEY || env.TOKEN || userID;
 				有效时间 = Number(env.TIME) || 有效时间;
@@ -388,171 +681,12 @@ export default {
 				userIDTime = userIDs[2];
 			}
 
+            // 3. 检查 UUID 是否有效，若无效则显示新的伪装页面
 			if (!userID) {
-				// 生成美化后的系统信息页面
-				const html = `
-				<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1">
-							<title>系统信息</title>
-							<style>
-								:root {
-									--primary-color: #4CAF50;
-									--border-color: #e0e0e0;
-									--background-color: #f5f5f5;
-									--warning-bg: #fff3f3;
-									--warning-border: #ffcdd2;
-									--warning-text: #d32f2f;
-								}
-								
-								body {
-									margin: 0;
-									padding: 20px;
-									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-									line-height: 1.6;
-									background-color: var(--background-color);
-								}
-
-								.container {
-									max-width: 800px;
-									margin: 0 auto;
-									background: white;
-									padding: 25px;
-									border-radius: 10px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-								}
-
-								.title {
-									font-size: 1.5em;
-									color: var(--primary-color);
-									margin-bottom: 20px;
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.title .icon {
-									font-size: 1.2em;
-								}
-
-								.warning-box {
-									background-color: var(--warning-bg);
-									border: 1px solid var(--warning-border);
-									border-radius: 6px;
-									padding: 15px;
-									margin-bottom: 20px;
-									color: var(--warning-text);
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.warning-box .icon {
-									font-size: 1.2em;
-								}
-
-								.info-grid {
-									display: grid;
-									grid-template-columns: auto 1fr;
-									gap: 12px;
-									background: #fff;
-									border-radius: 8px;
-									overflow: hidden;
-								}
-
-								.info-row {
-									display: contents;
-								}
-
-								.info-row:hover > * {
-									background-color: #f8f9fa;
-								}
-
-								.info-label {
-									padding: 12px 15px;
-									color: #666;
-									font-weight: 500;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-value {
-									padding: 12px 15px;
-									color: #333;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-row:last-child .info-label,
-								.info-row:last-child .info-value {
-									border-bottom: none;
-								}
-
-								@media (max-width: 768px) {
-									body {
-										padding: 10px;
-									}
-									
-									.container {
-										padding: 15px;
-									}
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="title">
-									<span class="icon">🔍</span>
-									系统信息
-								</div>
-
-								<div class="warning-box">
-									<span class="icon">⚠️</span>
-									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
-								</div>
-
-								<div class="info-grid">
-									<div class="info-row">
-										<div class="info-label">TLS 版本</div>
-										<div class="info-value">${request.cf?.tlsVersion || 'TLSv1.3'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">HTTP 协议</div>
-										<div class="info-value">${request.cf?.httpProtocol || 'HTTP/2'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 TCP RTT</div>
-										<div class="info-value">${request.cf?.clientTcpRtt || '3'} ms</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">地理位置</div>
-										<div class="info-value">${request.cf?.continent || 'EU'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">时区</div>
-										<div class="info-value">${request.cf?.timezone || 'Europe/Vilnius'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 IP</div>
-										<div class="info-value">${request.headers.get('CF-Connecting-IP') || '127.0.0.1'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">User Agent</div>
-										<div class="info-value">${request.headers.get('User-Agent') || 'Mozilla/5.0'}</div>
-									</div>
-								</div>
-							</div>
-						</body>
-						</html>`;
-
-				return new Response(html, {
-					status: 200,
-					headers: {
-						'content-type': 'text/html;charset=utf-8',
-					},
-				});
+				return await statusPage();
 			}
 
+            // 4. 生成伪装信息
 			const currentDate = new Date();
 			currentDate.setHours(0, 0, 0, 0);
 			const timestamp = Math.ceil(currentDate.getTime() / 1000);
@@ -562,78 +696,19 @@ export default {
                 fakeUserIDSHA256.slice(8, 12),
                 fakeUserIDSHA256.slice(12, 16),
                 fakeUserIDSHA256.slice(16, 20),
-                fakeUserIDSHA256.slice(20, 32) 
+                fakeUserIDSHA256.slice(20, 32)
 			].join('-');
 
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
-			// 修改PROXYIP初始化逻辑
-			if (env.KV) {
-				try {
-					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
-					if (advancedSettingsJSON) {
-						const settings = JSON.parse(advancedSettingsJSON);
-						if (settings.proxyip && settings.proxyip.trim()) {
-							proxyIP = settings.proxyip;
-						}
-					}
-				} catch (error) {
-					console.error('从KV读取PROXYIP时发生错误:', error);
-				}
-			}
-			// 如果proxyIP为空，则使用环境变量或默认值
-			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
-			proxyIPs = await 整理(proxyIP);
-			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-
-			// 修改SOCKS5地址初始化逻辑
-			if (env.KV) {
-				try {
-					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
-					if (advancedSettingsJSON) {
-						const settings = JSON.parse(advancedSettingsJSON);
-						if (settings.socks5 && settings.socks5.trim()) {
-							socks5Address = settings.socks5.split('\n')[0].trim();
-						}
-					}
-				} catch (error) {
-					console.error('从KV读取SOCKS5时发生错误:', error);
-				}
-			}
-			// 如果socks5Address为空，则使用环境变量或默认值
-			socks5Address = socks5Address || env.SOCKS5 || '';
-			socks5s = await 整理(socks5Address);
-			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-			socks5Address = socks5Address.split('//')[1] || socks5Address;
-
-			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
-			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
-			if (env.BAN) banHosts = await 整理(env.BAN);
-			
-            // --- NAT64/DNS64 设置加载逻辑 ---
-            if (env.KV) {
-				try {
-					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
-					if (advancedSettingsJSON) {
-						const settings = JSON.parse(advancedSettingsJSON);
-						if (settings.nat64 && settings.nat64.trim()) {
-							DNS64Server = settings.nat64.trim().split('\n')[0];
-						}
-					}
-				} catch (error) {
-					console.error('从KV读取NAT64时发生错误:', error);
-                }
-            }
-			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
-
+            // 5. 处理 SOCKS5
 			if (socks5Address) {
 				try {
 					parsedSocks5Address = socks5AddressParser(socks5Address);
 					RproxyIP = env.RPROXYIP || 'false';
 					enableSocks = true;
 				} catch (err) {
-					let e = err;
-					console.log(e.toString());
+					console.log(err.toString());
 					RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 					enableSocks = false;
 				}
@@ -641,42 +716,20 @@ export default {
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 
+            // 6. 根据请求类型（WebSocket 或 HTTP）进行路由
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
-				if (env.ADD) addresses = await 整理(env.ADD);
-				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
-				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
-				if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
-				if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
-				DLS = Number(env.DLS) || DLS;
-				remarkIndex = Number(env.CSVREMARK) || remarkIndex;
-				BotToken = env.TGTOKEN || BotToken;
-				ChatID = env.TGID || ChatID;
-				FileName = env.SUBNAME || FileName;
-				subEmoji = env.SUBEMOJI || env.EMOJI || subEmoji;
-				if (subEmoji == '0') subEmoji = 'false';
-				if (env.LINK) link = await 整理(env.LINK);
-				let sub = env.SUB || '';
-				subConverter = env.SUBAPI || subConverter;
-				if (subConverter.includes("http://")) {
-					subConverter = subConverter.split("//")[1];
-					subProtocol = 'http';
-				} else {
-					subConverter = subConverter.split("//")[1] || subConverter;
-				}
-				subConfig = env.SUBCONFIG || subConfig;
-				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
+				// HTTP 请求处理
+                let sub = env.SUB || '';
+				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub').toLowerCase();
 				if (url.searchParams.has('notls')) noTLS = 'true';
 
 				if (url.searchParams.has('proxyip')) {
 					path = `/?proxyip=${url.searchParams.get('proxyip')}`;
 					RproxyIP = 'false';
-				} else if (url.searchParams.has('socks5')) {
-					path = `/?socks5=${url.searchParams.get('socks5')}`;
-					RproxyIP = 'false';
-				} else if (url.searchParams.has('socks')) {
-					path = `/?socks5=${url.searchParams.get('socks')}`;
+				} else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
+					path = `/?socks5=${url.searchParams.get('socks5') || url.searchParams.get('socks')}`;
 					RproxyIP = 'false';
 				}
 
@@ -685,180 +738,18 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
-						// 生成美化后的系统信息页面
-						const html = `
-						<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1">
-							<title>系统信息</title>
-							<style>
-								:root {
-									--primary-color: #4CAF50;
-									--border-color: #e0e0e0;
-									--background-color: #f5f5f5;
-									--warning-bg: #fff3f3;
-									--warning-border: #ffcdd2;
-									--warning-text: #d32f2f;
-								}
-								
-								body {
-									margin: 0;
-									padding: 20px;
-									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-									line-height: 1.6;
-									background-color: var(--background-color);
-								}
-
-								.container {
-									max-width: 800px;
-									margin: 0 auto;
-									background: white;
-									padding: 25px;
-									border-radius: 10px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-								}
-
-								.title {
-									font-size: 1.5em;
-									color: var(--primary-color);
-									margin-bottom: 20px;
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.title .icon {
-									font-size: 1.2em;
-								}
-
-								.warning-box {
-									background-color: var(--warning-bg);
-									border: 1px solid var(--warning-border);
-									border-radius: 6px;
-									padding: 15px;
-									margin-bottom: 20px;
-									color: var(--warning-text);
-									display: flex;
-									align-items: center;
-									gap: 10px;
-								}
-
-								.warning-box .icon {
-									font-size: 1.2em;
-								}
-
-								.info-grid {
-									display: grid;
-									grid-template-columns: auto 1fr;
-									gap: 12px;
-									background: #fff;
-									border-radius: 8px;
-									overflow: hidden;
-								}
-
-								.info-row {
-									display: contents;
-								}
-
-								.info-row:hover > * {
-									background-color: #f8f9fa;
-								}
-
-								.info-label {
-									padding: 12px 15px;
-									color: #666;
-									font-weight: 500;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-value {
-									padding: 12px 15px;
-									color: #333;
-									border-bottom: 1px solid var(--border-color);
-								}
-
-								.info-row:last-child .info-label,
-								.info-row:last-child .info-value {
-									border-bottom: none;
-								}
-
-								@media (max-width: 768px) {
-									body {
-										padding: 10px;
-									}
-									
-									.container {
-										padding: 15px;
-									}
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="title">
-									<span class="icon">🔍</span>
-									系统信息
-								</div>
-
-								<!--<div class="warning-box">
-									<span class="icon">⚠️</span>
-									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
-								</div> -->
-
-								<div class="info-grid">
-									<div class="info-row">
-										<div class="info-label">TLS 版本</div>
-										<div class="info-value">${request.cf?.tlsVersion || 'TLSv1.3'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">HTTP 协议</div>
-										<div class="info-value">${request.cf?.httpProtocol || 'HTTP/2'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 TCP RTT</div>
-										<div class="info-value">${request.cf?.clientTcpRtt || '3'} ms</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">地理位置</div>
-										<div class="info-value">${request.cf?.continent || 'EU'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">时区</div>
-										<div class="info-value">${request.cf?.timezone || 'Europe/Vilnius'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">客户端 IP</div>
-										<div class="info-value">${request.headers.get('CF-Connecting-IP') || '127.0.0.1'}</div>
-									</div>
-									<div class="info-row">
-										<div class="info-label">User Agent</div>
-										<div class="info-value">${request.headers.get('User-Agent') || 'Mozilla/5.0'}</div>
-									</div>
-								</div>
-							</div>
-						</body>
-						</html>`;
-
-						return new Response(html, {
-							status: 200,
-							headers: {
-								'content-type': 'text/html;charset=utf-8',
-							},
-						});
+						// 显示新的伪装页面
+						return await statusPage();
 					}
 				} else if (路径 === `/${fakeUserID}`) {
 					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 					return new Response(`${fakeConfig}`, { status: 200 });
-				} 
-				// 【方案一：核心安全修复】在这里修改了判断逻辑
+				}
 				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
-					const html = await KV(request, env);
-					return html;
+					return await KV(request, env);
 				} else if ((动态UUID && url.pathname === `/${动态UUID}`) || 路径 === `/${userID}`) {
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
-					
+
 					const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
 					const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
 
@@ -871,7 +762,7 @@ export default {
 					let total = 24 * 1099511627776;
 
 					if (userAgent && userAgent.includes('mozilla')) {
-						return new Response(`<div style="font-size:13px;">${secureProtoConfig}</div>`, {
+						return new Response(secureProtoConfig, {
 							status: 200,
 							headers: {
 								"Content-Type": "text/html;charset=utf-8",
@@ -895,112 +786,12 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
-						// 美化错误页面
-						const html = `
-						<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1">
-							<title>错误提示</title>
-							<style>
-								:root {
-									--primary-color: #e74c3c;
-									--border-color: #e0e0e0;
-									--background-color: #f5f5f5;
-									--error-bg: #fef5f5;
-									--error-border: #f8d7da;
-									--error-text: #721c24;
-								}
-								
-								body {
-									margin: 0;
-									padding: 20px;
-									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-									line-height: 1.6;
-									background-color: var(--background-color);
-								}
-
-								.container {
-									max-width: 600px;
-									margin: 50px auto;
-									background: white;
-									padding: 25px;
-									border-radius: 10px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-									text-align: center;
-								}
-
-								.error-icon {
-									font-size: 60px;
-									color: var(--primary-color);
-									margin-bottom: 20px;
-								}
-
-								.error-title {
-									font-size: 24px;
-									color: var(--error-text);
-									margin-bottom: 15px;
-								}
-
-								.error-message {
-									background-color: var(--error-bg);
-									border: 1px solid var(--error-border);
-									border-radius: 6px;
-									padding: 15px;
-									margin: 20px 0;
-									color: var(--error-text);
-									font-size: 16px;
-								}
-
-								.back-button {
-									display: inline-block;
-									padding: 10px 20px;
-									background-color: var(--primary-color);
-									color: white;
-									border-radius: 5px;
-									text-decoration: none;
-									font-weight: 500;
-									margin-top: 20px;
-									transition: background-color 0.3s;
-								}
-
-								.back-button:hover {
-									background-color: #c0392b;
-								}
-
-								@media (max-width: 768px) {
-									body {
-										padding: 10px;
-									}
-									
-									.container {
-										padding: 15px;
-									}
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="error-icon">⚠️</div>
-								<div class="error-title">访问错误</div>
-								<div class="error-message">
-									不用怀疑！你的 UUID 输入错误！请检查配置并重试。
-								</div>
-								<a href="/" class="back-button">返回首页</a>
-							</div>
-						</body>
-						</html>`;
-
-						return new Response(html, { 
-							status: 404,
-							headers: {
-								'content-type': 'text/html;charset=utf-8',
-							},
-						});
+						// 对于所有其他未知路径，显示新的伪装页面
+						return await statusPage();
 					}
 				}
 			} else {
+                // WebSocket 请求处理
 				socks5Address = url.searchParams.get('socks5') || socks5Address;
 				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
 				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
@@ -1018,8 +809,7 @@ export default {
 						parsedSocks5Address = socks5AddressParser(socks5Address);
 						enableSocks = true;
 					} catch (err) {
-						let e = err;
-						console.log(e.toString());
+						console.log(err.toString());
 						enableSocks = false;
 					}
 				} else {
@@ -1043,8 +833,7 @@ export default {
 				return await secureProtoOverWSHandler(request);
 			}
 		} catch (err) {
-			let e = err;
-			return new Response(e.toString());
+			return new Response(err.toString());
 		}
 	},
 };
@@ -1146,7 +935,7 @@ function mergeData(header, chunk) {
     }
 
     const totalLength = header.length + chunk.length;
-    
+
     const merged = new Uint8Array(totalLength);
     merged.set(header, 0);
     merged.set(chunk, header.length);
@@ -1155,11 +944,11 @@ function mergeData(header, chunk) {
 
 async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, log) {
     const DNS_SERVER = { hostname: '8.8.4.4', port: 53 };
-    
+
     let tcpSocket;
     const controller = new AbortController();
     const signal = controller.signal;
-    let timeoutId; 
+    let timeoutId;
 
     try {
         // 设置全局超时
@@ -1172,7 +961,7 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
                     log(`关闭TCP连接出错: ${e.message}`);
                 }
             }
-        }, 5000);
+        }, 3000);
 
         try {
             // 使用Promise.race进行超时控制
@@ -1182,13 +971,13 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
                     port: DNS_SERVER.port,
                     signal,
                 }),
-                new Promise((_, reject) => 
+                new Promise((_, reject) =>
                     setTimeout(() => reject(new Error('DNS连接超时')), 1500)
                 )
             ]);
 
             log(`成功连接到DNS服务器 ${DNS_SERVER.hostname}:${DNS_SERVER.port}`);
-            
+
             // 发送DNS查询
             const writer = tcpSocket.writable.getWriter();
             try {
@@ -1205,7 +994,7 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
                 // 使用更高效的循环处理数据
                 while (true) {
                     const { done, value } = await reader.read();
-                    
+
                     if (done) {
                         log('DNS数据流处理完成');
                         break;
@@ -1258,167 +1047,152 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
-    // 优化 SOCKS5 模式检查
-    const checkSocks5Mode = async (address) => {
-        const patterns = [atob('YWxsIGlu'), atob('Kg==')];
-        if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
-        
-        const pattern = go2Socks5s.find(p => 
-            new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address)
-        );
-        return !!pattern;
-    };
 
-    // 优化连接处理
-    const createConnection = async (address, port, socks = false) => {
-        log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+	const createConnection = async (address, port, proxyOptions = null) => {
+		const proxyType = proxyOptions ? proxyOptions.type : 'direct';
+		log(`建立连接: ${address}:${port} (方式: ${proxyType})`);
+
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 5000);
+
+		try {
+			let tcpSocketPromise;
+			if (proxyType === 'http') {
+				tcpSocketPromise = httpConnect(address, port, log);
+			} else if (proxyType === 'socks5') {
+				tcpSocketPromise = socks5Connect(addressType, address, port, log);
+			} else {
+				tcpSocketPromise = connect({
+					hostname: address,
+					port: port,
+					allowHalfOpen: false,
+                    keepAlive: true,
+                    signal: controller.signal
+				});
+			}
+
+			const tcpSocket = await Promise.race([
+				tcpSocketPromise,
+				new Promise((_, reject) => setTimeout(() => reject(new Error('连接超时')), 3000))
+			]);
+
+			clearTimeout(timeoutId);
+			remoteSocket.value = tcpSocket;
+
+			const writer = tcpSocket.writable.getWriter();
+			try {
+				await writer.write(rawClientData);
+			} finally {
+				writer.releaseLock();
+			}
+
+			return tcpSocket;
+		} catch (error) {
+			clearTimeout(timeoutId);
+			throw error;
+		}
+	};
+
+    // 新的递归函数，用于按顺序尝试所有连接策略
+    async function tryConnectionStrategies(strategies) {
+        if (!strategies || strategies.length === 0) {
+            log('All connection strategies failed. Closing WebSocket.');
+            safeCloseWebSocket(webSocket);
+            return;
+        }
+
+        const [currentStrategy, ...nextStrategies] = strategies;
+        log(`Attempting connection with strategy: '${currentStrategy.name}'`);
 
         try {
-            const tcpSocket = await Promise.race([
-                socks ? 
-                    socks5Connect(addressType, address, port, log) :
-                    connect({ 
-                        hostname: address,
-                        port: port,
-                        allowHalfOpen: false,
-                        keepAlive: true,
-                        keepAliveInitialDelay: 60000,
-                        signal: controller.signal
-                    })
-                ,
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('连接超时')), 3000)
-                )
-            ]);
+            const tcpSocket = await currentStrategy.execute();
+            log(`Strategy '${currentStrategy.name}' connected successfully. Piping data.`);
 
-            clearTimeout(timeoutId);
-            remoteSocket.value = tcpSocket;
+            // 关键点：如果本次连接失败，重试函数将用剩余的策略继续尝试
+            const retryNext = () => tryConnectionStrategies(nextStrategies);
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
 
-            // 写入数据
-            const writer = tcpSocket.writable.getWriter();
-            try {
-                await writer.write(rawClientData);
-            } finally {
-                writer.releaseLock();
-            }
-
-            return tcpSocket;
         } catch (error) {
-            clearTimeout(timeoutId);
-            throw error;
+            log(`Strategy '${currentStrategy.name}' failed: ${error.message}. Trying next strategy...`);
+            await tryConnectionStrategies(nextStrategies); // 立即尝试下一个策略
         }
-    };
-
-    // 优化重试逻辑
-    const retryConnection = async () => {
-            let tcpSocket;
-
-            if (enableSocks) {
-            try {              
-                log('重试：尝试使用 SOCKS5...');
-                tcpSocket = await createConnection(addressRemote, portRemote, true);               
-                log('SOCKS5 连接成功！');
-            } catch (socksError) {
-                log(`SOCKS5 连接失败: ${socksError.message}`);
-                safeCloseWebSocket(webSocket);
-                return;
-            }
-            } else {            
-            // 定义所有回退策略，按优先级排序
-            const strategies = [
-                {
-                    name: '用户配置的 PROXYIP',
-                    enabled: proxyIP && proxyIP.trim() !== '',
-                    execute: async () => {
-                        let port = portRemote;
-                        let parsedIP = proxyIP;
-                        if (parsedIP.includes(']:')) { [parsedIP, port] = parsedIP.split(']:'); parsedIP += ']'; }
-                        else if (parsedIP.includes(':')) { [parsedIP, port] = parsedIP.split(':'); }
-                        if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp')[1].split('.')[0] || port; }
-                        return createConnection(parsedIP.toLowerCase(), port);
-                    }
-                },
-                {
-                    name: '用户配置的 NAT64',
-                    enabled: DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="),
-                    execute: async () => {
-                        const nat64Address = await resolveToIPv6(addressRemote);
-                        const nat64Proxyip = `[${nat64Address}]`;
-                        return createConnection(nat64Proxyip, 443);
-                    }
-                },
-                {
-                    name: '内置的默认 PROXYIP',
-                    enabled: true, // 总是启用作为回退
-                    execute: async () => {
-                        const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-                    let port = portRemote;
-                        let parsedIP = defaultProxyIP;
-                        if (parsedIP.includes(']:')) { [parsedIP, port] = parsedIP.split(']:'); parsedIP += ']'; }
-                        else if (parsedIP.includes(':')) { [parsedIP, port] = parsedIP.split(':'); }
-                        if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp')[1].split('.')[0] || port; }
-                        return createConnection(parsedIP.toLowerCase(), port);
-                    }
-                },
-                {
-                    name: '内置的默认 NAT64',
-                    enabled: true, // 总是启用作为最终回退
-                    execute: async () => {
-                        // 确保在尝试默认NAT64之前，全局变量是默认值
-                        if (!DNS64Server || DNS64Server.trim() === '') {
-                           DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
-                        }
-                    const nat64Address = await resolveToIPv6(addressRemote);
-                        const nat64Proxyip = `[${nat64Address}]`;
-                        return createConnection(nat64Proxyip, 443);
-            }
-                }
-            ];
-
-            // 按顺序尝试所有策略
-            for (const strategy of strategies) {
-                if (strategy.enabled && !tcpSocket) {
-                    try {
-                        log(`重试：尝试策略 '${strategy.name}'...`);
-                        tcpSocket = await strategy.execute();
-                        log(`策略 '${strategy.name}' 连接成功！`);
-                    } catch (error) {
-                        log(`策略 '${strategy.name}' 失败: ${error.message}`);
-                    }
-                }
-            }
-
-            // 如果所有策略都失败了
-            if (!tcpSocket) {
-                log('所有回退尝试均已失败，关闭连接。');
-                    safeCloseWebSocket(webSocket);
-                return;
-            }
-        }
-        
-        if (tcpSocket) {
-            log('建立从远程服务器到客户端的数据流...');
-            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
-        }
-    };
-
-    try {
-        // 主连接逻辑
-        log('主流程：第一阶段 - 尝试直接连接...');
-        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
-            await checkSocks5Mode(addressRemote) : false;
-
-        const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
-        log('直接连接成功！');
-        return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
-    } catch (error) {
-        log(`主连接失败 (${error.message})，将启动重试流程...`);
-        return retryConnection();
     }
+
+    // --- 组装策略列表 ---
+    const connectionStrategies = [];
+    const shouldUseSocks = enableSocks && go2Socks5s.some(pattern => new RegExp(`^${pattern.replace(/\*/g, '.*')}$`, 'i').test(addressRemote));
+
+    // 1. 主要连接策略
+    if (enableHttpProxy) {
+        connectionStrategies.push({
+            name: 'HTTP Proxy',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'http' })
+        });
+    } else if (shouldUseSocks) {
+        connectionStrategies.push({
+            name: 'SOCKS5 Proxy (go2Socks5s)',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
+        });
+    } else {
+        connectionStrategies.push({
+            name: 'Direct Connection',
+            execute: () => createConnection(addressRemote, portRemote, null)
+        });
+    }
+
+    // 2. 备用 (Fallback) 策略
+    if (enableSocks && !shouldUseSocks) {
+        connectionStrategies.push({
+            name: 'SOCKS5 Proxy (Fallback)',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
+        });
+    }
+
+    if (proxyIP && proxyIP.trim() !== '') {
+        connectionStrategies.push({
+            name: '用户配置的 PROXYIP',
+            execute: () => {
+                const { address, port } = parseProxyIP(proxyIP, portRemote);
+                return createConnection(address, port);
+            }
+        });
+    }
+
+    const userNat64Server = DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+    if (userNat64Server) {
+        connectionStrategies.push({
+            name: '用户配置的 NAT64',
+            execute: async () => {
+                const nat64Address = await resolveToIPv6(addressRemote);
+                return createConnection(`[${nat64Address}]`, 443);
+            }
+        });
+    }
+
+    connectionStrategies.push({
+        name: '内置的默认 PROXYIP',
+        execute: () => {
+            const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+            const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
+            return createConnection(address, port);
+        }
+    });
+
+    connectionStrategies.push({
+        name: '内置的默认 NAT64',
+        execute: async () => {
+            if (!DNS64Server || DNS64Server.trim() === '') {
+                DNS64Server = '2001:67c:2960::6464';
+            }
+            const nat64Address = await resolveToIPv6(addressRemote);
+            return createConnection(`[${nat64Address}]`, 443);
+        }
+    });
+
+    // --- 启动策略链 ---
+    await tryConnectionStrategies(connectionStrategies);
 }
+
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
@@ -1509,25 +1283,25 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         if (!hasIncomingData) {
             controller.abort('连接超时');
         }
-    }, 5000);
+    }, 3000);
 
     try {
         // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
     const writeData = async (chunk) => {
-        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                 throw new Error('WebSocket 未连接');
-        }
+                        }
 
-        if (header) {
+                        if (header) {
                 // 预分配足够的 buffer，避免重复分配
                 const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
                 combinedData.set(new Uint8Array(header), 0);
                 combinedData.set(new Uint8Array(chunk), header.byteLength);
-                webSocket.send(combinedData);
+                            webSocket.send(combinedData);
                 header = null; // 清除 header 引用
-        } else {
-            webSocket.send(chunk);
-        }
+                        } else {
+                            webSocket.send(chunk);
+                        }
         
             hasIncomingData = true;
         };
@@ -1575,10 +1349,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 
                 // 仅在未收到数据时尝试重试，并限制重试次数
                 if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-                    retryAttempted = true;
+                        retryAttempted = true;
                     retryCount++;
                     log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
-                    retry();
+                        retry();
                 }
             });
 
@@ -1591,19 +1365,20 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         
         // 仅在发生异常且未收到数据时尝试重试，并限制重试次数
         if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-            retryAttempted = true;
+                retryAttempted = true;
             retryCount++;
             log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
-            retry();
+                retry();
         }
         
         throw error;
     } finally {
         clearTimeout(timeout);
         if (signal.aborted) {
-            safeCloseWebSocket(webSocket);
+                safeCloseWebSocket(webSocket);
+            }
         }
-    }
+    
 }
 
 const WS_READY_STATE_OPEN = 1;
@@ -1745,6 +1520,157 @@ function socks5AddressParser(address) {
     }
 }
 
+//  HTTP 代理地址解析函数
+function httpProxyAddressParser(address) {
+    let [latter, former] = address.split("@").reverse();
+    let username, password, hostname, port;
+
+    if (former) {
+        const formers = former.split(":");
+        if (formers.length > 2) { // 密码中可能包含冒号，但用户名不能
+             const userSeparatorIndex = former.indexOf(":");
+             username = former.substring(0, userSeparatorIndex);
+             password = former.substring(userSeparatorIndex + 1);
+        } else if (formers.length === 2){
+            [username, password] = formers;
+        } else {
+             throw new Error('Invalid HTTP proxy address format: "username:password" required');
+        }
+    }
+
+    const latters = latter.split(":");
+    port = Number(latters.pop());
+    if (isNaN(port)) {
+        throw new Error('Invalid HTTP proxy address format: port must be a number');
+    }
+
+    hostname = latters.join(":");
+
+    const regex = /^\[.*\]$/;
+    if (hostname.includes(":") && !regex.test(hostname)) {
+        throw new Error('Invalid HTTP proxy address format: IPv6 must be in brackets');
+    }
+
+    return {
+        username,
+        password,
+        hostname,
+        port,
+    }
+}
+
+async function httpConnect(addressRemote, portRemote, log) {
+	const { username, password, hostname, port } = parsedHttpProxyAddress;
+	const sock = await connect({
+		hostname: hostname,
+		port: port
+	});
+
+	// 构建HTTP CONNECT请求
+	let connectRequest = `CONNECT ${addressRemote}:${portRemote} HTTP/1.1\r\n`;
+	connectRequest += `Host: ${addressRemote}:${portRemote}\r\n`;
+
+	// 添加代理认证（如果需要）
+	if (username && password) {
+		const authString = `${username}:${password}`;
+		const base64Auth = btoa(authString);
+		connectRequest += `Proxy-Authorization: Basic ${base64Auth}\r\n`;
+	}
+
+	connectRequest += `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\n`;
+	connectRequest += `Proxy-Connection: Keep-Alive\r\n`;
+	connectRequest += `Connection: Keep-Alive\r\n`; // 添加标准 Connection 头
+	connectRequest += `\r\n`;
+
+	log(`正在连接到 ${addressRemote}:${portRemote} 通过代理 ${hostname}:${port}`);
+
+	try {
+		// 发送连接请求
+		const writer = sock.writable.getWriter();
+		await writer.write(new TextEncoder().encode(connectRequest));
+		writer.releaseLock();
+	} catch (err) {
+		console.error('发送HTTP CONNECT请求失败:', err);
+		throw new Error(`发送HTTP CONNECT请求失败: ${err.message}`);
+	}
+
+	// 读取HTTP响应
+	const reader = sock.readable.getReader();
+	let respText = '';
+	let connected = false;
+	let responseBuffer = new Uint8Array(0);
+
+	try {
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) {
+				console.error('HTTP代理连接中断');
+				throw new Error('HTTP代理连接中断');
+			}
+
+			// 合并接收到的数据
+			const newBuffer = new Uint8Array(responseBuffer.length + value.length);
+			newBuffer.set(responseBuffer);
+			newBuffer.set(value, responseBuffer.length);
+			responseBuffer = newBuffer;
+
+			// 将收到的数据转换为文本
+			respText = new TextDecoder().decode(responseBuffer);
+
+			// 检查是否收到完整的HTTP响应头
+			if (respText.includes('\r\n\r\n')) {
+				// 分离HTTP头和可能的数据部分
+				const headersEndPos = respText.indexOf('\r\n\r\n') + 4;
+				const headers = respText.substring(0, headersEndPos);
+
+				log(`收到HTTP代理响应: ${headers.split('\r\n')[0]}`);
+
+				// 检查响应状态
+				if (headers.startsWith('HTTP/1.1 200') || headers.startsWith('HTTP/1.0 200')) {
+					connected = true;
+
+					// 如果响应头之后还有数据，我们需要保存这些数据以便后续处理
+					if (headersEndPos < responseBuffer.length) {
+						const remainingData = responseBuffer.slice(headersEndPos);
+						// 创建一个缓冲区来存储这些数据，以便稍后使用
+						const dataStream = new ReadableStream({
+							start(controller) {
+								controller.enqueue(remainingData);
+							}
+						});
+
+						// 创建一个新的TransformStream来处理额外数据
+						const { readable, writable } = new TransformStream();
+						dataStream.pipeTo(writable).catch(err => console.error('处理剩余数据错误:', err));
+
+						// 替换原始readable流
+						// @ts-ignore
+						sock.readable = readable;
+					}
+				} else {
+					const errorMsg = `HTTP代理连接失败: ${headers.split('\r\n')[0]}`;
+					console.error(errorMsg);
+					throw new Error(errorMsg);
+				}
+				break;
+			}
+		}
+	} catch (err) {
+		reader.releaseLock();
+		throw new Error(`处理HTTP代理响应失败: ${err.message}`);
+	}
+
+	reader.releaseLock();
+
+	if (!connected) {
+		throw new Error('HTTP代理连接失败: 未收到成功响应');
+	}
+
+	log(`HTTP代理连接成功: ${addressRemote}:${portRemote}`);
+	return sock;
+}
+
+
 function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64) {
     if (isBase64) {
         content = atob(content);
@@ -1815,7 +1741,7 @@ async function 代理URL(request, 代理网址, 目标网址, 调试模式 = fal
         新响应.headers.delete('cf-ray');
         新响应.headers.delete('cf-connecting-ip');
         新响应.headers.delete('x-forwarded-proto');
-        新响应.headers.delete('x-real-ip');		
+        新响应.headers.delete('x-real-ip');
 
         return 新响应;
     } catch (error) {
@@ -1855,108 +1781,9 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQo='));
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-	// 在获取其他配置前,先尝试读取自定义的设置
-	if (env.KV) {
-		try {
-			const advancedSettingsJSON = await env.KV.get('settinggs.txt');
-			let settings = {};
-			if (advancedSettingsJSON) {
-				try {
-					settings = JSON.parse(advancedSettingsJSON);
-				} catch (e) {
-					console.error("解析settinggs.txt失败:", e);
-				}
-			}
-
-			// 修改PROXYIP设置逻辑
-			const customProxyIP = settings.proxyip;
-			if (customProxyIP && customProxyIP.trim()) {
-				// 如果KV中有PROXYIP设置，使用KV中的设置
-				proxyIP = customProxyIP;
-				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-				RproxyIP = 'false';
-			} else if (env.PROXYIP) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				proxyIP = env.PROXYIP;
-				proxyIPs = await 整理(proxyIP);
-				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-				RproxyIP = 'false';
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				proxyIP = '';
-				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
-			}
-
-			// 修改SOCKS5设置逻辑
-			const customSocks5 = settings.socks5;			
-			if (customSocks5 && customSocks5.trim()) {
-				// 如果KV中有SOCKS5设置，使用KV中的设置
-				socks5Address = customSocks5.trim().split('\n')[0];
-				socks5s = await 整理(socks5Address);
-				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-				socks5Address = socks5Address.split('//')[1] || socks5Address;
-				enableSocks = true; 
-			} else if (env.SOCKS5) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				socks5Address = env.SOCKS5;
-				socks5s = await 整理(socks5Address);
-				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-				socks5Address = socks5Address.split('//')[1] || socks5Address;
-				enableSocks = true; 
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				enableSocks = false;
-				socks5Address = '';
-			}
-
-			// 读取自定义SUB设置
-			const customSub = settings.sub;
-			// 明确检查是否为null或空字符串
-			if (customSub !== null && customSub.trim() !== '') {
-				// 如果KV中有SUB设置，使用KV中的设置
-				sub = customSub.trim().split('\n')[0];
-			} else if (env.SUB) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				sub = env.SUB;
-			} else {
-				// 如果KV和环境变量中都没有设置，使用默认值
-				sub = '';
-			}
-
-			// 读取自定义SUBAPI设置
-			const customSubAPI = settings.subapi;
-			// 明确检查是否为null或空字符串
-			if (customSubAPI !== null && customSubAPI.trim() !== '') {
-				// 如果KV中有SUBAPI设置，使用KV中的设置
-				subConverter = customSubAPI.trim().split('\n')[0];
-			} else if (env.SUBAPI) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				subConverter = env.SUBAPI;
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
-			}
-
-			// 读取自定义SUBCONFIG设置
-			const customSubConfig = settings.subconfig;
-			if (customSubConfig !== null && customSubConfig.trim() !== '') {
-				// 如果KV中有SUBCONFIG设置，使用KV中的设置
-				subConfig = customSubConfig.trim().split('\n')[0];
-			} else if (env.SUBCONFIG) {
-				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
-				subConfig = env.SUBCONFIG;
-			} else {
-				// 如果KV和环境变量中都没有设置，使用代码默认值
-				subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
-			}
-		} catch (error) {
-			console.error('读取自定义设置时发生错误:', error);
-		}
-	}
 
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
@@ -1964,40 +1791,13 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		const subs = await 整理(sub);
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
-	
-	if (env.KV) {
-		await 迁移地址列表(env);
-		const 优选地址列表 = await env.KV.get('ADD.txt');
-		if (优选地址列表) {
-				const 优选地址数组 = await 整理(优选地址列表);
-				const 分类地址 = {
-					接口地址: new Set(),
-					链接地址: new Set(),
-					优选地址: new Set()
-				};
 
-				for (const 元素 of 优选地址数组) {
-					if (元素.startsWith('https://')) {
-						分类地址.接口地址.add(元素);
-					} else if (元素.includes('://')) {
-						分类地址.链接地址.add(元素);
-					} else {
-						分类地址.优选地址.add(元素);
-					}
-				}
-
-			addressesapi = [...分类地址.接口地址];
-			link = [...分类地址.链接地址];
-			addresses = [...分类地址.优选地址];
-		}
-	}
-
-	    if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
+	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
 	    		let cfips = [
 		            '104.16.0.0/14',
 		            '104.21.0.0/16',
 		            '188.114.96.0/20',
-			    
+
 	    		];
 
     		function ipToInt(ip) {
@@ -2059,7 +1859,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 				if (!response.ok) {
 					console.error('获取地址时出错:', response.status, response.statusText);
-					return; 
+					return;
 				}
 
 				const text = await response.text();
@@ -2091,7 +1891,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 		let 订阅器 = '<br>';
 		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
-		
+
 		if (sub) {
 			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
@@ -2115,21 +1915,34 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		const 动态UUID信息 = (uuid != userID) ? `TOKEN: ${uuid}<br>UUIDNow: ${userID}<br>UUIDLow: ${userIDLow}<br>${userIDTime}TIME（动态UUID有效时间）: ${有效时间} 天<br>UPTIME（动态UUID更新时间）: ${更新时间} 时（北京时间）<br><br>` : `${userIDTime}`;
 		const 节点配置页 = `
 			<!DOCTYPE html>
-			<html>
+			<html lang="zh-CN">
 			<head>
 				<meta charset="utf-8">
 				<meta name="viewport" content="width=device-width, initial-scale=1">
 				<title>${FileName} 配置信息</title>
 				<style>
 					:root {
-						--primary-color: #4CAF50;
-						--secondary-color: #45a049;
+						--primary-color: #0d6efd;
+						--secondary-color: #0b5ed7;
 						--border-color: #e0e0e0;
-						--text-color: #333;
+						--text-color: #212529;
 						--background-color: #f5f5f5;
 						--section-bg: #ffffff;
+						--link-color: #1a0dab;
+						--visited-link-color: #6c00a2;
 					}
-					
+
+					html.dark-mode {
+						--primary-color: #589bff;
+						--secondary-color: #458cff;
+						--border-color: #3c3c3c;
+						--text-color: #e0e0e0;
+						--background-color: #1c1c1e;
+						--section-bg: #2a2a2a;
+						--link-color: #8ab4f8;
+						--visited-link-color: #c58af9;
+					}
+
 					body {
 						margin: 0;
 						padding: 20px;
@@ -2137,6 +1950,19 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						line-height: 1.6;
 						color: var(--text-color);
 						background-color: var(--background-color);
+					}
+
+					a {
+						color: var(--link-color);
+						text-decoration: none;
+					}
+
+					a:visited {
+						color: var(--visited-link-color);
+					}
+
+					a:hover {
+						text-decoration: underline;
 					}
 
 					.container {
@@ -2158,7 +1984,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 					.section-title {
 						font-size: 1.2em;
-						color: var(--primary-color);
+						color: var(--text-color);
 						margin-bottom: 15px;
 						padding-bottom: 10px;
 						border-bottom: 2px solid var(--border-color);
@@ -2180,13 +2006,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						word-break: break-all;
 					}
 
-					.subscription-link a {
-						color: #0066cc;
-						text-decoration: none;
-					}
-
-					.subscription-link a:hover {
-						text-decoration: underline;
+					html.dark-mode .subscription-link {
+						background: #3a3a3a;
 					}
 
 					.qrcode-container {
@@ -2197,7 +2018,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					.notice-toggle {
 						color: var(--primary-color);
 						cursor: pointer;
-						text-decoration: none;
 						display: inline-block;
 						margin: 10px 0;
 						font-weight: 500;
@@ -2209,8 +2029,14 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						padding: 15px;
 						margin: 10px 0;
 						border-radius: 0 8px 8px 0;
+						word-break: break-all;
+						overflow-wrap: break-word;
 					}
-
+					
+					html.dark-mode .notice-content {
+						background: #3a3a3a;
+					}
+					
 					.config-info {
 						background: #f8f9fa;
 						padding: 15px;
@@ -2219,45 +2045,124 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						font-size: 13px;
 						overflow-x: auto;
 					}
+					
+					html.dark-mode .config-info {
+						background: #3a3a3a;
+					}
 
 					.copy-button {
 						display: inline-block;
 						padding: 6px 12px;
 						background: var(--primary-color);
-						color: white;
+						color: #fff;
 						border: none;
 						border-radius: 4px;
 						cursor: pointer;
 						font-size: 14px;
 						margin: 5px 0;
+						transition: background-color 0.2s;
 					}
 
 					.copy-button:hover {
 						background: var(--secondary-color);
 					}
+					
+					.theme-switch-wrapper {
+						display: flex;
+						align-items: center;
+						position: fixed;
+						top: 15px;
+						right: 15px;
+					}
+
+					.theme-switch {
+						display: inline-block;
+						height: 20px;
+						position: relative;
+						width: 36px;
+					}
+
+					.theme-switch input {
+						display:none;
+					}
+
+					.slider {
+						background-color: #ccc;
+						bottom: 0;
+						cursor: pointer;
+						left: 0;
+						position: absolute;
+						right: 0;
+						top: 0;
+						transition: .4s;
+					}
+
+					.slider:before {
+						background-color: #fff;
+						bottom: 3px;
+						content: "";
+						height: 14px;
+						left: 3px;
+						position: absolute;
+						transition: .4s;
+						width: 14px;
+					}
+
+					input:checked + .slider {
+						background-color: var(--primary-color);
+					}
+
+					input:checked + .slider:before {
+						transform: translateX(16px);
+					}
+
+					.slider.round {
+						border-radius: 20px;
+					}
+
+					.slider.round:before {
+						border-radius: 50%;
+					}
+
 
 					@media (max-width: 768px) {
 						body {
 							padding: 10px;
 						}
-						
+
 						.container {
 							padding: 15px;
 						}
-						
+
 						.section {
 							padding: 15px;
 						}
 					}
 				</style>
+                <script>
+                    (function() {
+                        try {
+                            const theme = localStorage.getItem('theme');
+                            if (theme === 'dark-mode') {
+                                document.documentElement.classList.add('dark-mode');
+                            }
+                        } catch (e) { console.error(e); }
+                    })();
+                </script>
 			</head>
 			<body>
+				<div class="theme-switch-wrapper">
+					<label class="theme-switch" for="checkbox">
+						<input type="checkbox" id="checkbox" />
+						<div class="slider round"></div>
+					</label>
+				</div>
 				<div class="container">
 					<div class="section">
 						<div class="section-title">📋 订阅信息</div>
 						<div class="subscription-link">
 							自适应订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')">
 								https://${proxyhost}${hostName}/${uuid}
 							</a>
 							<div id="qrcode_0" class="qrcode-container"></div>
@@ -2265,7 +2170,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 						<div class="subscription-link">
 							Base64订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')">
 								https://${proxyhost}${hostName}/${uuid}?b64
 							</a>
 							<div id="qrcode_1" class="qrcode-container"></div>
@@ -2273,7 +2178,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 						<div class="subscription-link">
 							clash订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')">
 								https://${proxyhost}${hostName}/${uuid}?clash
 							</a>
 							<div id="qrcode_2" class="qrcode-container"></div>
@@ -2281,7 +2186,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 						<div class="subscription-link">
 							singbox订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')">
 								https://${proxyhost}${hostName}/${uuid}?sb
 							</a>
 							<div id="qrcode_3" class="qrcode-container"></div>
@@ -2289,7 +2194,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 						<div class="subscription-link">
 							Loon订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')" style="color:blue;">
+							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')">
 								https://${proxyhost}${hostName}/${uuid}?loon
 							</a>
 							<div id="qrcode_4" class="qrcode-container"></div>
@@ -2379,6 +2284,29 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 							noticeToggle.textContent = '实用订阅技巧 ∨';
 						}
 					}
+					
+					const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
+					
+					(function() {
+						const currentTheme = localStorage.getItem('theme');
+						if (currentTheme === 'dark-mode') {
+							toggleSwitch.checked = true;
+						}
+					})();
+					
+
+					function switchTheme(e) {
+						if (e.target.checked) {
+							document.documentElement.classList.add('dark-mode');
+							localStorage.setItem('theme', 'dark-mode');
+						} else {
+							document.documentElement.classList.remove('dark-mode');
+							localStorage.setItem('theme', 'light-mode');
+						}    
+					}
+
+					toggleSwitch.addEventListener('change', switchTheme, false);
+
 				</script>
 			</body>
 			</html>
@@ -2421,7 +2349,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 						if (!response.ok) {
 							console.error('获取地址时出错:', response.status, response.statusText);
-							return; 
+							return;
 						}
 
 						const text = await response.text();
@@ -2467,7 +2395,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			} else {
 				const response = await fetch(url, {
 					headers: {
-						'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
+						'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
 					}
 				});
 				content = await response.text();
@@ -2492,8 +2420,8 @@ async function 整理优选列表(api) {
 	const controller = new AbortController();
 
 	const timeout = setTimeout(() => {
-		controller.abort(); 
-	}, 2000); 
+		controller.abort();
+	}, 2000);
 
 	try {
 		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
@@ -2502,7 +2430,7 @@ async function 整理优选列表(api) {
 				'Accept': 'text/html,application/xhtml+xml,application/xml;',
 				'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
 			},
-			signal: controller.signal 
+			signal: controller.signal
 		}).then(response => response.ok ? response.text() : Promise.reject())));
 
 		for (const [index, response] of responses.entries()) {
@@ -2540,7 +2468,7 @@ async function 整理优选列表(api) {
 							} else {
 								return `${baseItem}:443`;
 							}
-							return null; 
+							return null;
 						}).filter(Boolean));
 					}
 					newapi += content + '\n';
@@ -2587,7 +2515,7 @@ async function 整理测速结果(tls) {
 
 			const ipAddressIndex = 0;
 			const portIndex = 1;
-			const dataCenterIndex = tlsIndex + remarkIndex; 
+			const dataCenterIndex = tlsIndex + remarkIndex;
 
 			if (tlsIndex === -1) {
 				console.error('CSV文件缺少必需的字段');
@@ -2596,7 +2524,7 @@ async function 整理测速结果(tls) {
 
 			for (let i = 1; i < lines.length; i++) {
 				const columns = lines[i].split(',');
-				const speedIndex = columns.length - 1; 
+				const speedIndex = columns.length - 1;
 				// 检查TLS是否为"TRUE"且速度大于DLS
 				if (columns[tlsIndex].toUpperCase() === tls && parseFloat(columns[speedIndex]) > DLS) {
 					const ipAddress = columns[ipAddressIndex];
@@ -2677,12 +2605,12 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			let 节点备注 = '';
 			const 协议类型 = atob(protocolEncodedFlag);
 
-            const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` + 
-                `encryption=none&` + 
-                `security=none&` + 
-                `type=ws&` + 
-                `host=${伪装域名}&` + 
-                `path=${encodeURIComponent(最终路径)}` + 
+            const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` +
+                `encryption=none&` +
+                `security=none&` +
+                `type=ws&` +
+                `host=${伪装域名}&` +
+                `path=${encodeURIComponent(最终路径)}` +
                 `#${encodeURIComponent(addressid + 节点备注)}`;
 
 			return secureProtoLink;
@@ -2748,32 +2676,31 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 
 		const 协议类型 = atob(protocolEncodedFlag);
 
-		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` + 
+		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` +
 			`encryption=none&` +
 			`security=tls&` +
 			`sni=${伪装域名}&` +
 			`fp=randomized&` +
-			`alpn=h3&` + 
+			`alpn=h3&` +
 			`type=ws&` +
 			`host=${伪装域名}&` +
-            `path=${encodeURIComponent(最终路径)}` + 
+            `path=${encodeURIComponent(最终路径)}` +
 			`#${encodeURIComponent(addressid + 节点备注)}`;
 
 		return secureProtoLink;
 	}).join('\n');
 
-	let base64Response = responseBody; 
+	let base64Response = responseBody;
 	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
 	if (link.length > 0) base64Response += '\n' + link.join('\n');
 	return btoa(base64Response);
 }
 
-// 优化 整理 函数
 async function 整理(内容) {
     if (!内容) return [];
     const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
         .replace(/^,|,$/g, '');
-    
+
     return 替换后的内容.split(',');
 }
 
@@ -2810,8 +2737,8 @@ function isValidIPv4(address) {
 }
 
 function 生成动态UUID(密钥) {
-	const 时区偏移 = 8; 
-	const 起始日期 = new Date(2007, 6, 7, 更新时间, 0, 0); 
+	const 时区偏移 = 8;
+	const 起始日期 = new Date(2007, 6, 7, 更新时间, 0, 0);
 	const 一周的毫秒数 = 1000 * 60 * 60 * 24 * 有效时间;
 
 	function 获取当前周数() {
@@ -2830,7 +2757,7 @@ function 生成动态UUID(密钥) {
 		});
 	}
 
-	const 当前周数 = 获取当前周数(); 
+	const 当前周数 = 获取当前周数();
 	const 结束时间 = new Date(起始日期.getTime() + 当前周数 * 一周的毫秒数);
 
 	const 当前UUIDPromise = 生成UUID(密钥 + 当前周数);
@@ -2886,7 +2813,7 @@ async function handlePostRequest(request, env, txt) {
             default: // 主列表内容保存到ADD.txt
                 await env.KV.put(txt, content);
         }
-        
+
         return new Response("保存成功");
     } catch (error) {
         console.error('保存KV时发生错误:', error);
@@ -2899,7 +2826,8 @@ async function handleGetRequest(env, txt) {
     let hasKV = !!env.KV;
     let proxyIPContent = '';
     let socks5Content = '';
-    let subContent = ''; 
+    let httpProxyContent = '';
+    let subContent = '';
     let subAPIContent = '';
     let subConfigContent = '';
     let nat64Content = '';
@@ -2907,12 +2835,13 @@ async function handleGetRequest(env, txt) {
     if (hasKV) {
         try {
             content = await env.KV.get(txt) || '';
-			
+
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
                 proxyIPContent = settings.proxyip || '';
                 socks5Content = settings.socks5 || '';
+                httpProxyContent = settings.httpproxy || '';
                 subContent = settings.sub || '';
                 subAPIContent = settings.subapi || '';
                 subConfigContent = settings.subconfig || '';
@@ -2933,13 +2862,27 @@ async function handleGetRequest(env, txt) {
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
                 :root {
-                    --primary-color: #4CAF50;
-                    --secondary-color: #45a049;
+                    --primary-color: #0d6efd;
+                    --secondary-color: #0b5ed7;
                     --border-color: #e0e0e0;
-                    --text-color: #333;
+                    --text-color: #212529;
                     --background-color: #f5f5f5;
+					--section-bg: white;
+					--link-color: #1a0dab;
+					--visited-link-color: #6c00a2;
                 }
-                
+
+                html.dark-mode {
+                    --primary-color: #589bff;
+                    --secondary-color: #458cff;
+                    --border-color: #3c3c3c;
+                    --text-color: #e0e0e0;
+                    --background-color: #1c1c1e;
+					--section-bg: #2a2a2a;
+					--link-color: #8ab4f8;
+					--visited-link-color: #c58af9;
+                }
+
                 body {
                     margin: 0;
                     padding: 20px;
@@ -2948,14 +2891,31 @@ async function handleGetRequest(env, txt) {
                     color: var(--text-color);
                     background-color: var(--background-color);
                 }
+				
+				a {
+					color: var(--link-color);
+					text-decoration: none;
+				}
+				
+				a:visited {
+					color: var(--visited-link-color);
+				}
+
+				a:hover {
+					text-decoration: underline;
+				}
 
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
-                    background: white;
+                    background: var(--section-bg, white);
                     padding: 25px;
                     border-radius: 10px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                
+                html.dark-mode .container {
+                    background: #242526;
                 }
 
                 .title {
@@ -2971,6 +2931,28 @@ async function handleGetRequest(env, txt) {
                     margin: 20px 0;
                 }
 
+                .editor, .setting-editor {
+                    background-color: var(--section-bg, white);
+                    color: var(--text-color);
+                }
+                
+                html.dark-mode .editor, html.dark-mode .setting-editor {
+                    background-color: #2a2a2a;
+                }
+
+                .editor:focus, .setting-editor:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+                }
+				
+				html.dark-mode .editor:focus,
+				html.dark-mode .setting-editor:focus {
+					outline: none;
+					border-color: var(--primary-color);
+					box-shadow: 0 0 0 2px rgba(88, 155, 255, 0.25);
+				}
+
                 .editor {
                     width: 100%;
                     height: 520px;
@@ -2982,17 +2964,11 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     line-height: 1.5;
                     resize: vertical;
-                    transition: border-color 0.3s ease;
-                }
-
-                .editor:focus {
-                    outline: none;
-                    border-color: var(--primary-color);
-                    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
                 }
 
                 .button-group {
                     display: flex;
+					align-items: center;
                     gap: 12px;
                     margin-top: 15px;
                 }
@@ -3004,7 +2980,7 @@ async function handleGetRequest(env, txt) {
                     font-size: 14px;
                     font-weight: 500;
                     cursor: pointer;
-                    transition: all 0.3s ease;
+                    transition: all 0.2s ease;
                 }
 
                 .btn:disabled {
@@ -3014,7 +2990,7 @@ async function handleGetRequest(env, txt) {
 
                 .btn-primary {
                     background: var(--primary-color);
-                    color: white;
+                    color: #fff;
                 }
 
                 .btn-primary:hover:not(:disabled) {
@@ -3022,24 +2998,26 @@ async function handleGetRequest(env, txt) {
                 }
 
                 .btn-secondary {
-                    background: #666;
-                    color: white;
+                    background: #6c757d;
+                    color: #fff;
                 }
 
                 .btn-secondary:hover:not(:disabled) {
-                    background: #555;
+                    background: #5c636a;
                 }
 
                 .save-status {
-                    margin-left: 10px;
                     font-size: 14px;
                     color: #666;
+                }
+				
+				html.dark-mode .save-status {
+                    color: var(--text-color);
                 }
 
                 .notice-toggle {
                     color: var(--primary-color);
                     cursor: pointer;
-                    text-decoration: none;
                     display: inline-block;
                     margin: 10px 0;
                     font-weight: 500;
@@ -3051,26 +3029,17 @@ async function handleGetRequest(env, txt) {
                     padding: 15px;
                     margin: 10px 0;
                     border-radius: 0 8px 8px 0;
+                    word-break: break-all;
                 }
+                
+                html.dark-mode .notice-content {
+						background: #3a3a3a;
+				}
 
                 .divider {
                     height: 1px;
                     background: var(--border-color);
                     margin: 20px 0;
-                }
-
-                @media (max-width: 768px) {
-                    body {
-                        padding: 10px;
-                    }
-                    
-                    .container {
-                        padding: 15px;
-                    }
-                    
-                    .editor {
-                        height: 400px;
-                    }
                 }
 
                 .advanced-settings {
@@ -3080,6 +3049,10 @@ async function handleGetRequest(env, txt) {
                     border-radius: 8px;
                     border: 1px solid var(--border-color);
                 }
+                
+                 html.dark-mode .advanced-settings {
+						background: #3a3a3a;
+				}
 
                 .advanced-settings-header {
                     display: flex;
@@ -3089,110 +3062,255 @@ async function handleGetRequest(env, txt) {
                     cursor: pointer;
                 }
 
-                .advanced-settings-content {
+                #advanced-settings-content {
                     display: none;
                 }
 
-                .proxyip-editor {
+                .setting-item {
+                    margin-bottom: 10px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    overflow: hidden;
+                }
+
+                .setting-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 10px 15px;
+                    background-color: #f0f0f0;
+                    cursor: pointer;
+                    font-weight: 500;
+                }
+                
+                 html.dark-mode .setting-header {
+						background: #424242;
+				}
+
+                .setting-content {
+                    display: none; /* Initially hidden */
+                    padding: 15px;
+                    background-color: #fafafa;
+                }
+                
+                 html.dark-mode .setting-content {
+						background: #3a3a3a;
+				}
+				 
+				 .setting-content p {
+					 margin: 5px 0;
+					 color: #666;
+				 }
+
+				 html.dark-mode .setting-content p {
+					 color: #bbb;
+				 }
+				 
+                .setting-editor {
                     width: 100%;
-                    height: 100px;
+                    min-height: 80px;
                     margin-top: 10px;
                     padding: 10px;
+                    box-sizing: border-box;
                     border: 1px solid var(--border-color);
                     border-radius: 4px;
                     font-family: Monaco, Consolas, "Courier New", monospace;
                     font-size: 14px;
                     resize: vertical;
                 }
+				
+				.setting-editor::placeholder {
+					color: #aaa;
+				}
+				
+				html.dark-mode .setting-editor::placeholder {
+					color: #666;
+				}
+
+                .theme-switch-wrapper {
+						display: flex;
+						align-items: center;
+						position: fixed;
+						top: 15px;
+						right: 15px;
+					}
+
+					.theme-switch {
+						display: inline-block;
+						height: 20px;
+						position: relative;
+						width: 36px;
+					}
+
+					.theme-switch input {
+						display:none;
+					}
+
+					.slider {
+						background-color: #ccc;
+						bottom: 0;
+						cursor: pointer;
+						left: 0;
+						position: absolute;
+						right: 0;
+						top: 0;
+						transition: .4s;
+					}
+
+					.slider:before {
+						background-color: #fff;
+						bottom: 3px;
+						content: "";
+						height: 14px;
+						left: 3px;
+						position: absolute;
+						transition: .4s;
+						width: 14px;
+					}
+
+					input:checked + .slider {
+						background-color: var(--primary-color);
+					}
+
+					input:checked + .slider:before {
+						transform: translateX(16px);
+					}
+
+					.slider.round {
+						border-radius: 20px;
+					}
+
+					.slider.round:before {
+						border-radius: 50%;
+					}
+
+                @media (max-width: 768px) {
+                    body {
+                        padding: 10px;
+                    }
+
+                    .container {
+                        padding: 15px;
+                    }
+
+                    .editor {
+                        height: 400px;
+                    }
+                }
             </style>
+            <script>
+                (function() {
+                    try {
+                        const theme = localStorage.getItem('theme');
+                        if (theme === 'dark-mode') {
+                            document.documentElement.classList.add('dark-mode');
+                        }
+                    } catch (e) { console.error(e); }
+                })();
+            </script>
         </head>
         <body>
+            <div class="theme-switch-wrapper">
+                <label class="theme-switch" for="checkbox">
+                    <input type="checkbox" id="checkbox" />
+                    <div class="slider round"></div>
+                </label>
+            </div>
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
-                
-                <!-- 修改高级设置部分 -->
+
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
                         <h3 style="margin: 0;">⚙️ 高级设置</h3>
-                        <span id="advanced-settings-toggle">∨</span>
                     </div>
-                    <div id="advanced-settings-content" class="advanced-settings-content">
+                    <div id="advanced-settings-content">
                         <!-- PROXYIP设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="proxyip"><strong>PROXYIP 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
-                            <textarea 
-                                id="proxyip" 
-                                class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}"
-                            >${proxyIPContent}</textarea>
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>PROXYIP 设置</strong></span>
+                            </div>
+                            <div class="setting-content">
+                                <p>每行一个IP，格式：IP:端口(可不添加端口)</p>
+                                <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${proxyIPContent}</textarea>
+                            </div>
                         </div>
 
                         <!-- SOCKS5设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="socks5"><strong>SOCKS5 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
-                            <textarea 
-                                id="socks5" 
-                                class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}"
-                            >${socks5Content}</textarea>
+                        <div class="setting-item">
+                             <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SOCKS5 设置</strong></span>
+                            </div>
+                            <div class="setting-content">
+                                <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <textarea id="socks5" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- HTTP Proxy 设置 -->
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>HTTP 设置</strong></span>
+                            </div>
+                            <div class="setting-content">
+                                <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
+                            </div>
                         </div>
 
                         <!-- SUB设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="sub"><strong>SUB 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
-                            <textarea 
-                                id="sub" 
-                                class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}"
-                            >${subContent}</textarea>
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SUB 设置</strong> (优选订阅生成器)</span>
+                            </div>
+                            <div class="setting-content">
+                                <p>只支持单个优选订阅生成器地址</p>
+                                <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
+                            </div>
                         </div>
-                        
+
                         <!-- SUBAPI设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="subapi"><strong>SUBAPI 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
-                            <textarea 
-                                id="subapi" 
-                                class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}"
-                            >${subAPIContent}</textarea>
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SUBAPI 设置</strong> (订阅转换后端)</span>
+                            </div>
+                            <div class="setting-content">
+                                <p>订阅转换后端地址</p>
+                                <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
+                            </div>
                         </div>
-                        
+
                         <!-- SUBCONFIG设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="subconfig"><strong>SUBCONFIG 设置</strong></label>
-                            <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
-                            <textarea 
-                                id="subconfig" 
-                                class="proxyip-editor" 
-                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}"
-                            >${subConfigContent}</textarea>
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SUBCONFIG 设置</strong> (订阅转换配置)</span>
+                            </div>
+                            <div class="setting-content">
+                                <p>订阅转换配置文件地址</p>
+                                <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
+                            </div>
                         </div>
 
                         <!-- NAT64/DNS64 设置 -->
-                        <div style="margin-bottom: 20px;">
-                            <label for="nat64"><strong>NAT64/DNS64</strong></label>
-    						<p style="margin: 5px 0; color: #666;">
-        					<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
-    						</p>
-                            <textarea 
-                                id="nat64" 
-                                class="proxyip-editor" 
-                                placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1"
-                            >${nat64Content}</textarea>
+                        <div class="setting-item">
+                           <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>NAT64/DNS64 设置</strong></span>
+                            </div>
+                             <div class="setting-content">
+                                <p>
+                                    <a id="nat64-link" target="_blank">自行查询</a>
+                                </p>
+                                <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
+                            </div>
                         </div>
-
 						<script>
   							const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
   							const decodedURL = atob(encodedURL);
   							document.getElementById('nat64-link').setAttribute('href', decodedURL);
 						</script>
+
                         <!-- 统一的保存按钮 -->
-                        <div>
-                            <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                        <div style="margin-top: 20px;">
+                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
@@ -3202,14 +3320,14 @@ async function handleGetRequest(env, txt) {
                 <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                     ℹ️ 注意事项 ∨
                 </a>
-                
+
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    ${decodeURIComponent(atob('JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU1JUI4JUI4JUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUI3JUU2JThCJUFDJUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUE0JUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEExMjcuMC4wLjElM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5SVAlM0NiciUzRSUwQXZpc2EuY24lM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThEJTNDYnIlM0UlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjMlRTQlQkMlOTglRTklODAlODlJUHY2JTNDYnIlM0UlM0NiciUzRSUwQSUwQSUzQ3N0cm9uZyUzRTIuJTNDJTJGc3Ryb25nJTNFJTIwQUREQVBJJTIwJUU1JUE2JTgyJUU2JTlFJTlDJUU2JTk4JUFGJUU0JUJCJUEzJUU3JTkwJTg2SVAlRUYlQkMlOEMlRTUlOEYlQUYlRTQlQkQlOUMlRTQlQjglQkFQUk9YWUlQJUU3JTlBJTg0JUU4JUFGJTlEJUVGJUJDJThDJUU1JThGJUFGJUU1JUIwJTg2JTIyJTNGcHJveHlpcCUzRHRydWUlMjIlRTUlOEYlODIlRTYlOTUlQjAlRTYlQjclQkIlRTUlOEElQTAlRTUlODglQjAlRTklOTMlQkUlRTYlOEUlQTUlRTYlOUMlQUIlRTUlQjAlQkUlRUYlQkMlOEMlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQlM0Zwcm94eWlwJTNEdHJ1ZSUzQ2JyJTNFJTNDYnIlM0UlMEElMEElM0NzdHJvbmclM0UzLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5RSU5QyVFNiU5OCVBRiUyMCUzQ2ElMjBocmVmJTNEJ2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JyUzRUNsb3VkZmxhcmVTcGVlZFRlc3QlM0MlMkZhJTNFJTIwJUU3JTlBJTg0JTIwY3N2JTIwJUU3JUJCJTkzJUU2JTlFJTlDJUU2JTk2JTg3JUU0JUJCJUI2JUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
                     ${hasKV ? `
-                        <textarea class="editor" 
+                        <textarea class="editor"
                             placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
                             id="content">${content}</textarea>
                         <div class="button-group">
@@ -3224,103 +3342,140 @@ async function handleGetRequest(env, txt) {
             </div>
 
             <script>
-            function goBack() {
-                const pathParts = window.location.pathname.split('/');
-                pathParts.pop(); // 移除 "edit"
-                const newPath = pathParts.join('/');
-                window.location.href = newPath;
-            }
+                function goBack() {
+                    const pathParts = window.location.pathname.split('/');
+                    pathParts.pop(); // 移除 "edit"
+                    const newPath = pathParts.join('/');
+                    window.location.href = newPath;
+                }
 
-            async function saveContent(button) {
-                try {
-                    button.disabled = true;
-                    const content = document.getElementById('content').value;
-                    const saveStatus = document.getElementById('saveStatus');
-                    
+                async function saveContent(button) {
+                    try {
+                        button.disabled = true;
+                        const content = document.getElementById('content').value;
+                        const saveStatus = document.getElementById('saveStatus');
+
+                        saveStatus.textContent = '保存中...';
+
+                        const response = await fetch(window.location.href, {
+                            method: 'POST',
+                            body: content
+                        });
+
+                        if (response.ok) {
+                            saveStatus.textContent = '保存成功';
+                            setTimeout(() => {
+                                saveStatus.textContent = '';
+                            }, 3000);
+                        } else {
+                            throw new Error('保存失败');
+                        }
+                    } catch (error) {
+                        const saveStatus = document.getElementById('saveStatus');
+                        saveStatus.textContent = '❌ ' + error.message;
+                        console.error('保存时发生错误:', error);
+                    } finally {
+                        button.disabled = false;
+                    }
+                }
+
+                function toggleNotice() {
+                    const noticeContent = document.getElementById('noticeContent');
+                    const noticeToggle = document.getElementById('noticeToggle');
+                    if (noticeContent.style.display === 'none') {
+                        noticeContent.style.display = 'block';
+                        noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                    } else {
+                        noticeContent.style.display = 'none';
+                        noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                    }
+                }
+
+                function toggleAdvancedSettings() {
+                    const content = document.getElementById('advanced-settings-content');
+                    const isOpening = content.style.display === 'none' || !content.style.display;
+
+                    if (isOpening) {
+                        content.style.display = 'block';
+                    } else {
+                        content.style.display = 'none';
+                        
+                        const allSettings = document.querySelectorAll('.setting-content');
+                        allSettings.forEach(setting => {
+                            setting.style.display = 'none';
+                        });
+                        const allHeaders = document.querySelectorAll('.setting-header');
+                        allHeaders.forEach(header => {
+                            header.classList.remove('open');
+                        });
+                    }
+                }
+
+                function toggleSetting(headerElement) {
+                    const content = headerElement.nextElementSibling;
+                    headerElement.classList.toggle('open');
+                    if (content.style.display === 'none' || content.style.display === '') {
+                        content.style.display = 'block';
+                    } else {
+                        content.style.display = 'none';
+                    }
+                }
+
+                async function saveSettings() {
+                    const saveStatus = document.getElementById('settings-save-status');
                     saveStatus.textContent = '保存中...';
-                    
-                    const response = await fetch(window.location.href, {
-                        method: 'POST',
-                        body: content
-                    });
 
-                    if (response.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => {
-                            saveStatus.textContent = '';
-                        }, 3000);
-                    } else {
-                        throw new Error('保存失败');
+                    try {
+                        const advancedSettings = {
+                            proxyip: document.getElementById('proxyip').value,
+                            socks5: document.getElementById('socks5').value,
+                            httpproxy: document.getElementById('httpproxy').value,
+                            sub: document.getElementById('sub').value,
+                            subapi: document.getElementById('subapi').value,
+                            subconfig: document.getElementById('subconfig').value,
+                            nat64: document.getElementById('nat64').value
+                        };
+
+                        const response = await fetch(window.location.href + '?type=advanced', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(advancedSettings)
+                        });
+
+                        if (response.ok) {
+                            saveStatus.textContent = '保存成功';
+                            setTimeout(() => {
+                                saveStatus.textContent = '';
+                            }, 3000);
+                        } else {
+                            throw new Error('保存失败: ' + await response.text());
+                        }
+                    } catch (error) {
+                        saveStatus.textContent = '❌ ' + error.message;
+                        console.error('保存设置时发生错误:', error);
                     }
-                } catch (error) {
-                    const saveStatus = document.getElementById('saveStatus');
-                    saveStatus.textContent = '❌ ' + error.message;
-                    console.error('保存时发生错误:', error);
-                } finally {
-                    button.disabled = false;
                 }
-            }
-
-            function toggleNotice() {
-                const noticeContent = document.getElementById('noticeContent');
-                const noticeToggle = document.getElementById('noticeToggle');
-                if (noticeContent.style.display === 'none') {
-                    noticeContent.style.display = 'block';
-                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
-                } else {
-                    noticeContent.style.display = 'none';
-                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
-                }
-            }
-
-            function toggleAdvancedSettings() {
-                const content = document.getElementById('advanced-settings-content');
-                const toggle = document.getElementById('advanced-settings-toggle');
-                if (content.style.display === 'none' || !content.style.display) {
-                    content.style.display = 'block';
-                    toggle.textContent = '∧';
-                } else {
-                    content.style.display = 'none';
-                    toggle.textContent = '∨';
-                }
-            }
-
-            // 修改保存设置函数
-            async function saveSettings() {
-                const saveStatus = document.getElementById('settings-save-status');
-                saveStatus.textContent = '保存中...';
+                const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
                 
-                try {
-                    const advancedSettings = {
-                        proxyip: document.getElementById('proxyip').value,
-                        socks5: document.getElementById('socks5').value,
-                        sub: document.getElementById('sub').value,
-                        subapi: document.getElementById('subapi').value,
-                        subconfig: document.getElementById('subconfig').value,
-                        nat64: document.getElementById('nat64').value
-                    };
-
-                    const response = await fetch(window.location.href + '?type=advanced', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(advancedSettings)
-                    });
-
-                    if (response.ok) {
-                        saveStatus.textContent = '✅ 保存成功';
-                        setTimeout(() => {
-                            saveStatus.textContent = '';
-                        }, 3000);
-                    } else {
-                        throw new Error('保存失败: ' + await response.text());
+                (function() {
+                    const currentTheme = localStorage.getItem('theme');
+                    if (currentTheme === 'dark-mode') {
+                        toggleSwitch.checked = true;
                     }
-                } catch (error) {
-                    saveStatus.textContent = '❌ ' + error.message;
-                    console.error('保存设置时发生错误:', error);
+                })();
+
+                function switchTheme(e) {
+                    if (e.target.checked) {
+                        document.documentElement.classList.add('dark-mode');
+                        localStorage.setItem('theme', 'dark-mode');
+                    } else {
+                        document.documentElement.classList.remove('dark-mode');
+                        localStorage.setItem('theme', 'light-mode');
+                    }    
                 }
-            }
+                toggleSwitch.addEventListener('change', switchTheme, false);
             </script>
         </body>
         </html>
