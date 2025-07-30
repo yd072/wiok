@@ -11,10 +11,6 @@ let subEmoji = 'true';
 let socks5Address = '';
 let parsedSocks5Address = {};
 let enableSocks = false;
-// --- HTTP 代理相关变量 ---
-let httpProxyAddress = '';
-let parsedHttpProxyAddress = {};
-let enableHttpProxy = false;
 
 let noTLS = 'false';
 const expire = -1;
@@ -84,8 +80,6 @@ async function loadConfigurations(env) {
     if (env.UUID || env.uuid || env.PASSWORD || env.pswd) userID = env.UUID || env.uuid || env.PASSWORD || env.pswd;
     if (env.PROXYIP || env.proxyip) proxyIP = env.PROXYIP || env.proxyip;
     if (env.SOCKS5) socks5Address = env.SOCKS5;
-    // --- [修改] 从环境变量加载 HTTP  ---
-    if (env.HTTP) httpProxyAddress = env.HTTP;
     if (env.SUBAPI) subConverter = atob(env.SUBAPI);
     if (env.SUBCONFIG) subConfig = atob(env.SUBCONFIG);
     if (env.SUBNAME) FileName = atob(env.SUBNAME);
@@ -116,8 +110,6 @@ async function loadConfigurations(env) {
                 const settings = JSON.parse(advancedSettingsJSON);
                 if (settings.proxyip && settings.proxyip.trim()) proxyIP = settings.proxyip;
                 if (settings.socks5 && settings.socks5.trim()) socks5Address = settings.socks5.split('\n')[0].trim();
-                // --- 从 KV 加载 httpproxy ---
-                if (settings.httpproxy && settings.httpproxy.trim()) httpProxyAddress = settings.httpproxy.split('\n')[0].trim();
                 if (settings.sub && settings.sub.trim()) env.SUB = settings.sub.trim().split('\n')[0];
                 if (settings.subapi && settings.subapi.trim()) subConverter = settings.subapi.trim().split('\n')[0];
                 if (settings.subconfig && settings.subconfig.trim()) subConfig = settings.subconfig.trim().split('\n')[0];
@@ -144,6 +136,9 @@ async function loadConfigurations(env) {
     }
     
     // 3. 最终处理
+    if (!DNS64Server) {
+        DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+    }
 
     if (subConverter.includes("http://")) {
         subConverter = subConverter.split("//")[1];
@@ -158,17 +153,6 @@ async function loadConfigurations(env) {
     socks5s = await 整理(socks5Address);
     socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 	socks5Address = socks5Address.split('//')[1] || socks5Address;
-
-    // --- 解析和启用 HTTP 代理 ---
-    if (httpProxyAddress) {
-        try {
-            parsedHttpProxyAddress = httpProxyAddressParser(httpProxyAddress);
-            enableHttpProxy = true;
-        } catch (err) {
-            console.log(`解析HTTP代理地址时出错: ${err.toString()}`);
-            enableHttpProxy = false;
-        }
-    }
 }
 
 
@@ -319,174 +303,6 @@ class WebSocketManager {
 
 		safeCloseWebSocket(this.webSocket);
 	}
-}
-
-// =================================================================
-//  服务状态页 (Status Page) 
-// =================================================================
-async function statusPage() {
-    const html = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Service Status</title>
-        <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0ZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiIGZpbGw9IiMyZGNlODkiLz48L3N2Zz4=">
-        <style>
-            :root {
-                --bg-color: #f4f7f9;
-                --card-bg-color: #ffffff;
-                --text-color: #333;
-                --primary-color: #2dce89; /* Green for operational */
-                --secondary-color: #8898aa;
-                --border-color: #e9ecef;
-                --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            }
-            body {
-                margin: 0;
-                font-family: var(--font-family);
-                background-color: var(--bg-color);
-                color: var(--text-color);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-                padding: 20px;
-                box-sizing: border-box;
-            }
-            .container {
-                max-width: 800px;
-                width: 100%;
-                background-color: var(--card-bg-color);
-                border-radius: 8px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                padding: 40px;
-                box-sizing: border-box;
-            }
-            .header {
-                border-bottom: 1px solid var(--border-color);
-                padding-bottom: 20px;
-                margin-bottom: 30px;
-            }
-            .header h1 {
-                margin: 0;
-                font-size: 24px;
-            }
-            .header .all-systems-operational {
-                color: var(--primary-color);
-                font-size: 18px;
-                font-weight: 600;
-                margin-top: 10px;
-            }
-            .service-group h2 {
-                font-size: 18px;
-                color: var(--text-color);
-                margin-bottom: 15px;
-            }
-            .service-item {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 15px 0;
-                border-bottom: 1px solid var(--border-color);
-            }
-            .service-item:last-child {
-                border-bottom: none;
-            }
-            .service-name {
-                font-size: 16px;
-            }
-            .service-status {
-                font-size: 16px;
-                font-weight: 600;
-                color: var(--primary-color);
-            }
-            .footer {
-                margin-top: 30px;
-                text-align: center;
-                font-size: 14px;
-                color: var(--secondary-color);
-            }
-            .footer a {
-                color: var(--secondary-color);
-                text-decoration: none;
-            }
-            .footer a:hover {
-                text-decoration: underline;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>Service Status</h1>
-                <div class="all-systems-operational">✔ All Systems Operational</div>
-            </div>
-
-            <div class="service-group">
-                <h2>Backend Infrastructure</h2>
-                <div class="service-item">
-                    <span class="service-name">API Gateway</span>
-                    <span class="service-status">Operational</span>
-                </div>
-                <div class="service-item">
-                    <span class="service-name">Authentication Service</span>
-                    <span class="service-status">Operational</span>
-                </div>
-                 <div class="service-item">
-                    <span class="service-name">Storage Cluster</span>
-                    <span class="service-status">Operational</span>
-                </div>
-            </div>
-
-            <div class="service-group" style="margin-top: 30px;">
-                <h2>Real-time Data Services</h2>
-                <div class="service-item">
-                    <span class="service-name">WebSocket Push Service</span>
-                    <span class="service-status">Operational</span>
-                </div>
-                <div class="service-item">
-                    <span class="service-name">Real-time Data Pipeline</span>
-                    <span class="service-status">Operational</span>
-                </div>
-            </div>
-
-            <div class="footer">
-                <p>
-                    Last Updated:
-                    <span id="date-container"></span>
-                    <span id="time-container" class="notranslate"></span>
-                </p>
-                <a href="#" target="_blank" rel="noopener noreferrer">Powered by EdgeTunnel</a>
-            </div>
-        </div>
-        <script>
-            let lastDate = '';
-            function updateTimestamp() {
-                const now = new Date();   
-                const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-                const currentDate = now.toLocaleDateString('en-US', dateOptions);               
-                if (currentDate !== lastDate) {
-                    document.getElementById('date-container').textContent = currentDate;
-                    lastDate = currentDate;
-                }          
-                const hours = String(now.getHours()).padStart(2, '0');
-                const minutes = String(now.getMinutes()).padStart(2, '0');
-                const seconds = String(now.getSeconds()).padStart(2, '0');
-                const currentTimeString = ' ' + hours + ':' + minutes + ':' + seconds;
-                document.getElementById('time-container').textContent = currentTimeString;
-            }
-            setInterval(updateTimestamp, 1000);
-            updateTimestamp();
-        </script>
-    </body>
-    </html>
-    `;
-    return new Response(html, {
-        status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    });
 }
 
 async function resolveToIPv6(target) {
@@ -681,9 +497,170 @@ export default {
 				userIDTime = userIDs[2];
 			}
 
-            // 3. 检查 UUID 是否有效，若无效则显示新的伪装页面
+            // 3. 检查 UUID 是否有效
 			if (!userID) {
-				return await statusPage();
+				// 生成美化后的系统信息页面
+				const html = `
+				<!DOCTYPE html>
+						<html>
+						<head>
+							<meta charset="utf-8">
+							<meta name="viewport" content="width=device-width, initial-scale=1">
+							<title>系统信息</title>
+							<style>
+								:root {
+									--primary-color: #4CAF50;
+									--border-color: #e0e0e0;
+									--background-color: #f5f5f5;
+									--warning-bg: #fff3f3;
+									--warning-border: #ffcdd2;
+									--warning-text: #d32f2f;
+								}
+								
+								body {
+									margin: 0;
+									padding: 20px;
+									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+									line-height: 1.6;
+									background-color: var(--background-color);
+								}
+
+								.container {
+									max-width: 800px;
+									margin: 0 auto;
+									background: white;
+									padding: 25px;
+									border-radius: 10px;
+									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+								}
+
+								.title {
+									font-size: 1.5em;
+									color: var(--primary-color);
+									margin-bottom: 20px;
+									display: flex;
+									align-items: center;
+									gap: 10px;
+								}
+
+								.title .icon {
+									font-size: 1.2em;
+								}
+
+								.warning-box {
+									background-color: var(--warning-bg);
+									border: 1px solid var(--warning-border);
+									border-radius: 6px;
+									padding: 15px;
+									margin-bottom: 20px;
+									color: var(--warning-text);
+									display: flex;
+									align-items: center;
+									gap: 10px;
+								}
+
+								.warning-box .icon {
+									font-size: 1.2em;
+								}
+
+								.info-grid {
+									display: grid;
+									grid-template-columns: auto 1fr;
+									gap: 12px;
+									background: #fff;
+									border-radius: 8px;
+									overflow: hidden;
+								}
+
+								.info-row {
+									display: contents;
+								}
+
+								.info-row:hover > * {
+									background-color: #f8f9fa;
+								}
+
+								.info-label {
+									padding: 12px 15px;
+									color: #666;
+									font-weight: 500;
+									border-bottom: 1px solid var(--border-color);
+								}
+
+								.info-value {
+									padding: 12px 15px;
+									color: #333;
+									border-bottom: 1px solid var(--border-color);
+								}
+
+								.info-row:last-child .info-label,
+								.info-row:last-child .info-value {
+									border-bottom: none;
+								}
+
+								@media (max-width: 768px) {
+									body {
+										padding: 10px;
+									}
+									
+									.container {
+										padding: 15px;
+									}
+								}
+							</style>
+						</head>
+						<body>
+							<div class="container">
+								<div class="title">
+									<span class="icon">🔍</span>
+									系统信息
+								</div>
+
+								<div class="warning-box">
+									<span class="icon">⚠️</span>
+									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
+								</div>
+
+								<div class="info-grid">
+									<div class="info-row">
+										<div class="info-label">TLS 版本</div>
+										<div class="info-value">${request.cf?.tlsVersion || 'TLSv1.3'}</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">HTTP 协议</div>
+										<div class="info-value">${request.cf?.httpProtocol || 'HTTP/2'}</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">客户端 TCP RTT</div>
+										<div class="info-value">${request.cf?.clientTcpRtt || '3'} ms</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">地理位置</div>
+										<div class="info-value">${request.cf?.continent || 'EU'}</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">时区</div>
+										<div class="info-value">${request.cf?.timezone || 'Europe/Vilnius'}</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">客户端 IP</div>
+										<div class="info-value">${request.headers.get('CF-Connecting-IP') || '127.0.0.1'}</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">User Agent</div>
+										<div class="info-value">${request.headers.get('User-Agent') || 'Mozilla/5.0'}</div>
+									</div>
+								</div>
+							</div>
+						</body>
+						</html>`;
+
+				return new Response(html, {
+					status: 200,
+					headers: {
+						'content-type': 'text/html;charset=utf-8',
+					},
+				});
 			}
 
             // 4. 生成伪装信息
@@ -738,8 +715,168 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
-						// 显示新的伪装页面
-						return await statusPage();
+						// 生成美化后的系统信息页面
+						const html = `
+						<!DOCTYPE html>
+						<html>
+						<head>
+							<meta charset="utf-8">
+							<meta name="viewport" content="width=device-width, initial-scale=1">
+							<title>系统信息</title>
+							<style>
+								:root {
+									--primary-color: #4CAF50;
+									--border-color: #e0e0e0;
+									--background-color: #f5f5f5;
+									--warning-bg: #fff3f3;
+									--warning-border: #ffcdd2;
+									--warning-text: #d32f2f;
+								}
+								
+								body {
+									margin: 0;
+									padding: 20px;
+									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+									line-height: 1.6;
+									background-color: var(--background-color);
+								}
+
+								.container {
+									max-width: 800px;
+									margin: 0 auto;
+									background: white;
+									padding: 25px;
+									border-radius: 10px;
+									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+								}
+
+								.title {
+									font-size: 1.5em;
+									color: var(--primary-color);
+									margin-bottom: 20px;
+									display: flex;
+									align-items: center;
+									gap: 10px;
+								}
+
+								.title .icon {
+									font-size: 1.2em;
+								}
+
+								.warning-box {
+									background-color: var(--warning-bg);
+									border: 1px solid var(--warning-border);
+									border-radius: 6px;
+									padding: 15px;
+									margin-bottom: 20px;
+									color: var(--warning-text);
+									display: flex;
+									align-items: center;
+									gap: 10px;
+								}
+
+								.warning-box .icon {
+									font-size: 1.2em;
+								}
+
+								.info-grid {
+									display: grid;
+									grid-template-columns: auto 1fr;
+									gap: 12px;
+									background: #fff;
+									border-radius: 8px;
+									overflow: hidden;
+								}
+
+								.info-row {
+									display: contents;
+								}
+
+								.info-row:hover > * {
+									background-color: #f8f9fa;
+								}
+
+								.info-label {
+									padding: 12px 15px;
+									color: #666;
+									font-weight: 500;
+									border-bottom: 1px solid var(--border-color);
+								}
+
+								.info-value {
+									padding: 12px 15px;
+									color: #333;
+									border-bottom: 1px solid var(--border-color);
+								}
+
+								.info-row:last-child .info-label,
+								.info-row:last-child .info-value {
+									border-bottom: none;
+								}
+
+								@media (max-width: 768px) {
+									body {
+										padding: 10px;
+									}
+									
+									.container {
+										padding: 15px;
+									}
+								}
+							</style>
+						</head>
+						<body>
+							<div class="container">
+								<div class="title">
+									<span class="icon">🔍</span>
+									系统信息
+								</div>
+
+								<!--<div class="warning-box">
+									<span class="icon">⚠️</span>
+									请设置你的 UUID 变量，或尝试重新部署，检查变量是否生效
+								</div> -->
+
+								<div class="info-grid">
+									<div class="info-row">
+										<div class="info-label">TLS 版本</div>
+										<div class="info-value">${request.cf?.tlsVersion || 'TLSv1.3'}</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">HTTP 协议</div>
+										<div class="info-value">${request.cf?.httpProtocol || 'HTTP/2'}</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">客户端 TCP RTT</div>
+										<div class="info-value">${request.cf?.clientTcpRtt || '3'} ms</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">地理位置</div>
+										<div class="info-value">${request.cf?.continent || 'EU'}</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">时区</div>
+										<div class="info-value">${request.cf?.timezone || 'Europe/Vilnius'}</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">客户端 IP</div>
+										<div class="info-value">${request.headers.get('CF-Connecting-IP') || '127.0.0.1'}</div>
+									</div>
+									<div class="info-row">
+										<div class="info-label">User Agent</div>
+										<div class="info-value">${request.headers.get('User-Agent') || 'Mozilla/5.0'}</div>
+									</div>
+								</div>
+							</div>
+						</body>
+						</html>`;
+
+						return new Response(html, {
+							status: 200,
+							headers: {
+								'content-type': 'text/html;charset=utf-8',
+							},
+						});
 					}
 				} else if (路径 === `/${fakeUserID}`) {
 					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
@@ -786,8 +923,109 @@ export default {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
-						// 对于所有其他未知路径，显示新的伪装页面
-						return await statusPage();
+						// 美化错误页面
+						const html = `
+						<!DOCTYPE html>
+						<html>
+						<head>
+							<meta charset="utf-8">
+							<meta name="viewport" content="width=device-width, initial-scale=1">
+							<title>错误提示</title>
+							<style>
+								:root {
+									--primary-color: #e74c3c;
+									--border-color: #e0e0e0;
+									--background-color: #f5f5f5;
+									--error-bg: #fef5f5;
+									--error-border: #f8d7da;
+									--error-text: #721c24;
+								}
+								
+								body {
+									margin: 0;
+									padding: 20px;
+									font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+									line-height: 1.6;
+									background-color: var(--background-color);
+								}
+
+								.container {
+									max-width: 600px;
+									margin: 50px auto;
+									background: white;
+									padding: 25px;
+									border-radius: 10px;
+									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+									text-align: center;
+								}
+
+								.error-icon {
+									font-size: 60px;
+									color: var(--primary-color);
+									margin-bottom: 20px;
+								}
+
+								.error-title {
+									font-size: 24px;
+									color: var(--error-text);
+									margin-bottom: 15px;
+								}
+
+								.error-message {
+									background-color: var(--error-bg);
+									border: 1px solid var(--error-border);
+									border-radius: 6px;
+									padding: 15px;
+									margin: 20px 0;
+									color: var(--error-text);
+									font-size: 16px;
+								}
+
+								.back-button {
+									display: inline-block;
+									padding: 10px 20px;
+									background-color: var(--primary-color);
+									color: white;
+									border-radius: 5px;
+									text-decoration: none;
+									font-weight: 500;
+									margin-top: 20px;
+									transition: background-color 0.3s;
+								}
+
+								.back-button:hover {
+									background-color: #c0392b;
+								}
+
+								@media (max-width: 768px) {
+									body {
+										padding: 10px;
+									}
+									
+									.container {
+										padding: 15px;
+									}
+								}
+							</style>
+						</head>
+						<body>
+							<div class="container">
+								<div class="error-icon">⚠️</div>
+								<div class="error-title">访问错误</div>
+								<div class="error-message">
+									不用怀疑！你的 UUID 输入错误！请检查配置并重试。
+								</div>
+								<a href="/" class="back-button">返回首页</a>
+							</div>
+						</body>
+						</html>`;
+
+						return new Response(html, { 
+							status: 404,
+							headers: {
+								'content-type': 'text/html;charset=utf-8',
+							},
+						});
 					}
 				}
 			} else {
@@ -961,7 +1199,7 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
                     log(`关闭TCP连接出错: ${e.message}`);
                 }
             }
-        }, 3000);
+        }, 5000);
 
         try {
             // 使用Promise.race进行超时控制
@@ -1047,152 +1285,158 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
+    
+    // 优化 SOCKS5 模式检查 (来自代码1)
+    const checkSocks5Mode = async (address) => {
+        const patterns = [atob('YWxsIGlu'), atob('Kg==')];
+        if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
+        
+        const pattern = go2Socks5s.find(p => 
+            new RegExp('^' + p.replace(/\*/g, '.*') + '$', 'i').test(address)
+        );
+        return !!pattern;
+    };
 
-	const createConnection = async (address, port, proxyOptions = null) => {
-		const proxyType = proxyOptions ? proxyOptions.type : 'direct';
-		log(`建立连接: ${address}:${port} (方式: ${proxyType})`);
+    // 优化连接处理 (来自代码1，参数稍作调整以适应新策略)
+    const createConnection = async (address, port, useSocks = false) => {
+        const connectionType = useSocks ? 'SOCKS5' : 'Direct';
+        log(`建立连接: ${address}:${port} (方式: ${connectionType})`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 5000);
+        try {
+            const tcpSocket = await Promise.race([
+                useSocks ? 
+                    socks5Connect(addressType, address, port, log) :
+                    connect({ 
+                        hostname: address,
+                        port: port,
+                        allowHalfOpen: false,
+                        keepAlive: true,
+                        signal: controller.signal
+                    }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('连接超时')), 3000)
+                )
+            ]);
 
-		try {
-			let tcpSocketPromise;
-			if (proxyType === 'http') {
-				tcpSocketPromise = httpConnect(address, port, log);
-			} else if (proxyType === 'socks5') {
-				tcpSocketPromise = socks5Connect(addressType, address, port, log);
-			} else {
-				tcpSocketPromise = connect({
-					hostname: address,
-					port: port,
-					allowHalfOpen: false,
-                    keepAlive: true,
-                    signal: controller.signal
-				});
-			}
+            clearTimeout(timeoutId);
+            remoteSocket.value = tcpSocket;
 
-			const tcpSocket = await Promise.race([
-				tcpSocketPromise,
-				new Promise((_, reject) => setTimeout(() => reject(new Error('连接超时')), 3000))
-			]);
+            const writer = tcpSocket.writable.getWriter();
+            try {
+                await writer.write(rawClientData);
+            } finally {
+                writer.releaseLock();
+            }
 
-			clearTimeout(timeoutId);
-			remoteSocket.value = tcpSocket;
+            return tcpSocket;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            throw error;
+        }
+    };
 
-			const writer = tcpSocket.writable.getWriter();
-			try {
-				await writer.write(rawClientData);
-			} finally {
-				writer.releaseLock();
-			}
-
-			return tcpSocket;
-		} catch (error) {
-			clearTimeout(timeoutId);
-			throw error;
-		}
-	};
-
-    // 新的递归函数，用于按顺序尝试所有连接策略
+    // 新的递归函数，用于按顺序尝试所有连接策略 (来自代码2)
     async function tryConnectionStrategies(strategies) {
         if (!strategies || strategies.length === 0) {
-            log('All connection strategies failed. Closing WebSocket.');
-            safeCloseWebSocket(webSocket);
-            return;
-        }
+            log('所有连接策略均已失败，关闭连接。');
+                safeCloseWebSocket(webSocket);
+                return;
+            }
 
         const [currentStrategy, ...nextStrategies] = strategies;
-        log(`Attempting connection with strategy: '${currentStrategy.name}'`);
+        log(`尝试使用策略: '${currentStrategy.name}'`);
 
         try {
             const tcpSocket = await currentStrategy.execute();
-            log(`Strategy '${currentStrategy.name}' connected successfully. Piping data.`);
+            log(`策略 '${currentStrategy.name}' 连接成功，开始传输数据。`);
             
-            // 关键点：如果本次连接失败，重试函数将用剩余的策略继续尝试
+            // 如果本次连接在后续传输中失败，此函数将被调用以尝试下一个策略
             const retryNext = () => tryConnectionStrategies(nextStrategies);
             remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
 
         } catch (error) {
-            log(`Strategy '${currentStrategy.name}' failed: ${error.message}. Trying next strategy...`);
+            log(`策略 '${currentStrategy.name}' 失败: ${error.message}。正在尝试下一个策略...`);
             await tryConnectionStrategies(nextStrategies); // 立即尝试下一个策略
         }
     }
 
     // --- 组装策略列表 ---
     const connectionStrategies = [];
-    const shouldUseSocks = enableSocks && go2Socks5s.some(pattern => new RegExp(`^${pattern.replace(/\*/g, '.*')}$`, 'i').test(addressRemote));
+    const shouldUseSocksAsPrimary = enableSocks && go2Socks5s.length > 0 ? await checkSocks5Mode(addressRemote) : false;
 
     // 1. 主要连接策略
-    if (enableHttpProxy) {
+    if (shouldUseSocksAsPrimary) {
         connectionStrategies.push({
-            name: 'HTTP Proxy',
-            execute: () => createConnection(addressRemote, portRemote, { type: 'http' })
+            name: 'SOCKS5 (主策略)',
+            execute: () => createConnection(addressRemote, portRemote, true)
         });
-    } else if (shouldUseSocks) {
+            } else {            
         connectionStrategies.push({
-            name: 'SOCKS5 Proxy (go2Socks5s)',
-            execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
-        });
-    } else {
-        connectionStrategies.push({
-            name: 'Direct Connection',
-            execute: () => createConnection(addressRemote, portRemote, null)
+            name: '直接连接',
+            execute: () => createConnection(addressRemote, portRemote, false)
         });
     }
     
     // 2. 备用 (Fallback) 策略
-    if (enableSocks && !shouldUseSocks) {
+    // 仅当SOCKS启用但未被用作主策略时，才将其作为回退选项
+    if (enableSocks && !shouldUseSocksAsPrimary) {
         connectionStrategies.push({
-            name: 'SOCKS5 Proxy (Fallback)',
-            execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
+            name: 'SOCKS5 (回退)',
+            execute: () => createConnection(addressRemote, portRemote, true)
         });
     }
 
+    // 用户配置的 PROXYIP
     if (proxyIP && proxyIP.trim() !== '') {
         connectionStrategies.push({
-            name: '用户配置的 PROXYIP',
+                    name: '用户配置的 PROXYIP',
             execute: () => {
-                const { address, port } = parseProxyIP(proxyIP, portRemote);
-                return createConnection(address, port);
-            }
+                        const { address, port } = parseProxyIP(proxyIP, portRemote);
+                return createConnection(address, port, false);
+                    }
         });
     }
     
+    // 用户配置的 NAT64
     const userNat64Server = DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
     if (userNat64Server) {
         connectionStrategies.push({
-            name: '用户配置的 NAT64',
-            execute: async () => {
-                const nat64Address = await resolveToIPv6(addressRemote);
-                return createConnection(`[${nat64Address}]`, 443);
-            }
+                    name: '用户配置的 NAT64',
+                    execute: async () => {
+                        const nat64Address = await resolveToIPv6(addressRemote);
+                return createConnection(`[${nat64Address}]`, 443, false);
+                    }
         });
     }
     
+    // 内置的默认 PROXYIP
     connectionStrategies.push({
-        name: '内置的默认 PROXYIP',
+                    name: '内置的默认 PROXYIP',
         execute: () => {
-            const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-            const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
-            return createConnection(address, port);
-        }
+                        const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                        const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
+            return createConnection(address, port, false);
+                    }
     });
 
+    // 内置的默认 NAT64
     connectionStrategies.push({
-        name: '内置的默认 NAT64',
-        execute: async () => {
-            if (!DNS64Server || DNS64Server.trim() === '') {
-                DNS64Server = '2001:67c:2960::6464';
+                    name: '内置的默认 NAT64',
+                    execute: async () => {
+                        if (!DNS64Server || DNS64Server.trim() === '') {
+                DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+                        }
+                        const nat64Address = await resolveToIPv6(addressRemote);
+            return createConnection(`[${nat64Address}]`, 443, false);
             }
-            const nat64Address = await resolveToIPv6(addressRemote);
-            return createConnection(`[${nat64Address}]`, 443);
-        }
     });
 
     // --- 启动策略链 ---
     await tryConnectionStrategies(connectionStrategies);
 }
-
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
@@ -1283,24 +1527,24 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         if (!hasIncomingData) {
             controller.abort('连接超时');
         }
-    }, 3000);
+    }, 5000);
 
     try {
         // 发送数据的函数，确保 WebSocket 处于 OPEN 状态
     const writeData = async (chunk) => {
-                        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+        if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                 throw new Error('WebSocket 未连接');
-                        }
+        }
 
-                        if (header) {
+        if (header) {
                 // 预分配足够的 buffer，避免重复分配
                 const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
                 combinedData.set(new Uint8Array(header), 0);
                 combinedData.set(new Uint8Array(chunk), header.byteLength);
-                            webSocket.send(combinedData);
+                webSocket.send(combinedData);
                 header = null; // 清除 header 引用
-                        } else {
-                            webSocket.send(chunk);
+        } else {
+            webSocket.send(chunk);
         }
         
             hasIncomingData = true;
@@ -1349,10 +1593,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 
                 // 仅在未收到数据时尝试重试，并限制重试次数
                 if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-                        retryAttempted = true;
+                    retryAttempted = true;
                     retryCount++;
                     log(`连接失败, 正在进行第 ${retryCount} 次重试...`);
-                        retry();
+                    retry();
                 }
             });
 
@@ -1365,20 +1609,19 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         
         // 仅在发生异常且未收到数据时尝试重试，并限制重试次数
         if (!hasIncomingData && retry && !retryAttempted && retryCount < MAX_RETRIES) {
-                retryAttempted = true;
+            retryAttempted = true;
             retryCount++;
             log(`发生异常, 正在进行第 ${retryCount} 次重试...`);
-                retry();
+            retry();
         }
         
         throw error;
     } finally {
         clearTimeout(timeout);
         if (signal.aborted) {
-                safeCloseWebSocket(webSocket);
-            }
+            safeCloseWebSocket(webSocket);
         }
-    
+    }
 }
 
 const WS_READY_STATE_OPEN = 1;
@@ -1519,157 +1762,6 @@ function socks5AddressParser(address) {
         port,
     }
 }
-
-//  HTTP 代理地址解析函数 
-function httpProxyAddressParser(address) {
-    let [latter, former] = address.split("@").reverse();
-    let username, password, hostname, port;
-
-    if (former) {
-        const formers = former.split(":");
-        if (formers.length > 2) { // 密码中可能包含冒号，但用户名不能
-             const userSeparatorIndex = former.indexOf(":");
-             username = former.substring(0, userSeparatorIndex);
-             password = former.substring(userSeparatorIndex + 1);
-        } else if (formers.length === 2){
-            [username, password] = formers;
-        } else {
-             throw new Error('Invalid HTTP proxy address format: "username:password" required');
-        }
-    }
-
-    const latters = latter.split(":");
-    port = Number(latters.pop());
-    if (isNaN(port)) {
-        throw new Error('Invalid HTTP proxy address format: port must be a number');
-    }
-
-    hostname = latters.join(":");
-
-    const regex = /^\[.*\]$/;
-    if (hostname.includes(":") && !regex.test(hostname)) {
-        throw new Error('Invalid HTTP proxy address format: IPv6 must be in brackets');
-    }
-
-    return {
-        username,
-        password,
-        hostname,
-        port,
-    }
-}
-
-async function httpConnect(addressRemote, portRemote, log) {
-	const { username, password, hostname, port } = parsedHttpProxyAddress;
-	const sock = await connect({
-		hostname: hostname,
-		port: port
-	});
-
-	// 构建HTTP CONNECT请求
-	let connectRequest = `CONNECT ${addressRemote}:${portRemote} HTTP/1.1\r\n`;
-	connectRequest += `Host: ${addressRemote}:${portRemote}\r\n`;
-
-	// 添加代理认证（如果需要）
-	if (username && password) {
-		const authString = `${username}:${password}`;
-		const base64Auth = btoa(authString);
-		connectRequest += `Proxy-Authorization: Basic ${base64Auth}\r\n`;
-	}
-
-	connectRequest += `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\n`;
-	connectRequest += `Proxy-Connection: Keep-Alive\r\n`;
-	connectRequest += `Connection: Keep-Alive\r\n`; // 添加标准 Connection 头
-	connectRequest += `\r\n`;
-
-	log(`正在连接到 ${addressRemote}:${portRemote} 通过代理 ${hostname}:${port}`);
-
-	try {
-		// 发送连接请求
-		const writer = sock.writable.getWriter();
-		await writer.write(new TextEncoder().encode(connectRequest));
-		writer.releaseLock();
-	} catch (err) {
-		console.error('发送HTTP CONNECT请求失败:', err);
-		throw new Error(`发送HTTP CONNECT请求失败: ${err.message}`);
-	}
-
-	// 读取HTTP响应
-	const reader = sock.readable.getReader();
-	let respText = '';
-	let connected = false;
-	let responseBuffer = new Uint8Array(0);
-
-	try {
-		while (true) {
-			const { value, done } = await reader.read();
-			if (done) {
-				console.error('HTTP代理连接中断');
-				throw new Error('HTTP代理连接中断');
-			}
-
-			// 合并接收到的数据
-			const newBuffer = new Uint8Array(responseBuffer.length + value.length);
-			newBuffer.set(responseBuffer);
-			newBuffer.set(value, responseBuffer.length);
-			responseBuffer = newBuffer;
-
-			// 将收到的数据转换为文本
-			respText = new TextDecoder().decode(responseBuffer);
-
-			// 检查是否收到完整的HTTP响应头
-			if (respText.includes('\r\n\r\n')) {
-				// 分离HTTP头和可能的数据部分
-				const headersEndPos = respText.indexOf('\r\n\r\n') + 4;
-				const headers = respText.substring(0, headersEndPos);
-
-				log(`收到HTTP代理响应: ${headers.split('\r\n')[0]}`);
-
-				// 检查响应状态
-				if (headers.startsWith('HTTP/1.1 200') || headers.startsWith('HTTP/1.0 200')) {
-					connected = true;
-
-					// 如果响应头之后还有数据，我们需要保存这些数据以便后续处理
-					if (headersEndPos < responseBuffer.length) {
-						const remainingData = responseBuffer.slice(headersEndPos);
-						// 创建一个缓冲区来存储这些数据，以便稍后使用
-						const dataStream = new ReadableStream({
-							start(controller) {
-								controller.enqueue(remainingData);
-							}
-						});
-
-						// 创建一个新的TransformStream来处理额外数据
-						const { readable, writable } = new TransformStream();
-						dataStream.pipeTo(writable).catch(err => console.error('处理剩余数据错误:', err));
-
-						// 替换原始readable流
-						// @ts-ignore
-						sock.readable = readable;
-					}
-				} else {
-					const errorMsg = `HTTP代理连接失败: ${headers.split('\r\n')[0]}`;
-					console.error(errorMsg);
-					throw new Error(errorMsg);
-				}
-				break;
-			}
-		}
-	} catch (err) {
-		reader.releaseLock();
-		throw new Error(`处理HTTP代理响应失败: ${err.message}`);
-	}
-
-	reader.releaseLock();
-
-	if (!connected) {
-		throw new Error('HTTP代理连接失败: 未收到成功响应');
-	}
-
-	log(`HTTP代理连接成功: ${addressRemote}:${portRemote}`);
-	return sock;
-}
-
 
 function 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64) {
     if (isBase64) {
@@ -2698,7 +2790,6 @@ async function handleGetRequest(env, txt) {
     let hasKV = !!env.KV;
     let proxyIPContent = '';
     let socks5Content = '';
-    let httpProxyContent = '';
     let subContent = ''; 
     let subAPIContent = '';
     let subConfigContent = '';
@@ -2713,7 +2804,6 @@ async function handleGetRequest(env, txt) {
                 const settings = JSON.parse(advancedSettingsJSON);
                 proxyIPContent = settings.proxyip || '';
                 socks5Content = settings.socks5 || '';
-                httpProxyContent = settings.httpproxy || '';
                 subContent = settings.sub || '';
                 subAPIContent = settings.subapi || '';
                 subConfigContent = settings.subconfig || '';
@@ -2860,6 +2950,20 @@ async function handleGetRequest(env, txt) {
                     margin: 20px 0;
                 }
 
+                @media (max-width: 768px) {
+                    body {
+                        padding: 10px;
+                    }
+                    
+                    .container {
+                        padding: 15px;
+                    }
+                    
+                    .editor {
+                        height: 400px;
+                    }
+                }
+
                 .advanced-settings {
                     margin: 20px 0;
                     padding: 20px;
@@ -2876,58 +2980,20 @@ async function handleGetRequest(env, txt) {
                     cursor: pointer;
                 }
 
-                #advanced-settings-content {
+                .advanced-settings-content {
                     display: none;
                 }
 
-                .setting-item {
-                    margin-bottom: 10px;
-                    border: 1px solid #ddd;
-                    border-radius: 6px;
-                    overflow: hidden;
-                }
-
-                .setting-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 10px 15px;
-                    background-color: #f0f0f0;
-                    cursor: pointer;
-                    font-weight: 500;
-                }
-                
-                .setting-content {
-                    display: none; /* Initially hidden */
-                    padding: 15px;
-                    background-color: #fafafa;
-                }
-
-                .setting-editor {
+                .proxyip-editor {
                     width: 100%;
-                    min-height: 80px;
+                    height: 100px;
                     margin-top: 10px;
                     padding: 10px;
-                    box-sizing: border-box;
                     border: 1px solid var(--border-color);
                     border-radius: 4px;
                     font-family: Monaco, Consolas, "Courier New", monospace;
                     font-size: 14px;
                     resize: vertical;
-                }
-
-                @media (max-width: 768px) {
-                    body {
-                        padding: 10px;
-                    }
-                    
-                    .container {
-                        padding: 15px;
-                    }
-                    
-                    .editor {
-                        height: 400px;
-                    }
                 }
             </style>
         </head>
@@ -2935,98 +3001,89 @@ async function handleGetRequest(env, txt) {
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
                 
+                <!-- 修改高级设置部分 -->
                 <div class="advanced-settings">
                     <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
                         <h3 style="margin: 0;">⚙️ 高级设置</h3>
+                        <span id="advanced-settings-toggle">∨</span>
                     </div>
-                    <div id="advanced-settings-content">
+                    <div id="advanced-settings-content" class="advanced-settings-content">
                         <!-- PROXYIP设置 -->
-                        <div class="setting-item">
-                            <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>PROXYIP 设置</strong></span>
-                            </div>
-                            <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
-                                <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${proxyIPContent}</textarea>
-                            </div>
+                        <div style="margin-bottom: 20px;">
+                            <label for="proxyip"><strong>PROXYIP 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">每行一个IP，格式：IP:端口(可不添加端口)</p>
+                            <textarea 
+                                id="proxyip" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}"
+                            >${proxyIPContent}</textarea>
                         </div>
 
                         <!-- SOCKS5设置 -->
-                        <div class="setting-item">
-                             <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SOCKS5 设置</strong></span>
-                            </div>
-                            <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
-                                <textarea id="socks5" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
-                            </div>
-                        </div>
-                        
-                        <!-- HTTP Proxy 设置 -->
-                        <div class="setting-item">
-                            <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>HTTP 设置</strong></span>
-                            </div>
-                            <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
-                                <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
-                            </div>
+                        <div style="margin-bottom: 20px;">
+                            <label for="socks5"><strong>SOCKS5 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                            <textarea 
+                                id="socks5" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}"
+                            >${socks5Content}</textarea>
                         </div>
 
                         <!-- SUB设置 -->
-                        <div class="setting-item">
-                            <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SUB 设置</strong> (优选订阅生成器)</span>
-                            </div>
-                            <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
-                                <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
-                            </div>
+                        <div style="margin-bottom: 20px;">
+                            <label for="sub"><strong>SUB 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">只支持单个优选订阅生成器地址</p>
+                            <textarea 
+                                id="sub" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}"
+                            >${subContent}</textarea>
                         </div>
                         
                         <!-- SUBAPI设置 -->
-                        <div class="setting-item">
-                            <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SUBAPI 设置</strong> (订阅转换后端)</span>
-                            </div>
-                            <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
-                                <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
-                            </div>
+                        <div style="margin-bottom: 20px;">
+                            <label for="subapi"><strong>SUBAPI 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">订阅转换后端地址</p>
+                            <textarea 
+                                id="subapi" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}"
+                            >${subAPIContent}</textarea>
                         </div>
                         
                         <!-- SUBCONFIG设置 -->
-                        <div class="setting-item">
-                            <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SUBCONFIG 设置</strong> (订阅转换配置)</span>
-                            </div>
-                            <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
-                                <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
-                            </div>
+                        <div style="margin-bottom: 20px;">
+                            <label for="subconfig"><strong>SUBCONFIG 设置</strong></label>
+                            <p style="margin: 5px 0; color: #666;">订阅转换配置文件地址</p>
+                            <textarea 
+                                id="subconfig" 
+                                class="proxyip-editor" 
+                                placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}"
+                            >${subConfigContent}</textarea>
                         </div>
 
                         <!-- NAT64/DNS64 设置 -->
-                        <div class="setting-item">
-                           <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>NAT64/DNS64 设置</strong></span>
-                            </div>
-                             <div class="setting-content">
-                                <p style="margin: 5px 0; color: #666;">
-                                    <a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
-                                </p>
-                                <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
-                            </div>
+                        <div style="margin-bottom: 20px;">
+                            <label for="nat64"><strong>NAT64/DNS64</strong></label>
+    						<p style="margin: 5px 0; color: #666;">
+        					<a id="nat64-link" target="_blank" style="color: #666; text-decoration: underline;">自行查询</a>
+    						</p>
+                            <textarea 
+                                id="nat64" 
+                                class="proxyip-editor" 
+                                placeholder="例如：\ndns64.example.com\n2a01:4f8:c2c:123f::/1"
+                            >${nat64Content}</textarea>
                         </div>
+
 						<script>
   							const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
   							const decodedURL = atob(encodedURL);
   							document.getElementById('nat64-link').setAttribute('href', decodedURL);
 						</script>
-
                         <!-- 统一的保存按钮 -->
-                        <div style="margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+                        <div>
+                            <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
@@ -3058,110 +3115,103 @@ async function handleGetRequest(env, txt) {
             </div>
 
             <script>
-                function goBack() {
-                    const pathParts = window.location.pathname.split('/');
-                    pathParts.pop(); // 移除 "edit"
-                    const newPath = pathParts.join('/');
-                    window.location.href = newPath;
-                }
+            function goBack() {
+                const pathParts = window.location.pathname.split('/');
+                pathParts.pop(); // 移除 "edit"
+                const newPath = pathParts.join('/');
+                window.location.href = newPath;
+            }
 
-                async function saveContent(button) {
-                    try {
-                        button.disabled = true;
-                        const content = document.getElementById('content').value;
-                        const saveStatus = document.getElementById('saveStatus');
-                        
-                        saveStatus.textContent = '保存中...';
-                        
-                        const response = await fetch(window.location.href, {
-                            method: 'POST',
-                            body: content
-                        });
-
-                        if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
-                            setTimeout(() => {
-                                saveStatus.textContent = '';
-                            }, 3000);
-                        } else {
-                            throw new Error('保存失败');
-                        }
-                    } catch (error) {
-                        const saveStatus = document.getElementById('saveStatus');
-                        saveStatus.textContent = '❌ ' + error.message;
-                        console.error('保存时发生错误:', error);
-                    } finally {
-                        button.disabled = false;
-                    }
-                }
-
-                function toggleNotice() {
-                    const noticeContent = document.getElementById('noticeContent');
-                    const noticeToggle = document.getElementById('noticeToggle');
-                    if (noticeContent.style.display === 'none') {
-                        noticeContent.style.display = 'block';
-                        noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
-                    } else {
-                        noticeContent.style.display = 'none';
-                        noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
-                    }
-                }
-
-                function toggleAdvancedSettings() {
-                    const content = document.getElementById('advanced-settings-content');
-                    if (content.style.display === 'none' || !content.style.display) {
-                        content.style.display = 'block';
-                    } else {
-                        content.style.display = 'none';
-                    }
-                }
-
-                function toggleSetting(headerElement) {
-                    const content = headerElement.nextElementSibling;
-                    headerElement.classList.toggle('open');
-                    if (content.style.display === 'none' || content.style.display === '') {
-                        content.style.display = 'block';
-                    } else {
-                        content.style.display = 'none';
-                    }
-                }
-
-                async function saveSettings() {
-                    const saveStatus = document.getElementById('settings-save-status');
+            async function saveContent(button) {
+                try {
+                    button.disabled = true;
+                    const content = document.getElementById('content').value;
+                    const saveStatus = document.getElementById('saveStatus');
+                    
                     saveStatus.textContent = '保存中...';
                     
-                    try {
-                        const advancedSettings = {
-                            proxyip: document.getElementById('proxyip').value,
-                            socks5: document.getElementById('socks5').value,
-                            httpproxy: document.getElementById('httpproxy').value,
-                            sub: document.getElementById('sub').value,
-                            subapi: document.getElementById('subapi').value,
-                            subconfig: document.getElementById('subconfig').value,
-                            nat64: document.getElementById('nat64').value
-                        };
+                    const response = await fetch(window.location.href, {
+                        method: 'POST',
+                        body: content
+                    });
 
-                        const response = await fetch(window.location.href + '?type=advanced', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(advancedSettings)
-                        });
-
-                        if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
-                            setTimeout(() => {
-                                saveStatus.textContent = '';
-                            }, 3000);
-                        } else {
-                            throw new Error('保存失败: ' + await response.text());
-                        }
-                    } catch (error) {
-                        saveStatus.textContent = '❌ ' + error.message;
-                        console.error('保存设置时发生错误:', error);
+                    if (response.ok) {
+                        saveStatus.textContent = '✅ 保存成功';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败');
                     }
+                } catch (error) {
+                    const saveStatus = document.getElementById('saveStatus');
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存时发生错误:', error);
+                } finally {
+                    button.disabled = false;
                 }
+            }
+
+            function toggleNotice() {
+                const noticeContent = document.getElementById('noticeContent');
+                const noticeToggle = document.getElementById('noticeToggle');
+                if (noticeContent.style.display === 'none') {
+                    noticeContent.style.display = 'block';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                } else {
+                    noticeContent.style.display = 'none';
+                    noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                }
+            }
+
+            function toggleAdvancedSettings() {
+                const content = document.getElementById('advanced-settings-content');
+                const toggle = document.getElementById('advanced-settings-toggle');
+                if (content.style.display === 'none' || !content.style.display) {
+                    content.style.display = 'block';
+                    toggle.textContent = '∧';
+                } else {
+                    content.style.display = 'none';
+                    toggle.textContent = '∨';
+                }
+            }
+
+            // 修改保存设置函数
+            async function saveSettings() {
+                const saveStatus = document.getElementById('settings-save-status');
+                saveStatus.textContent = '保存中...';
+                
+                try {
+                    const advancedSettings = {
+                        proxyip: document.getElementById('proxyip').value,
+                        socks5: document.getElementById('socks5').value,
+                        sub: document.getElementById('sub').value,
+                        subapi: document.getElementById('subapi').value,
+                        subconfig: document.getElementById('subconfig').value,
+                        nat64: document.getElementById('nat64').value
+                    };
+
+                    const response = await fetch(window.location.href + '?type=advanced', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(advancedSettings)
+                    });
+
+                    if (response.ok) {
+                        saveStatus.textContent = '✅ 保存成功';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('保存失败: ' + await response.text());
+                    }
+                } catch (error) {
+                    saveStatus.textContent = '❌ ' + error.message;
+                    console.error('保存设置时发生错误:', error);
+                }
+            }
             </script>
         </body>
         </html>
