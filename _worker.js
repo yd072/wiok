@@ -1,4 +1,3 @@
-
 import { connect } from 'cloudflare:sockets';
 
 let userID = '';
@@ -14,8 +13,8 @@ let enableSocks = false;
 
 let noTLS = 'false';
 const expire = -1;
-let proxyIPs = [];
-let socks5s = [];
+let proxyIPs;
+let socks5s;
 let go2Socks5s = [
 	'*ttvnw.net',
 	'*tapecontent.net',
@@ -30,8 +29,8 @@ let addressescsv = [];
 let DLS = 8;
 let remarkIndex = 1;
 let FileName = atob('ZWRnZXR1bm5lbA==');
-let BotToken = '';
-let ChatID = '';
+let BotToken;
+let ChatID;
 let proxyhosts = [];
 let proxyhostsURL = '';
 let RproxyIP = 'false';
@@ -48,14 +47,15 @@ let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 let DNS64Server = '';
 
-/**
- * 辅助工具函数
- */
+// 添加工具函数
 const utils = {
+	// UUID校验
 	isValidUUID(uuid) {
 		const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 		return uuidPattern.test(uuid);
 	},
+
+	// Base64处理
 	base64: {
 		toArrayBuffer(base64Str) {
 			if (!base64Str) return { earlyData: undefined, error: null };
@@ -70,116 +70,6 @@ const utils = {
 		}
 	},
 };
-
-/**
- * 集中加载所有配置，严格执行 KV > 环境变量 > 默认值的优先级
- * @param {any} env 
- */
-async function loadConfigurations(env) {
-    // 1. 从环境变量加载，如果存在则覆盖默认值
-    if (env.UUID || env.uuid || env.PASSWORD || env.pswd) userID = env.UUID || env.uuid || env.PASSWORD || env.pswd;
-    if (env.PROXYIP || env.proxyip) proxyIP = env.PROXYIP || env.proxyip;
-    if (env.SOCKS5) socks5Address = env.SOCKS5;
-    if (env.SUBAPI) subConverter = atob(env.SUBAPI);
-    if (env.SUBCONFIG) subConfig = atob(env.SUBCONFIG);
-    if (env.SUBNAME) FileName = atob(env.SUBNAME);
-    if (env.DNS64 || env.NAT64) DNS64Server = env.DNS64 || env.NAT64;
-    
-    if (env.ADD) addresses = await 整理(env.ADD);
-    if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
-    if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
-    if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
-    if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
-    if (env.LINK) link = await 整理(env.LINK);
-    if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
-    if (env.BAN) banHosts = (await 整理(env.BAN)).map(h => atob(h));
-
-    if (env.DLS) DLS = Number(env.DLS);
-    if (env.CSVREMARK) remarkIndex = Number(env.CSVREMARK);
-    if (env.TGTOKEN) BotToken = env.TGTOKEN;
-    if (env.TGID) ChatID = env.TGID;
-    if (env.SUBEMOJI || env.EMOJI) subEmoji = env.SUBEMOJI || env.EMOJI;
-
-    // 2. 如果存在 KV，则使用 KV 的值覆盖所有之前的值
-    if (env.KV) {
-        try {
-            await 迁移地址列表(env, 'ADD.txt');
-
-            const advancedSettingsJSON = await env.KV.get('settinggs.txt');
-            if (advancedSettingsJSON) {
-                const settings = JSON.parse(advancedSettingsJSON);
-                if (settings.proxyip && settings.proxyip.trim()) proxyIP = settings.proxyip;
-                if (settings.socks5 && settings.socks5.trim()) socks5Address = settings.socks5.split('\n')[0].trim();
-                if (settings.sub && settings.sub.trim()) env.SUB = settings.sub.trim().split('\n')[0];
-                if (settings.subapi && settings.subapi.trim()) subConverter = settings.subapi.trim().split('\n')[0];
-                if (settings.subconfig && settings.subconfig.trim()) subConfig = settings.subconfig.trim().split('\n')[0];
-                if (settings.nat64 && settings.nat64.trim()) DNS64Server = settings.nat64.trim().split('\n')[0];
-            }
-
-            const preferList = await env.KV.get('ADD.txt');
-            if (preferList) {
-                const 优选地址数组 = await 整理(preferList);
-                const 分类地址 = { 接口地址: new Set(), 链接地址: new Set(), 优选地址: new Set() };
-                for (const 元素 of 优选地址数组) {
-                    if (元素.startsWith('https://')) 分类地址.接口地址.add(元素);
-                    else if (元素.includes('://')) 分类地址.链接地址.add(元素);
-                    else 分类地址.优选地址.add(元素);
-                }
-                addressesapi = [...分类地址.接口地址];
-                link = [...分类地址.链接地址];
-                addresses = [...分类地址.优选地址];
-            }
-
-        } catch (e) {
-            console.error("从KV加载配置时出错: ", e);
-        }
-    }
-    
-    // 3. 最终处理
-    if (!DNS64Server) {
-        DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
-    }
-
-    if (subConverter.includes("http://")) {
-        subConverter = subConverter.split("//")[1];
-        subProtocol = 'http';
-    } else {
-        subConverter = subConverter.split("//")[1] || subConverter;
-    }
-
-    proxyIPs = await 整理(proxyIP);
-    proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
-    
-    socks5s = await 整理(socks5Address);
-    socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
-	socks5Address = socks5Address.split('//')[1] || socks5Address;
-}
-
-
-/**
- * 解析 PROXYIP 字符串，提取地址和端口
- * @param {string} proxyString 
- * @param {number} defaultPort 
- * @returns {{address: string, port: number}}
- */
-function parseProxyIP(proxyString, defaultPort) {
-    let port = defaultPort;
-    let address = proxyString;
-
-    if (address.includes(']:')) {
-        [address, port] = address.split(']:');
-        address += ']';
-    } else if (address.includes(':')) {
-        [address, port] = address.split(':');
-    }
-
-    if (address.includes('.tp')) {
-        port = address.split('.tp')[1].split('.')[0] || port;
-    }
-
-    return { address: address.toLowerCase(), port: Number(port) };
-}
-
 
 // WebSocket连接管理类
 class WebSocketManager {
@@ -468,12 +358,16 @@ async function resolveToIPv6(target) {
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
         const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
         
+        // --- 关键修改 ---
         if (isIPv6(nat64)) {
             return nat64;
         } else {
+            // 如果没得到合法的IPv6，就抛出错误
             throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
         }
     } catch (error) {
+        // --- 关键修改 ---
+        // 将底层的错误继续向上抛出，而不是返回一个默认值
         throw new Error(`NAT64 resolution failed: ${error.message}`);
 	}
 }
@@ -481,12 +375,9 @@ async function resolveToIPv6(target) {
 export default {
 	async fetch(request, env, ctx) {
 		try {
-            // 1. 统一加载所有配置
-            await loadConfigurations(env);
-
-            // 2. 处理动态 UUID
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
+			userID = env.UUID || env.uuid || env.PASSWORD || env.pswd || userID;
 			if (env.KEY || env.TOKEN || (userID && !utils.isValidUUID(userID))) {
 				动态UUID = env.KEY || env.TOKEN || userID;
 				有效时间 = Number(env.TIME) || 有效时间;
@@ -497,7 +388,6 @@ export default {
 				userIDTime = userIDs[2];
 			}
 
-            // 3. 检查 UUID 是否有效
 			if (!userID) {
 				// 生成美化后的系统信息页面
 				const html = `
@@ -663,7 +553,6 @@ export default {
 				});
 			}
 
-            // 4. 生成伪装信息
 			const currentDate = new Date();
 			currentDate.setHours(0, 0, 0, 0);
 			const timestamp = Math.ceil(currentDate.getTime() / 1000);
@@ -678,14 +567,73 @@ export default {
 
 			const fakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
 
-            // 5. 处理 SOCKS5
+			// 修改PROXYIP初始化逻辑
+			if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.proxyip && settings.proxyip.trim()) {
+							proxyIP = settings.proxyip;
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取PROXYIP时发生错误:', error);
+				}
+			}
+			// 如果proxyIP为空，则使用环境变量或默认值
+			proxyIP = proxyIP || env.PROXYIP || env.proxyip || '';
+			proxyIPs = await 整理(proxyIP);
+			proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+
+			// 修改SOCKS5地址初始化逻辑
+			if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.socks5 && settings.socks5.trim()) {
+							socks5Address = settings.socks5.split('\n')[0].trim();
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取SOCKS5时发生错误:', error);
+				}
+			}
+			// 如果socks5Address为空，则使用环境变量或默认值
+			socks5Address = socks5Address || env.SOCKS5 || '';
+			socks5s = await 整理(socks5Address);
+			socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+			socks5Address = socks5Address.split('//')[1] || socks5Address;
+
+			if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
+			if (env.CFPORTS) httpsPorts = await 整理(env.CFPORTS);
+			if (env.BAN) banHosts = await 整理(env.BAN);
+			
+            // --- NAT64/DNS64 设置加载逻辑 ---
+            if (env.KV) {
+				try {
+					const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+					if (advancedSettingsJSON) {
+						const settings = JSON.parse(advancedSettingsJSON);
+						if (settings.nat64 && settings.nat64.trim()) {
+							DNS64Server = settings.nat64.trim().split('\n')[0];
+						}
+					}
+				} catch (error) {
+					console.error('从KV读取NAT64时发生错误:', error);
+                }
+            }
+			DNS64Server = DNS64Server || env.DNS64 || env.NAT64 || (DNS64Server != '' ? DNS64Server : atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="));
+
 			if (socks5Address) {
 				try {
 					parsedSocks5Address = socks5AddressParser(socks5Address);
 					RproxyIP = env.RPROXYIP || 'false';
 					enableSocks = true;
 				} catch (err) {
-					console.log(err.toString());
+					let e = err;
+					console.log(e.toString());
 					RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 					enableSocks = false;
 				}
@@ -693,20 +641,42 @@ export default {
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 
-            // 6. 根据请求类型（WebSocket 或 HTTP）进行路由
 			const upgradeHeader = request.headers.get('Upgrade');
 			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
-				// HTTP 请求处理
-                let sub = env.SUB || '';
+				if (env.ADD) addresses = await 整理(env.ADD);
+				if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
+				if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
+				if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
+				if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
+				DLS = Number(env.DLS) || DLS;
+				remarkIndex = Number(env.CSVREMARK) || remarkIndex;
+				BotToken = env.TGTOKEN || BotToken;
+				ChatID = env.TGID || ChatID;
+				FileName = env.SUBNAME || FileName;
+				subEmoji = env.SUBEMOJI || env.EMOJI || subEmoji;
+				if (subEmoji == '0') subEmoji = 'false';
+				if (env.LINK) link = await 整理(env.LINK);
+				let sub = env.SUB || '';
+				subConverter = env.SUBAPI || subConverter;
+				if (subConverter.includes("http://")) {
+					subConverter = subConverter.split("//")[1];
+					subProtocol = 'http';
+				} else {
+					subConverter = subConverter.split("//")[1] || subConverter;
+				}
+				subConfig = env.SUBCONFIG || subConfig;
 				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
 				if (url.searchParams.has('notls')) noTLS = 'true';
 
 				if (url.searchParams.has('proxyip')) {
 					path = `/?proxyip=${url.searchParams.get('proxyip')}`;
 					RproxyIP = 'false';
-				} else if (url.searchParams.has('socks5') || url.searchParams.has('socks')) {
-					path = `/?socks5=${url.searchParams.get('socks5') || url.searchParams.get('socks')}`;
+				} else if (url.searchParams.has('socks5')) {
+					path = `/?socks5=${url.searchParams.get('socks5')}`;
+					RproxyIP = 'false';
+				} else if (url.searchParams.has('socks')) {
+					path = `/?socks5=${url.searchParams.get('socks')}`;
 					RproxyIP = 'false';
 				}
 
@@ -882,8 +852,10 @@ export default {
 					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 					return new Response(`${fakeConfig}`, { status: 200 });
 				} 
+				// 【方案一：核心安全修复】在这里修改了判断逻辑
 				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
-					return await KV(request, env);
+					const html = await KV(request, env);
+					return html;
 				} else if ((动态UUID && url.pathname === `/${动态UUID}`) || 路径 === `/${userID}`) {
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 					
@@ -1029,7 +1001,6 @@ export default {
 					}
 				}
 			} else {
-                // WebSocket 请求处理
 				socks5Address = url.searchParams.get('socks5') || socks5Address;
 				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
 				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
@@ -1047,7 +1018,8 @@ export default {
 						parsedSocks5Address = socks5AddressParser(socks5Address);
 						enableSocks = true;
 					} catch (err) {
-						console.log(err.toString());
+						let e = err;
+						console.log(e.toString());
 						enableSocks = false;
 					}
 				} else {
@@ -1071,7 +1043,8 @@ export default {
 				return await secureProtoOverWSHandler(request);
 			}
 		} catch (err) {
-			return new Response(err.toString());
+			let e = err;
+			return new Response(e.toString());
 		}
 	},
 };
@@ -1285,8 +1258,7 @@ async function handleDNSQuery(udpChunk, webSocket, secureProtoResponseHeader, lo
 }
 
 async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
-    
-    // 优化 SOCKS5 模式检查 (来自代码1)
+    // 优化 SOCKS5 模式检查
     const checkSocks5Mode = async (address) => {
         const patterns = [atob('YWxsIGlu'), atob('Kg==')];
         if (go2Socks5s.some(pattern => patterns.includes(pattern))) return true;
@@ -1297,25 +1269,26 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         return !!pattern;
     };
 
-    // 优化连接处理 (来自代码1，参数稍作调整以适应新策略)
-    const createConnection = async (address, port, useSocks = false) => {
-        const connectionType = useSocks ? 'SOCKS5' : 'Direct';
-        log(`建立连接: ${address}:${port} (方式: ${connectionType})`);
+    // 优化连接处理
+    const createConnection = async (address, port, socks = false) => {
+        log(`建立连接: ${address}:${port} ${socks ? '(SOCKS5)' : ''}`);
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         try {
             const tcpSocket = await Promise.race([
-                useSocks ? 
+                socks ? 
                     socks5Connect(addressType, address, port, log) :
                     connect({ 
                         hostname: address,
                         port: port,
                         allowHalfOpen: false,
                         keepAlive: true,
+                        keepAliveInitialDelay: 60000,
                         signal: controller.signal
-                    }),
+                    })
+                ,
                 new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('连接超时')), 3000)
                 )
@@ -1324,6 +1297,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             clearTimeout(timeoutId);
             remoteSocket.value = tcpSocket;
 
+            // 写入数据
             const writer = tcpSocket.writable.getWriter();
             try {
                 await writer.write(rawClientData);
@@ -1338,104 +1312,112 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     };
 
-    // 新的递归函数，用于按顺序尝试所有连接策略 (来自代码2)
-    async function tryConnectionStrategies(strategies) {
-        if (!strategies || strategies.length === 0) {
-            log('所有连接策略均已失败，关闭连接。');
+    // 优化重试逻辑
+    const retryConnection = async () => {
+            let tcpSocket;
+
+            if (enableSocks) {
+            try {              
+                log('重试：尝试使用 SOCKS5...');
+                tcpSocket = await createConnection(addressRemote, portRemote, true);               
+                log('SOCKS5 连接成功！');
+            } catch (socksError) {
+                log(`SOCKS5 连接失败: ${socksError.message}`);
                 safeCloseWebSocket(webSocket);
                 return;
             }
-
-        const [currentStrategy, ...nextStrategies] = strategies;
-        log(`尝试使用策略: '${currentStrategy.name}'`);
-
-        try {
-            const tcpSocket = await currentStrategy.execute();
-            log(`策略 '${currentStrategy.name}' 连接成功，开始传输数据。`);
-            
-            // 如果本次连接在后续传输中失败，此函数将被调用以尝试下一个策略
-            const retryNext = () => tryConnectionStrategies(nextStrategies);
-            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
-
-        } catch (error) {
-            log(`策略 '${currentStrategy.name}' 失败: ${error.message}。正在尝试下一个策略...`);
-            await tryConnectionStrategies(nextStrategies); // 立即尝试下一个策略
-        }
-    }
-
-    // --- 组装策略列表 ---
-    const connectionStrategies = [];
-    const shouldUseSocksAsPrimary = enableSocks && go2Socks5s.length > 0 ? await checkSocks5Mode(addressRemote) : false;
-
-    // 1. 主要连接策略
-    if (shouldUseSocksAsPrimary) {
-        connectionStrategies.push({
-            name: 'SOCKS5 (主策略)',
-            execute: () => createConnection(addressRemote, portRemote, true)
-        });
             } else {            
-        connectionStrategies.push({
-            name: '直接连接',
-            execute: () => createConnection(addressRemote, portRemote, false)
-        });
-    }
-    
-    // 2. 备用 (Fallback) 策略
-    // 仅当SOCKS启用但未被用作主策略时，才将其作为回退选项
-    if (enableSocks && !shouldUseSocksAsPrimary) {
-        connectionStrategies.push({
-            name: 'SOCKS5 (回退)',
-            execute: () => createConnection(addressRemote, portRemote, true)
-        });
-    }
-
-    // 用户配置的 PROXYIP
-    if (proxyIP && proxyIP.trim() !== '') {
-        connectionStrategies.push({
+            // 定义所有回退策略，按优先级排序
+            const strategies = [
+                {
                     name: '用户配置的 PROXYIP',
-            execute: () => {
-                        const { address, port } = parseProxyIP(proxyIP, portRemote);
-                return createConnection(address, port, false);
+                    enabled: proxyIP && proxyIP.trim() !== '',
+                    execute: async () => {
+                        let port = portRemote;
+                        let parsedIP = proxyIP;
+                        if (parsedIP.includes(']:')) { [parsedIP, port] = parsedIP.split(']:'); parsedIP += ']'; }
+                        else if (parsedIP.includes(':')) { [parsedIP, port] = parsedIP.split(':'); }
+                        if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp')[1].split('.')[0] || port; }
+                        return createConnection(parsedIP.toLowerCase(), port);
                     }
-        });
-    }
-    
-    // 用户配置的 NAT64
-    const userNat64Server = DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
-    if (userNat64Server) {
-        connectionStrategies.push({
+                },
+                {
                     name: '用户配置的 NAT64',
+                    enabled: DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA=="),
                     execute: async () => {
                         const nat64Address = await resolveToIPv6(addressRemote);
-                return createConnection(`[${nat64Address}]`, 443, false);
+                        const nat64Proxyip = `[${nat64Address}]`;
+                        return createConnection(nat64Proxyip, 443);
                     }
-        });
-    }
-    
-    // 内置的默认 PROXYIP
-    connectionStrategies.push({
+                },
+                {
                     name: '内置的默认 PROXYIP',
-        execute: () => {
-                        const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
-                        const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
-            return createConnection(address, port, false);
-                    }
-    });
-
-    // 内置的默认 NAT64
-    connectionStrategies.push({
-                    name: '内置的默认 NAT64',
+                    enabled: true, // 总是启用作为回退
                     execute: async () => {
+                        const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+                    let port = portRemote;
+                        let parsedIP = defaultProxyIP;
+                        if (parsedIP.includes(']:')) { [parsedIP, port] = parsedIP.split(']:'); parsedIP += ']'; }
+                        else if (parsedIP.includes(':')) { [parsedIP, port] = parsedIP.split(':'); }
+                        if (parsedIP.includes('.tp')) { port = parsedIP.split('.tp')[1].split('.')[0] || port; }
+                        return createConnection(parsedIP.toLowerCase(), port);
+                    }
+                },
+                {
+                    name: '内置的默认 NAT64',
+                    enabled: true, // 总是启用作为最终回退
+                    execute: async () => {
+                        // 确保在尝试默认NAT64之前，全局变量是默认值
                         if (!DNS64Server || DNS64Server.trim() === '') {
-                DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
+                           DNS64Server = atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
                         }
-                        const nat64Address = await resolveToIPv6(addressRemote);
-            return createConnection(`[${nat64Address}]`, 443, false);
+                    const nat64Address = await resolveToIPv6(addressRemote);
+                        const nat64Proxyip = `[${nat64Address}]`;
+                        return createConnection(nat64Proxyip, 443);
             }
-    });
+                }
+            ];
 
-    // --- 启动策略链 ---
-    await tryConnectionStrategies(connectionStrategies);
+            // 按顺序尝试所有策略
+            for (const strategy of strategies) {
+                if (strategy.enabled && !tcpSocket) {
+                    try {
+                        log(`重试：尝试策略 '${strategy.name}'...`);
+                        tcpSocket = await strategy.execute();
+                        log(`策略 '${strategy.name}' 连接成功！`);
+                    } catch (error) {
+                        log(`策略 '${strategy.name}' 失败: ${error.message}`);
+                    }
+                }
+            }
+
+            // 如果所有策略都失败了
+            if (!tcpSocket) {
+                log('所有回退尝试均已失败，关闭连接。');
+                    safeCloseWebSocket(webSocket);
+                return;
+            }
+        }
+        
+        if (tcpSocket) {
+            log('建立从远程服务器到客户端的数据流...');
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, null, log);
+        }
+    };
+
+    try {
+        // 主连接逻辑
+        log('主流程：第一阶段 - 尝试直接连接...');
+        const shouldUseSocks = enableSocks && go2Socks5s.length > 0 ? 
+            await checkSocks5Mode(addressRemote) : false;
+
+        const tcpSocket = await createConnection(addressRemote, portRemote, shouldUseSocks);
+        log('直接连接成功！');
+        return remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryConnection, log);
+    } catch (error) {
+        log(`主连接失败 (${error.message})，将启动重试流程...`);
+        return retryConnection();
+    }
 }
 
 function processsecureProtoHeader(secureProtoBuffer, userID) {
@@ -1873,10 +1855,109 @@ function 配置信息(UUID, 域名地址) {
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
-const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
+const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQolMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjMlMjM='));
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-	
+	// 在获取其他配置前,先尝试读取自定义的设置
+	if (env.KV) {
+		try {
+			const advancedSettingsJSON = await env.KV.get('settinggs.txt');
+			let settings = {};
+			if (advancedSettingsJSON) {
+				try {
+					settings = JSON.parse(advancedSettingsJSON);
+				} catch (e) {
+					console.error("解析settinggs.txt失败:", e);
+				}
+			}
+
+			// 修改PROXYIP设置逻辑
+			const customProxyIP = settings.proxyip;
+			if (customProxyIP && customProxyIP.trim()) {
+				// 如果KV中有PROXYIP设置，使用KV中的设置
+				proxyIP = customProxyIP;
+				proxyIPs = await 整理(proxyIP);
+				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+				RproxyIP = 'false';
+			} else if (env.PROXYIP) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				proxyIP = env.PROXYIP;
+				proxyIPs = await 整理(proxyIP);
+				proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
+				RproxyIP = 'false';
+			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
+				proxyIP = '';
+				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
+			}
+
+			// 修改SOCKS5设置逻辑
+			const customSocks5 = settings.socks5;			
+			if (customSocks5 && customSocks5.trim()) {
+				// 如果KV中有SOCKS5设置，使用KV中的设置
+				socks5Address = customSocks5.trim().split('\n')[0];
+				socks5s = await 整理(socks5Address);
+				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+				socks5Address = socks5Address.split('//')[1] || socks5Address;
+				enableSocks = true; 
+			} else if (env.SOCKS5) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				socks5Address = env.SOCKS5;
+				socks5s = await 整理(socks5Address);
+				socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
+				socks5Address = socks5Address.split('//')[1] || socks5Address;
+				enableSocks = true; 
+			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
+				enableSocks = false;
+				socks5Address = '';
+			}
+
+			// 读取自定义SUB设置
+			const customSub = settings.sub;
+			// 明确检查是否为null或空字符串
+			if (customSub !== null && customSub.trim() !== '') {
+				// 如果KV中有SUB设置，使用KV中的设置
+				sub = customSub.trim().split('\n')[0];
+			} else if (env.SUB) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				sub = env.SUB;
+			} else {
+				// 如果KV和环境变量中都没有设置，使用默认值
+				sub = '';
+			}
+
+			// 读取自定义SUBAPI设置
+			const customSubAPI = settings.subapi;
+			// 明确检查是否为null或空字符串
+			if (customSubAPI !== null && customSubAPI.trim() !== '') {
+				// 如果KV中有SUBAPI设置，使用KV中的设置
+				subConverter = customSubAPI.trim().split('\n')[0];
+			} else if (env.SUBAPI) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				subConverter = env.SUBAPI;
+			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
+				subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
+			}
+
+			// 读取自定义SUBCONFIG设置
+			const customSubConfig = settings.subconfig;
+			if (customSubConfig !== null && customSubConfig.trim() !== '') {
+				// 如果KV中有SUBCONFIG设置，使用KV中的设置
+				subConfig = customSubConfig.trim().split('\n')[0];
+			} else if (env.SUBCONFIG) {
+				// 如果KV中没有设置但环境变量中有，使用环境变量中的设置
+				subConfig = env.SUBCONFIG;
+			} else {
+				// 如果KV和环境变量中都没有设置，使用代码默认值
+				subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
+			}
+		} catch (error) {
+			console.error('读取自定义设置时发生错误:', error);
+		}
+	}
+
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
@@ -1884,7 +1965,34 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
 	
-	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
+	if (env.KV) {
+		await 迁移地址列表(env);
+		const 优选地址列表 = await env.KV.get('ADD.txt');
+		if (优选地址列表) {
+				const 优选地址数组 = await 整理(优选地址列表);
+				const 分类地址 = {
+					接口地址: new Set(),
+					链接地址: new Set(),
+					优选地址: new Set()
+				};
+
+				for (const 元素 of 优选地址数组) {
+					if (元素.startsWith('https://')) {
+						分类地址.接口地址.add(元素);
+					} else if (元素.includes('://')) {
+						分类地址.链接地址.add(元素);
+					} else {
+						分类地址.优选地址.add(元素);
+					}
+				}
+
+			addressesapi = [...分类地址.接口地址];
+			link = [...分类地址.链接地址];
+			addresses = [...分类地址.优选地址];
+		}
+	}
+
+	    if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
 	    		let cfips = [
 		            '104.16.0.0/14',
 		            '104.21.0.0/16',
@@ -2359,7 +2467,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			} else {
 				const response = await fetch(url, {
 					headers: {
-						'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
+						'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
 					}
 				});
 				content = await response.text();
@@ -2660,6 +2768,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	return btoa(base64Response);
 }
 
+// 优化 整理 函数
 async function 整理(内容) {
     if (!内容) return [];
     const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
@@ -3095,7 +3204,7 @@ async function handleGetRequest(env, txt) {
                 </a>
                 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU1JUI4JUI4JUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUI3JUU2JThCJUFDJUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUE0JUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEExMjcuMC4wLjElM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5SVAlM0NiciUzRSUwQXZpc2EuY24lM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThEJTNDYnIlM0UlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjMlRTQlQkMlOTglRTklODAlODlJUHY2JTNDYnIlM0UlM0NiciUzRSUwQSUwQSUzQ3N0cm9uZyUzRTIuJTNDJTJGc3Ryb25nJTNFJTIwQUREQVBJJTIwJUU1JUE2JTgyJUU2JTlFJTlDJUU2JTk4JUFGJUU0JUJCJUEzJUU3JTkwJTg2SVAlRUYlQkMlOEMlRTUlOEYlQUYlRTQlQkQlOUMlRTQlQjglQkFQUk9YWUlQJUU3JTlBJTg0JUU4JUFGJTlEJUVGJUJDJThDJUU1JThGJUFGJUU1JUIwJTg2JTIyJTNGcHJveHlpcCUzRHRydWUlMjIlRTUlOEYlODIlRTYlOTUlQjAlRTYlQjclQkIlRTUlOEElQTAlRTUlODglQjAlRTklOTMlQkUlRTYlOEUlQTUlRTYlOUMlQUIlRTUlQjAlQkUlRUYlQkMlOEMlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQlM0Zwcm94eWlwJTNEdHJ1ZSUzQ2JyJTNFJTNDYnIlM0UlMEElMEElM0NzdHJvbmclM0UzLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5RSU5QyVFNiU5OCVBRiUyMCUzQ2ElMjBocmVmJTNEJ2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JyUzRUNsb3VkZmxhcmVTcGVlZFRlc3QlM0MlMkZhJTNFJTIwJUU3JTlBJTg0JTIwY3N2JTIwJUU3JUJCJTkzJUU2JTlFJTlDJUU2JTk2JTg3JUU0JUJCJUI2JUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    ${decodeURIComponent(atob('JTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUIzJUU2JThDJUE1JUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUEwJUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwMTI3LjAuMC4xJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQJTNDYnIlM0UKJTIwJTIwJUU1JTkwJThEJUU1JUIxJTk1JTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSVBRiU5RiVFNSU5MCU4RCUzQ2JyJTNFCiUyMCUyMCU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyMyVFNCVCQyU5OCVFOSU4MCU4OUlQVjYlM0NiciUzRSUzQ2JyJTNFCgolMDklMDklMDklMDklMDklM0NzdHJvbmclM0UyLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5OCVBRiVFNiU5OCVBRiVFNCVCQiVBMyVFNCVCRCU5Q0lQJUVGJUJDJThDJUU1JThGJUFGJUU0JUJEJTlDJUU0JUI4JUJBUFJPWFlJUCVFNyU5QSU4NCVFOCVBRiU5RCVFRiVCQyU4QyVFNSU4RiVBRiVFNSVCMCU4NiUyMiUzRnByb3h5aXAlM0R0cnVlJTIyJUU1JThGJTgyJUU2JTk1JUIwJUU2JUI3JUJCJUU1JThBJUEwJUU1JTg4JUIwJUU5JTkzJUJFJUU2JThFJUE1JUU2JTlDJUFCJUU1JUIwJUJFJUVGJUJDJThDJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UKJTIwJTIwaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dCUzRnByb3h5aXAlM0R0cnVlJTNDYnIlM0UlM0NiciUzRQoKJTA5JTA5JTA5JTA5JTA5JTNDc3Ryb25nJTNFMy4lM0MlMkZzdHJvbmclM0UlMjBBRERBUEklMjAlRTUlQTYlODIlRTYlOTglQUYlMjAlM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTI3JTNFQ2xvdWRmbGFyZVNwZWVkVGVzdCUzQyUyRmElM0UlMjAlRTclOUElODQlMjBjc3YlMjAlRTclQkIlOTMlRTYlOUUlOUMlRTYlOTYlODclRTQlQkIlQjclRTMlODAlODIlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRQolMjAlMjBodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                 </div>
 
                 <div class="editor-container">
