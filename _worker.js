@@ -1148,15 +1148,13 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         });
     }
 
-    if (proxyIPs && proxyIPs.length > 0) {
-        proxyIPs.forEach(ip => {
-            connectionStrategies.push({
-                name: `用户配置的 PROXYIP: ${ip}`,
-                execute: () => {
-                const { address, port } = parseProxyIP(ip, portRemote);
+    if (proxyIP && proxyIP.trim() !== '') {
+        connectionStrategies.push({
+            name: '用户配置的 PROXYIP',
+            execute: () => {
+                const { address, port } = parseProxyIP(proxyIP, portRemote);
                 return createConnection(address, port);
-                }
-            });
+            }
         });
     }
 
