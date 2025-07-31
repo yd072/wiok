@@ -1053,7 +1053,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 		log(`建立连接: ${address}:${port} (方式: ${proxyType})`);
 
 		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 5000);
+		const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 3000);
 
 		try {
 			let tcpSocketPromise;
