@@ -1053,7 +1053,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 		log(`建立连接: ${address}:${port} (方式: ${proxyType})`);
 
 		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 3000);
+		const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 5000);
 
 		try {
 			let tcpSocketPromise;
@@ -1148,13 +1148,15 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         });
     }
 
-    if (proxyIP && proxyIP.trim() !== '') {
-        connectionStrategies.push({
-            name: '用户配置的 PROXYIP',
-            execute: () => {
-                const { address, port } = parseProxyIP(proxyIP, portRemote);
+    if (proxyIPs && proxyIPs.length > 0) {
+        proxyIPs.forEach(ip => {
+            connectionStrategies.push({
+                name: `用户配置的 PROXYIP: ${ip}`,
+                execute: () => {
+                const { address, port } = parseProxyIP(ip, portRemote);
                 return createConnection(address, port);
-            }
+                }
+            });
         });
     }
 
