@@ -1172,7 +1172,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     connectionStrategies.push({
         name: '内置的默认 PROXYIP',
         execute: () => {
-            const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+            const defaultProxyIP = 'kodi.tv';
             const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
             return createConnection(address, port);
         }
@@ -1182,7 +1182,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         name: '内置的默认 NAT64',
         execute: async () => {
             if (!DNS64Server || DNS64Server.trim() === '') {
-                DNS64Server = '2001:67c:2960::6464';
+                DNS64Server = atob("ZG5zNjQuY21pLnp0dmkub3Jn");
             }
             const nat64Address = await resolveToIPv6(addressRemote);
             return createConnection(`[${nat64Address}]`, 443);
