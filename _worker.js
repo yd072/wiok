@@ -1182,7 +1182,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         name: '内置的默认 NAT64',
         execute: async () => {
             if (!DNS64Server || DNS64Server.trim() === '') {
-                DNS64Server = atob("ZG5zNjQuY21pLnp0dmkub3Jn");
+                DNS64Server = '2001:67c:2960::6464';
             }
             const nat64Address = await resolveToIPv6(addressRemote);
             return createConnection(`[${nat64Address}]`, 443);
@@ -1270,9 +1270,11 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     let hasIncomingData = false;
     let header = responseHeader;
     let isSocketClosed = false;
-    let retryAttempted = false; // 重新引入，防止单次失败触发多次重试
+    let retryAttempted = false;
+    let retryCount = 0; // 记录重试次数
+    const MAX_RETRIES = 3; // 限制最大重试次数
 
-    // 为本次连接尝试创建一个独立的中止控制器
+    // 控制超时
     const controller = new AbortController();
     const signal = controller.signal;
 
