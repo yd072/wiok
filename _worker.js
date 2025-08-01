@@ -3382,7 +3382,7 @@ async function handleGetRequest(env, txt) {
                                         <input type="checkbox" id="notls-checkbox" ${noTLSContent === 'true' ? 'checked' : ''}>
                                         <div class="slider round"></div>
                                     </label>
-                                    <span>订阅默认使用 noTLS 节点 (WebSocket 将不使用 TLS 加密)</span>
+                                    <span>启用 noTLS (将不使用 TLS 加密)</span>
                                 </div>
                                 <p>请选择用于随机生成 noTLS 节点时使用的端口。</p>
                                 <div class="checkbox-grid" id="httpports-grid">
