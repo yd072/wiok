@@ -1284,12 +1284,12 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     const controller = new AbortController();
     const signal = controller.signal;
 
-    const timeout = setTimeout(() => {
-        if (!hasIncomingData) {
-            // 设置超时，如果3秒内没收到任何数据则中止
-            controller.abort('连接超时');
-        }
-    }, 5000);
+   // const timeout = setTimeout(() => {
+   //     if (!hasIncomingData) {
+   //         // 设置超时，如果3秒内没收到任何数据则中止
+   //         controller.abort('连接超时');
+   //     }
+   // }, 5000);
 
     try {
         const writeData = async (chunk) => {
@@ -1355,7 +1355,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
 
     } finally {
         // 无论成功还是失败，都清理定时器
-        clearTimeout(timeout);
+    //    clearTimeout(timeout);
         // 如果是因超时而中止，也确保关闭 WebSocket
         if (signal.aborted && !isSocketClosed) {
             safeCloseWebSocket(webSocket);
