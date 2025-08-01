@@ -2042,7 +2042,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						cursor: pointer;
 						font-size: 14px;
 						margin: 5px 0;
-						transition: background-color 0.2s;
+						transition: background-color: 0.2s;
 					}
 
 					.copy-button:hover {
@@ -2832,10 +2832,13 @@ async function handleGetRequest(env, txt) {
                 subAPIContent = settings.subapi || '';
                 subConfigContent = settings.subconfig || '';
                 nat64Content = settings.nat64 || '';
-				httpsPortsContent = settings.httpsports || '';
-                httpPortsContent = settings.httpports || '';
+				httpsPortsContent = settings.httpsports || httpsPorts.join(',');
+                httpPortsContent = settings.httpports || httpPorts.join(',');
                 noTLSContent = settings.notls || 'false';
-            }
+            } else {
+				httpsPortsContent = httpsPorts.join(',');
+				httpPortsContent = httpPorts.join(',');
+			}
         } catch (error) {
             console.error('读取KV时发生错误:', error);
             content = '读取数据时发生错误: ' + error.message;
@@ -2846,18 +2849,24 @@ async function handleGetRequest(env, txt) {
     const defaultHttpsPorts = ["443", "2053", "2083", "2087", "2096", "8443"];
     const defaultHttpPorts = ["80", "8080", "8880", "2052", "2082", "2086", "2095"];
 
-    const savedHttpsPorts = httpsPortsContent ? httpsPortsContent.split(',') : defaultHttpsPorts;
-    const allHttpsPorts = [...new Set([...defaultHttpsPorts, ...savedHttpsPorts])];
-    const httpsOptionsHTML = allHttpsPorts.map(port => {
-        const isSelected = savedHttpsPorts.includes(port.trim());
-        return `<option value="${port.trim()}" ${isSelected ? 'selected' : ''}>${port.trim()}</option>`;
+    const savedHttpsPorts = httpsPortsContent.split(',');
+    const allHttpsPorts = [...new Set([...defaultHttpsPorts, ...savedHttpsPorts])].filter(p => p.trim() !== "");
+    const httpsCheckboxesHTML = allHttpsPorts.map(port => {
+        const isChecked = savedHttpsPorts.includes(port.trim());
+        return `<div class="checkbox-item">
+                    <input type="checkbox" id="https-port-${port.trim()}" name="httpsports" value="${port.trim()}" ${isChecked ? 'checked' : ''}>
+                    <label for="https-port-${port.trim()}">${port.trim()}</label>
+                </div>`;
     }).join('\n');
 
-    const savedHttpPorts = httpPortsContent ? httpPortsContent.split(',') : defaultHttpPorts;
-    const allHttpPorts = [...new Set([...defaultHttpPorts, ...savedHttpPorts])];
-    const httpOptionsHTML = allHttpPorts.map(port => {
-        const isSelected = savedHttpPorts.includes(port.trim());
-        return `<option value="${port.trim()}" ${isSelected ? 'selected' : ''}>${port.trim()}</option>`;
+    const savedHttpPorts = httpPortsContent.split(',');
+    const allHttpPorts = [...new Set([...defaultHttpPorts, ...savedHttpPorts])].filter(p => p.trim() !== "");
+    const httpCheckboxesHTML = allHttpPorts.map(port => {
+        const isChecked = savedHttpPorts.includes(port.trim());
+        return `<div class="checkbox-item">
+                    <input type="checkbox" id="http-port-${port.trim()}" name="httpports" value="${port.trim()}" ${isChecked ? 'checked' : ''}>
+                    <label for="http-port-${port.trim()}">${port.trim()}</label>
+                </div>`;
     }).join('\n');
 
 
@@ -2939,24 +2948,23 @@ async function handleGetRequest(env, txt) {
                     margin: 20px 0;
                 }
 
-                .editor, .setting-editor, .port-select {
+                .editor, .setting-editor {
                     background-color: var(--section-bg, white);
                     color: var(--text-color);
                 }
                 
-                html.dark-mode .editor, html.dark-mode .setting-editor, html.dark-mode .port-select {
+                html.dark-mode .editor, html.dark-mode .setting-editor {
                     background-color: #2a2a2a;
                 }
 
-                .editor:focus, .setting-editor:focus, .port-select:focus {
+                .editor:focus, .setting-editor:focus {
                     outline: none;
                     border-color: var(--primary-color);
                     box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
                 }
 				
 				html.dark-mode .editor:focus,
-				html.dark-mode .setting-editor:focus,
-				html.dark-mode .port-select:focus {
+				html.dark-mode .setting-editor:focus {
 					outline: none;
 					border-color: var(--primary-color);
 					box-shadow: 0 0 0 2px rgba(88, 155, 255, 0.25);
@@ -2975,17 +2983,6 @@ async function handleGetRequest(env, txt) {
                     resize: vertical;
                 }
 				
-				.port-select {
-                    width: 100%;
-                    height: 150px;
-                    padding: 10px;
-                    box-sizing: border-box;
-                    border: 1px solid var(--border-color);
-                    border-radius: 4px;
-                    font-family: Monaco, Consolas, "Courier New", monospace;
-                    font-size: 14px;
-                }
-
                 .button-group {
                     display: flex;
 					align-items: center;
@@ -3151,7 +3148,30 @@ async function handleGetRequest(env, txt) {
 					display: flex;
 					align-items: center;
 					gap: 10px;
+                    margin-bottom: 15px;
 				}
+                
+                .checkbox-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                    gap: 10px;
+                    margin-top: 10px;
+                }
+
+                .checkbox-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+
+                .checkbox-item input[type="checkbox"] {
+                    cursor: pointer;
+                }
+                
+                .checkbox-item label {
+                    cursor: pointer;
+                    user-select: none;
+                }
 
                 .theme-switch-wrapper {
 						display: flex;
@@ -3221,6 +3241,10 @@ async function handleGetRequest(env, txt) {
 
                     .editor {
                         height: 400px;
+                    }
+
+                    .checkbox-grid {
+                        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
                     }
                 }
             </style>
@@ -3334,32 +3358,16 @@ async function handleGetRequest(env, txt) {
   							document.getElementById('nat64-link').setAttribute('href', decodedURL);
 						</script>
 						
-						<!-- noTLS Setting -->
-                        <div class="setting-item">
-                            <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>noTLS 设置</strong></span>
-                            </div>
-                            <div class="setting-content">
-                                <div class="switch-container">
-                                    <label class="theme-switch" for="notls-checkbox">
-                                        <input type="checkbox" id="notls-checkbox" ${noTLSContent === 'true' ? 'checked' : ''}>
-                                        <div class="slider round"></div>
-                                    </label>
-                                    <span>启用 noTLS (WebSocket 将不使用 TLS 加密)</span>
-                                </div>
-                            </div>
-                        </div>
-						
 						<!-- HTTPS Ports Setting -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
                                 <span><strong>随机节点 TLS 端口设置</strong></span>
                             </div>
                             <div class="setting-content">
-                                <p>按住 Ctrl (或 Mac 上的 Command) 可选择多个端口。</p>
-                                <select id="httpsports" class="port-select" multiple>
-                                    ${httpsOptionsHTML}
-                                </select>
+                                <p>请选择用于随机生成 TLS 节点时使用的端口。</p>
+                                <div class="checkbox-grid" id="httpsports-grid">
+                                    ${httpsCheckboxesHTML}
+                                </div>
                             </div>
                         </div>
 
@@ -3369,10 +3377,17 @@ async function handleGetRequest(env, txt) {
                                 <span><strong>随机节点 noTLS 端口设置</strong></span>
                             </div>
                             <div class="setting-content">
-                                <p>按住 Ctrl (或 Mac 上的 Command) 可选择多个端口。</p>
-                                <select id="httpports" class="port-select" multiple>
-                                    ${httpOptionsHTML}
-                                </select>
+                                <div class="switch-container">
+                                    <label class="theme-switch" for="notls-checkbox">
+                                        <input type="checkbox" id="notls-checkbox" ${noTLSContent === 'true' ? 'checked' : ''}>
+                                        <div class="slider round"></div>
+                                    </label>
+                                    <span>订阅默认使用 noTLS 节点 (WebSocket 将不使用 TLS 加密)</span>
+                                </div>
+                                <p>请选择用于随机生成 noTLS 节点时使用的端口。</p>
+                                <div class="checkbox-grid" id="httpports-grid">
+                                    ${httpCheckboxesHTML}
+                                </div>
                             </div>
                         </div>
 
@@ -3494,8 +3509,8 @@ async function handleGetRequest(env, txt) {
                     saveStatus.textContent = '保存中...';
 
                     try {
-						const selectedHttpsPorts = Array.from(document.getElementById('httpsports').selectedOptions).map(option => option.value).join(',');
-						const selectedHttpPorts = Array.from(document.getElementById('httpports').selectedOptions).map(option => option.value).join(',');
+						const selectedHttpsPorts = Array.from(document.querySelectorAll('input[name="httpsports"]:checked')).map(cb => cb.value).join(',');
+						const selectedHttpPorts = Array.from(document.querySelectorAll('input[name="httpports"]:checked')).map(cb => cb.value).join(',');
 
                         const advancedSettings = {
                             proxyip: document.getElementById('proxyip').value,
