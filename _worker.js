@@ -2794,7 +2794,6 @@ async function handlePostRequest(request, env, txt) {
     }
 }
 
-
 async function handleGetRequest(env, txt) {
     let content = '';
     let hasKV = !!env.KV;
@@ -2829,219 +2828,347 @@ async function handleGetRequest(env, txt) {
 
     const html = `
         <!DOCTYPE html>
-        <html lang="zh-CN">
+        <html>
         <head>
-            <title>${FileName} 配置仪表盘</title>
+            <title>优选订阅列表</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
                 :root {
                     --primary-color: #0d6efd;
                     --secondary-color: #0b5ed7;
-                    --border-color: #dee2e6;
+                    --border-color: #e0e0e0;
                     --text-color: #212529;
-                    --background-color: #f8f9fa;
-                    --card-bg: white;
-                    --input-bg: white;
-                    --link-color: #0d6efd;
-                    --shadow-sm: 0 .125rem .25rem rgba(0,0,0,.075);
+                    --background-color: #f5f5f5;
+					--section-bg: white;
+					--link-color: #1a0dab;
+					--visited-link-color: #6c00a2;
                 }
 
                 html.dark-mode {
                     --primary-color: #589bff;
                     --secondary-color: #458cff;
-                    --border-color: #495057;
-                    --text-color: #e9ecef;
-                    --background-color: #212529;
-                    --card-bg: #343a40;
-                    --input-bg: #495057;
-                    --link-color: #8ab4f8;
+                    --border-color: #3c3c3c;
+                    --text-color: #e0e0e0;
+                    --background-color: #1c1c1e;
+					--section-bg: #2a2a2a;
+					--link-color: #8ab4f8;
+					--visited-link-color: #c58af9;
                 }
 
                 body {
                     margin: 0;
-                    padding: 1rem;
+                    padding: 20px;
                     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                     line-height: 1.6;
                     color: var(--text-color);
                     background-color: var(--background-color);
-                    display: flex;
-                    justify-content: center;
                 }
-                
-                a {
+				
+				a {
 					color: var(--link-color);
 					text-decoration: none;
 				}
-				a:hover { text-decoration: underline; }
+				
+				a:visited {
+					color: var(--visited-link-color);
+				}
+
+				a:hover {
+					text-decoration: underline;
+				}
 
                 .container {
-                    max-width: 1200px;
-                    width: 100%;
-                }
-
-                .grid-container {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-                    gap: 1.5rem;
-                }
-
-                .card {
-                    background-color: var(--card-bg);
-                    border-radius: .75rem;
-                    border: 1px solid var(--border-color);
-                    padding: 1.5rem;
-                    box-shadow: var(--shadow-sm);
-                    display: flex;
-                    flex-direction: column;
-                }
-                .card.full-width {
-                    grid-column: 1 / -1;
-                }
-
-                .card-header {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.75rem;
-                    padding-bottom: 1rem;
-                    margin-bottom: 1rem;
-                    border-bottom: 1px solid var(--border-color);
-                }
-                .card-header h2 {
-                    margin: 0;
-                    font-size: 1.25rem;
-                }
-
-                .form-group {
-                    margin-bottom: 1.25rem;
-                }
-                .form-group:last-child {
-                    margin-bottom: 0;
-                }
-
-                .form-group label {
-                    display: block;
-                    font-weight: 500;
-                    margin-bottom: .5rem;
-                }
-                .form-group p {
-                    font-size: 0.875rem;
-                    color: #6c757d;
-                    margin: -.25rem 0 .5rem 0;
-                }
-                html.dark-mode .form-group p {
-                    color: #adb5bd;
+                    max-width: 1000px;
+                    margin: 0 auto;
+                    background: var(--section-bg, white);
+                    padding: 25px;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                 }
                 
-                .form-control {
+                html.dark-mode .container {
+                    background: #242526;
+                }
+
+                .title {
+                    font-size: 1.5em;
+                    color: var(--text-color);
+                    margin-bottom: 20px;
+                    padding-bottom: 10px;
+                    border-bottom: 2px solid var(--border-color);
+                }
+
+                .editor-container {
                     width: 100%;
-                    padding: .5rem .75rem;
+                    margin: 20px 0;
+                }
+
+                .editor, .setting-editor {
+                    background-color: var(--section-bg, white);
+                    color: var(--text-color);
+                }
+                
+                html.dark-mode .editor, html.dark-mode .setting-editor {
+                    background-color: #2a2a2a;
+                }
+
+                .editor:focus, .setting-editor:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+                }
+				
+				html.dark-mode .editor:focus,
+				html.dark-mode .setting-editor:focus {
+					outline: none;
+					border-color: var(--primary-color);
+					box-shadow: 0 0 0 2px rgba(88, 155, 255, 0.25);
+				}
+
+                .editor {
+                    width: 100%;
+                    height: 520px;
+                    padding: 15px;
                     box-sizing: border-box;
                     border: 1px solid var(--border-color);
-                    border-radius: .25rem;
+                    border-radius: 8px;
                     font-family: Monaco, Consolas, "Courier New", monospace;
                     font-size: 14px;
-                    background-color: var(--input-bg);
-                    color: var(--text-color);
-                    transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
-                }
-                .form-control:focus {
-                    outline: 0;
-                    border-color: var(--primary-color);
-                    box-shadow: 0 0 0 .25rem rgba(var(--primary-color-rgb),.25);
-                }
-
-                textarea.form-control {
-                    min-height: 120px;
+                    line-height: 1.5;
                     resize: vertical;
                 }
-                
-                .main-editor {
-                    height: 520px;
-                }
 
-                .card-footer {
-                    margin-top: auto; /* Push footer to the bottom */
-                    padding-top: 1.5rem;
+                .button-group {
                     display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    gap: 1rem;
+					align-items: center;
+                    gap: 12px;
+                    margin-top: 15px;
                 }
 
                 .btn {
-                    padding: .5rem 1rem;
+                    padding: 8px 20px;
                     border: none;
-                    border-radius: .25rem;
-                    font-size: 1rem;
+                    border-radius: 6px;
+                    font-size: 14px;
                     font-weight: 500;
                     cursor: pointer;
                     transition: all 0.2s ease;
                 }
+
                 .btn:disabled {
-                    opacity: 0.65;
+                    opacity: 0.6;
                     cursor: not-allowed;
                 }
+
                 .btn-primary {
                     background: var(--primary-color);
                     color: #fff;
                 }
+
                 .btn-primary:hover:not(:disabled) {
                     background: var(--secondary-color);
                 }
+
                 .btn-secondary {
                     background: #6c757d;
                     color: #fff;
                 }
+
                 .btn-secondary:hover:not(:disabled) {
                     background: #5c636a;
                 }
 
-                .save-status { font-size: 0.9rem; }
-
-                .status-badge {
-                    padding: .25em .6em;
-                    font-size: .8rem;
-                    font-weight: 700;
-                    line-height: 1;
-                    color: #fff;
-                    text-align: center;
-                    white-space: nowrap;
-                    vertical-align: baseline;
-                    border-radius: .25rem;
+                .save-status {
+                    font-size: 14px;
+                    color: #666;
                 }
-                .status-badge.success { background-color: #198754; }
-                .status-badge.danger { background-color: #dc3545; }
+				
+				html.dark-mode .save-status {
+                    color: var(--text-color);
+                }
+
+                .notice-toggle {
+                    color: var(--primary-color);
+                    cursor: pointer;
+                    display: inline-block;
+                    margin: 10px 0;
+                    font-weight: 500;
+                }
 
                 .notice-content {
-                    background: rgba(13, 110, 253, 0.1);
+                    background: #f8f9fa;
                     border-left: 4px solid var(--primary-color);
-                    padding: 1rem;
-                    margin: 0;
-                    border-radius: 0 .25rem .25rem 0;
+                    padding: 15px;
+                    margin: 10px 0;
+                    border-radius: 0 8px 8px 0;
                     word-break: break-all;
-                    font-size: 0.9rem;
                 }
+                
                 html.dark-mode .notice-content {
-                    background: rgba(88, 155, 255, 0.15);
+						background: #3a3a3a;
+				}
+
+                .divider {
+                    height: 1px;
+                    background: var(--border-color);
+                    margin: 20px 0;
                 }
+
+                .advanced-settings {
+                    margin: 20px 0;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    border: 1px solid var(--border-color);
+                }
+                
+                 html.dark-mode .advanced-settings {
+						background: #3a3a3a;
+				}
+
+                .advanced-settings-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 15px;
+                    cursor: pointer;
+                }
+
+                #advanced-settings-content {
+                    display: none;
+                }
+
+                .setting-item {
+                    margin-bottom: 10px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    overflow: hidden;
+                }
+
+                .setting-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 10px 15px;
+                    background-color: #f0f0f0;
+                    cursor: pointer;
+                    font-weight: 500;
+                }
+                
+                 html.dark-mode .setting-header {
+						background: #424242;
+				}
+
+                .setting-content {
+                    display: none; /* Initially hidden */
+                    padding: 15px;
+                    background-color: #fafafa;
+                }
+                
+                 html.dark-mode .setting-content {
+						background: #3a3a3a;
+				}
+				 
+				 .setting-content p {
+					 margin: 5px 0;
+					 color: #666;
+				 }
+
+				 html.dark-mode .setting-content p {
+					 color: #bbb;
+				 }
+				 
+                .setting-editor {
+                    width: 100%;
+                    min-height: 80px;
+                    margin-top: 10px;
+                    padding: 10px;
+                    box-sizing: border-box;
+                    border: 1px solid var(--border-color);
+                    border-radius: 4px;
+                    font-family: Monaco, Consolas, "Courier New", monospace;
+                    font-size: 14px;
+                    resize: vertical;
+                }
+				
+				.setting-editor::placeholder {
+					color: #aaa;
+				}
+				
+				html.dark-mode .setting-editor::placeholder {
+					color: #666;
+				}
 
                 .theme-switch-wrapper {
-                    position: fixed; top: 1rem; right: 1rem; z-index: 1000;
-                }
-                .theme-switch { display: inline-block; height: 20px; position: relative; width: 36px; }
-                .theme-switch input { display:none; }
-                .slider { background-color: #ccc; bottom: 0; cursor: pointer; left: 0; position: absolute; right: 0; top: 0; transition: .4s; }
-                .slider:before { background-color: #fff; bottom: 3px; content: ""; height: 14px; left: 3px; position: absolute; transition: .4s; width: 14px; }
-                input:checked + .slider { background-color: var(--primary-color); }
-                input:checked + .slider:before { transform: translateX(16px); }
-                .slider.round { border-radius: 20px; }
-                .slider.round:before { border-radius: 50%; }
+						display: flex;
+						align-items: center;
+						position: fixed;
+						top: 15px;
+						right: 15px;
+					}
+
+					.theme-switch {
+						display: inline-block;
+						height: 20px;
+						position: relative;
+						width: 36px;
+					}
+
+					.theme-switch input {
+						display:none;
+					}
+
+					.slider {
+						background-color: #ccc;
+						bottom: 0;
+						cursor: pointer;
+						left: 0;
+						position: absolute;
+						right: 0;
+						top: 0;
+						transition: .4s;
+					}
+
+					.slider:before {
+						background-color: #fff;
+						bottom: 3px;
+						content: "";
+						height: 14px;
+						left: 3px;
+						position: absolute;
+						transition: .4s;
+						width: 14px;
+					}
+
+					input:checked + .slider {
+						background-color: var(--primary-color);
+					}
+
+					input:checked + .slider:before {
+						transform: translateX(16px);
+					}
+
+					.slider.round {
+						border-radius: 20px;
+					}
+
+					.slider.round:before {
+						border-radius: 50%;
+					}
 
                 @media (max-width: 768px) {
-                    body { padding: 0.5rem; }
-                    .grid-container { grid-template-columns: 1fr; }
-                    .card { padding: 1rem; }
+                    body {
+                        padding: 10px;
+                    }
+
+                    .container {
+                        padding: 15px;
+                    }
+
+                    .editor {
+                        height: 400px;
+                    }
                 }
             </style>
             <script>
@@ -3063,98 +3190,131 @@ async function handleGetRequest(env, txt) {
                 </label>
             </div>
             <div class="container">
-                <main class="grid-container">
-                    <div class="card full-width">
-                         <div class="card-header">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4M3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707M12.268 5.732a.5.5 0 0 1 0 .707l-.914.915a.5.5 0 0 1-.707-.708l.914-.914a.5.5 0 0 1 .707 0m-6.836 6.836a.5.5 0 0 1 .707 0l.914.915a.5.5 0 0 1-.707.708l-.915-.914a.5.5 0 0 1 0-.707m6.836 0a.5.5 0 0 1 0 .707l-.914.915a.5.5 0 1 1-.708-.708l.914-.914a.5.5 0 0 1 .707 0z"/><path d="M8 16a8 8 0 1 1 0-16 8 8 0 0 1 0 16m-6.5-8A6.5 6.5 0 1 0 14.5 8a6.52 6.52 0 0 0-.33-1.889l-1.424 1.424a.5.5 0 0 1-.707 0l-.055-.055a.5.5 0 0 1 0-.707l1.424-1.424A6.5 6.5 0 0 0 8.5 1.5v2a.5.5 0 0 1-1 0v-2A6.5 6.5 0 0 0 1.5 8"/></svg>
-                            <h2>状态面板</h2>
-                         </div>
-                         <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;">
-                             <div>
-                                 <strong>KV 存储:</strong>
-                                 ${hasKV ? '<span class="status-badge success">已绑定</span>' : '<span class="status-badge danger">未绑定</span>'}
-                             </div>
-                             <button class="btn btn-secondary" onclick="goBack()">返回订阅信息页</button>
-                         </div>
-                    </div>
+                <div class="title">📝 ${FileName} 优选订阅列表</div>
 
-                    <div class="card">
-                        <div class="card-header">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path d="M7.068.727c.243-.97 1.62-.97 1.864 0l.071.286a.96.96 0 0 0 1.622.434l.205-.211c.695-.719 1.888-.03 1.62 1.103l-.128.509a.96.96 0 0 0 1.07.986l.546-.077c1.021-.145 1.421 1.256.642 1.956l-.28.259a.96.96 0 0 0 0 1.37l.28.26c.78.7.381 2.101-.642 1.956l-.546-.077a.96.96 0 0 0-1.07.986l.128.509c.262 1.133-.925 1.822-1.62 1.103l-.205-.211a.96.96 0 0 0-1.622.434l-.071.286c-.243.97-1.62.97-1.864 0l-.071-.286a.96.96 0 0 0-1.622-.434l-.205.211c-.695.719-1.888.03-1.62-1.103l.128-.509a.96.96 0 0 0-1.07-.986l-.546.077c-1.021.145-1.421-1.256-.642-1.956l.28-.259a.96.96 0 0 0 0-1.37l-.28-.26c-.78-.7-.381-2.101.642-1.956l.546.077a.96.96 0 0 0 1.07-.986l-.128-.509c-.262-1.133.925-1.822 1.62-1.103l.205.211a.96.96 0 0 0 1.622-.434zM12.973 8.5H8.25l-2.884 3.157a.96.96 0 0 1-1.371 0l-1.115-1.007a.96.96 0 0 1 0-1.371l2.884-3.157H3.027a.96.96 0 0 1 0-1.371h4.946l2.884-3.157a.96.96 0 0 1 1.371 0l1.115 1.007a.96.96 0 0 1 0 1.371l-2.884 3.157h4.723a.96.96 0 0 1 0 1.371z"/></svg>
-                            <h2>详细配置</h2>
-                        </div>
-                        ${!hasKV ? '<p style="padding: 0 1rem">请先绑定KV空间以启用详细配置。</p>' : `
-                        <div class="form-group">
-                            <label for="proxyip">PROXYIP</label>
-                            <p>每行一个IP，格式: IP[:端口]。</p>
-                            <textarea id="proxyip" class="form-control" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${proxyIPContent}</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="socks5">SOCKS5</label>
-                            <p>每行一个地址，格式: [用户:密码@]主机:端口。</p>
-                            <textarea id="socks5" class="form-control" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="httpproxy">HTTP 代理</label>
-                            <p>每行一个地址，格式: [用户:密码@]主机:端口。</p>
-                            <textarea id="httpproxy" class="form-control" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
-                        </div>
-                         <div class="form-group">
-                            <label for="sub">SUB (优选订阅生成器)</label>
-                            <p>仅支持单个优选订阅生成器地址。</p>
-                            <textarea id="sub" class="form-control" rows="1" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="subapi">SUBAPI (订阅转换后端)</label>
-                             <p>订阅转换后端地址。</p>
-                            <textarea id="subapi" class="form-control" rows="1" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="subconfig">SUBCONFIG (订阅转换配置)</label>
-                             <p>订阅转换配置文件地址。</p>
-                            <textarea id="subconfig" class="form-control" rows="2" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="nat64">NAT64/DNS64</label>
-                            <p><a href="https://nat64.xyz/" target="_blank">点击此处</a>查询可用服务器。</p>
-                            <textarea id="nat64" class="form-control" rows="1" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
-                        </div>
-                        <div class="card-footer">
-                            <button class="btn btn-primary" onclick="saveSettings(this)">保存配置</button>
-                            <span id="settings-save-status" class="save-status"></span>
-                        </div>
-                        `}
+                <div class="advanced-settings">
+                    <div class="advanced-settings-header" onclick="toggleAdvancedSettings()">
+                        <h3 style="margin: 0;">⚙️ 高级设置</h3>
                     </div>
-
-                    <div class="card">
-                        <div class="card-header">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M2 2.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5V3a.5.5 0 0 0-.5-.5zM3 3H2v1h1z"/><path d="M5 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M5.5 7a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 4a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1z"/><path fill-rule="evenodd" d="M1.5 7a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5zM2 7h1v1H2zm0 3.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5zm1 .5H2v1h1z"/></svg>
-                            <h2>${FileName} 优选订阅列表</h2>
-                        </div>
-                        ${!hasKV ? '<p style="padding: 0 1rem">请先绑定KV空间以编辑列表。</p>' : `
-                        <div class="form-group">
-                            <label for="content">列表内容</label>
-                            <textarea class="form-control main-editor"
-                                placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
-                                id="content">${content}</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>注意事项</label>
-                            <div class="notice-content">
-                               ${decodeURIComponent(atob('JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU1JUI4JUI4JUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUI3JUU2JThCJUFDJUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUE0JUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEExMjcuMC4wLjElM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5SVAlM0NiciUzRSUwQXZpc2EuY24lM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThEJTNDYnIlM0UlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjMlRTQlQkMlOTglRTklODAlODlJUHY2JTNDYnIlM0UlM0NiciUzRSUwQSUwQSUzQ3N0cm9uZyUzRTIuJTNDJTJGc3Ryb25nJTNFJTIwQUREQVBJJTIwJUU1JUE2JTgyJUU2JTlFJTlDJUU2JTk4JUFGJUU0JUJCJUEzJUU3JTkwJTg2SVAlRUYlQkMlOEMlRTUlOEYlQUYlRTQlQkQlOUMlRTQlQjglQkFQUk9YWUlQJUU3JTlBJTg0JUU4JUFGJTlEJUVGJUJDJThDJUU1JThGJUFGJUU1JUIwJTg2JTIyJTNGcHJveHlpcCUzRHRydWUlMjIlRTUlOEYlODIlRTYlOTUlQjAlRTYlQjclQkIlRTUlOEElQTAlRTUlODglQjAlRTklOTMlQkUlRTYlOEUlQTUlRTYlOUMlQUIlRTUlQjAlQkUlRUYlQkMlOEMlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQlM0Zwcm94eWlwJTNEdHJ1ZSUzQ2JyJTNFJTNDYnIlM0UlMEElMEElM0NzdHJvbmclM0UzLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5RSU5QyVFNiU5OCVBRiUyMCUzQ2ElMjBocmVmJTNEJ2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JyUzRUNsb3VkZmxhcmVTcGVlZFRlc3QlM0MlMkZhJTNFJTIwJUU3JTlBJTg0JTIwY3N2JTIwJUU3JUJCJTkzJUU2JTlFJTlDJUU2JTk2JTg3JUU0JUJCJUI2JUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                    <div id="advanced-settings-content">
+                        <!-- PROXYIP设置 -->
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>PROXYIP 设置</strong></span>
+                            </div>
+                            <div class="setting-content">
+                                <p>每行一个IP，格式：IP:端口(可不添加端口)</p>
+                                <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${proxyIPContent}</textarea>
                             </div>
                         </div>
-                        <div class="card-footer">
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存列表</button>
+
+                        <!-- SOCKS5设置 -->
+                        <div class="setting-item">
+                             <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SOCKS5 设置</strong></span>
+                            </div>
+                            <div class="setting-content">
+                                <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <textarea id="socks5" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- HTTP Proxy 设置 -->
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>HTTP 设置</strong></span>
+                            </div>
+                            <div class="setting-content">
+                                <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- SUB设置 -->
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SUB 设置</strong> (优选订阅生成器)</span>
+                            </div>
+                            <div class="setting-content">
+                                <p>只支持单个优选订阅生成器地址</p>
+                                <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- SUBAPI设置 -->
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SUBAPI 设置</strong> (订阅转换后端)</span>
+                            </div>
+                            <div class="setting-content">
+                                <p>订阅转换后端地址</p>
+                                <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- SUBCONFIG设置 -->
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SUBCONFIG 设置</strong> (订阅转换配置)</span>
+                            </div>
+                            <div class="setting-content">
+                                <p>订阅转换配置文件地址</p>
+                                <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- NAT64/DNS64 设置 -->
+                        <div class="setting-item">
+                           <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>NAT64/DNS64 设置</strong></span>
+                            </div>
+                             <div class="setting-content">
+                                <p>
+                                    <a id="nat64-link" target="_blank">自行查询</a>
+                                </p>
+                                <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
+                            </div>
+                        </div>
+						<script>
+  							const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
+  							const decodedURL = atob(encodedURL);
+  							document.getElementById('nat64-link').setAttribute('href', decodedURL);
+						</script>
+
+                        <!-- 统一的保存按钮 -->
+                        <div style="margin-top: 20px;">
+                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+                            <span id="settings-save-status" class="save-status"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 保持现有内容 -->
+                <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                    ℹ️ 注意事项 ∨
+                </a>
+
+                <div id="noticeContent" class="notice-content" style="display: none">
+				    ${decodeURIComponent(atob('JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU1JUI4JUI4JUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUI3JUU2JThCJUFDJUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUE0JUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEExMjcuMC4wLjElM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5SVAlM0NiciUzRSUwQXZpc2EuY24lM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThEJTNDYnIlM0UlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjMlRTQlQkMlOTglRTklODAlODlJUHY2JTNDYnIlM0UlM0NiciUzRSUwQSUwQSUzQ3N0cm9uZyUzRTIuJTNDJTJGc3Ryb25nJTNFJTIwQUREQVBJJTIwJUU1JUE2JTgyJUU2JTlFJTlDJUU2JTk4JUFGJUU0JUJCJUEzJUU3JTkwJTg2SVAlRUYlQkMlOEMlRTUlOEYlQUYlRTQlQkQlOUMlRTQlQjglQkFQUk9YWUlQJUU3JTlBJTg0JUU4JUFGJTlEJUVGJUJDJThDJUU1JThGJUFGJUU1JUIwJTg2JTIyJTNGcHJveHlpcCUzRHRydWUlMjIlRTUlOEYlODIlRTYlOTUlQjAlRTYlQjclQkIlRTUlOEElQTAlRTUlODglQjAlRTklOTMlQkUlRTYlOEUlQTUlRTYlOUMlQUIlRTUlQjAlQkUlRUYlQkMlOEMlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQlM0Zwcm94eWlwJTNEdHJ1ZSUzQ2JyJTNFJTNDYnIlM0UlMEElMEElM0NzdHJvbmclM0UzLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5RSU5QyVFNiU5OCVBRiUyMCUzQ2ElMjBocmVmJTNEJ2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JyUzRUNsb3VkZmxhcmVTcGVlZFRlc3QlM0MlMkZhJTNFJTIwJUU3JTlBJTg0JTIwY3N2JTIwJUU3JUJCJTkzJUU2JTlFJTlDJUU2JTk2JTg3JUU0JUJCJUI2JUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                </div>
+
+                <div class="editor-container">
+                    ${hasKV ? `
+                        <textarea class="editor"
+                            placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}"
+                            id="content">${content}</textarea>
+                        <div class="button-group">
+                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
-                        `}
-                    </div>
-                </main>
+                        <div class="divider"></div>
+                        ${cmad}
+                    ` : '<p>未绑定KV空间</p>'}
+                </div>
             </div>
 
             <script>
-                // 返回上一页（订阅信息页）
                 function goBack() {
                     const pathParts = window.location.pathname.split('/');
                     pathParts.pop(); // 移除 "edit"
@@ -3162,36 +3322,83 @@ async function handleGetRequest(env, txt) {
                     window.location.href = newPath;
                 }
 
-                // 保存优选列表
                 async function saveContent(button) {
-                    const saveStatus = document.getElementById('saveStatus');
                     try {
                         button.disabled = true;
                         const content = document.getElementById('content').value;
+                        const saveStatus = document.getElementById('saveStatus');
+
                         saveStatus.textContent = '保存中...';
+
                         const response = await fetch(window.location.href, {
                             method: 'POST',
                             body: content
                         });
+
                         if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
+                            saveStatus.textContent = '保存成功';
+                            setTimeout(() => {
+                                saveStatus.textContent = '';
+                            }, 3000);
                         } else {
-                            throw new Error('保存失败: ' + await response.text());
+                            throw new Error('保存失败');
                         }
                     } catch (error) {
+                        const saveStatus = document.getElementById('saveStatus');
                         saveStatus.textContent = '❌ ' + error.message;
+                        console.error('保存时发生错误:', error);
                     } finally {
                         button.disabled = false;
-                        setTimeout(() => { saveStatus.textContent = ''; }, 3000);
                     }
                 }
 
-                // 保存详细配置
-                async function saveSettings(button) {
+                function toggleNotice() {
+                    const noticeContent = document.getElementById('noticeContent');
+                    const noticeToggle = document.getElementById('noticeToggle');
+                    if (noticeContent.style.display === 'none') {
+                        noticeContent.style.display = 'block';
+                        noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                    } else {
+                        noticeContent.style.display = 'none';
+                        noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                    }
+                }
+
+                function toggleAdvancedSettings() {
+                    const content = document.getElementById('advanced-settings-content');
+                    const isOpening = content.style.display === 'none' || !content.style.display;
+
+                    if (isOpening) {
+                        content.style.display = 'block';
+                    } else {
+                        content.style.display = 'none';
+                        
+                        const allSettings = document.querySelectorAll('.setting-content');
+                        allSettings.forEach(setting => {
+                            setting.style.display = 'none';
+                        });
+                        const allHeaders = document.querySelectorAll('.setting-header');
+                        allHeaders.forEach(header => {
+                            header.classList.remove('open');
+                        });
+                    }
+                }
+
+                function toggleSetting(headerElement) {
+                    const content = headerElement.nextElementSibling;
+                    headerElement.classList.toggle('open');
+                    if (content.style.display === 'none' || content.style.display === '') {
+                        content.style.display = 'block';
+                    } else {
+                        content.style.display = 'none';
+                    }
+                }
+
+                async function saveSettings() {
                     const saveStatus = document.getElementById('settings-save-status');
+                    saveStatus.textContent = '保存中...';
+
                     try {
-                        button.disabled = true;
-                        saveStatus.textContent = '保存中...';
                         const advancedSettings = {
                             proxyip: document.getElementById('proxyip').value,
                             socks5: document.getElementById('socks5').value,
@@ -3201,44 +3408,37 @@ async function handleGetRequest(env, txt) {
                             subconfig: document.getElementById('subconfig').value,
                             nat64: document.getElementById('nat64').value
                         };
+
                         const response = await fetch(window.location.href + '?type=advanced', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
                             body: JSON.stringify(advancedSettings)
                         });
+
                         if (response.ok) {
-                            saveStatus.textContent = '✅ 保存成功';
+                            saveStatus.textContent = '保存成功';
+                            setTimeout(() => {
+                                saveStatus.textContent = '';
+                            }, 3000);
                         } else {
                             throw new Error('保存失败: ' + await response.text());
                         }
                     } catch (error) {
                         saveStatus.textContent = '❌ ' + error.message;
-                    } finally {
-                        button.disabled = false;
-                        setTimeout(() => { saveStatus.textContent = ''; }, 3000);
+                        console.error('保存设置时发生错误:', error);
                     }
                 }
-
-                // --- [FIXED] Theme Switcher Functions ---
-                function hexToRgb(hex) {
-                    const r = parseInt(hex.slice(1, 3), 16);
-                    const g = parseInt(hex.slice(3, 5), 16);
-                    const b = parseInt(hex.slice(5, 7), 16);
-                    return r + ',' + g + ',' + b;
-                }
-
-                function setFocusColor() {
-                    try {
-                        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
-                        const rgb = primaryColor.startsWith('#') ? hexToRgb(primaryColor) : (primaryColor.match(/(\\d+)/g) || []).slice(0, 3).join(',');
-                        if (rgb) {
-                            document.documentElement.style.setProperty('--primary-color-rgb', rgb);
-                        }
-                    } catch(e) {
-                        console.error("Error setting focus color", e);
-                    }
-                }
+                const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
                 
+                (function() {
+                    const currentTheme = localStorage.getItem('theme');
+                    if (currentTheme === 'dark-mode') {
+                        toggleSwitch.checked = true;
+                    }
+                })();
+
                 function switchTheme(e) {
                     if (e.target.checked) {
                         document.documentElement.classList.add('dark-mode');
@@ -3246,22 +3446,9 @@ async function handleGetRequest(env, txt) {
                     } else {
                         document.documentElement.classList.remove('dark-mode');
                         localStorage.setItem('theme', 'light-mode');
-                    }
-                    setFocusColor();
+                    }    
                 }
-
-                const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
-                if (toggleSwitch) {
-                    (function() {
-                        const currentTheme = localStorage.getItem('theme');
-                        if (currentTheme === 'dark-mode') {
-                            document.documentElement.classList.add('dark-mode');
-                            toggleSwitch.checked = true;
-                        }
-                        setFocusColor();
-                    })();
-                    toggleSwitch.addEventListener('change', switchTheme, false);
-                }
+                toggleSwitch.addEventListener('change', switchTheme, false);
             </script>
         </body>
         </html>
