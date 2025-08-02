@@ -4,7 +4,7 @@ import { connect } from 'cloudflare:sockets';
 // --- 全局配置缓存 ---
 let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let cacheTimestamp = 0;          // 存储上次缓存的时间戳
-const CACHE_TTL = 5 * 60 * 1000; // 10分钟有效期
+const CACHE_TTL = 10 * 60 * 1000; // 10分钟有效期
 // --------------------
 
 let userID = '';
