@@ -88,9 +88,10 @@ const utils = {
 async function loadConfigurations(env) {
     // 1. 检查内存缓存是否有效
     if (cachedSettings && (Date.now() - cacheTimestamp < CACHE_TTL)) {
+	    console.log("CACHE HIT: Using in-memory settings.");
         return; // 缓存命中，直接返回
     }
-
+ console.log("CACHE MISS: Cache is empty or expired. Loading from KV.");
     // 2. 从环境变量加载，如果存在则覆盖默认值
     if (env.UUID || env.uuid || env.PASSWORD || env.pswd) userID = env.UUID || env.uuid || env.PASSWORD || env.pswd;
     if (env.PROXYIP || env.proxyip) proxyIP = env.PROXYIP || env.proxyip;
@@ -121,6 +122,7 @@ async function loadConfigurations(env) {
         try {
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
+		    console.log("CACHE POPULATED: Successfully loaded settings from KV.");
                 const settings = JSON.parse(advancedSettingsJSON);
                 
                 // 将新配置存入内存缓存
