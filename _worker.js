@@ -953,7 +953,7 @@ async function secureProtoOverWSHandler(request) {
  */
 async function handleUDPOutBound(webSocket, secureProtoResponseHeader, log) {
 
-    const DOH_URL = 'https://dns.google/dns-query'; //https://1.1.1.1/dns-query
+    const DOH_URL = 'https://dns.google/dns-query'; //https://cloudflare-dns.com/dns-query
 
     let issecureProtoHeaderSent = false;
     let buffer = new Uint8Array(0);
