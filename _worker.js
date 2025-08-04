@@ -946,7 +946,7 @@ async function secureProtoOverWSHandler(request) {
 }
 
 /**
- *  处理出站 UDP (DNS over HTTPS) 流量
+ * 处理出站 UDP (DNS over HTTPS) 
  * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
  * @param {ArrayBuffer} secureProtoResponseHeader 
  * @param {(string)=> void} log 
@@ -973,7 +973,6 @@ async function handleUDPOutBound(webSocket, secureProtoResponseHeader, log) {
         }
     });
 
-    // 目前只处理DNS的UDP请求，将其转发到DoH服务
     transformStream.readable.pipeTo(new WritableStream({
         async write(chunk) {
             const resp = await fetch('https://1.1.1.1/dns-query',
