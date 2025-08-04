@@ -953,41 +953,46 @@ async function secureProtoOverWSHandler(request) {
  */
 async function handleUDPOutBound(webSocket, secureProtoResponseHeader, log) {
 
-    let issecureProtoHeaderSent = false;
-    const transformStream = new TransformStream({
-        start(controller) {
+    const DOH_URL = 'https://1.1.1.1/dns-query'; //https://dns.google/dns-query
 
-        },
+    let issecureProtoHeaderSent = false;
+    let buffer = new Uint8Array(0);
+    const transformStream = new TransformStream({
         transform(chunk, controller) {
-            for (let index = 0; index < chunk.byteLength;) {
-                const lengthBuffer = chunk.slice(index, index + 2);
-                const udpPakcetLength = new DataView(lengthBuffer).getUint16(0);
-                const udpData = new Uint8Array(
-                    chunk.slice(index + 2, index + 2 + udpPakcetLength)
-                );
-                index = index + 2 + udpPakcetLength;
-                controller.enqueue(udpData);
+            const newBuffer = new Uint8Array(buffer.length + chunk.length);
+            newBuffer.set(buffer);
+            newBuffer.set(chunk, buffer.length);
+            buffer = newBuffer;
+            while (buffer.length >= 2) {
+                const udpPacketLength = new DataView(buffer.buffer, buffer.byteOffset, 2).getUint16(0);
+                if (buffer.length >= 2 + udpPacketLength) {
+                    const udpData = buffer.slice(2, 2 + udpPacketLength);
+                    controller.enqueue(udpData);
+                    buffer = buffer.slice(2 + udpPacketLength);
+                } else {
+                    break;
+                }
             }
         },
-        flush(controller) {
-        }
     });
 
     transformStream.readable.pipeTo(new WritableStream({
         async write(chunk) {
-            const resp = await fetch('https://1.1.1.1/dns-query',
-                {
-                    method: 'POST',
-                    headers: {
-                        'content-type': 'application/dns-message',
-                    },
-                    body: chunk,
-                })
+            // 将DNS查询发送到指定的DoH服务器
+            const resp = await fetch(DOH_URL, {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/dns-message',
+                },
+                body: chunk,
+            });
+
             const dnsQueryResult = await resp.arrayBuffer();
             const udpSize = dnsQueryResult.byteLength;
             const udpSizeBuffer = new Uint8Array([(udpSize >> 8) & 0xff, udpSize & 0xff]);
+
             if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                log(`doh success and dns message length is ${udpSize}`);
+                log(`DoH查询成功，DNS消息长度为: ${udpSize}`);
                 if (issecureProtoHeaderSent) {
                     webSocket.send(await new Blob([udpSizeBuffer, dnsQueryResult]).arrayBuffer());
                 } else {
@@ -997,7 +1002,7 @@ async function handleUDPOutBound(webSocket, secureProtoResponseHeader, log) {
             }
         }
     })).catch((error) => {
-        log('dns udp has error' + error)
+        log('处理DNS UDP时出错: ' + error);
     });
 
     const writer = transformStream.writable.getWriter();
