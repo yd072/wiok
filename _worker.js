@@ -1,11 +1,11 @@
 
 import { connect } from 'cloudflare:sockets';
 
-// --- 全局配置缓存 (混合模式：TTL + 版本控制) ---
+// --- 全局配置缓存 (内嵌版本号的混合模式) ---
 let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let cacheTimestamp = 0;          // 存储上次缓存的时间戳
 const CACHE_TTL = 10 * 60 * 1000; // 10分钟有效期
-let currentConfigVersion = '0';  // 新增：存储当前配置的版本号
+let currentConfigVersion = '0';  // 存储当前配置的版本号
 // --------------------
 
 let userID = '';
@@ -83,10 +83,11 @@ const utils = {
 };
 
 /**
- * 集中加载所有配置 (修正并采用“混合缓存策略”)
+ * 集中加载所有配置 (已优化为“内嵌版本号的混合缓存策略”)
  * @param {any} env
  */
 async function loadConfigurations(env) {
+    // 步骤1：环境变量加载基础配置
     if (env.UUID || env.uuid || env.PASSWORD || env.pswd) userID = env.UUID || env.uuid || env.PASSWORD || env.pswd;
     if (env.PROXYIP || env.proxyip) proxyIP = env.PROXYIP || env.proxyip;
     if (env.SOCKS5) socks5Address = env.SOCKS5;
@@ -95,7 +96,6 @@ async function loadConfigurations(env) {
     if (env.SUBCONFIG) subConfig = atob(env.SUBCONFIG);
     if (env.SUBNAME) FileName = atob(env.SUBNAME);
     if (env.DNS64 || env.NAT64) DNS64Server = env.DNS64 || env.NAT64;
-
     if (env.ADD) addresses = await 整理(env.ADD);
     if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
     if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
@@ -104,7 +104,6 @@ async function loadConfigurations(env) {
     if (env.LINK) link = await 整理(env.LINK);
     if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
     if (env.BAN) banHosts = (await 整理(env.BAN)).map(h => atob(h));
-
     if (env.DLS) DLS = Number(env.DLS);
     if (env.CSVREMARK) remarkIndex = Number(env.CSVREMARK);
     if (env.TGTOKEN) BotToken = env.TGTOKEN;
@@ -113,59 +112,58 @@ async function loadConfigurations(env) {
 
     // 步骤2：检查内存中的缓存是否在10分钟有效期内
     if (cachedSettings && (Date.now() - cacheTimestamp < CACHE_TTL)) {
-        return; // 缓存有效，直接返回
+        return; 
     }
 
-    // 步骤3：如果绑定了KV，则在缓存失效后启动“版本检查”并用KV配置覆盖环境变量
+    // 步骤3：如果绑定了KV，则启动加载和版本检查流程
     if (env.KV) {
-        const latestVersion = await env.KV.get('settinggs.version');
-
-        if (latestVersion && latestVersion === currentConfigVersion) {
-            console.log(`配置版本 (${latestVersion}) 未变，延长缓存有效期10分钟。`);
-            cacheTimestamp = Date.now();
-            return;
-        }
-
-        console.log(`检测到配置更新或缓存过期。内存版本: ${currentConfigVersion}, KV版本: ${latestVersion}。重新加载...`);
+        console.log("内存缓存失效，从KV加载配置并检查版本...");
         try {
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
-                
-                cachedSettings = settings;
-                cacheTimestamp = Date.now();
-                if (latestVersion) {
-                    currentConfigVersion = latestVersion;
-                }
+                const newVersion = settings.version || '0'; // 从新配置中获取版本
 
-                // 使用KV中的配置覆盖当前变量
-                if (settings.proxyip && settings.proxyip.trim()) proxyIP = settings.proxyip;
-                if (settings.socks5 && settings.socks5.trim()) socks5Address = settings.socks5.split('\n')[0].trim();
-                if (settings.httpproxy && settings.httpproxy.trim()) httpProxyAddress = settings.httpproxy.split('\n')[0].trim();
-                if (settings.sub && settings.sub.trim()) env.SUB = settings.sub.trim().split('\n')[0];
-                if (settings.subapi && settings.subapi.trim()) subConverter = settings.subapi.trim().split('\n')[0];
-                if (settings.subconfig && settings.subconfig.trim()) subConfig = settings.subconfig.trim().split('\n')[0];
-                if (settings.nat64 && settings.nat64.trim()) DNS64Server = settings.nat64.trim().split('\n')[0];
-				if (settings.httpsports && settings.httpsports.trim()) {
-                    httpsPorts = await 整理(settings.httpsports);
-                }
-                if (settings.httpports && settings.httpports.trim()) {
-                    httpPorts = await 整理(settings.httpports);
-                }
-				if (settings.notls) {
-                    noTLS = settings.notls;
-                }
-                if (settings.ADD) {
-                    const 优选地址数组 = await 整理(settings.ADD);
-                    const 分类地址 = { 接口地址: new Set(), 链接地址: new Set(), 优选地址: new Set() };
-                    for (const 元素 of 优选地址数组) {
-                        if (元素.startsWith('https://')) 分类地址.接口地址.add(元素);
-                        else if (元素.includes('://')) 分类地址.链接地址.add(元素);
-                        else 分类地址.优选地址.add(元素);
+                // 关键决策点：比较版本号
+                if (newVersion !== '0' && newVersion === currentConfigVersion) {
+                    console.log(`配置版本 (${newVersion}) 未变，仅延长缓存有效期。`);
+                    cacheTimestamp = Date.now(); // 版本未变，只续命
+                } else {
+                    console.log(`检测到配置更新。内存版本: ${currentConfigVersion}, 新版本: ${newVersion}。`);
+                    // 版本已变，用这次读取到的新数据更新所有内容
+                    cachedSettings = settings;
+                    cacheTimestamp = Date.now();
+                    currentConfigVersion = newVersion;
+
+                    // 使用新配置覆盖所有变量
+                    if (settings.proxyip && settings.proxyip.trim()) proxyIP = settings.proxyip;
+                    if (settings.socks5 && settings.socks5.trim()) socks5Address = settings.socks5.split('\n')[0].trim();
+                    if (settings.httpproxy && settings.httpproxy.trim()) httpProxyAddress = settings.httpproxy.split('\n')[0].trim();
+                    if (settings.sub && settings.sub.trim()) env.SUB = settings.sub.trim().split('\n')[0];
+                    if (settings.subapi && settings.subapi.trim()) subConverter = settings.subapi.trim().split('\n')[0];
+                    if (settings.subconfig && settings.subconfig.trim()) subConfig = settings.subconfig.trim().split('\n')[0];
+                    if (settings.nat64 && settings.nat64.trim()) DNS64Server = settings.nat64.trim().split('\n')[0];
+                    if (settings.httpsports && settings.httpsports.trim()) {
+                        httpsPorts = await 整理(settings.httpsports);
                     }
-                    addressesapi = [...分类地址.接口地址];
-                    link = [...分类地址.链接地址];
-                    addresses = [...分类地址.优选地址];
+                    if (settings.httpports && settings.httpports.trim()) {
+                        httpPorts = await 整理(settings.httpports);
+                    }
+                    if (settings.notls) {
+                        noTLS = settings.notls;
+                    }
+                    if (settings.ADD) {
+                        const 优选地址数组 = await 整理(settings.ADD);
+                        const 分类地址 = { 接口地址: new Set(), 链接地址: new Set(), 优选地址: new Set() };
+                        for (const 元素 of 优选地址数组) {
+                            if (元素.startsWith('https://')) 分类地址.接口地址.add(元素);
+                            else if (元素.includes('://')) 分类地址.链接地址.add(元素);
+                            else 分类地址.优选地址.add(元素);
+                        }
+                        addressesapi = [...分类地址.接口地址];
+                        link = [...分类地址.链接地址];
+                        addresses = [...分类地址.优选地址];
+                    }
                 }
             }
         } catch (e) {
@@ -173,7 +171,7 @@ async function loadConfigurations(env) {
         }
     }
 
-    // 步骤4：最终处理 (逻辑保持不变)
+    // 步骤4：最终处理
     if (subConverter.includes("http://")) {
         subConverter = subConverter.split("//")[1];
         subProtocol = 'http';
@@ -1790,7 +1788,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 	const isUserAgentMozilla = userAgent.includes('mozilla');
 	if (isUserAgentMozilla && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
-		const newSocks5s = socks5s.map(socks5Address => {
+		const socks5s = socks5s.map(socks5Address => {
 			if (socks5Address.includes('@')) return socks5Address.split('@')[1];
 			else if (socks5Address.includes('//')) return socks5Address.split('//')[1];
 			else return socks5Address;
@@ -1807,13 +1805,13 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		let 判断是否绑定KV空间 = env.KV ? ` <a href='${_url.pathname}/edit'>编辑优选列表</a>` : '';
 
 		if (sub) {
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${socks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			else if (RproxyIP == 'true') 订阅器 += `CFCDN（访问方式）: 自动获取ProxyIP<br>`;
 			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`
 			订阅器 += `<br>SUB（优选订阅生成器）: ${sub}${判断是否绑定KV空间}<br>`;
 		} else {
-			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
+			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${socks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
 			订阅器 += `<br>您的订阅内容由 内置 addresses/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
