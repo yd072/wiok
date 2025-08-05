@@ -1,21 +1,12 @@
 
 import { connect } from 'cloudflare:sockets';
 
-// --- 全局配置缓存 (版本控制模式) ---
-const CONSTANTS = {
-	KV_SETTINGS_KEY: 'settinggs.txt',
-	KV_VERSION_KEY: 'settinggs.version',
-};
+// --- 全局配置缓存 ---
+let cachedSettings = null;       // 用于存储从KV读取的配置对象
+let cacheTimestamp = 0;          // 存储上次缓存的时间戳
+const CACHE_TTL = 10 * 60 * 1000; // 10分钟有效期
+// --------------------
 
-// 使用一个对象来管理全局状态，更清晰
-const globalState = {
-    cachedSettings: null,      // 用于存储从KV读取的配置对象
-    currentConfigVersion: '0', // 新增：存储当前配置的版本号，'0'表示从未加载过
-};
-// ------------------------------------
-
-
-// --- 其他全局变量 ---
 let userID = '';
 let proxyIP = '';
 //let sub = '';
@@ -91,11 +82,16 @@ const utils = {
 };
 
 /**
- * 集中加载所有配置 (优化版本控制)
+ * 集中加载所有配置，严格执行 KV > 环境变量 > 默认值的优先级
  * @param {any} env
  */
 async function loadConfigurations(env) {
-    // 0. 从环境变量加载默认值（这部分逻辑可以保持，作为KV不可用时的备用）
+    // 1. 检查内存缓存是否有效
+    if (cachedSettings && (Date.now() - cacheTimestamp < CACHE_TTL)) {
+        return; // 缓存命中，直接返回
+    }
+
+    // 2. 从环境变量加载，如果存在则覆盖默认值
     if (env.UUID || env.uuid || env.PASSWORD || env.pswd) userID = env.UUID || env.uuid || env.PASSWORD || env.pswd;
     if (env.PROXYIP || env.proxyip) proxyIP = env.PROXYIP || env.proxyip;
     if (env.SOCKS5) socks5Address = env.SOCKS5;
@@ -120,67 +116,53 @@ async function loadConfigurations(env) {
     if (env.TGID) ChatID = env.TGID;
     if (env.SUBEMOJI || env.EMOJI) subEmoji = env.SUBEMOJI || env.EMOJI;
 
-
-    // 1. 如果绑定了KV，则使用版本控制进行加载
+    // 3. 如果存在 KV，则使用 KV 的值覆盖所有之前的值
     if (env.KV) {
-        // 1.1 从 KV 中获取最新的版本号
-        const latestVersion = await env.KV.get(CONSTANTS.KV_VERSION_KEY);
-
-        // 1.2 比较版本号：如果KV中没有版本，或者版本与内存中的不一致
-        if (!latestVersion || latestVersion !== globalState.currentConfigVersion) {
-            console.log(`检测到配置更新。内存版本: ${globalState.currentConfigVersion}, KV版本: ${latestVersion}。正在重新加载...`);
-            
-            // 1.3 只有在版本变化时，才加载完整的配置
-            const advancedSettingsJSON = await env.KV.get(CONSTANTS.KV_SETTINGS_KEY);
+        try {
+            const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
-                try {
-                    const settings = JSON.parse(advancedSettingsJSON);
-                    
-                    // 1.4 更新内存中的配置和版本号
-                    globalState.cachedSettings = settings;
-                    if (latestVersion) { // 只有在KV中确实存在版本号时才更新
-                        globalState.currentConfigVersion = latestVersion;
-                    }
+                const settings = JSON.parse(advancedSettingsJSON);
+                
+                // 将新配置存入内存缓存
+                cachedSettings = settings;
+                cacheTimestamp = Date.now();
 
-                    // 1.5 使用KV中的配置覆盖所有当前变量
-                    if (settings.proxyip && settings.proxyip.trim()) proxyIP = settings.proxyip;
-                    if (settings.socks5 && settings.socks5.trim()) socks5Address = settings.socks5.split('\n')[0].trim();
-                    if (settings.httpproxy && settings.httpproxy.trim()) httpProxyAddress = settings.httpproxy.split('\n')[0].trim();
-                    if (settings.sub && settings.sub.trim()) env.SUB = settings.sub.trim().split('\n')[0];
-                    if (settings.subapi && settings.subapi.trim()) subConverter = settings.subapi.trim().split('\n')[0];
-                    if (settings.subconfig && settings.subconfig.trim()) subConfig = settings.subconfig.trim().split('\n')[0];
-                    if (settings.nat64 && settings.nat64.trim()) DNS64Server = settings.nat64.trim().split('\n')[0];
-                    if (settings.httpsports && settings.httpsports.trim()) {
-                        httpsPorts = await 整理(settings.httpsports);
+                // 使用KV中的配置覆盖当前变量
+                if (settings.proxyip && settings.proxyip.trim()) proxyIP = settings.proxyip;
+                if (settings.socks5 && settings.socks5.trim()) socks5Address = settings.socks5.split('\n')[0].trim();
+                if (settings.httpproxy && settings.httpproxy.trim()) httpProxyAddress = settings.httpproxy.split('\n')[0].trim();
+                if (settings.sub && settings.sub.trim()) env.SUB = settings.sub.trim().split('\n')[0];
+                if (settings.subapi && settings.subapi.trim()) subConverter = settings.subapi.trim().split('\n')[0];
+                if (settings.subconfig && settings.subconfig.trim()) subConfig = settings.subconfig.trim().split('\n')[0];
+                if (settings.nat64 && settings.nat64.trim()) DNS64Server = settings.nat64.trim().split('\n')[0];
+				if (settings.httpsports && settings.httpsports.trim()) {
+                    httpsPorts = await 整理(settings.httpsports);
+                }
+                if (settings.httpports && settings.httpports.trim()) {
+                    httpPorts = await 整理(settings.httpports);
+                }
+				if (settings.notls) {
+                    noTLS = settings.notls;
+                }
+                if (settings.ADD) {
+                    const 优选地址数组 = await 整理(settings.ADD);
+                    const 分类地址 = { 接口地址: new Set(), 链接地址: new Set(), 优选地址: new Set() };
+                    for (const 元素 of 优选地址数组) {
+                        if (元素.startsWith('https://')) 分类地址.接口地址.add(元素);
+                        else if (元素.includes('://')) 分类地址.链接地址.add(元素);
+                        else 分类地址.优选地址.add(元素);
                     }
-                    if (settings.httpports && settings.httpports.trim()) {
-                        httpPorts = await 整理(settings.httpports);
-                    }
-                    if (settings.notls) {
-                        noTLS = settings.notls;
-                    }
-                    if (settings.ADD) {
-                        const 优选地址数组 = await 整理(settings.ADD);
-                        const 分类地址 = { 接口地址: new Set(), 链接地址: new Set(), 优选地址: new Set() };
-                        for (const 元素 of 优选地址数组) {
-                            if (元素.startsWith('https://')) 分类地址.接口地址.add(元素);
-                            else if (元素.includes('://')) 分类地址.链接地址.add(元素);
-                            else 分类地址.优选地址.add(元素);
-                        }
-                        addressesapi = [...分类地址.接口地址];
-                        link = [...分类地址.链接地址];
-                        addresses = [...分类地址.优选地址];
-                    }
-                } catch (e) {
-                    console.error("从KV加载或解析配置时出错: ", e);
+                    addressesapi = [...分类地址.接口地址];
+                    link = [...分类地址.链接地址];
+                    addresses = [...分类地址.优选地址];
                 }
             }
+        } catch (e) {
+            console.error("从KV加载配置时出错: ", e);
         }
-        // 如果版本号相同，则不做任何事，直接使用内存中的缓存配置
     }
 
-
-    // 3. 最终处理 (这部分逻辑保持不变)
+    // 4. 最终处理
     if (subConverter.includes("http://")) {
         subConverter = subConverter.split("//")[1];
         subProtocol = 'http';
@@ -964,10 +946,10 @@ async function secureProtoOverWSHandler(request) {
 }
 
 /**
- * 处理出站 UDP (DNS over HTTPS)
- * @param {import("@cloudflare/workers-types").WebSocket} webSocket
- * @param {ArrayBuffer} secureProtoResponseHeader
- * @param {(string)=> void} log
+ * 处理出站 UDP (DNS over HTTPS) 
+ * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
+ * @param {ArrayBuffer} secureProtoResponseHeader 
+ * @param {(string)=> void} log 
  */
 async function handleUDPOutBound(webSocket, secureProtoResponseHeader, log) {
 
@@ -1083,12 +1065,12 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     async function tryConnectionStrategies(strategies) {
         if (!strategies || strategies.length === 0) {
             log('All connection strategies failed. Closing WebSocket.');
-
+            
             // 自愈机制：当所有策略都失败后，清空缓存，强制下一次请求从KV重新加载。
             log('Invalidating configuration cache due to connection failures.');
-            globalState.cachedSettings = null;
-            globalState.currentConfigVersion = '0';
-
+            cachedSettings = null;
+            cacheTimestamp = 0;
+            
             safeCloseWebSocket(webSocket);
             return;
         }
@@ -2715,7 +2697,7 @@ async function handlePostRequest(request, env) {
         const type = url.searchParams.get('type');
 
         // 获取当前的 settings 对象
-        const settingsJSON = await env.KV.get(CONSTANTS.KV_SETTINGS_KEY);
+        const settingsJSON = await env.KV.get('settinggs.txt');
         let settings = settingsJSON ? JSON.parse(settingsJSON) : {};
 
         if (type === 'advanced') {
@@ -2727,19 +2709,13 @@ async function handlePostRequest(request, env) {
             settings.ADD = await request.text();
         }
 
-        // 新增：生成一个新的版本号（使用时间戳）
-        const newVersion = Date.now().toString();
+        // 将合并后的 settings 对象写回 KV
+        await env.KV.put('settinggs.txt', JSON.stringify(settings, null, 2));
 
-        // 修改：使用 Promise.all 并行写入配置和版本号，提高效率
-        await Promise.all([
-            env.KV.put(CONSTANTS.KV_SETTINGS_KEY, JSON.stringify(settings, null, 2)),
-            env.KV.put(CONSTANTS.KV_VERSION_KEY, newVersion) // 关键：写入新的版本号
-        ]);
-
-        // --- 清除此缓存以立即生效 ---
-        globalState.cachedSettings = null;
-        globalState.currentConfigVersion = '0'; // 重置版本号，强制下次从此实例的请求重新加载
-		console.log(`配置已更新，新版本号: ${newVersion}，此实例缓存已清除。`);
+        // --- 清除内存缓存以实现即时生效 ---
+		cachedSettings = null;
+		cacheTimestamp = 0;
+		console.log("配置已更新，内存缓存已清除。");
 		
         return new Response("保存成功");
     } catch (error) {
@@ -2764,7 +2740,7 @@ async function handleGetRequest(env) {
 
     if (hasKV) {
         try {
-            const advancedSettingsJSON = await env.KV.get(CONSTANTS.KV_SETTINGS_KEY);
+            const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
                 content = settings.ADD || ''; // 从 'ADD' 字段加载主内容
@@ -2792,7 +2768,7 @@ async function handleGetRequest(env) {
     const defaultHttpsPorts = ["443", "2053", "2083", "2087", "2096", "8443"];
     const defaultHttpPorts = ["80", "8080", "8880", "2052", "2082", "2086", "2095"];
 
-    const savedHttpsPorts = httpsPortsContent.split(',').filter(Boolean);
+    const savedHttpsPorts = httpsPortsContent.split(',');
     const allHttpsPorts = [...new Set([...defaultHttpsPorts, ...savedHttpsPorts])].filter(p => p.trim() !== "");
     const httpsCheckboxesHTML = allHttpsPorts.map(port => {
         const isChecked = savedHttpsPorts.includes(port.trim());
@@ -2802,7 +2778,7 @@ async function handleGetRequest(env) {
                 </div>`;
     }).join('\n');
 
-    const savedHttpPorts = httpPortsContent.split(',').filter(Boolean);
+    const savedHttpPorts = httpPortsContent.split(',');
     const allHttpPorts = [...new Set([...defaultHttpPorts, ...savedHttpPorts])].filter(p => p.trim() !== "");
     const httpCheckboxesHTML = allHttpPorts.map(port => {
         const isChecked = savedHttpPorts.includes(port.trim());
