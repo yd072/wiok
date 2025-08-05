@@ -1,10 +1,11 @@
 
 import { connect } from 'cloudflare:sockets';
 
-// --- 全局配置缓存 ---
+// --- 全局配置缓存 (混合模式：TTL + 版本控制) ---
 let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let cacheTimestamp = 0;          // 存储上次缓存的时间戳
 const CACHE_TTL = 10 * 60 * 1000; // 10分钟有效期
+let currentConfigVersion = '0';  // 新增：存储当前配置的版本号
 // --------------------
 
 let userID = '';
@@ -82,16 +83,10 @@ const utils = {
 };
 
 /**
- * 集中加载所有配置，严格执行 KV > 环境变量 > 默认值的优先级
+ * 集中加载所有配置 (修正并采用“混合缓存策略”)
  * @param {any} env
  */
 async function loadConfigurations(env) {
-    // 1. 检查内存缓存是否有效
-    if (cachedSettings && (Date.now() - cacheTimestamp < CACHE_TTL)) {
-        return; // 缓存命中，直接返回
-    }
-
-    // 2. 从环境变量加载，如果存在则覆盖默认值
     if (env.UUID || env.uuid || env.PASSWORD || env.pswd) userID = env.UUID || env.uuid || env.PASSWORD || env.pswd;
     if (env.PROXYIP || env.proxyip) proxyIP = env.PROXYIP || env.proxyip;
     if (env.SOCKS5) socks5Address = env.SOCKS5;
@@ -116,16 +111,32 @@ async function loadConfigurations(env) {
     if (env.TGID) ChatID = env.TGID;
     if (env.SUBEMOJI || env.EMOJI) subEmoji = env.SUBEMOJI || env.EMOJI;
 
-    // 3. 如果存在 KV，则使用 KV 的值覆盖所有之前的值
+    // 步骤2：检查内存中的缓存是否在10分钟有效期内
+    if (cachedSettings && (Date.now() - cacheTimestamp < CACHE_TTL)) {
+        return; // 缓存有效，直接返回
+    }
+
+    // 步骤3：如果绑定了KV，则在缓存失效后启动“版本检查”并用KV配置覆盖环境变量
     if (env.KV) {
+        const latestVersion = await env.KV.get('settinggs.version');
+
+        if (latestVersion && latestVersion === currentConfigVersion) {
+            console.log(`配置版本 (${latestVersion}) 未变，延长缓存有效期10分钟。`);
+            cacheTimestamp = Date.now();
+            return;
+        }
+
+        console.log(`检测到配置更新或缓存过期。内存版本: ${currentConfigVersion}, KV版本: ${latestVersion}。重新加载...`);
         try {
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
                 
-                // 将新配置存入内存缓存
                 cachedSettings = settings;
                 cacheTimestamp = Date.now();
+                if (latestVersion) {
+                    currentConfigVersion = latestVersion;
+                }
 
                 // 使用KV中的配置覆盖当前变量
                 if (settings.proxyip && settings.proxyip.trim()) proxyIP = settings.proxyip;
@@ -158,11 +169,11 @@ async function loadConfigurations(env) {
                 }
             }
         } catch (e) {
-            console.error("从KV加载配置时出错: ", e);
+            console.error("从KV加载或解析配置时出错: ", e);
         }
     }
 
-    // 4. 最终处理
+    // 步骤4：最终处理 (逻辑保持不变)
     if (subConverter.includes("http://")) {
         subConverter = subConverter.split("//")[1];
         subProtocol = 'http';
@@ -946,10 +957,10 @@ async function secureProtoOverWSHandler(request) {
 }
 
 /**
- * 处理出站 UDP (DNS over HTTPS) 
- * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
- * @param {ArrayBuffer} secureProtoResponseHeader 
- * @param {(string)=> void} log 
+ * 处理出站 UDP (DNS over HTTPS)
+ * @param {import("@cloudflare/workers-types").WebSocket} webSocket
+ * @param {ArrayBuffer} secureProtoResponseHeader
+ * @param {(string)=> void} log
  */
 async function handleUDPOutBound(webSocket, secureProtoResponseHeader, log) {
 
@@ -1065,12 +1076,12 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     async function tryConnectionStrategies(strategies) {
         if (!strategies || strategies.length === 0) {
             log('All connection strategies failed. Closing WebSocket.');
-            
+
             // 自愈机制：当所有策略都失败后，清空缓存，强制下一次请求从KV重新加载。
             log('Invalidating configuration cache due to connection failures.');
             cachedSettings = null;
             cacheTimestamp = 0;
-            
+
             safeCloseWebSocket(webSocket);
             return;
         }
@@ -2709,13 +2720,19 @@ async function handlePostRequest(request, env) {
             settings.ADD = await request.text();
         }
 
-        // 将合并后的 settings 对象写回 KV
-        await env.KV.put('settinggs.txt', JSON.stringify(settings, null, 2));
+        // 新增：生成一个新的版本号（使用时间戳）
+        const newVersion = Date.now().toString();
 
-        // --- 清除内存缓存以实现即时生效 ---
+        // 修改：使用 Promise.all 并行写入配置和版本号，提高效率
+        await Promise.all([
+            env.KV.put('settinggs.txt', JSON.stringify(settings, null, 2)),
+            env.KV.put('settinggs.version', newVersion) // 关键：写入新的版本号
+        ]);
+
+        // --- 清除此 Worker 实例的内存缓存以立即生效 ---
 		cachedSettings = null;
 		cacheTimestamp = 0;
-		console.log("配置已更新，内存缓存已清除。");
+		console.log("配置已更新，此实例缓存已清除。");
 		
         return new Response("保存成功");
     } catch (error) {
@@ -2768,7 +2785,7 @@ async function handleGetRequest(env) {
     const defaultHttpsPorts = ["443", "2053", "2083", "2087", "2096", "8443"];
     const defaultHttpPorts = ["80", "8080", "8880", "2052", "2082", "2086", "2095"];
 
-    const savedHttpsPorts = httpsPortsContent.split(',');
+    const savedHttpsPorts = httpsPortsContent.split(',').filter(Boolean);
     const allHttpsPorts = [...new Set([...defaultHttpsPorts, ...savedHttpsPorts])].filter(p => p.trim() !== "");
     const httpsCheckboxesHTML = allHttpsPorts.map(port => {
         const isChecked = savedHttpsPorts.includes(port.trim());
@@ -2778,7 +2795,7 @@ async function handleGetRequest(env) {
                 </div>`;
     }).join('\n');
 
-    const savedHttpPorts = httpPortsContent.split(',');
+    const savedHttpPorts = httpPortsContent.split(',').filter(Boolean);
     const allHttpPorts = [...new Set([...defaultHttpPorts, ...savedHttpPorts])].filter(p => p.trim() !== "");
     const httpCheckboxesHTML = allHttpPorts.map(port => {
         const isChecked = savedHttpPorts.includes(port.trim());
