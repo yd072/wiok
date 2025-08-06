@@ -1,5 +1,5 @@
 
-// --- [新增] 内联 Yamux 多路复用库 (代替外部 import) ---
+// --- 内联 Yamux 多路复用库 (代替外部 import) ---
 // The code below is a bundled version of @chainsafe/yamux to avoid remote import issues on Cloudflare.
 const {
 	Muxer
@@ -354,130 +354,6 @@ function parseProxyIP(proxyString, defaultPort) {
     return { address: address.toLowerCase(), port: Number(port) };
 }
 
-
-// WebSocket连接管理类 - [注：此类在多路复用模式下不再直接使用，但保留]
-class WebSocketManager {
-	constructor(webSocket, log) {
-		this.webSocket = webSocket;
-		this.log = log;
-		this.readableStreamCancel = false;
-		this.backpressure = false;
-		this.messageQueue = [];
-		this.isProcessing = false; // 标志：是否正在处理队列
-	}
-
-	makeReadableStream(earlyDataHeader) {
-		return new ReadableStream({
-			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
-			pull: (controller) => this.handleStreamPull(controller),
-			cancel: (reason) => this.handleStreamCancel(reason),
-		});
-	}
-
-	async handleStreamStart(controller, earlyDataHeader) {
-		try {
-			this.webSocket.addEventListener('message', (event) => {
-				if (this.readableStreamCancel) return;
-
-				if (!this.backpressure) {
-					this.processMessage(event.data, controller);
-				} else {
-					this.messageQueue.push(event.data);
-					this.log('Backpressure detected, message queued');
-				}
-			});
-
-			this.webSocket.addEventListener('close', () => this.handleClose(controller));
-			this.webSocket.addEventListener('error', (err) => this.handleError(err, controller));
-
-			// 处理早期数据
-			await this.handleEarlyData(earlyDataHeader, controller);
-		} catch (error) {
-			this.log(`Stream start error: ${error.message}`);
-			controller.error(error);
-		}
-	}
-
-	async processMessage(data, controller) {
-		// 防止并发执行，保证消息按顺序处理
-		if (this.isProcessing) {
-			this.messageQueue.push(data);
-			return;
-		}
-
-		this.isProcessing = true;
-		try {
-			controller.enqueue(data);
-
-			// 处理消息队列
-			while (this.messageQueue.length > 0 && !this.backpressure) {
-				const queuedData = this.messageQueue.shift();
-				controller.enqueue(queuedData);
-			}
-		} catch (error) {
-			this.log(`Message processing error: ${error.message}`);
-		} finally {
-			this.isProcessing = false;
-		}
-	}
-
-	handleStreamPull(controller) {
-		if (controller.desiredSize > 0) {
-			this.backpressure = false;
-
-			// 立即处理排队的消息
-			while (this.messageQueue.length > 0 && controller.desiredSize > 0) {
-				const data = this.messageQueue.shift();
-				this.processMessage(data, controller);
-			}
-		} else {
-			this.backpressure = true;
-		}
-	}
-
-	handleStreamCancel(reason) {
-		if (this.readableStreamCancel) return;
-
-		this.log(`Readable stream canceled, reason: ${reason}`);
-		this.readableStreamCancel = true;
-		this.cleanup();
-	}
-
-	handleClose(controller) {
-		this.cleanup();
-		if (!this.readableStreamCancel) {
-			controller.close();
-		}
-	}
-
-	handleError(err, controller) {
-		this.log(`WebSocket error: ${err.message}`);
-		if (!this.readableStreamCancel) {
-		controller.error(err);
-		}
-		this.cleanup();
-	}
-
-	async handleEarlyData(earlyDataHeader, controller) {
-		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
-		if (error) {
-			controller.error(error);
-		} else if (earlyData) {
-			controller.enqueue(earlyData);
-		}
-	}
-
-	cleanup() {
-		if (this.readableStreamCancel) return;
-		this.readableStreamCancel = true;
-
-		this.messageQueue = [];
-		this.isProcessing = false;
-		this.backpressure = false;
-
-		safeCloseWebSocket(this.webSocket);
-	}
-}
 
 // =================================================================
 //  服务状态页 (Status Page)
@@ -1073,11 +949,11 @@ async function handleMuxedStream(muxStream) {
     try {
         // 从子流中读取第一个数据块以解析头部
         const reader = muxStream.readable.getReader();
-        const { value: firstChunk, done } = await reader.read();
-        reader.releaseLock(); // 立即释放锁
+		const { value: firstChunk, done } = await reader.read();
 
         if (done) {
             log('Mux stream closed before sending any data.');
+			muxStream.close();
             return;
         }
 
@@ -1101,30 +977,32 @@ async function handleMuxedStream(muxStream) {
             return;
         }
 
-        const rawClientData = firstChunk.slice(rawDataIndex);
+        // 释放原始 reader，后续将使用 pipeTo
+        reader.releaseLock();
         
-        // 重建一个包含所有客户端数据的 ReadableStream
+        // 重建一个包含所有客户端数据的 ReadableStream，这个流从第一个数据块的 payload 部分开始
         const clientReadable = new ReadableStream({
             start(controller) {
-                if (rawClientData.byteLength > 0) {
-                    controller.enqueue(rawClientData);
+                const firstPayload = firstChunk.slice(rawDataIndex);
+                if (firstPayload.byteLength > 0) {
+                    controller.enqueue(firstPayload);
                 }
+                
                 // 将 muxStream 剩余部分管道过来
-                const readable = muxStream.readable;
-                const reader = readable.getReader();
-                async function push() {
-                    const { done, value } = await reader.read();
-                    if (done) {
+                muxStream.readable.pipeTo(new WritableStream({
+                    write(chunk) {
+                        controller.enqueue(chunk);
+                    },
+                    close() {
                         controller.close();
-                        return;
+                    },
+                    abort(reason) {
+                        controller.error(reason);
                     }
-                    controller.enqueue(value);
-                    push();
-                }
-                push().catch(error => {
-                    log('Client data stream pipe error', error);
-                    controller.error(error);
-                });
+                })).catch(error => {
+					log('Piping rest of client data failed:', error);
+					controller.error(error);
+				});
             }
         });
 
@@ -1148,79 +1026,9 @@ async function handleMuxedStream(muxStream) {
         );
 
     } catch (error) {
-        log('Error in handleMuxedStream:', error);
+        log('Error in handleMuxedStream:', error.stack || error);
         muxStream.close(); // 确保子流被关闭
     }
-}
-
-
-/**
- * 处理出站 UDP (DNS over HTTPS) 
- * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
- * @param {ArrayBuffer} secureProtoResponseHeader 
- * @param {(string)=> void} log 
- */
-async function handleUDPOutBound(webSocket, secureProtoResponseHeader, log) {
-
-    const DOH_URL = 'https://dns.google/dns-query'; //https://cloudflare-dns.com/dns-query
-
-    let issecureProtoHeaderSent = false;
-    let buffer = new Uint8Array(0);
-    const transformStream = new TransformStream({
-        transform(chunk, controller) {
-            const newBuffer = new Uint8Array(buffer.length + chunk.length);
-            newBuffer.set(buffer);
-            newBuffer.set(chunk, buffer.length);
-            buffer = newBuffer;
-            while (buffer.length >= 2) {
-                const udpPacketLength = new DataView(buffer.buffer, buffer.byteOffset, 2).getUint16(0);
-                if (buffer.length >= 2 + udpPacketLength) {
-                    const udpData = buffer.slice(2, 2 + udpPacketLength);
-                    controller.enqueue(udpData);
-                    buffer = buffer.slice(2 + udpPacketLength);
-                } else {
-                    break;
-                }
-            }
-        },
-    });
-
-    transformStream.readable.pipeTo(new WritableStream({
-        async write(chunk) {
-            // 将DNS查询发送到指定的DoH服务器
-            const resp = await fetch(DOH_URL, {
-                method: 'POST',
-                headers: {
-                    'content-type': 'application/dns-message',
-                },
-                body: chunk,
-            });
-
-            const dnsQueryResult = await resp.arrayBuffer();
-            const udpSize = dnsQueryResult.byteLength;
-            const udpSizeBuffer = new Uint8Array([(udpSize >> 8) & 0xff, udpSize & 0xff]);
-
-            if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                log(`DoH查询成功，DNS消息长度为: ${udpSize}`);
-                if (issecureProtoHeaderSent) {
-                    webSocket.send(await new Blob([udpSizeBuffer, dnsQueryResult]).arrayBuffer());
-                } else {
-                    webSocket.send(await new Blob([secureProtoResponseHeader, udpSizeBuffer, dnsQueryResult]).arrayBuffer());
-                    issecureProtoHeaderSent = true;
-                }
-            }
-        }
-    })).catch((error) => {
-        log('处理DNS UDP时出错: ' + error);
-    });
-
-    const writer = transformStream.writable.getWriter();
-
-    return {
-        write(chunk) {
-            writer.write(chunk);
-        }
-    };
 }
 
 
@@ -1289,17 +1097,32 @@ async function handleTCPOutBound(addressType, addressRemote, portRemote, clientR
         try {
             const tcpSocket = await currentStrategy.execute();
             log(`Strategy '${currentStrategy.name}' connected successfully. Piping data.`);
+
+			// --- [修复] 立即发送响应头以确认子流建立 ---
+			try {
+				const writer = client.writable.getWriter();
+				await writer.write(secureProtoResponseHeader);
+				writer.releaseLock();
+				log('Sent secureProto response header to client immediately.');
+			} catch (err) {
+				log('Error writing initial response header to client stream:', err);
+				tcpSocket.close();
+				client.close();
+				return;
+			}
             
-            // 将客户端数据流写入远程Socket
-            clientReadable.pipeTo(tcpSocket.writable).catch(err => {
+            // 设置双向数据管道
+            // 客户端 -> 远程
+            clientReadable.pipeTo(tcpSocket.writable, { signal: client.signal }).catch(err => {
                 log(`Client to remote pipe failed: ${err.message}`);
                 tcpSocket.close();
             });
 
-            const retryNext = () => tryConnectionStrategies(nextStrategies);
-
-            // [改动] 调用适配后的 remoteSocketToWS
-            await remoteSocketToWS(tcpSocket, client, secureProtoResponseHeader, retryNext, log);
+            // 远程 -> 客户端
+            tcpSocket.readable.pipeTo(client.writable, { signal: client.signal }).catch(err => {
+                log(`Remote to client pipe failed: ${err.message}`);
+                client.close();
+            });
 
         } catch (error) {
             log(`Strategy '${currentStrategy.name}' failed: ${error.message}. Trying next strategy...`);
@@ -1308,7 +1131,6 @@ async function handleTCPOutBound(addressType, addressRemote, portRemote, clientR
     }
     
     // 组装策略列表 (复用)
-    // --- 组装策略列表 ---
     const connectionStrategies = [];
     const shouldUseSocks = enableSocks && go2Socks5s.some(pattern => new RegExp(`^${pattern.replace(/\*/g, '.*')}$`, 'i').test(addressRemote));
 
@@ -1454,51 +1276,6 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
         secureProtoVersion: version,
         isUDP,
     };
-}
-
-
-/**
- * [已适配] 将远程服务器的数据流管道回客户端
- * @param {*} remoteSocket 远程 TCP Socket
- * @param {object} client 客户端对象 (MuxedStream)
- * @param {Uint8Array} responseHeader
- * @param {() => Promise<void>} retry 重试函数
- * @param {(string) => void} log 日志函数
- */
-async function remoteSocketToWS(remoteSocket, client, responseHeader, retry, log) {
-    let hasIncomingData = false;
-    let header = responseHeader;
-
-    // [改动] 使用 pipeTo 将数据流直接传输到客户端 (MuxedStream) 的可写流
-    try {
-        await remoteSocket.readable
-            .pipeThrough(new TransformStream({
-                transform(chunk, controller) {
-                    hasIncomingData = true;
-                    if (header) {
-                        const combined = new Uint8Array(header.length + chunk.length);
-                        combined.set(header, 0);
-                        combined.set(chunk, header.length);
-                        controller.enqueue(combined);
-                        header = null;
-                    } else {
-                        controller.enqueue(chunk);
-                    }
-                }
-            }))
-            .pipeTo(client.writable); // 直接管道到 MuxedStream 的 writable
-    } catch (error) {
-        log(`Remote to client pipe failed:`, error.stack || error);
-        // 不再需要手动关闭，pipeTo 失败会自动处理流的中止
-    }
-
-    log(`Remote connection stream closed, hasIncomingData: ${hasIncomingData}`);
-
-    // 重试逻辑
-    if (!hasIncomingData && retry) {
-        log(`Connection successful but no data received, triggering retry...`);
-        retry();
-    }
 }
 
 
