@@ -1,9 +1,9 @@
 
 // --- MUX START ---
 // 引入 yamux 库，用于实现多路复用
-import { Muxer } from 'https://esm.sh/@chainsafe/yamux@9.1.0/dist/muxer.mjs';
+import { Muxer } from 'https://esm.sh/@chainsafe/yamux@9.1.0/dist/muxer.mjs'; 
 // 为了类型提示和代码可读性，也导入 MuxedStream 类型
-import { MuxedStream } from 'https://esm.sh/@chainsafe/yamux@9.1.0/dist/stream.mjs';
+import { MuxedStream } from 'https://esm.sh/@chainsafe/yamux@9.1.0/dist/stream.mjs'; 
 // --- MUX END ---
 
 import { connect } from 'cloudflare:sockets';
