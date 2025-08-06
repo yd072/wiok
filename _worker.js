@@ -447,88 +447,84 @@ async function statusPage() {
 
 // --- 带详细日志的、更健壮的 resolveToIPv6 函数 ---
 async function resolveToIPv6(target) {
-    console.log(`[NAT64-DEBUG] 开始解析目标: ${target}`);
+    console.log(`[RESOLVE-DEBUG] 开始解析目标: ${target}`);
 
-    function isIPv6(str) {
-        return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
-    }
-    function isIPv4(str) {
+    // --- 辅助函数 ---
+    const isIPv6 = (str) => str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
+    const isIPv4 = (str) => {
         const parts = str.split('.');
         return parts.length === 4 && parts.every(part => {
             const num = parseInt(part, 10);
             return num >= 0 && num <= 255 && part === num.toString();
         });
-    }
-    async function resolveViaDoH(domain, recordType) {
-        console.log(`[NAT64-DEBUG] DoH 查询: ${domain} [${recordType}]`);
-        const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${recordType}`;
+    };
+
+    /**
+     * 通过 DoH API 解析 DNS 记录。
+     * @param {string} domain 要查询的域名。
+     * @param {'A' | 'AAAA'} recordType DNS 记录类型。
+     * @param {string} dohServer DoH 服务器的域名 (例如 'cloudflare-dns.com' 或 'dns.google')。
+     * @returns {Promise<string|null>} 返回找到的第一个 IP 地址，否则返回 null。
+     */
+    async function resolveViaDoH(domain, recordType, dohServer) {
+        const url = `https://${dohServer}/dns-query?name=${encodeURIComponent(domain)}&type=${recordType}`;
+        console.log(`[RESOLVE-DEBUG] DoH 查询: ${url}`);
         try {
             const response = await fetch(url, { headers: { 'Accept': 'application/dns-json' } });
-            if (!response.ok) {
-                console.log(`[NAT64-DEBUG] DoH 查询失败, HTTP 状态: ${response.status}`);
-                return null;
-            }
+            if (!response.ok) return null;
             const data = await response.json();
             if (data.Answer && data.Answer.length > 0) {
                 const record = data.Answer.find(r => r.type === (recordType === 'AAAA' ? 28 : 1));
-                if (record) {
-                    console.log(`[NAT64-DEBUG] DoH 查询成功, 找到记录: ${record.data}`);
-                    return record.data;
-                }
+                if (record) return record.data;
             }
-            console.log(`[NAT64-DEBUG] DoH 查询成功, 但未找到 ${recordType} 记录`);
             return null;
         } catch (error) {
-            console.error(`[NAT64-DEBUG] DoH 查询时发生异常: ${error}`);
+            console.error(`[RESOLVE-DEBUG] DoH 查询异常 to ${dohServer}: ${error}`);
             return null;
         }
     }
 
-    if (!target || typeof target !== 'string') throw new Error("无效的解析目标。");
-    if (isIPv6(target)) {
-        console.log(`[NAT64-DEBUG] 目标本身是 IPv6, 直接返回: ${target}`);
-        return target;
-    }
+    // --- 解析逻辑 ---
 
-    // 优先尝试直接解析 AAAA 记录
-    if (!isIPv4(target)) {
-        const ipv6 = await resolveViaDoH(target, 'AAAA');
+    if (!target || typeof target !== 'string') throw new Error("无效的解析目标。");
+    if (isIPv6(target)) return target;
+
+    // **修正点 1: 检查是否配置了 NAT64 服务器。**
+    // 如果配置了，我们就优先使用它，而不是 Cloudflare 的默认 DNS。
+    // 这完美模拟了原始代码的行为：让指定的 DNS 服务器来决定如何解析。
+    if (DNS64Server && DNS64Server.trim() !== '' && !DNS64Server.endsWith('/96')) {
+        console.log(`[RESOLVE-DEBUG] 检测到 NAT64 服务器配置: ${DNS64Server}。将使用它进行 AAAA 解析。`);
+        // **直接向指定的 NAT64/DNS64 服务器查询 AAAA 记录。**
+        const ipv6 = await resolveViaDoH(target, 'AAAA', DNS64Server);
         if (ipv6) {
-            console.log(`[NAT64-DEBUG] 成功解析到原生 IPv6 地址, 无需 NAT64: ${ipv6}`);
+            console.log(`[RESOLVE-DEBUG] NAT64 服务器 ${DNS64Server} 成功返回 IPv6: ${ipv6}`);
             return ipv6;
         }
-        console.log(`[NAT64-DEBUG] 未找到原生 IPv6 地址, 继续执行 NAT64 回退逻辑。`);
+        console.log(`[RESOLVE-DEBUG] NAT64 服务器 ${DNS64Server} 未能解析 ${target} 的 AAAA 记录。将尝试标准解析流程。`);
     }
 
-    // 获取 IPv4 地址用于 NAT64 转换
-    let ipv4Address = isIPv4(target) ? target : await resolveViaDoH(target, 'A');
-    if (!ipv4Address) {
-        throw new Error(`[NAT64-ERROR] 无法为 "${target}" 解析出用于 NAT64 转换的 IPv4 地址。`);
-    }
-    console.log(`[NAT64-DEBUG] 获得用于转换的 IPv4: ${ipv4Address}`);
-
-    // 执行 NAT64 转换
-    if (!DNS64Server || DNS64Server.trim() === '') {
-        throw new Error("[NAT64-ERROR] 未配置 DNS64/NAT64 服务器。");
-    }
-    console.log(`[NAT64-DEBUG] 使用配置的 NAT64 服务器: ${DNS64Server}`);
-
-    if (DNS64Server.endsWith('/96')) {
-        const prefix = DNS64Server.split('/96')[0];
-        const parts = ipv4Address.split('.').map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
-        const nat64Address = `${prefix}${parts[0]}${parts[1]}:${parts[2]}${parts[3]}`;
-        console.log(`[NAT64-DEBUG] 通过 /96 前缀合成的地址: ${nat64Address}`);
-        return nat64Address;
+    // 如果没有配置 NAT64，或者 NAT64 解析失败，则执行标准流程。
+    // 步骤 1: 尝试用 Cloudflare DNS 直接解析原生 IPv6。
+    if (!isIPv4(target)) {
+        const ipv6 = await resolveViaDoH(target, 'AAAA', 'cloudflare-dns.com');
+        if (ipv6) {
+            console.log(`[RESOLVE-DEBUG] Cloudflare DNS 解析到原生 IPv6: ${ipv6}`);
+            return ipv6;
+        }
     }
 
-    const nat64Domain = `${ipv4Address}.${DNS64Server}`;
-    const resolvedNat64 = await resolveViaDoH(nat64Domain, 'AAAA');
-    if (resolvedNat64) {
-        console.log(`[NAT64-DEBUG] 通过查询 ${nat64Domain} 成功解析到地址: ${resolvedNat64}`);
-        return resolvedNat64;
+    // 步骤 2: 回退到 /96 前缀的 NAT64 转换（如果配置了的话）。
+    if (DNS64Server && DNS64Server.endsWith('/96')) {
+        console.log(`[RESOLVE-DEBUG] 使用 /96 前缀进行 NAT64 转换。`);
+        const ipv4Address = isIPv4(target) ? target : await resolveViaDoH(target, 'A', 'cloudflare-dns.com');
+        if (ipv4Address) {
+            const prefix = DNS64Server.split('/96')[0];
+            const parts = ipv4Address.split('.').map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
+            return `${prefix}${parts[0]}${parts[1]}:${parts[2]}${parts[3]}`;
+        }
     }
-
-    throw new Error(`[NAT64-ERROR] 使用服务器 "${DNS64Server}" 转换 IPv4 "${ipv4Address}" 失败。`);
+    
+    throw new Error(`[RESOLVE-ERROR] 所有解析方法均失败，无法为 "${target}" 获取 IPv6 地址。`);
 }
 
 export default {
