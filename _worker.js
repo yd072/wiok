@@ -210,6 +210,131 @@ function parseProxyIP(proxyString, defaultPort) {
     return { address: address.toLowerCase(), port: Number(port) };
 }
 
+
+// WebSocket连接管理类
+class WebSocketManager {
+	constructor(webSocket, log) {
+		this.webSocket = webSocket;
+		this.log = log;
+		this.readableStreamCancel = false;
+		this.backpressure = false;
+		this.messageQueue = [];
+		this.isProcessing = false; // 标志：是否正在处理队列
+	}
+
+	makeReadableStream(earlyDataHeader) {
+		return new ReadableStream({
+			start: (controller) => this.handleStreamStart(controller, earlyDataHeader),
+			pull: (controller) => this.handleStreamPull(controller),
+			cancel: (reason) => this.handleStreamCancel(reason),
+		});
+	}
+
+	async handleStreamStart(controller, earlyDataHeader) {
+		try {
+			this.webSocket.addEventListener('message', (event) => {
+				if (this.readableStreamCancel) return;
+
+				if (!this.backpressure) {
+					this.processMessage(event.data, controller);
+				} else {
+					this.messageQueue.push(event.data);
+					this.log('Backpressure detected, message queued');
+				}
+			});
+
+			this.webSocket.addEventListener('close', () => this.handleClose(controller));
+			this.webSocket.addEventListener('error', (err) => this.handleError(err, controller));
+
+			// 处理早期数据
+			await this.handleEarlyData(earlyDataHeader, controller);
+		} catch (error) {
+			this.log(`Stream start error: ${error.message}`);
+			controller.error(error);
+		}
+	}
+
+	async processMessage(data, controller) {
+		// 防止并发执行，保证消息按顺序处理
+		if (this.isProcessing) {
+			this.messageQueue.push(data);
+			return;
+		}
+
+		this.isProcessing = true;
+		try {
+			controller.enqueue(data);
+
+			// 处理消息队列
+			while (this.messageQueue.length > 0 && !this.backpressure) {
+				const queuedData = this.messageQueue.shift();
+				controller.enqueue(queuedData);
+			}
+		} catch (error) {
+			this.log(`Message processing error: ${error.message}`);
+		} finally {
+			this.isProcessing = false;
+		}
+	}
+
+	handleStreamPull(controller) {
+		if (controller.desiredSize > 0) {
+			this.backpressure = false;
+
+			// 立即处理排队的消息
+			while (this.messageQueue.length > 0 && controller.desiredSize > 0) {
+				const data = this.messageQueue.shift();
+				this.processMessage(data, controller);
+			}
+		} else {
+			this.backpressure = true;
+		}
+	}
+
+	handleStreamCancel(reason) {
+		if (this.readableStreamCancel) return;
+
+		this.log(`Readable stream canceled, reason: ${reason}`);
+		this.readableStreamCancel = true;
+		this.cleanup();
+	}
+
+	handleClose(controller) {
+		this.cleanup();
+		if (!this.readableStreamCancel) {
+			controller.close();
+		}
+	}
+
+	handleError(err, controller) {
+		this.log(`WebSocket error: ${err.message}`);
+		if (!this.readableStreamCancel) {
+		controller.error(err);
+		}
+		this.cleanup();
+	}
+
+	async handleEarlyData(earlyDataHeader, controller) {
+		const { earlyData, error } = utils.base64.toArrayBuffer(earlyDataHeader);
+		if (error) {
+			controller.error(error);
+		} else if (earlyData) {
+			controller.enqueue(earlyData);
+		}
+	}
+
+	cleanup() {
+		if (this.readableStreamCancel) return;
+		this.readableStreamCancel = true;
+
+		this.messageQueue = [];
+		this.isProcessing = false;
+		this.backpressure = false;
+
+		safeCloseWebSocket(this.webSocket);
+	}
+}
+
 // =================================================================
 //  服务状态页 (Status Page)
 // =================================================================
@@ -680,10 +805,46 @@ export default {
 					}
 				}
 			} else {
-                // --- MUX START ---
-                // WebSocket 请求处理，现在统一由新的多路复用处理器接管
+                // WebSocket 请求处理
+				socks5Address = url.searchParams.get('socks5') || socks5Address;
+				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
+				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
+					socks5Address = url.pathname.split('://')[1].split('#')[0];
+					if (socks5Address.includes('@')) {
+						let userPassword = socks5Address.split('@')[0];
+						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
+						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
+						socks5Address = `${userPassword}@${socks5Address.split('@')[1]}`;
+					}
+				}
+
+				if (socks5Address) {
+					try {
+						parsedSocks5Address = socks5AddressParser(socks5Address);
+						enableSocks = true;
+					} catch (err) {
+						console.log(err.toString());
+						enableSocks = false;
+					}
+				} else {
+					enableSocks = false;
+				}
+
+				if (url.searchParams.has('proxyip')) {
+					proxyIP = url.searchParams.get('proxyip');
+					enableSocks = false;
+				} else if (new RegExp('/proxyip=', 'i').test(url.pathname)) {
+					proxyIP = url.pathname.toLowerCase().split('/proxyip=')[1];
+					enableSocks = false;
+				} else if (new RegExp('/proxyip.', 'i').test(url.pathname)) {
+					proxyIP = `proxyip.${url.pathname.toLowerCase().split("/proxyip.")[1]}`;
+					enableSocks = false;
+				} else if (new RegExp('/pyip=', 'i').test(url.pathname)) {
+					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
+					enableSocks = false;
+				}
+
 				return await secureProtoOverWSHandler(request);
-                // --- MUX END ---
 			}
 		} catch (err) {
 			return new Response(err.toString());
@@ -691,79 +852,88 @@ export default {
 	},
 };
 
-// --- MUX START ---
-// #################################################################
-// #########   重构后的 WebSocket 和多路复用处理程序   ##########
-// #################################################################
-
-/**
- * 主要的 WebSocket 入口，负责建立和管理 yamux 多路复用会话
- * @param {Request} request
- */
-// --- MUX START ---
-// #################################################################
-// #########   重构后的 WebSocket 和多路复用处理程序   ##########
-// #################################################################
-
-/**
- * 主要的 WebSocket 入口，负责建立和管理 yamux 多路复用会话
- * @param {Request} request
- */
 async function secureProtoOverWSHandler(request) {
-    // 最终解决方案：使用动态导入，在函数运行时加载模块，以绕过部署平台的 URL 解析 Bug
-    const [{ Muxer }, { MuxedStream }] = await Promise.all([
-        import('https://cdn.jsdelivr.net/npm/@chainsafe/yamux@9.1.0/dist/muxer.mjs'),
-        import('https://cdn.jsdelivr.net/npm/@chainsafe/yamux@9.1.0/dist/stream.mjs')
-    ]);
-
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
 
     webSocket.accept();
 
+    let address = '';
+    let portWithRandomLog = '';
     const log = (info, event = '') => {
         const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] [MuxSession] ${info}`, event);
+        console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
     };
+    const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
+    const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
 
-    // 1. 创建 Yamux Muxer 实例，它将控制所有的子流
-    const muxer = new Muxer({
-        // 当 muxer 需要发送数据给客户端时，调用此函数
-        onWrite: (data) => {
-            try {
-                if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                    webSocket.send(data);
-                }
-            } catch (err) {
-                log('Error sending data via WebSocket:', err);
-                muxer.close(); // 发送失败，关闭整个会话
+    let remoteSocketWrapper = {
+        value: null
+    };
+    let udpStreamProcessed = false;
+    const banHostsSet = new Set(banHosts);
+    let secureProtoResponseHeader = null;
+
+    readableWebSocketStream.pipeTo(new WritableStream({
+        async write(chunk, controller) {
+            if (udpStreamProcessed) {
+                return;
             }
+            if (remoteSocketWrapper.value) {
+                const writer = remoteSocketWrapper.value.writable.getWriter();
+                await writer.write(chunk);
+                writer.releaseLock();
+                return;
+            }
+
+            const {
+                hasError,
+                message,
+                addressType,
+                portRemote = 443,
+                addressRemote = '',
+                rawDataIndex,
+                secureProtoVersion = new Uint8Array([0, 0]),
+                isUDP,
+            } = processsecureProtoHeader(chunk, userID);
+
+            address = addressRemote;
+            portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
+            if (hasError) {
+                throw new Error(message);
+            }
+
+            secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
+            const rawClientData = chunk.slice(rawDataIndex);
+
+            if (isUDP) {
+                // UDP-specific handling
+                if (portRemote === 53) {
+                    const udpHandler = await handleUDPOutBound(webSocket, secureProtoResponseHeader, log);
+                    udpHandler.write(rawClientData);
+                    udpStreamProcessed = true;
+                } else {
+                    // All other UDP traffic is blocked
+                    throw new Error('UDP proxying is only enabled for DNS on port 53');
+                }
+                return;
+            }
+
+            // TCP-specific handling
+            if (banHosts.includes(addressRemote)) {
+                throw new Error('Domain is blocked');
+            }
+            log(`Handling TCP outbound for ${addressRemote}:${portRemote}`);
+            await handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
         },
-        // 当客户端打开一个新的子流时，调用此函数 (核心逻辑入口)
-        onStream: (muxStream) => {
-            // 为每个独立的流运行处理逻辑
-            handleMuxedStream(muxStream, MuxedStream); // 传递 MuxedStream 类型
+        close() {
+            log(`readableWebSocketStream is closed`);
         },
-    });
-
-    // 2. 监听 WebSocket 事件
-    webSocket.addEventListener('message', event => {
-        try {
-            // 将从客户端收到的所有数据都喂给 muxer
-            muxer.onData(event.data);
-        } catch (err) {
-            log('Error processing incoming mux data:', err);
-        }
-    });
-
-    webSocket.addEventListener('close', () => {
-        log('WebSocket connection closed.');
-        muxer.close(); // 确保 muxer 会话也被清理
-    });
-
-    webSocket.addEventListener('error', err => {
-        log('WebSocket error:', err.message);
-        muxer.close();
+        abort(reason) {
+            log(`readableWebSocketStream is aborted`, JSON.stringify(reason));
+        },
+    })).catch((err) => {
+        log('readableWebSocketStream pipe error', err);
     });
 
     return new Response(null, {
@@ -773,118 +943,79 @@ async function secureProtoOverWSHandler(request) {
 }
 
 /**
- * 处理每一个被多路复用的独立流 (muxStream)
- * @param {InstanceType<typeof MuxedStream>} muxStream yamux 创建的独立流
- * @param {any} MuxedStream 动态导入的 MuxedStream 类
+ * 处理出站 UDP (DNS over HTTPS) 
+ * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
+ * @param {ArrayBuffer} secureProtoResponseHeader 
+ * @param {(string)=> void} log 
  */
-async function handleMuxedStream(muxStream, MuxedStream) {
-    const reader = muxStream.readable.getReader();
-    let firstChunk;
-    try {
-        const result = await reader.read();
-        if (result.done) {
-            console.log(`Mux stream ${muxStream.id} closed before sending any data.`);
-            return;
-        }
-        firstChunk = result.value;
-    } catch (error) {
-        console.error(`Error reading from mux stream ${muxStream.id}:`, error);
-        muxStream.close();
-        return;
-    } finally {
-        reader.releaseLock();
-    }
-    
-    // 使用现有的头部解析函数
-    const {
-        hasError,
-        message,
-        addressType,
-        portRemote = 443,
-        addressRemote = '',
-        rawDataIndex,
-        isUDP,
-    } = processsecureProtoHeader(firstChunk, userID);
+async function handleUDPOutBound(webSocket, secureProtoResponseHeader, log) {
 
-    const log = (info, event = '') => console.log(`[${new Date().toISOString()}] [${addressRemote}:${portRemote}] [Stream ${muxStream.id}] ${info}`, event || '');
+    const DOH_URL = 'https://dns.google/dns-query'; //https://cloudflare-dns.com/dns-query
 
-    if (hasError) {
-        log('Error processing secureProto header:', message);
-        muxStream.close(); // 关闭这个子流，不影响其他流
-        return;
-    }
-    
-    // 从头部之后的数据开始，创建一个新的 ReadableStream
-    const clientDataStream = new ReadableStream({
-        start(controller) {
-            const rawClientData = firstChunk.slice(rawDataIndex);
-            if (rawClientData.byteLength > 0) {
-                controller.enqueue(rawClientData);
+    let issecureProtoHeaderSent = false;
+    let buffer = new Uint8Array(0);
+    const transformStream = new TransformStream({
+        transform(chunk, controller) {
+            const newBuffer = new Uint8Array(buffer.length + chunk.length);
+            newBuffer.set(buffer);
+            newBuffer.set(chunk, buffer.length);
+            buffer = newBuffer;
+            while (buffer.length >= 2) {
+                const udpPacketLength = new DataView(buffer.buffer, buffer.byteOffset, 2).getUint16(0);
+                if (buffer.length >= 2 + udpPacketLength) {
+                    const udpData = buffer.slice(2, 2 + udpPacketLength);
+                    controller.enqueue(udpData);
+                    buffer = buffer.slice(2 + udpPacketLength);
+                } else {
+                    break;
+                }
             }
-            // 将 muxStream.readable 剩下的数据管道过来
-            muxStream.readable.pipeTo(new WritableStream({
-                write(chunk) {
-                    controller.enqueue(chunk);
-                },
-                close() {
-                    controller.close();
-                },
-                abort(reason) {
-                    controller.error(reason);
-                }
-            })).catch(err => {
-                if (!err.message.includes('abort')) {
-                    log('Error piping remaining client data', err.message);
-                }
-            });
-        }
+        },
     });
 
-    if (isUDP) {
-        log('UDP traffic over multiplexed connection is not supported.');
-        muxStream.close();
-        return;
-    }
+    transformStream.readable.pipeTo(new WritableStream({
+        async write(chunk) {
+            // 将DNS查询发送到指定的DoH服务器
+            const resp = await fetch(DOH_URL, {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/dns-message',
+                },
+                body: chunk,
+            });
 
-    if (banHosts.includes(addressRemote)) {
-        log('Domain is blocked:', addressRemote);
-        muxStream.close();
-        return;
-    }
+            const dnsQueryResult = await resp.arrayBuffer();
+            const udpSize = dnsQueryResult.byteLength;
+            const udpSizeBuffer = new Uint8Array([(udpSize >> 8) & 0xff, udpSize & 0xff]);
 
-    log(`Handling TCP outbound`);
-    
-    try {
-        await handleTCPOutBoundOverMux(
-            addressType,
-            addressRemote,
-            portRemote,
-            clientDataStream,
-            muxStream,
-            log,
-            MuxedStream
-        );
-    } catch (error) {
-        log('Error in handleTCPOutBoundOverMux:', error);
-        muxStream.close();
-    }
+            if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                log(`DoH查询成功，DNS消息长度为: ${udpSize}`);
+                if (issecureProtoHeaderSent) {
+                    webSocket.send(await new Blob([udpSizeBuffer, dnsQueryResult]).arrayBuffer());
+                } else {
+                    webSocket.send(await new Blob([secureProtoResponseHeader, udpSizeBuffer, dnsQueryResult]).arrayBuffer());
+                    issecureProtoHeaderSent = true;
+                }
+            }
+        }
+    })).catch((error) => {
+        log('处理DNS UDP时出错: ' + error);
+    });
+
+    const writer = transformStream.writable.getWriter();
+
+    return {
+        write(chunk) {
+            writer.write(chunk);
+        }
+    };
 }
 
-/**
- * 专门为多路复用场景重构的 TCP 处理函数
- * @param {number} addressType
- * @param {string} addressRemote
- * @param {number} portRemote
- * @param {ReadableStream} clientDataStream
- * @param {InstanceType<typeof MuxedStream>} muxStream
- * @param {(string, any?) => void} log
- * @param {any} MuxedStream
- */
-async function handleTCPOutBoundOverMux(addressType, addressRemote, portRemote, clientDataStream, muxStream, log, MuxedStream) {
+async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
 
 	const createConnection = async (address, port, proxyOptions = null) => {
 		const proxyType = proxyOptions ? proxyOptions.type : 'direct';
-		log(`Establishing connection to ${address}:${port} (via: ${proxyType})`);
+		log(`建立连接: ${address}:${port} (方式: ${proxyType})`);
 
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 5000);
@@ -900,121 +1031,138 @@ async function handleTCPOutBoundOverMux(addressType, addressRemote, portRemote, 
 					hostname: address,
 					port: port,
 					allowHalfOpen: false,
+                    keepAlive: true,
                     signal: controller.signal
 				});
 			}
 
-			const tcpSocket = await tcpSocketPromise;
-			clearTimeout(timeoutId);
-			return tcpSocket;
+			const tcpSocket = await Promise.race([
+				tcpSocketPromise,
+				new Promise((_, reject) => setTimeout(() => reject(new Error('连接超时')), 5000))
+			]);
 
+			clearTimeout(timeoutId);
+			remoteSocket.value = tcpSocket;
+
+			const writer = tcpSocket.writable.getWriter();
+			try {
+				await writer.write(rawClientData);
+			} finally {
+				writer.releaseLock();
+			}
+
+			return tcpSocket;
 		} catch (error) {
 			clearTimeout(timeoutId);
 			throw error;
 		}
 	};
-    
-    async function remoteSocketToMuxStream(remoteSocket, muxStream, retry, log) {
-        let hasIncomingData = false;
-        try {
-            await remoteSocket.readable.pipeTo(
-                new WritableStream({
-                    async write(chunk) {
-                        if (muxStream.state === 'closed' || muxStream.state === 'closing') {
-                            remoteSocket.close();
-                            return;
-                        }
-                        hasIncomingData = true;
-                        const writer = muxStream.writable.getWriter();
-                        await writer.write(chunk);
-                        writer.releaseLock();
-                    },
-                    close() {
-                        log(`Remote socket readable closed. hasIncomingData: ${hasIncomingData}`);
-                    },
-                    abort(reason) {
-                        console.error(`Remote socket readable aborted:`, reason);
-                    },
-                }),
-                { signal: muxStream.signal }
-            );
-        } catch (error) {
-            if (!error.message.includes('abort')) {
-                console.error(`Error piping from remote to mux stream:`, error.stack || error);
-            }
-        }
-    
-        if (!hasIncomingData && retry) {
-            log(`Connection successful but no data received, triggering retry...`);
-            retry();
-        }
-    }
 
+    // 新的递归函数，用于按顺序尝试所有连接策略
     async function tryConnectionStrategies(strategies) {
-        if (muxStream.state !== 'open') {
-             log('Mux stream is not open, aborting connection attempts.');
-             return;
-        }
-
         if (!strategies || strategies.length === 0) {
-            log('All connection strategies failed. Closing mux stream.');
-            cachedSettings = null; // 自愈机制
-            muxStream.close();
+            log('All connection strategies failed. Closing WebSocket.');
+            
+            // 自愈机制：当所有策略都失败后，清空缓存，强制下一次请求从KV重新加载。
+            log('Invalidating configuration cache due to connection failures.');
+            cachedSettings = null;
+            
+            safeCloseWebSocket(webSocket);
             return;
         }
 
         const [currentStrategy, ...nextStrategies] = strategies;
-        const retryNext = () => tryConnectionStrategies(nextStrategies);
-
         log(`Attempting connection with strategy: '${currentStrategy.name}'`);
 
         try {
             const tcpSocket = await currentStrategy.execute();
             log(`Strategy '${currentStrategy.name}' connected successfully. Piping data.`);
 
-            // Pipe 1: Client -> Remote
-            clientDataStream.pipeTo(tcpSocket.writable, { signal: muxStream.signal }).catch(err => {
-                 if (!err.message.includes('abort')) {
-                    log(`Pipe client->remote for stream ${muxStream.id} failed: ${err.message}`);
-                 }
-            });
-            
-            // Pipe 2: Remote -> Client (with retry logic)
-            await remoteSocketToMuxStream(tcpSocket, muxStream, retryNext, log);
+            // 关键点：如果本次连接失败，重试函数将用剩余的策略继续尝试
+            const retryNext = () => tryConnectionStrategies(nextStrategies);
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
 
         } catch (error) {
             log(`Strategy '${currentStrategy.name}' failed: ${error.message}. Trying next strategy...`);
-            await tryConnectionStrategies(nextStrategies);
+            await tryConnectionStrategies(nextStrategies); // 立即尝试下一个策略
         }
     }
 
+    // --- 组装策略列表 ---
     const connectionStrategies = [];
     const shouldUseSocks = enableSocks && go2Socks5s.some(pattern => new RegExp(`^${pattern.replace(/\*/g, '.*')}$`, 'i').test(addressRemote));
 
+    // 1. 主要连接策略
     if (enableHttpProxy) {
-        connectionStrategies.push({ name: 'HTTP Proxy', execute: () => createConnection(addressRemote, portRemote, { type: 'http' }) });
+        connectionStrategies.push({
+            name: 'HTTP Proxy',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'http' })
+        });
     } else if (shouldUseSocks) {
-        connectionStrategies.push({ name: 'SOCKS5 Proxy (go2Socks5s)', execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' }) });
+        connectionStrategies.push({
+            name: 'SOCKS5 Proxy (go2Socks5s)',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
+        });
     } else {
-        connectionStrategies.push({ name: 'Direct Connection', execute: () => createConnection(addressRemote, portRemote, null) });
+        connectionStrategies.push({
+            name: 'Direct Connection',
+            execute: () => createConnection(addressRemote, portRemote, null)
+        });
     }
 
+    // 2. 备用 (Fallback) 策略
     if (enableSocks && !shouldUseSocks) {
-        connectionStrategies.push({ name: 'SOCKS5 Proxy (Fallback)', execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' }) });
+        connectionStrategies.push({
+            name: 'SOCKS5 Proxy (Fallback)',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
+        });
     }
+
     if (proxyIP && proxyIP.trim() !== '') {
-        connectionStrategies.push({ name: '用户配置的 PROXYIP', execute: () => { const { address, port } = parseProxyIP(proxyIP, portRemote); return createConnection(address, port); } });
+        connectionStrategies.push({
+            name: '用户配置的 PROXYIP',
+            execute: () => {
+                const { address, port } = parseProxyIP(proxyIP, portRemote);
+                return createConnection(address, port);
+            }
+        });
     }
+
     const userNat64Server = DNS64Server && DNS64Server.trim() !== '' && DNS64Server !== atob("ZG5zNjQuY21saXVzc3NzLm5ldA==");
     if (userNat64Server) {
-        connectionStrategies.push({ name: '用户配置的 NAT64', execute: async () => { const nat64Address = await resolveToIPv6(addressRemote); return createConnection(`[${nat64Address}]`, 443); } });
+        connectionStrategies.push({
+            name: '用户配置的 NAT64',
+            execute: async () => {
+                const nat64Address = await resolveToIPv6(addressRemote);
+                return createConnection(`[${nat64Address}]`, 443);
+            }
+        });
     }
-    connectionStrategies.push({ name: '内置的默认 PROXYIP', execute: () => { const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw=='); const { address, port } = parseProxyIP(defaultProxyIP, portRemote); return createConnection(address, port); } });
-    connectionStrategies.push({ name: '内置的默认 NAT64', execute: async () => { if (!DNS64Server || DNS64Server.trim() === '') { DNS64Server = atob("ZG5zNjQuY21pLnp0dmkub3Jn"); } const nat64Address = await resolveToIPv6(addressRemote); return createConnection(`[${nat64Address}]`, 443); } });
 
+    connectionStrategies.push({
+        name: '内置的默认 PROXYIP',
+        execute: () => {
+            const defaultProxyIP = atob('UFJPWFlJUC50cDEuZnh4ay5kZWR5bi5pbw==');
+            const { address, port } = parseProxyIP(defaultProxyIP, portRemote);
+            return createConnection(address, port);
+        }
+    });
+
+    connectionStrategies.push({
+        name: '内置的默认 NAT64',
+        execute: async () => {
+            if (!DNS64Server || DNS64Server.trim() === '') {
+                DNS64Server = atob("ZG5zNjQuY21pLnp0dmkub3Jn");
+            }
+            const nat64Address = await resolveToIPv6(addressRemote);
+            return createConnection(`[${nat64Address}]`, 443);
+        }
+    });
+
+    // --- 启动策略链 ---
     await tryConnectionStrategies(connectionStrategies);
 }
-// --- MUX END ---
+
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
         return { hasError: true, message: 'Invalid data' };
@@ -1087,7 +1235,63 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     };
 }
 
+async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
+    let hasIncomingData = false;
+    let header = responseHeader; // 用于发送初始响应头。
+    try {
+        await remoteSocket.readable.pipeTo(
+            new WritableStream({
+
+                async write(chunk) {
+                    hasIncomingData = true;
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        return;
+                    }
+                    if (header) {
+                        const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                        combinedData.set(new Uint8Array(header), 0);
+                        combinedData.set(new Uint8Array(chunk), header.byteLength);
+                        webSocket.send(combinedData);
+                        header = null;
+                    } else {
+                        webSocket.send(chunk);
+                    }
+                },
+
+                close() {
+                    log(`远程连接的数据流已正常关闭, 是否接收到数据: ${hasIncomingData}`);
+                },
+                // abort 方法在数据流被异常中止时调用。
+                abort(reason) {
+                    console.error(`远程连接的数据流被中断:`, reason);
+                },
+            })
+        );
+    } catch (error) {
+        // 捕获在 pipeTo 过程中可能发生的任何错误。
+        console.error(`数据流传输时发生异常:`, error.stack || error);
+        // 发生错误时，安全地关闭WebSocket连接。
+        safeCloseWebSocket(webSocket);
+    }
+
+    if (!hasIncomingData && retry) {
+        log(`连接成功但未收到任何数据，触发重试机制...`);
+        retry();
+    }
+}
+
 const WS_READY_STATE_OPEN = 1;
+const WS_READY_STATE_CLOSING = 2;
+
+function safeCloseWebSocket(socket) {
+    try {
+        if (socket.readyState === WS_READY_STATE_OPEN || socket.readyState === WS_READY_STATE_CLOSING) {
+            socket.close();
+        }
+    } catch (error) {
+        console.error('safeCloseWebSocket error', error);
+    }
+}
 
 const byteToHexArray = Array.from({ length: 256 }, (_, i) => (i + 256).toString(16).slice(1));
 
@@ -1122,16 +1326,19 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
     let res = (await reader.read()).value;
 
     if (res[0] !== 0x05) {
-        throw new Error(`SOCKS5 version error: received ${res[0]}, expected 5`);
+        log(`SOCKS5 version error: received ${res[0]}, expected 5`);
+        return;
     }
     if (res[1] === 0xff) {
-        throw new Error("No acceptable authentication methods");
+        log("No acceptable authentication methods");
+        return;
     }
 
     if (res[1] === 0x02) {
         log("SOCKS5 requires authentication");
         if (!username || !password) {
-            throw new Error("Username and password required");
+            log("Username and password required");
+            return;
         }
         const authRequest = new Uint8Array([
             1,
@@ -1143,7 +1350,8 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
         await writer.write(authRequest);
         res = (await reader.read()).value;
         if (res[0] !== 0x01 || res[1] !== 0x00) {
-            throw new Error("SOCKS5 authentication failed");
+            log("SOCKS5 authentication failed");
+            return;
         }
     }
 
@@ -1156,25 +1364,23 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
             DSTADDR = new Uint8Array([3, addressRemote.length, ...encoder.encode(addressRemote)]);
             break;
         case 3:
-            const ipv6Bytes = addressRemote.split(':').flatMap(part => {
-                const hex = part.padStart(4, '0');
-                return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16)];
-            });
-            DSTADDR = new Uint8Array([4, ...ipv6Bytes]);
+            DSTADDR = new Uint8Array([4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]);
             break;
         default:
-            throw new Error(`Invalid address type: ${addressType}`);
+            log(`Invalid address type: ${addressType}`);
+            return;
     }
     const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
     await writer.write(socksRequest);
     log('SOCKS5 request sent');
 
     res = (await reader.read()).value;
-    if (res[1] !== 0x00) {
-        throw new Error("SOCKS5 connection failed, status: " + res[1]);
+    if (res[1] === 0x00) {
+        log("SOCKS5 connection established");
+    } else {
+        log("SOCKS5 connection failed");
+        return;
     }
-    log("SOCKS5 connection established");
-    
     writer.releaseLock();
     reader.releaseLock();
     return socket;
@@ -1297,6 +1503,7 @@ async function httpConnect(addressRemote, portRemote, log) {
 		while (true) {
 			const { value, done } = await reader.read();
 			if (done) {
+				console.error('HTTP代理连接中断');
 				throw new Error('HTTP代理连接中断');
 			}
 
@@ -1311,46 +1518,48 @@ async function httpConnect(addressRemote, portRemote, log) {
 
 			// 检查是否收到完整的HTTP响应头
 			if (respText.includes('\r\n\r\n')) {
+				// 分离HTTP头和可能的数据部分
 				const headersEndPos = respText.indexOf('\r\n\r\n') + 4;
 				const headers = respText.substring(0, headersEndPos);
 
 				log(`收到HTTP代理响应: ${headers.split('\r\n')[0]}`);
 
+				// 检查响应状态
 				if (headers.startsWith('HTTP/1.1 200') || headers.startsWith('HTTP/1.0 200')) {
 					connected = true;
 
+					// 如果响应头之后还有数据，我们需要保存这些数据以便后续处理
 					if (headersEndPos < responseBuffer.length) {
 						const remainingData = responseBuffer.slice(headersEndPos);
+						// 创建一个缓冲区来存储这些数据，以便稍后使用
 						const dataStream = new ReadableStream({
 							start(controller) {
 								controller.enqueue(remainingData);
-								controller.close();
 							}
 						});
-                        
-                        // @ts-ignore
-						sock.readable = new TransformStream({
-							start(controller) {
-								controller.enqueue(remainingData);
-                                // Don't close the new stream, pipe the original one.
-                                sock.readable.pipeTo(new WritableStream({
-                                    write: chunk => controller.enqueue(chunk),
-                                    close: () => controller.close(),
-                                    abort: e => controller.error(e),
-                                }))
-							}
-						}).readable;
+
+						// 创建一个新的TransformStream来处理额外数据
+						const { readable, writable } = new TransformStream();
+						dataStream.pipeTo(writable).catch(err => console.error('处理剩余数据错误:', err));
+
+						// 替换原始readable流
+						// @ts-ignore
+						sock.readable = readable;
 					}
 				} else {
 					const errorMsg = `HTTP代理连接失败: ${headers.split('\r\n')[0]}`;
+					console.error(errorMsg);
 					throw new Error(errorMsg);
 				}
 				break;
 			}
 		}
-	} finally {
+	} catch (err) {
 		reader.releaseLock();
+		throw new Error(`处理HTTP代理响应失败: ${err.message}`);
 	}
+
+	reader.releaseLock();
 
 	if (!connected) {
 		throw new Error('HTTP代理连接失败: 未收到成功响应');
