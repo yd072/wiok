@@ -50,7 +50,7 @@ let 更新时间 = 3;
 let userIDLow;
 let userIDTime = "";
 let proxyIPPool = [];
-let path = '/?ed=2560';
+// let path = '/?ed=2560'; // 已被随机路径取代
 let 动态UUID = null;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
@@ -78,6 +78,20 @@ const utils = {
 		}
 	},
 };
+
+/**
+ * 生成一个8位的随机路径
+ * @returns {string} 例如 /aK7b2CDE
+ */
+function generateRandomPath() {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '/';
+    for (let i = 0; i < 8; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return result;
+}
+
 
 /**
  * 集中加载所有配置，严格执行 KV > 环境变量 > 默认值的优先级
@@ -671,6 +685,7 @@ export default {
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
 				// HTTP 请求处理
                 let sub = env.SUB || '';
+                let path = ''; // path 变量在此处作用域内定义
 				if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub').toLowerCase();
 				if (url.searchParams.has('notls')) noTLS = 'true';
 
@@ -1597,7 +1612,7 @@ function 配置信息(UUID, 域名地址) {
 
 	const 传输层协议 = 'ws';
 	const 伪装域名 = 域名地址;
-	const 路径 = path;
+	const 路径 = generateRandomPath(); // 使用随机路径
 
 	let 传输层安全 = ['tls', true];
 	const SNI = 域名地址;
@@ -2172,7 +2187,11 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			fakeHostName = `${fakeHostName}.xyz`
 		}
 		console.log(`虚假HOST: ${fakeHostName}`);
-		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent(path)}`;
+        
+        // 这里的 path 参数不再是固定的，但为了兼容订阅转换器，我们仍然需要传递一个路径。
+        // 使用 generateRandomPath() 或者一个简单的 '/' 都可以。
+        // 为了让订阅器那边能处理，我们仍然用一个固定的查询参数格式，但路径本身是隐藏的。
+		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`; // Path is now dynamic inside the node
 		let isBase64 = true;
 
 		if (!sub || sub == "") {
@@ -2435,7 +2454,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			if (port == "-1") port = "80";
 
 			let 伪装域名 = host;
-			let 最终路径 = path;
+			let 最终路径 = generateRandomPath();
 			let 节点备注 = '';
 			const 协议类型 = atob(protocolEncodedFlag);
 
@@ -2498,7 +2517,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		if (port == "-1") port = "443";
 
 		let 伪装域名 = host;
-		let 最终路径 = path;
+		let 最终路径 = generateRandomPath(); // <-- 每个节点都有自己的随机路径
 		let 节点备注 = '';
 		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
 		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
