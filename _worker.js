@@ -108,14 +108,7 @@ async function loadConfigurations(env) {
     if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
     if (env.BAN) banHosts = (await 整理(env.BAN)).map(h => atob(h));
 
-    if (env.DLS) {
-    const dlsValue = Number(env.DLS);
-    if (!isNaN(dlsValue) && dlsValue > 0) {
-        DLS = dlsValue;
-    } else {
-        console.warn(`Invalid DLS value provided: ${env.DLS}. Using default value.`);
-    }
-}
+    if (env.DLS) DLS = Number(env.DLS);
     if (env.CSVREMARK) remarkIndex = Number(env.CSVREMARK);
     if (env.TGTOKEN) BotToken = env.TGTOKEN;
     if (env.TGID) ChatID = env.TGID;
