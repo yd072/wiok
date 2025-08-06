@@ -1601,7 +1601,7 @@ function 配置信息(UUID, 域名地址) {
 
 	let 传输层安全 = ['tls', true];
 	const SNI = 域名地址;
-	const 指纹 = 'randomized';
+	const 指纹 = 'chrome';
 
 	if (域名地址.includes('.workers.dev') || noTLS === 'true') {
 		地址 = atob('dmlzYS5jbg==');
@@ -2515,7 +2515,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`encryption=none&` +
 			`security=tls&` +
 			`sni=${伪装域名}&` +
-			`fp=randomized&` +
+			`fp=chrome&` +
 			`alpn=h3&` +
 			`type=ws&` +
 			`host=${伪装域名}&` +
