@@ -1,9 +1,11 @@
 
-// --- MUX START ---
-import { Muxer } from 'https://esm.sh/@chainsafe/yamux@9.1.0/dist/muxer.mjs';
-import { MuxedStream } from 'https://esm.sh/@chainsafe/yamux@9.1.0/dist/stream.mjs';
-// --- MUX END ---
 import { connect } from 'cloudflare:sockets';
+
+// --- MUX START ---
+// 最终解决方案：更换为 JSDelivr CDN 来绕过 Cloudflare Pages 的解析问题
+import { Muxer } from 'https://cdn.jsdelivr.net/npm/@chainsafe/yamux@9.1.0/dist/muxer.mjs';
+import { MuxedStream } from 'https://cdn.jsdelivr.net/npm/@chainsafe/yamux@9.1.0/dist/stream.mjs';
+// --- MUX END ---
 
 // --- 全局配置缓存 ---
 let cachedSettings = null;       // 用于存储从KV读取的配置对象
