@@ -1,5 +1,7 @@
 
 import { connect } from 'cloudflare:sockets';
+// --- [新增] 导入 Yamux 多路复用库 ---
+import { Muxer } from 'https://esm.sh/@chainsafe/yamux@9.1.0/dist/muxer.mjs';
 
 // --- 全局配置缓存 ---
 let cachedSettings = null;       // 用于存储从KV读取的配置对象
@@ -211,7 +213,7 @@ function parseProxyIP(proxyString, defaultPort) {
 }
 
 
-// WebSocket连接管理类
+// WebSocket连接管理类 - [注：此类在多路复用模式下不再直接使用，但保留]
 class WebSocketManager {
 	constructor(webSocket, log) {
 		this.webSocket = webSocket;
@@ -843,8 +845,9 @@ export default {
 					proxyIP = url.pathname.toLowerCase().split('/pyip=')[1];
 					enableSocks = false;
 				}
-
-				return await secureProtoOverWSHandler(request);
+				
+				// --- [改动] 使用新的多路复用处理器 ---
+				return await secureProtoOverMuxHandler(request);
 			}
 		} catch (err) {
 			return new Response(err.toString());
@@ -852,88 +855,57 @@ export default {
 	},
 };
 
-async function secureProtoOverWSHandler(request) {
+/**
+ * [新功能] 基于 Yamux 的 WebSocket 多路复用处理器
+ * @param {Request} request
+ */
+async function secureProtoOverMuxHandler(request) {
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
 
     webSocket.accept();
 
-    let address = '';
-    let portWithRandomLog = '';
-    const log = (info, event = '') => {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
+    const sessionLog = (info, event = '') => {
+        console.log(`[${new Date().toISOString()}] [MuxSession] ${info}`, event);
     };
-    const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
-    const readableWebSocketStream = new WebSocketManager(webSocket, log).makeReadableStream(earlyDataHeader);
 
-    let remoteSocketWrapper = {
-        value: null
-    };
-    let udpStreamProcessed = false;
-    const banHostsSet = new Set(banHosts);
-    let secureProtoResponseHeader = null;
-
-    readableWebSocketStream.pipeTo(new WritableStream({
-        async write(chunk, controller) {
-            if (udpStreamProcessed) {
-                return;
-            }
-            if (remoteSocketWrapper.value) {
-                const writer = remoteSocketWrapper.value.writable.getWriter();
-                await writer.write(chunk);
-                writer.releaseLock();
-                return;
-            }
-
-            const {
-                hasError,
-                message,
-                addressType,
-                portRemote = 443,
-                addressRemote = '',
-                rawDataIndex,
-                secureProtoVersion = new Uint8Array([0, 0]),
-                isUDP,
-            } = processsecureProtoHeader(chunk, userID);
-
-            address = addressRemote;
-            portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
-            if (hasError) {
-                throw new Error(message);
-            }
-
-            secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
-            const rawClientData = chunk.slice(rawDataIndex);
-
-            if (isUDP) {
-                // UDP-specific handling
-                if (portRemote === 53) {
-                    const udpHandler = await handleUDPOutBound(webSocket, secureProtoResponseHeader, log);
-                    udpHandler.write(rawClientData);
-                    udpStreamProcessed = true;
-                } else {
-                    // All other UDP traffic is blocked
-                    throw new Error('UDP proxying is only enabled for DNS on port 53');
+    // 1. 初始化 Yamux Muxer
+    const muxer = new Muxer({
+        // 当 muxer 需要通过 WebSocket 发送数据时，调用此函数
+        onWrite: (data) => {
+            try {
+                if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                    webSocket.send(data);
                 }
-                return;
+            } catch (err) {
+                sessionLog('WebSocket send error:', err);
+                muxer.close(); // 发送失败，关闭整个会话
             }
+        },
+        // 当客户端打开一个新的子流时，调用此函数
+        onStream: (muxStream) => {
+            // 为每个独立的子流启动处理逻辑
+            handleMuxedStream(muxStream);
+        },
+    });
 
-            // TCP-specific handling
-            if (banHosts.includes(addressRemote)) {
-                throw new Error('Domain is blocked');
-            }
-            log(`Handling TCP outbound for ${addressRemote}:${portRemote}`);
-            await handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
-        },
-        close() {
-            log(`readableWebSocketStream is closed`);
-        },
-        abort(reason) {
-            log(`readableWebSocketStream is aborted`, JSON.stringify(reason));
-        },
-    })).catch((err) => {
-        log('readableWebSocketStream pipe error', err);
+    // 2. 监听 WebSocket 事件，并将数据喂给 Muxer
+    webSocket.addEventListener('message', event => {
+        try {
+            muxer.onData(event.data);
+        } catch (err) {
+            sessionLog('Error processing incoming mux data:', err);
+        }
+    });
+
+    webSocket.addEventListener('close', () => {
+        sessionLog('WebSocket connection closed.');
+        muxer.close(); // 清理 muxer 会话
+    });
+
+    webSocket.addEventListener('error', err => {
+        sessionLog('WebSocket error:', err);
+        muxer.close();
     });
 
     return new Response(null, {
@@ -941,6 +913,111 @@ async function secureProtoOverWSHandler(request) {
         webSocket: client,
     });
 }
+
+
+/**
+ * [新功能] 处理每一个被多路复用的独立流
+ * @param {import('https://esm.sh/@chainsafe/yamux@9.1.0/dist/stream.mjs').MuxedStream} muxStream
+ */
+async function handleMuxedStream(muxStream) {
+    const streamId = muxStream.id;
+    let address = '';
+    let portWithRandomLog = '';
+    const log = (info, event = '') => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] [${address}:${portWithRandomLog}] [MuxStream-${streamId}] ${info}`, event);
+    };
+
+    try {
+        // 从子流中读取第一个数据块以解析头部
+        const reader = muxStream.readable.getReader();
+        const { value: firstChunk, done } = await reader.read();
+        reader.releaseLock(); // 立即释放锁
+
+        if (done) {
+            log('Mux stream closed before sending any data.');
+            return;
+        }
+
+        const {
+            hasError,
+            message,
+            addressType,
+            portRemote = 443,
+            addressRemote = '',
+            rawDataIndex,
+            secureProtoVersion = new Uint8Array([0, 0]),
+            isUDP,
+        } = processsecureProtoHeader(firstChunk, userID);
+
+        address = addressRemote;
+        portWithRandomLog = `${portRemote}--${Math.random()}`; // 移除 udp/tcp 标记
+
+        if (hasError) {
+            log(`Header error: ${message}`);
+            muxStream.close(); // 关闭此子流，不影响其他流
+            return;
+        }
+
+        const rawClientData = firstChunk.slice(rawDataIndex);
+        
+        // 重建一个包含所有客户端数据的 ReadableStream
+        const clientReadable = new ReadableStream({
+            start(controller) {
+                if (rawClientData.byteLength > 0) {
+                    controller.enqueue(rawClientData);
+                }
+                // 将 muxStream 剩余部分管道过来
+                const readable = muxStream.readable;
+                const reader = readable.getReader();
+                async function push() {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        controller.close();
+                        return;
+                    }
+                    controller.enqueue(value);
+                    push();
+                }
+                push().catch(error => {
+                    log('Client data stream pipe error', error);
+                    controller.error(error);
+                });
+            }
+        });
+
+        if (isUDP) {
+            // UDP over Mux 暂不支持，因为需要更复杂的状态管理
+            log('UDP proxying over multiplexed stream is not supported.');
+            muxStream.close();
+            return;
+        }
+        
+        // 使用适配后的 handleTCPOutBound 处理 TCP 流量
+        const secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
+        await handleTCPOutBound(
+            addressType,
+            addressRemote,
+            portRemote,
+            clientReadable, // 传入重组的客户端数据流
+            muxStream,      // 传入子流对象本身
+            secureProtoResponseHeader,
+            log
+        );
+
+    } catch (error) {
+        log('Error in handleMuxedStream:', error);
+        muxStream.close(); // 确保子流被关闭
+    }
+}
+
+
+/**
+ * [已废弃] 旧的 WebSocket 处理器
+ * 不再直接调用，但其内部逻辑被新的多路复用处理器借鉴
+ */
+// async function secureProtoOverWSHandler(request) { ... }
+
 
 /**
  * 处理出站 UDP (DNS over HTTPS) 
@@ -1011,8 +1088,20 @@ async function handleUDPOutBound(webSocket, secureProtoResponseHeader, log) {
     };
 }
 
-async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log) {
 
+/**
+ * [已适配] 处理 TCP 出站流量的核心函数
+ * @param {number} addressType
+ * @param {string} addressRemote
+ * @param {number} portRemote
+ * @param {ReadableStream} clientReadable - 来自客户端的数据流 (多路复用子流或原始WS流)
+ * @param {object} client - 客户端对象 (WebSocket 或 MuxedStream)
+ * @param {Uint8Array} secureProtoResponseHeader
+ * @param {(string, any) => void} log
+ */
+async function handleTCPOutBound(addressType, addressRemote, portRemote, clientReadable, client, secureProtoResponseHeader, log) {
+    
+    // 连接到远程服务器的函数 (复用)
 	const createConnection = async (address, port, proxyOptions = null) => {
 		const proxyType = proxyOptions ? proxyOptions.type : 'direct';
 		log(`建立连接: ${address}:${port} (方式: ${proxyType})`);
@@ -1042,32 +1131,20 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 			]);
 
 			clearTimeout(timeoutId);
-			remoteSocket.value = tcpSocket;
-
-			const writer = tcpSocket.writable.getWriter();
-			try {
-				await writer.write(rawClientData);
-			} finally {
-				writer.releaseLock();
-			}
-
 			return tcpSocket;
 		} catch (error) {
 			clearTimeout(timeoutId);
 			throw error;
 		}
 	};
-
-    // 新的递归函数，用于按顺序尝试所有连接策略
+    
+    // 策略选择函数 (复用)
     async function tryConnectionStrategies(strategies) {
         if (!strategies || strategies.length === 0) {
-            log('All connection strategies failed. Closing WebSocket.');
-            
-            // 自愈机制：当所有策略都失败后，清空缓存，强制下一次请求从KV重新加载。
+            log('All connection strategies failed. Closing client.');
             log('Invalidating configuration cache due to connection failures.');
-            cachedSettings = null;
-            
-            safeCloseWebSocket(webSocket);
+            cachedSettings = null; // 自愈机制
+            client.close(); // [改动] 关闭通用客户端对象
             return;
         }
 
@@ -1077,17 +1154,25 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         try {
             const tcpSocket = await currentStrategy.execute();
             log(`Strategy '${currentStrategy.name}' connected successfully. Piping data.`);
+            
+            // 将客户端数据流写入远程Socket
+            clientReadable.pipeTo(tcpSocket.writable).catch(err => {
+                log(`Client to remote pipe failed: ${err.message}`);
+                tcpSocket.close();
+            });
 
-            // 关键点：如果本次连接失败，重试函数将用剩余的策略继续尝试
             const retryNext = () => tryConnectionStrategies(nextStrategies);
-            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
+
+            // [改动] 调用适配后的 remoteSocketToWS
+            await remoteSocketToWS(tcpSocket, client, secureProtoResponseHeader, retryNext, log);
 
         } catch (error) {
             log(`Strategy '${currentStrategy.name}' failed: ${error.message}. Trying next strategy...`);
-            await tryConnectionStrategies(nextStrategies); // 立即尝试下一个策略
+            await tryConnectionStrategies(nextStrategies);
         }
     }
-
+    
+    // 组装策略列表 (复用)
     // --- 组装策略列表 ---
     const connectionStrategies = [];
     const shouldUseSocks = enableSocks && go2Socks5s.some(pattern => new RegExp(`^${pattern.replace(/\*/g, '.*')}$`, 'i').test(addressRemote));
@@ -1163,6 +1248,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     await tryConnectionStrategies(connectionStrategies);
 }
 
+
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
         return { hasError: true, message: 'Invalid data' };
@@ -1235,50 +1321,51 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     };
 }
 
-async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
-    let hasIncomingData = false;
-    let header = responseHeader; // 用于发送初始响应头。
-    try {
-        await remoteSocket.readable.pipeTo(
-            new WritableStream({
 
-                async write(chunk) {
+/**
+ * [已适配] 将远程服务器的数据流管道回客户端
+ * @param {*} remoteSocket 远程 TCP Socket
+ * @param {object} client 客户端对象 (MuxedStream)
+ * @param {Uint8Array} responseHeader
+ * @param {() => Promise<void>} retry 重试函数
+ * @param {(string) => void} log 日志函数
+ */
+async function remoteSocketToWS(remoteSocket, client, responseHeader, retry, log) {
+    let hasIncomingData = false;
+    let header = responseHeader;
+
+    // [改动] 使用 pipeTo 将数据流直接传输到客户端 (MuxedStream) 的可写流
+    try {
+        await remoteSocket.readable
+            .pipeThrough(new TransformStream({
+                transform(chunk, controller) {
                     hasIncomingData = true;
-                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        return;
-                    }
                     if (header) {
-                        const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-                        combinedData.set(new Uint8Array(header), 0);
-                        combinedData.set(new Uint8Array(chunk), header.byteLength);
-                        webSocket.send(combinedData);
+                        const combined = new Uint8Array(header.length + chunk.length);
+                        combined.set(header, 0);
+                        combined.set(chunk, header.length);
+                        controller.enqueue(combined);
                         header = null;
                     } else {
-                        webSocket.send(chunk);
+                        controller.enqueue(chunk);
                     }
-                },
-
-                close() {
-                    log(`远程连接的数据流已正常关闭, 是否接收到数据: ${hasIncomingData}`);
-                },
-                // abort 方法在数据流被异常中止时调用。
-                abort(reason) {
-                    console.error(`远程连接的数据流被中断:`, reason);
-                },
-            })
-        );
+                }
+            }))
+            .pipeTo(client.writable); // 直接管道到 MuxedStream 的 writable
     } catch (error) {
-        // 捕获在 pipeTo 过程中可能发生的任何错误。
-        console.error(`数据流传输时发生异常:`, error.stack || error);
-        // 发生错误时，安全地关闭WebSocket连接。
-        safeCloseWebSocket(webSocket);
+        log(`Remote to client pipe failed:`, error.stack || error);
+        // 不再需要手动关闭，pipeTo 失败会自动处理流的中止
     }
 
+    log(`Remote connection stream closed, hasIncomingData: ${hasIncomingData}`);
+
+    // 重试逻辑
     if (!hasIncomingData && retry) {
-        log(`连接成功但未收到任何数据，触发重试机制...`);
+        log(`Connection successful but no data received, triggering retry...`);
         retry();
     }
 }
+
 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
