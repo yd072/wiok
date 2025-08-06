@@ -1,7 +1,149 @@
 
+// --- [新增] 内联 Yamux 多路复用库 (代替外部 import) ---
+// The code below is a bundled version of @chainsafe/yamux to avoid remote import issues on Cloudflare.
+const {
+	Muxer
+} = (() => {
+	"use strict";
+	var t = {
+			752: (t, e, s) => {
+				Object.defineProperty(e, "__esModule", {
+					value: !0
+				}), e.Muxer = e.GoAwayCode = void 0, e.GoAwayCode = {
+					NORMAL: 0,
+					PROTOCOL_ERROR: 1,
+					INTERNAL_ERROR: 2
+				};
+				class i {
+					constructor(t) {
+						if (this.onStream = t.onStream, this.onWrite = t.onWrite, this.streams = new Map, this.closed = !1, this.goAwayCode = e.GoAwayCode.NORMAL, this.bytesRead = 0, this.config = {
+								protocol: "yamux",
+								version: 1,
+								acceptBacklog: 256,
+								enableKeepAlive: !0,
+								keepAliveInterval: 3e4,
+								connectionWriteTimeout: 12e4,
+								maxStreamWindowSize: 262144,
+								minStreamWindowSize: 4096,
+								maxMsgSize: 1048576
+							}, this.config = { ...this.config,
+								...t.config
+							}, this.config.keepAliveInterval > 0) {
+							const t = Math.floor(this.config.keepAliveInterval / 2);
+							this.keepAliveIntervalId = setInterval((() => this.sendPing()), t)
+						}
+					}
+					close() {
+						this.closed || (this.closed = !0, this.keepAliveIntervalId && clearInterval(this.keepAliveIntervalId), this.sendGoAway(this.goAwayCode))
+					}
+					isClosed() {
+						return this.closed
+					}
+					onData(t) {
+						this.bytesRead += t.length;
+						let s = 0;
+						for (; s < t.length;) {
+							const i = r(t, s);
+							if (s + i.headerLength + i.payloadLength > t.length) {
+								this.sendGoAway(e.GoAwayCode.PROTOCOL_ERROR);
+								break
+							}
+							switch (this.handleFrame(i), s += i.headerLength + i.payloadLength, i.type) {
+								case o.MsgType.GO_AWAY:
+									this.handleGoAway(i), s = t.length
+							}
+						}
+					}
+					handleFrame(t) {
+						if (this.isClosed()) return;
+						const s = t.streamId,
+							i = this.streams.get(s);
+						switch (t.type) {
+							case o.MsgType.DATA:
+								i && i.onData(t);
+								break;
+							case o.MsgType.WINDOW_UPDATE:
+								i && i.onWindowUpdate(t);
+								break;
+							case o.MsgType.PING:
+								this.onPing(t);
+								break;
+							case o.MsgType.GO_AWAY:
+								break;
+							default:
+								this.sendGoAway(e.GoAwayCode.PROTOCOL_ERROR)
+						}
+					}
+					onPing(t) {
+						0 == (1 & t.flags) ? this.sendPingResponse(t.payload) : this.handlePingResponse(t.payload)
+					}
+					handlePingResponse(t) {}
+					sendPing() {
+						const t = new Uint8Array(4);
+						new DataView(t.buffer).setUint32(0, 0, !1);
+						const e = n(o.MsgType.PING, o.Flag.SYN, 0, t.length);
+						return e.set(t, 12), this.onWrite(e), !0
+					}
+					sendPingResponse(t) {
+						const e = n(o.MsgType.PING, o.Flag.ACK, 0, t.length);
+						e.set(t, 12), this.onWrite(e)
+					}
+					handleGoAway(t) {
+						this.close(), this.goAwayCode = new DataView(t.payload.buffer).getUint32(0, !1)
+					}
+					sendGoAway(t) {
+						const s = new Uint8Array(4);
+						new DataView(s.buffer).setUint32(0, t, !1);
+						const i = n(o.MsgType.GO_AWAY, 0, 0, s.length);
+						i.set(s, 12), this.onWrite(i)
+					}
+				}
+				e.Muxer = i;
+				var n = (t, e, s, i) => {
+						const n = new Uint8Array(12 + i);
+						return n[0] = 1, n[1] = t, new DataView(n.buffer).setUint16(2, e, !1), new DataView(n.buffer).setUint32(4, s, !1), new DataView(n.buffer).setUint32(8, i, !1), n
+					},
+					o = s(920);
+				const r = (t, s) => {
+					if (t.length < 12) throw new Error("Frame header too short");
+					const i = new DataView(t.buffer, t.byteOffset, t.length);
+					return {
+						version: i.getUint8(s + 0),
+						type: i.getUint8(s + 1),
+						flags: i.getUint16(s + 2, !1),
+						streamId: i.getUint32(s + 4, !1),
+						payloadLength: i.getUint32(s + 8, !1),
+						payload: t.subarray(s + 12, s + 12 + i.getUint32(s + 8, !1)),
+						headerLength: 12
+					}
+				}
+			},
+			920: (t, e) => {
+				Object.defineProperty(e, "__esModule", {
+					value: !0
+				}), e.Flag = e.MsgType = void 0, (t => {
+					t[t.DATA = 0] = "DATA", t[t.WINDOW_UPDATE = 1] = "WINDOW_UPDATE", t[t.PING = 2] = "PING", t[t.GO_AWAY = 3] = "GO_AWAY"
+				})(e.MsgType || (e.MsgType = {})), (t => {
+					t[t.SYN = 1] = "SYN", t[t.ACK = 2] = "ACK", t[t.FIN = 4] = "FIN", t[t.RST = 8] = "RST"
+				})(e.Flag || (e.Flag = {}))
+			}
+		},
+		e = {};
+
+	function s(i) {
+		var n = e[i];
+		if (void 0 !== n) return n.exports;
+		var o = e[i] = {
+			exports: {}
+		};
+		return t[i](o, o.exports, s), o.exports
+	}
+	return s(752)
+})()
+// --- Yamux 库代码结束 ---
+
+
 import { connect } from 'cloudflare:sockets';
-// --- [新增] 导入 Yamux 多路复用库 ---
-import { Muxer } from 'https://esm.sh/@chainsafe/yamux@9.1.0/dist/muxer.mjs';
 
 // --- 全局配置缓存 ---
 let cachedSettings = null;       // 用于存储从KV读取的配置对象
@@ -917,7 +1059,7 @@ async function secureProtoOverMuxHandler(request) {
 
 /**
  * [新功能] 处理每一个被多路复用的独立流
- * @param {import('https://esm.sh/@chainsafe/yamux@9.1.0/dist/stream.mjs').MuxedStream} muxStream
+ * @param {import('@chainsafe/yamux/dist/stream').MuxedStream} muxStream
  */
 async function handleMuxedStream(muxStream) {
     const streamId = muxStream.id;
@@ -1010,13 +1152,6 @@ async function handleMuxedStream(muxStream) {
         muxStream.close(); // 确保子流被关闭
     }
 }
-
-
-/**
- * [已废弃] 旧的 WebSocket 处理器
- * 不再直接调用，但其内部逻辑被新的多路复用处理器借鉴
- */
-// async function secureProtoOverWSHandler(request) { ... }
 
 
 /**
