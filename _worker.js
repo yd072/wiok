@@ -446,6 +446,11 @@ async function statusPage() {
 }
 
 async function resolveToIPv6(target) {
+    // 检查是否为IPv6
+    function isIPv6(str) {
+        return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
+    }
+
     // 检查是否为IPv4
     function isIPv4(str) {
         const parts = str.split('.');
@@ -455,167 +460,81 @@ async function resolveToIPv6(target) {
         });
     }
 
-    // 检查是否为IPv6
-    function isIPv6(str) {
-        return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
-    }
-
-    // 获取域名的IPv4地址
-    async function fetchIPv4(domain) {
-        const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
-        const response = await fetch(url, {
-            headers: { 'Accept': 'application/dns-json' }
-        });
-
-        if (!response.ok) throw new Error('DNS查询失败');
-
-        const data = await response.json();
-        const ipv4s = (data.Answer || [])
-            .filter(record => record.type === 1)
-            .map(record => record.data);
-
-        if (ipv4s.length === 0) throw new Error('未找到IPv4地址');
-        return ipv4s[Math.floor(Math.random() * ipv4s.length)];
-    }
-
-    // 查询NAT64 IPv6地址
-    async function queryNAT64(domain) {
-        const socket = connect({
-            hostname: isIPv6(DNS64Server) ? `[${DNS64Server}]` : DNS64Server,
-            port: 53
-        });
-
-        const writer = socket.writable.getWriter();
-        const reader = socket.readable.getReader();
-
+    /**
+     * 核心辅助函数：通过 Cloudflare DoH API 解析 DNS 记录。
+     * @param {string} domain 要查询的域名。
+     * @param {'A' | 'AAAA'} recordType DNS 记录类型。
+     * @returns {Promise<string|null>} 返回找到的第一个 IP 地址，否则返回 null。
+     */
+    async function resolveViaDoH(domain, recordType) {
+        const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${recordType}`;
         try {
-            // 发送DNS查询
-            const query = buildDNSQuery(domain);
-            const queryWithLength = new Uint8Array(query.length + 2);
-            queryWithLength[0] = query.length >> 8;
-            queryWithLength[1] = query.length & 0xFF;
-            queryWithLength.set(query, 2);
-            await writer.write(queryWithLength);
+            const response = await fetch(url, {
+                headers: { 'Accept': 'application/dns-json' },
+            });
+            if (!response.ok) return null;
 
-            // 读取响应
-            const response = await readDNSResponse(reader);
-            const ipv6s = parseIPv6(response);
-
-            if (ipv6s.length > 0) {
-                return ipv6s[0];
-            } else {
-                throw new Error('No IPv6 address found in DNS response from NAT64 server');
+            const data = await response.json();
+            if (data.Answer && data.Answer.length > 0) {
+                // 从答案中找到第一个匹配类型的记录并返回其数据
+                const record = data.Answer.find(r => r.type === (recordType === 'AAAA' ? 28 : 1));
+                return record ? record.data : null;
             }
-        } finally {
-            await writer.close();
-            await reader.cancel();
+            return null;
+        } catch (error) {
+            console.error(`DoH resolution failed for ${domain} [${recordType}]: ${error}`);
+            return null;
         }
     }
 
-    // 构建DNS查询包
-    function buildDNSQuery(domain) {
-        const buffer = new ArrayBuffer(512);
-        const view = new DataView(buffer);
-        let offset = 0;
-        view.setUint16(offset, Math.floor(Math.random() * 65536)); offset += 2;
-        view.setUint16(offset, 0x0100); offset += 2;
-        view.setUint16(offset, 1); offset += 2;
-        view.setUint16(offset, 0); offset += 6;
-		 // 域名编码
-        for (const label of domain.split('.')) {
-            view.setUint8(offset++, label.length);
-            for (let i = 0; i < label.length; i++) {
-                view.setUint8(offset++, label.charCodeAt(i));
-            }
-        }
-        view.setUint8(offset++, 0);
-		// 查询类型和类
-        view.setUint16(offset, 28); offset += 2; // AAAA记录
-        view.setUint16(offset, 1); offset += 2; // IN类
-
-        return new Uint8Array(buffer, 0, offset);
+    if (!target || typeof target !== 'string') {
+        throw new Error("无效的解析目标。");
     }
 
-    // 读取DNS响应
-    async function readDNSResponse(reader) {
-        const chunks = [];
-        let totalLength = 0;
-        let expectedLength = null;
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-            totalLength += value.length;
-            if (expectedLength === null && totalLength >= 2) {
-                expectedLength = (chunks[0][0] << 8) | chunks[0][1];
-            }
-            if (expectedLength !== null && totalLength >= expectedLength + 2) {
-                break;
-            }
-        }
-        const fullResponse = new Uint8Array(totalLength);
-        let offset = 0;
-        for (const chunk of chunks) {
-            fullResponse.set(chunk, offset);
-            offset += chunk.length;
-        }
-        return fullResponse.slice(2);
+    // --- 步骤 1: 如果目标本身就是 IPv6，直接返回 ---
+    if (isIPv6(target)) {
+        return target;
     }
 
-    // 解析IPv6地址
-    function parseIPv6(response) {
-        const view = new DataView(response.buffer);
-        let offset = 12;
-        while (view.getUint8(offset) !== 0) {
-            offset += view.getUint8(offset) + 1;
+    // --- 步骤 2: 如果目标是域名，尝试直接解析 AAAA 记录 (最高效) ---
+    if (!isIPv4(target)) {
+        const ipv6 = await resolveViaDoH(target, 'AAAA');
+        if (ipv6) {
+            return ipv6;
         }
-        offset += 5;
-        const answers = [];
-        const answerCount = view.getUint16(6);
-        for (let i = 0; i < answerCount; i++) {
-            if ((view.getUint8(offset) & 0xC0) === 0xC0) {
-                offset += 2;
-            } else {
-                while (view.getUint8(offset) !== 0) {
-                    offset += view.getUint8(offset) + 1;
-                }
-                offset++;
-            }
-            const type = view.getUint16(offset); offset += 2;
-            offset += 6;
-            const dataLength = view.getUint16(offset); offset += 2;
-            if (type === 28 && dataLength === 16) {
-                const parts = [];
-                for (let j = 0; j < 8; j++) {
-                    parts.push(view.getUint16(offset + j * 2).toString(16));
-                }
-                answers.push(parts.join(':'));
-            }
-            offset += dataLength;
-        }
-        return answers;
     }
 
-    function convertToNAT64IPv6(ipv4Address) {
-        const parts = ipv4Address.split('.');
-        if (parts.length !== 4) throw new Error('Invalid IPv4 address for NAT64 conversion');
-        const hex = parts.map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
-        return DNS64Server.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
+    // --- 步骤 3: 回退到 NAT64 机制。首先，确保我们有一个 IPv4 地址 ---
+    let ipv4Address;
+    if (isIPv4(target)) {
+        ipv4Address = target;
+    } else {
+        // 如果是域名但没有 AAAA 记录，则解析其 A 记录
+        ipv4Address = await resolveViaDoH(target, 'A');
+        if (!ipv4Address) {
+            throw new Error(`无法为 NAT64 解析域名 "${target}" 的 IPv4 地址。`);
+        }
     }
 
-    try {
-        if (isIPv6(target)) return target;
-        const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
-        const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
+    // --- 步骤 4: 使用配置的 DNS64/NAT64 服务执行转换 ---
+    if (!DNS64Server || DNS64Server.trim() === '') {
+        throw new Error("未配置 DNS64/NAT64 服务器，无法执行回退。");
+    }
 
-        if (isIPv6(nat64)) {
-            return nat64;
-        } else {
-            throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
-        }
-    } catch (error) {
-        throw new Error(`NAT64 resolution failed: ${error.message}`);
-	}
+    // 方式 A: DNS64 服务器使用 /96 前缀 (简单拼接)
+    if (DNS64Server.endsWith('/96')) {
+        const prefix = DNS64Server.split('/96')[0];
+        const parts = ipv4Address.split('.').map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
+        return `${prefix}${parts[0]}${parts[1]}:${parts[2]}${parts[3]}`;
+    }
+     // 方式 B: DNS64 服务器是一个需要查询的域名
+    const nat64Domain = `${ipv4Address}.${DNS64Server}`;
+    const resolvedNat64 = await resolveViaDoH(nat64Domain, 'AAAA');
+    if (resolvedNat64) {
+        return resolvedNat64;
+    }
+
+    throw new Error(`使用 NAT64 服务器 "${DNS64Server}" 将 IPv4 "${ipv4Address}" 解析为 IPv6 失败。`);
 }
 
 export default {
