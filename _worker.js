@@ -55,6 +55,7 @@ let 动态UUID = null;
 let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 let DNS64Server = '';
+const validFingerprints = ['chrome', 'random', 'randomized'];
 
 /**
  * 辅助工具函数
@@ -90,6 +91,14 @@ function generateRandomPath() {
         result += characters.charAt(Math.floor(Math.random() * characters.length));
     }
     return result;
+}
+
+/**
+ * 随机获取一个 TLS 指纹
+ * @returns {string} 例如 'chrome', 'random', 'randomized'
+ */
+function getRandomFingerprint() {
+    return validFingerprints[Math.floor(Math.random() * validFingerprints.length)];
 }
 
 
@@ -1613,10 +1622,11 @@ function 配置信息(UUID, 域名地址) {
 	const 传输层协议 = 'ws';
 	const 伪装域名 = 域名地址;
 	const 路径 = generateRandomPath(); // 使用随机路径
+	const 指纹 = getRandomFingerprint(); // 使用随机指纹
 
 	let 传输层安全 = ['tls', true];
 	const SNI = 域名地址;
-	const 指纹 = 'chrome';
+
 
 	if (域名地址.includes('.workers.dev') || noTLS === 'true') {
 		地址 = atob('dmlzYS5jbg==');
@@ -2534,7 +2544,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 			`encryption=none&` +
 			`security=tls&` +
 			`sni=${伪装域名}&` +
-			`fp=chrome&` +
+			`fp=${getRandomFingerprint()}&` + // <-- 使用随机指纹
 			`alpn=h3&` +
 			`type=ws&` +
 			`host=${伪装域名}&` +
