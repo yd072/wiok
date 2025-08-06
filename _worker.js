@@ -1,8 +1,7 @@
 
 // --- MUX START ---
-// 使用 npm: specifier，这是 Cloudflare Workers 的原生方式
-import { Muxer } from 'npm:@chainsafe/yamux@9.1.0/dist/muxer.mjs';
-import { MuxedStream } from 'npm:@chainsafe/yamux@9.1.0/dist/stream.mjs';
+import { Muxer } from 'https://esm.sh/@chainsafe/yamux@9.1.0/dist/muxer.mjs';
+import { MuxedStream } from 'https://esm.sh/@chainsafe/yamux@9.1.0/dist/stream.mjs';
 // --- MUX END ---
 import { connect } from 'cloudflare:sockets';
 
