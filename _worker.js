@@ -1,12 +1,6 @@
 
 import { connect } from 'cloudflare:sockets';
 
-// --- MUX START ---
-// 最终解决方案：更换为 JSDelivr CDN 来绕过 Cloudflare Pages 的解析问题
-import { Muxer } from 'https://cdn.jsdelivr.net/npm/@chainsafe/yamux@9.1.0/dist/muxer.mjs';
-import { MuxedStream } from 'https://cdn.jsdelivr.net/npm/@chainsafe/yamux@9.1.0/dist/stream.mjs';
-// --- MUX END ---
-
 // --- 全局配置缓存 ---
 let cachedSettings = null;       // 用于存储从KV读取的配置对象
 // --------------------
@@ -706,7 +700,22 @@ export default {
  * 主要的 WebSocket 入口，负责建立和管理 yamux 多路复用会话
  * @param {Request} request
  */
+// --- MUX START ---
+// #################################################################
+// #########   重构后的 WebSocket 和多路复用处理程序   ##########
+// #################################################################
+
+/**
+ * 主要的 WebSocket 入口，负责建立和管理 yamux 多路复用会话
+ * @param {Request} request
+ */
 async function secureProtoOverWSHandler(request) {
+    // 最终解决方案：使用动态导入，在函数运行时加载模块，以绕过部署平台的 URL 解析 Bug
+    const [{ Muxer }, { MuxedStream }] = await Promise.all([
+        import('https://cdn.jsdelivr.net/npm/@chainsafe/yamux@9.1.0/dist/muxer.mjs'),
+        import('https://cdn.jsdelivr.net/npm/@chainsafe/yamux@9.1.0/dist/stream.mjs')
+    ]);
+
     const webSocketPair = new WebSocketPair();
     const [client, webSocket] = Object.values(webSocketPair);
 
@@ -733,7 +742,7 @@ async function secureProtoOverWSHandler(request) {
         // 当客户端打开一个新的子流时，调用此函数 (核心逻辑入口)
         onStream: (muxStream) => {
             // 为每个独立的流运行处理逻辑
-            handleMuxedStream(muxStream);
+            handleMuxedStream(muxStream, MuxedStream); // 传递 MuxedStream 类型
         },
     });
 
@@ -765,9 +774,10 @@ async function secureProtoOverWSHandler(request) {
 
 /**
  * 处理每一个被多路复用的独立流 (muxStream)
- * @param {MuxedStream} muxStream yamux 创建的独立流
+ * @param {InstanceType<typeof MuxedStream>} muxStream yamux 创建的独立流
+ * @param {any} MuxedStream 动态导入的 MuxedStream 类
  */
-async function handleMuxedStream(muxStream) {
+async function handleMuxedStream(muxStream, MuxedStream) {
     const reader = muxStream.readable.getReader();
     let firstChunk;
     try {
@@ -851,7 +861,8 @@ async function handleMuxedStream(muxStream) {
             portRemote,
             clientDataStream,
             muxStream,
-            log
+            log,
+            MuxedStream
         );
     } catch (error) {
         log('Error in handleTCPOutBoundOverMux:', error);
@@ -865,10 +876,11 @@ async function handleMuxedStream(muxStream) {
  * @param {string} addressRemote
  * @param {number} portRemote
  * @param {ReadableStream} clientDataStream
- * @param {MuxedStream} muxStream
+ * @param {InstanceType<typeof MuxedStream>} muxStream
  * @param {(string, any?) => void} log
+ * @param {any} MuxedStream
  */
-async function handleTCPOutBoundOverMux(addressType, addressRemote, portRemote, clientDataStream, muxStream, log) {
+async function handleTCPOutBoundOverMux(addressType, addressRemote, portRemote, clientDataStream, muxStream, log, MuxedStream) {
 
 	const createConnection = async (address, port, proxyOptions = null) => {
 		const proxyType = proxyOptions ? proxyOptions.type : 'direct';
@@ -1003,7 +1015,6 @@ async function handleTCPOutBoundOverMux(addressType, addressRemote, portRemote, 
     await tryConnectionStrategies(connectionStrategies);
 }
 // --- MUX END ---
-
 function processsecureProtoHeader(secureProtoBuffer, userID) {
     if (secureProtoBuffer.byteLength < 24) {
         return { hasError: true, message: 'Invalid data' };
