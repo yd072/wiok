@@ -1674,20 +1674,16 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
         function generateRandomIPFromCIDR(cidr) {
             const [base, mask] = cidr.split('/');
-            const baseInt = ipToInt(base);
-            const maskBits = parseInt(mask, 10);
-            const hostBits = 32 - maskBits;
-
-            if (hostBits < 2) {
-
+                const baseInt = ipToInt(base);
+                const maskBits = parseInt(mask, 10);
+                const hostBits = 32 - maskBits;
+                if (hostBits < 2) {
                 return intToIp(baseInt);
-            }
+                }
+                const usableHosts = Math.pow(2, hostBits) - 2;
+                const randomOffset = Math.floor(Math.random() * usableHosts) + 1;
 
-
-            const usableHosts = Math.pow(2, hostBits) - 2;
-            const randomOffset = Math.floor(Math.random() * usableHosts) + 1;
-
-            const randomIPInt = baseInt + randomOffset;
+                const randomIPInt = baseInt + randomOffset;
             return intToIp(randomIPInt);
         }
 
