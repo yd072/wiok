@@ -715,7 +715,7 @@ export default {
 						return await statusPage();
 					}
 				} else if (路径 === `/${fakeUserID}`) {
-					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env, request);
+					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
 					return new Response(`${fakeConfig}`, { status: 200 });
 				}
 				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
@@ -724,7 +724,7 @@ export default {
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 
 					const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
-					const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env, request);
+					const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
 
 					const now = Date.now();
 					const today = new Date(now);
@@ -1642,86 +1642,7 @@ function 配置信息(UUID, 域名地址) {
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQo='));
 
-
-/**
- * 根据用户请求的Cloudflare数据中心(colo)，生成区域优化的随机节点。
- * @param {Request} request - Cloudflare传入的请求对象。
- * @param {string[]} cidrList - 用于生成IP的CIDR地址段列表。
- * @param {number} count - 需要生成的节点数量。
- * @param {boolean} isTls - 生成的节点是否用于TLS连接。
- * @param {string[]} ports - 用于生成节点的端口列表。
- * @returns {string[]} - 生成的优化节点数组，格式如 "IP:端口#备注"。
- */
-function generateRegionalRandomNodes(request, cidrList, count, isTls, ports) {
-    const userColo = request.cf.colo || 'NRT'; // 获取用户 colo，如果没有则默认东京
-
-    // 1. 定义 Colo 到我们自定义区域的映射
-    const coloToRegionMap = {
-        // 亚洲
-        'HKG': 'Asia', 'TPE': 'Asia', 'NRT': 'Asia', 'KIX': 'Asia', 'ICN': 'Asia', 'SIN': 'Asia', 'BOM': 'Asia', 'MAA': 'Asia',
-        // 北美
-        'SJC': 'NorthAmerica', 'LAX': 'NorthAmerica', 'SEA': 'NorthAmerica', 'IAD': 'NorthAmerica', 'ORD': 'NorthAmerica', 'MIA': 'NorthAmerica', 'EWR': 'NorthAmerica', 'YYZ': 'NorthAmerica',
-        // 欧洲
-        'AMS': 'Europe', 'FRA': 'Europe', 'LHR': 'Europe', 'CDG': 'Europe', 'MAD': 'Europe',
-        // 其他
-        'SYD': 'Oceania', 'GRU': 'SouthAmerica'
-    };
-
-    // 2. 定义每个区域应该使用哪些CIDR段（这是优化的核心）
-    // 我们将Cloudflare的IP段粗略地分配到不同区域
-    const regionalCIDRMap = {
-        'Asia': [
-            '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', 
-            '141.101.64.0/18', '172.64.0.0/13', '162.158.0.0/15'
-        ],
-        'NorthAmerica': [
-            '104.16.0.0/13', '104.24.0.0/14', '108.162.192.0/18',
-            '172.64.0.0/13', '162.158.0.0/15', '198.41.128.0/17'
-        ],
-        'Europe': [
-            '104.16.0.0/13', '188.114.96.0/20', '190.93.240.0/20', 
-            '172.64.0.0/13', '162.158.0.0/15', '131.0.72.0/22'
-        ],
-        'Oceania': ['103.21.244.0/22', '172.64.0.0/13'],
-        // 其他地区和未匹配到的colo，使用一个通用的全球列表
-        'Global': cidrList
-    };
-
-    const targetRegion = coloToRegionMap[userColo] || 'Global';
-    const cidrsToUse = regionalCIDRMap[targetRegion] || regionalCIDRMap['Global'];
-    
-    console.log(`用户 Colo: ${userColo}, 匹配区域: ${targetRegion}, 使用 ${cidrsToUse.length} 个CIDR段进行生成。`);
-
-    const generatedNodes = [];
-    let counter = 1;
-
-    // --- IP 生成工具函数 ---
-    const ipToInt = (ip) => ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
-    const intToIp = (int) => [(int >>> 24) & 255, (int >>> 16) & 255, (int >>> 8) & 255, int & 255].join('.');
-    const generateRandomIPFromCIDR = (cidr) => {
-        const [base, mask] = cidr.split('/');
-        const baseInt = ipToInt(base);
-        const hostBits = 32 - parseInt(mask, 10);
-        // 避免生成网络地址和广播地址
-        if (hostBits < 2) return intToIp(baseInt);
-        const maxHosts = Math.pow(2, hostBits) - 2;
-        const randomOffset = Math.floor(Math.random() * maxHosts) + 1;
-        return intToIp(baseInt + randomOffset);
-    };
-    // -------------------------
-
-    for (let i = 0; i < count; i++) {
-        const randomCIDR = cidrsToUse[Math.floor(Math.random() * cidrsToUse.length)];
-        const randomIP = generateRandomIPFromCIDR(randomCIDR);
-        const port = ports[Math.floor(Math.random() * ports.length)];
-        const remark = `#${targetRegion}优选-${userColo}-${String(counter++).padStart(2, '0')}`;
-        generatedNodes.push(`${randomIP}:${port}${remark}`);
-    }
-
-    return generatedNodes;
-}
-
-async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env, request) {
+async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
@@ -1731,26 +1652,57 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 	}
 
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-        // 使用您提供的更完整的Cloudflare IP段列表
-	    let cfips = [
-            '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '104.16.0.0/13',
-            '104.24.0.0/14', '108.162.192.0/18', '131.0.72.0/22', '141.101.64.0/18',
-            '162.158.0.0/15', '172.64.0.0/13', '173.245.48.0/20', '188.114.96.0/20',
-            '190.93.240.0/20', '197.234.240.0/22', '198.41.128.0/17'
-		];
+	    		let cfips = [
+		            '104.16.0.0/14',
+		            '104.21.0.0/16',
+		            '188.114.96.0/20',
 
-	    const totalIPsToGenerate = 10; // 总共要生成的节点数
+	    		];
+
+    		function ipToInt(ip) {
+        			return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+    		}
+
+    			function intToIp(int) {
+        			return [
+            			(int >>> 24) & 255,
+            			(int >>> 16) & 255,
+            			(int >>> 8) & 255,
+            			int & 255
+        				].join('.');
+    				}
+
+	    function generateRandomIPFromCIDR(cidr) {
+		    const [base, mask] = cidr.split('/');
+        		const baseInt = ipToInt(base);
+        		const maskBits = parseInt(mask, 10);
+        		const hostBits = 32 - maskBits;
+        		const maxHosts = Math.pow(2, hostBits);
+        		const randomOffset = Math.floor(Math.random() * maxHosts);
+
+        		const randomIPInt = baseInt + randomOffset;
+        	return intToIp(randomIPInt);
+	    }
+
+	    let counter = 1;
+	    const totalIPsToGenerate = 10;
 
 	    if (hostName.includes("worker") || hostName.includes("notls") || noTLS === 'true') {
 		    const randomPorts = httpPorts.length > 0 ? httpPorts : ['80'];
-            // 调用新函数生成区域优化的 noTLS 节点
-            const generatedNodes = generateRegionalRandomNodes(request, cfips, totalIPsToGenerate, false, randomPorts);
-		    addressesnotls = addressesnotls.concat(generatedNodes);
+		    for (let i = 0; i < totalIPsToGenerate; i++) {
+			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
+			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
+			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
+			    addressesnotls.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
+		    }
 	    } else {
 		    const randomPorts = httpsPorts.length > 0 ? httpsPorts : ['443'];
-            // 调用新函数生成区域优化的 TLS 节点
-            const generatedNodes = generateRegionalRandomNodes(request, cfips, totalIPsToGenerate, true, randomPorts);
-		    addresses = addresses.concat(generatedNodes);
+		        for (let i = 0; i < totalIPsToGenerate; i++) {
+			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
+			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
+			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
+			    addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
+		    }
 	    }
     }
 
@@ -2302,7 +2254,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		try {
 			let content;
 			if ((!sub || sub == "") && isBase64 == true) {
-				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv, request);
+				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
 			} else {
 				const response = await fetch(url, {
 					headers: {
@@ -2459,112 +2411,20 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function getRegionallyOptimizedNodes(request, allNodes) {
-    const userColo = request.cf.colo;
-
-    const regionMap = {
-        'HKG': 'hk', 'TPE': 'hk', 
-        'NRT': 'jp', 'KIX': 'jp',
-        'ICN': 'kr',
-        'SIN': 'sg',
-        'SJC': 'us', 'LAX': 'us', 'SEA': 'us',
-    };
-
-    const targetRegion = regionMap[userColo];
-    console.log(`User Colo: ${userColo}, Matched Target Region: ${targetRegion}`);
-
-    if (!targetRegion) {
-        console.log("No region mapping found, returning all nodes.");
-        return allNodes;
-    }
-
-    const regionalNodes = allNodes.filter(node => {
-        const parts = node.split('#');
-        if (parts.length > 1) {
-            return parts[1].toLowerCase().startsWith(targetRegion + '-');
-        }
-        return false;
-    });
-
-    if (regionalNodes.length > 0) {
-        console.log(`Successfully filtered ${regionalNodes.length} nodes for region ${targetRegion}.`);
-        return regionalNodes;
-    } else {
-        console.log(`Target region ${targetRegion} is empty, returning all nodes as fallback.`);
-        return allNodes;
-    }
-}
-
-async function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv, request) {
+function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
-	
-    // TLS 节点处理
-	let allAddresses = [...addresses, ...newAddressesapi, ...newAddressescsv];
-	let uniqueAddresses = [...new Set(allAddresses)];
-    let optimizedAddresses = uniqueAddresses;
-    // 如果有区域化标记的节点，则进行筛选
-    if (uniqueAddresses.some(node => /#\w{2}-/.test(node))) {
-        optimizedAddresses = getRegionallyOptimizedNodes(request, uniqueAddresses);
-    }
-
-	const responseBody = optimizedAddresses.map(address => {
-		let port = "-1";
-		let addressid = address;
-		const match = addressid.match(regex);
-		if (!match) {
-			if (address.includes(':') && address.includes('#')) {
-				const parts = address.split(':');
-				address = parts[0];
-				const subParts = parts[1].split('#');
-				port = subParts[0];
-				addressid = subParts[1];
-			} else if (address.includes(':')) {
-				const parts = address.split(':');
-				address = parts[0];
-				port = parts[1];
-			} else if (address.includes('#')) {
-				const parts = address.split('#');
-				address = parts[0];
-				addressid = parts[1];
-			}
-			if (addressid.includes(':')) addressid = addressid.split(':')[0];
-		} else {
-			address = match[1]; port = match[2] || port; addressid = match[3] || address;
-		}
-		const localHttpsPorts = httpsPorts.length > 0 ? httpsPorts : ["443", "2053", "2083", "2087", "2096", "8443"];
-		if (!isValidIPv4(address) && port == "-1") {
-			for (let httpsPort of localHttpsPorts) {
-				if (address.includes(httpsPort)) { port = httpsPort; break; }
-			}
-		}
-		if (port == "-1") port = "443";
-		let 伪装域名 = host;
-		let 最终路径 = generateRandomPath();
-		let 节点备注 = '';
-		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
-		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
-			最终路径 = `/${伪装域名}${最终路径}`;
-			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
-			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
-		}
-		const 协议类型 = atob(protocolEncodedFlag);
-		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` + `encryption=none&` + `security=tls&` + `sni=${伪装域名}&` + `fp=${getRandomFingerprint()}&` + `alpn=h3&` + `type=ws&` + `host=${伪装域名}&` + `path=${encodeURIComponent(最终路径)}` + `#${encodeURIComponent(addressid + 节点备注)}`;
-		return secureProtoLink;
-	}).join('\n');
-
-    // noTLS 节点处理
-	let notlsresponseBody = '';
+	addresses = addresses.concat(newAddressesapi);
+	addresses = addresses.concat(newAddressescsv);
+	let notlsresponseBody;
 	if (noTLS == 'true') {
-		let allNotlsAddresses = [...addressesnotls, ...newAddressesnotlsapi, ...newAddressesnotlscsv];
-		let uniqueAddressesnotls = [...new Set(allNotlsAddresses)];
-        let optimizedNotlsAddresses = uniqueAddressesnotls;
-        if (uniqueAddressesnotls.some(node => /#\w{2}-/.test(node))) {
-            optimizedNotlsAddresses = getRegionallyOptimizedNodes(request, uniqueAddressesnotls);
-        }
-		notlsresponseBody = optimizedNotlsAddresses.map(address => {
+		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
+		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
+		const uniqueAddressesnotls = [...new Set(addressesnotls)];
+
+		notlsresponseBody = uniqueAddressesnotls.map(address => {
 			let port = "-1";
 			let addressid = address;
+
 			const match = addressid.match(regex);
 			if (!match) {
 				if (address.includes(':') && address.includes('#')) {
@@ -2582,32 +2442,123 @@ async function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddress
 					address = parts[0];
 					addressid = parts[1];
 				}
-				if (addressid.includes(':')) addressid = addressid.split(':')[0];
+
+				if (addressid.includes(':')) {
+					addressid = addressid.split(':')[0];
+				}
 			} else {
-				address = match[1]; port = match[2] || port; addressid = match[3] || address;
+				address = match[1];
+				port = match[2] || port;
+				addressid = match[3] || address;
 			}
+
 			const localHttpPorts = httpPorts.length > 0 ? httpPorts : ["80", "8080", "8880", "2052", "2082", "2086", "2095"];
 			if (!isValidIPv4(address) && port == "-1") {
 				for (let httpPort of localHttpPorts) {
-					if (address.includes(httpPort)) { port = httpPort; break; }
+					if (address.includes(httpPort)) {
+						port = httpPort;
+						break;
+					}
 				}
 			}
 			if (port == "-1") port = "80";
+
 			let 伪装域名 = host;
 			let 最终路径 = generateRandomPath();
 			let 节点备注 = '';
 			const 协议类型 = atob(protocolEncodedFlag);
-            const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` + `encryption=none&` + `security=none&` + `type=ws&` + `host=${伪装域名}&` + `path=${encodeURIComponent(最终路径)}` + `#${encodeURIComponent(addressid + 节点备注)}`;
+
+            const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` +
+                `encryption=none&` +
+                `security=none&` +
+                `type=ws&` +
+                `host=${伪装域名}&` +
+                `path=${encodeURIComponent(最终路径)}` +
+                `#${encodeURIComponent(addressid + 节点备注)}`;
+
 			return secureProtoLink;
+
 		}).join('\n');
+
 	}
 
+	const uniqueAddresses = [...new Set(addresses)];
+
+	const responseBody = uniqueAddresses.map(address => {
+		let port = "-1";
+		let addressid = address;
+
+		const match = addressid.match(regex);
+		if (!match) {
+			if (address.includes(':') && address.includes('#')) {
+				const parts = address.split(':');
+				address = parts[0];
+				const subParts = parts[1].split('#');
+				port = subParts[0];
+				addressid = subParts[1];
+			} else if (address.includes(':')) {
+				const parts = address.split(':');
+				address = parts[0];
+				port = parts[1];
+			} else if (address.includes('#')) {
+				const parts = address.split('#');
+				address = parts[0];
+				addressid = parts[1];
+			}
+
+			if (addressid.includes(':')) {
+				addressid = addressid.split(':')[0];
+			}
+		} else {
+			address = match[1];
+			port = match[2] || port;
+			addressid = match[3] || address;
+		}
+		
+		const localHttpsPorts = httpsPorts.length > 0 ? httpsPorts : ["443", "2053", "2083", "2087", "2096", "8443"];
+		if (!isValidIPv4(address) && port == "-1") {
+			for (let httpsPort of localHttpsPorts) {
+				if (address.includes(httpsPort)) {
+					port = httpsPort;
+					break;
+				}
+			}
+		}
+		if (port == "-1") port = "443";
+
+		let 伪装域名 = host;
+		let 最终路径 = generateRandomPath(); // <-- 每个节点都有自己的随机路径
+		let 节点备注 = '';
+		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
+		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
+
+		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
+			最终路径 = `/${伪装域名}${最终路径}`;
+			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
+			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
+		}
+
+		const 协议类型 = atob(protocolEncodedFlag);
+
+		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` +
+			`encryption=none&` +
+			`security=tls&` +
+			`sni=${伪装域名}&` +
+			`fp=${getRandomFingerprint()}&` + // <-- 使用随机指纹
+			`alpn=h3&` +
+			`type=ws&` +
+			`host=${伪装域名}&` +
+            `path=${encodeURIComponent(最终路径)}` +
+			`#${encodeURIComponent(addressid + 节点备注)}`;
+
+		return secureProtoLink;
+	}).join('\n');
+
 	let base64Response = responseBody;
-	if (noTLS == 'true' && notlsresponseBody) base64Response += `\n${notlsresponseBody}`;
+	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
 	if (link.length > 0) base64Response += '\n' + link.join('\n');
 	return btoa(base64Response);
 }
-
 
 async function 整理(内容) {
     if (!内容) return [];
