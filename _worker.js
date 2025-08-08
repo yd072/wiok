@@ -233,27 +233,6 @@ function parseProxyIP(proxyString, defaultPort) {
     return { address: address.toLowerCase(), port: Number(port) };
 }
 
-/**
- * 统一清理 WebSocket 和 Remote TCP Socket 连接
- * @param {import("@cloudflare/workers-types").WebSocket} webSocket 客户端WebSocket连接
- * @param {{ value: import("@cloudflare/workers-types").Socket | null }} remoteSocketWrapper 包装了到目标服务器的TCP Socket的对象
- * @param {(string, any?) => void} log 日志函数
- */
-function cleanupConnections(webSocket, remoteSocketWrapper, log) {
-    log('Initiating cleanup for both WebSocket and remote socket.');
-    safeCloseWebSocket(webSocket);
-
-    if (remoteSocketWrapper && remoteSocketWrapper.value) {
-        try {
-            // 标准的关闭Socket的方法
-            remoteSocketWrapper.value.close();
-            log('Remote socket closed successfully.');
-        } catch (error) {
-            log(`Error closing remote socket: ${error.message}`);
-        }
-    }
-}
-
 
 // TransformStream
 function createWebSocketStream(webSocket, earlyDataHeader, log) {
@@ -303,12 +282,11 @@ function createWebSocketStream(webSocket, earlyDataHeader, log) {
 		},
 
 		cancel(reason) {
+			// 当流的消费者取消时（例如，pipeTo的另一端出错）
 			if (streamCancelled) return;
 			streamCancelled = true;
-			log(`Stream cancelled by consumer, reason: ${reason}`);
-            // 将取消事件作为错误抛出，以便被顶层的 try...catch 捕获。
-            // 这样做可以确保无论取消发生在哪个阶段，都能触发完整的清理逻辑（包括 remoteSocket）。
-            throw new Error(`WebSocket stream actively cancelled by consumer: ${reason}`);
+			log(`流被消费者取消，原因: ${reason}`);
+			safeCloseWebSocket(webSocket);
 		}
 	});
 
@@ -731,7 +709,7 @@ export default {
 				const 路径 = url.pathname.toLowerCase();
 				if (路径 == '/') {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(request, env.URL, url);
+					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
 						// 显示新的伪装页面
 						return await statusPage();
@@ -779,7 +757,7 @@ export default {
 					}
 				} else {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(request, env.URL, url);
+					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
 						// 对于所有其他未知路径，显示新的伪装页面
 						return await statusPage();
@@ -845,83 +823,77 @@ async function secureProtoOverWSHandler(request) {
         const timestamp = new Date().toISOString();
         console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
     };
-    
-    // remoteSocketWrapper 在这里定义，以便在 catch 块中也能访问到
-    const remoteSocketWrapper = {
+    const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
+    const readableWebSocketStream = createWebSocketStream(webSocket, earlyDataHeader, log);
+
+    let remoteSocketWrapper = {
         value: null
     };
+    let udpStreamProcessed = false;
+    const banHostsSet = new Set(banHosts);
+    let secureProtoResponseHeader = null;
 
-    // 使用顶层 try...catch 块包裹整个数据流处理过程
-    try {
-        const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
-        const readableWebSocketStream = createWebSocketStream(webSocket, earlyDataHeader, log);
+    readableWebSocketStream.pipeTo(new WritableStream({
+        async write(chunk, controller) {
+            if (udpStreamProcessed) {
+                return;
+            }
+            if (remoteSocketWrapper.value) {
+                const writer = remoteSocketWrapper.value.writable.getWriter();
+                await writer.write(chunk);
+                writer.releaseLock();
+                return;
+            }
 
-        let udpStreamProcessed = false;
-        let secureProtoResponseHeader = null;
+            const {
+                hasError,
+                message,
+                addressType,
+                portRemote = 443,
+                addressRemote = '',
+                rawDataIndex,
+                secureProtoVersion = new Uint8Array([0, 0]),
+                isUDP,
+            } = processsecureProtoHeader(chunk, userID);
 
-        await readableWebSocketStream.pipeTo(new WritableStream({
-            async write(chunk, controller) {
-                if (udpStreamProcessed) {
-                    return;
+            address = addressRemote;
+            portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
+            if (hasError) {
+                throw new Error(message);
+            }
+
+            secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
+            const rawClientData = chunk.slice(rawDataIndex);
+
+            if (isUDP) {
+                // UDP-specific handling
+                if (portRemote === 53) {
+                    const udpHandler = await handleUDPOutBound(webSocket, secureProtoResponseHeader, log);
+                    udpHandler.write(rawClientData);
+                    udpStreamProcessed = true;
+                } else {
+                    // All other UDP traffic is blocked
+                    throw new Error('UDP proxying is only enabled for DNS on port 53');
                 }
-                if (remoteSocketWrapper.value) {
-                    const writer = remoteSocketWrapper.value.writable.getWriter();
-                    await writer.write(chunk);
-                    writer.releaseLock();
-                    return;
-                }
+                return;
+            }
 
-                const {
-                    hasError,
-                    message,
-                    addressType,
-                    portRemote = 443,
-                    addressRemote = '',
-                    rawDataIndex,
-                    secureProtoVersion = new Uint8Array([0, 0]),
-                    isUDP,
-                } = processsecureProtoHeader(chunk, userID);
-
-                address = addressRemote;
-                portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
-                if (hasError) {
-                    throw new Error(message);
-                }
-
-                secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
-                const rawClientData = chunk.slice(rawDataIndex);
-
-                if (isUDP) {
-                    if (portRemote === 53) {
-                        const udpHandler = await handleUDPOutBound(webSocket, secureProtoResponseHeader, log);
-                        udpHandler.write(rawClientData);
-                        udpStreamProcessed = true;
-                    } else {
-                        throw new Error('UDP proxying is only enabled for DNS on port 53');
-                    }
-                    return;
-                }
-
-                if (banHosts.includes(addressRemote)) {
-                    throw new Error('Domain is blocked');
-                }
-                log(`Handling TCP outbound for ${addressRemote}:${portRemote}`);
-                await handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
-            },
-            close() {
-                log(`readableWebSocketStream is closed`);
-            },
-            abort(reason) {
-                log(`readableWebSocketStream is aborted`, JSON.stringify(reason));
-            },
-        }));
-
-    } catch (err) {
-        log('A critical error occurred in the main handler, initiating full cleanup.', err);
-        // 这里是最终的防线。任何从数据流管道中冒泡上来的错误都会在这里被捕获。
-        // 调用统一的清理函数来关闭所有相关连接。
-        cleanupConnections(webSocket, remoteSocketWrapper, log);
-    }
+            // TCP-specific handling
+            if (banHosts.includes(addressRemote)) {
+                throw new Error('Domain is blocked');
+            }
+            log(`Handling TCP outbound for ${addressRemote}:${portRemote}`);
+            await handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
+        },
+        close() {
+            log(`readableWebSocketStream is closed`);
+        },
+        abort(reason) {
+            log(`readableWebSocketStream is aborted`, JSON.stringify(reason));
+        },
+    })).catch((err) => {
+        log('readableWebSocketStream pipe error', err);
+    });
 
     return new Response(null, {
         status: 101,
@@ -1067,7 +1039,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
             // 关键点：如果本次连接失败，重试函数将用剩余的策略继续尝试
             const retryNext = () => tryConnectionStrategies(nextStrategies);
-            await remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
 
         } catch (error) {
             log(`Strategy '${currentStrategy.name}' failed: ${error.message}. Trying next strategy...`);
@@ -1224,7 +1196,7 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
 
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
-    let header = responseHeader;
+    let header = responseHeader; // 用于发送初始响应头。
     try {
         await remoteSocket.readable.pipeTo(
             new WritableStream({
@@ -1248,15 +1220,17 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 close() {
                     log(`远程连接的数据流已正常关闭, 是否接收到数据: ${hasIncomingData}`);
                 },
+                // abort 方法在数据流被异常中止时调用。
                 abort(reason) {
                     console.error(`远程连接的数据流被中断:`, reason);
                 },
             })
         );
     } catch (error) {
-        // 将错误传播到调用方，以便触发顶层的清理逻辑
-        console.error(`Exception during data transport from remote to WebSocket:`, error.stack || error);
-        throw error;
+        // 捕获在 pipeTo 过程中可能发生的任何错误。
+        console.error(`数据流传输时发生异常:`, error.stack || error);
+        // 发生错误时，安全地关闭WebSocket连接。
+        safeCloseWebSocket(webSocket);
     }
 
     if (!hasIncomingData && retry) {
@@ -3312,7 +3286,7 @@ async function handleGetRequest(env) {
                 </a>
 
                 <div id="noticeContent" class="notice-content" style="display: none">
-				    ${decodeURIComponent(atob('JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU1JUI4JUI4JUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUI3JUU2JThCJUFDJUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUE0JUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEExMjcuMC4wLjElM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5SVAlM0NiciUzRSUwQXZpc2EuY24lM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThEJTNDYnIlM0UlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjMlRTQlQkMlOTglRTklODAlODlJUHY2JTNDYnIlM0UlM0NiciUzRSUwQSUwQSUzQ3N0cm9uZyUzRTIuJTNDJTJGc3Ryb25nJTNFJTIwQUREQVBJJTIwJUU1JUE2JTgyJUU2JTlFJTlDJUU2JTk4JUFGJUU0JUJCJUEzJUU3JTkwJTg2SVAlRUYlQkMlOEMlRTUlOEYlQUYlRTQlQkQlOUMlRTQlQjglQkFQUk9YWUlQJUU3JTlBJTg0JUU4JUFGJTlEJUVGJUJDJThDJUU1JThGJUFGJUU1JUIwJTg2JTIyJTNGcHJveHlpcCUzRHRydWUlMjIlRTUlOEYlODIlRTYlOTUlQjAlRTYlQjclQkIlRTUlOEElQTAlRTUlODglQjAlRTklOTMlQkUlRTYlOEUlQTUlRTYlOUMlQUIlRTUlQjAlQkUlRUYlQkMlOEMlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQlM0Zwcm94eWlwJTNEdHJ1ZSUzQ2JyJTNFJTNDYnIlM0UlMEElMEElM0NzdHJvbmclM0UzLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5RSU5QyVFNiU5OCVBRiUyMCUzQ2ElMjBocmVmJTNEJ2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JyUzRUNsb3VkZmxhcmVTcGVlZFRlc3QlM0MlMkZhJTNFJTIwJUU3JTlBJTg0JTIwY3N2JTIwJUU3JUJCJTkzJUU2JTlFJTlDJUU2JTk2JTg3JUU0JUJCJUI2JUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+				    ${decodeURIComponent(atob('JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU1JUI4JUI4JUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUI3JUU2JThCJUFDJUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUE0JUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEExMjcuMC4wLjElM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5SVAlM0NiciUzRSUwQXZpc2EuY24lM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThEJTNDYnIlM0UlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjMlRTQlQkMlOTglRTklODAlODlJUHY2JTNDYnIlM0UlM0NiciUzRSUwQSUwQSUzQ3N0cm9uZyUzRTIuJTNDJTJGc3Ryb25nJTNFJTIwQUREQVBJJTIwJUU1JUE2JTgyJUU2JTlFJTlDJUU2JTk4JUFGJUU0JUJCJUEzJUU3JTkwJTg2SVAlRUYlQkMlOEMlRTUlOEYlQUYlRTQlQkQlOUMlRTQlQjglQkFQUk9YWUlQJUU3JTlBJTg0JUU4JUFGJTlEJUVGJUJDJThDJUU1JThGJUFGJUU1JUIwJTg2JTIyJTNGcHJveHlpcCUzRHRydWUlMjIlRTUlOEYlODIlRTYlOTUlQjAlRTYlQjclQkIlRTUlOEElQTAlRTUlODglQjAlRTklOTMlQkUlRTYlOEUlQTUlRTYlOUMlQUIlRTUlQjAlQkUlRUYlQkMlOEMlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRSUwQWh0dHBzJTNBJTJGJTJGY3Njbi5vbmxpbmUlMkZzY3ZuZGUlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JTJGcmF3JTJGcmVmc0UyRkhlYWRzJTJGbWFzdGVyJTJGY2YudHh0JTNGcHJveHlpcCUzRHRydWUlM0NiciUzRSUzQ2JyJTNFJTBBJTBBJTNDc3Ryb25nJTNFMzAlM0MlMkZzdHJvbmclM0UlMjBTVUIlMjAlRTUlQjAlOEYlRTUlQkUlQjQlRTklODAlODklRTUlOEYlODklRTQlQkIlOEUlMjAlRTQlQjglQTclRTclQUQlOUQlRTYlOUMlQUYlRTQlQkElQTclRTQlQkQlQUMlRTQlQkIlOEUlRTYlODklODAlRTklODYlOTElM0ElM0NiciUzRSUwQWh0dHBzJTNBJTJGJTJGY2YtY2RuLnZjc3ViLmNvbSUyRnN1YiUzQ2JyJTNFJTBBJTBBJTNDc3Ryb25nJTNFNy4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTUlQjAlQkUlRTQlQjglQkElRTQlQkMlODYlM0ElM0NiciUzRSUwQXZpc2EuY24lM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThEJTBBaHR0cHMlM0ElMkYlMkZleGFtcGxlLmNvbSUyRnN1YnNjcmlwdGlvbiUwQXZtc3MlM0ElMkYlMkZleGFtcGxlJTQwMTI3LjAuMC4xJTNBMTA4MCUzQyUyZmJyJTNF'))}
                 </div>
 
                 <div class="editor-container">
