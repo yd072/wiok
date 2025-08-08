@@ -1222,6 +1222,9 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     };
 }
 
+// =================================================================
+// 正确的、经过修复的 remoteSocketToWS 函数
+// =================================================================
 function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
