@@ -117,19 +117,19 @@ async function loadConfigurations(env) {
     if (env.PROXYIP || env.proxyip) proxyIP = env.PROXYIP || env.proxyip;
     if (env.SOCKS5) socks5Address = env.SOCKS5;
     if (env.HTTP) httpProxyAddress = env.HTTP;
-    if (env.SUBAPI) subConverter = atob(env.SUBAPI);
-    if (env.SUBCONFIG) subConfig = atob(env.SUBCONFIG);
-    if (env.SUBNAME) FileName = atob(env.SUBNAME);
+    if (env.SUBAPI) subConverter = env.SUBAPI;
+    if (env.SUBCONFIG) subConfig = env.SUBCONFIG;
+    if (env.SUBNAME) FileName = env.SUBNAME;
     if (env.DNS64 || env.NAT64) DNS64Server = env.DNS64 || env.NAT64;
 
-    if (env.ADD) addresses = 整理(env.ADD);
-    if (env.ADDAPI) addressesapi = 整理(env.ADDAPI);
-    if (env.ADDNOTLS) addressesnotls = 整理(env.ADDNOTLS);
-    if (env.ADDNOTLSAPI) addressesnotlsapi = 整理(env.ADDNOTLSAPI);
-    if (env.ADDCSV) addressescsv = 整理(env.ADDCSV);
-    if (env.LINK) link = 整理(env.LINK);
-    if (env.GO2SOCKS5) go2Socks5s = 整理(env.GO2SOCKS5);
-    if (env.BAN) banHosts = (整理(env.BAN)).map(h => atob(h));
+    if (env.ADD) addresses = await 整理(env.ADD);
+    if (env.ADDAPI) addressesapi = await 整理(env.ADDAPI);
+    if (env.ADDNOTLS) addressesnotls = await 整理(env.ADDNOTLS);
+    if (env.ADDNOTLSAPI) addressesnotlsapi = await 整理(env.ADDNOTLSAPI);
+    if (env.ADDCSV) addressescsv = await 整理(env.ADDCSV);
+    if (env.LINK) link = await 整理(env.LINK);
+    if (env.GO2SOCKS5) go2Socks5s = await 整理(env.GO2SOCKS5);
+    if (env.BAN) banHosts = await 整理(env.BAN);
 
     if (env.DLS) DLS = Number(env.DLS);
     if (env.CSVREMARK) remarkIndex = Number(env.CSVREMARK);
@@ -156,16 +156,16 @@ async function loadConfigurations(env) {
                 if (settings.subconfig && settings.subconfig.trim()) subConfig = settings.subconfig.trim().split('\n')[0];
                 if (settings.nat64 && settings.nat64.trim()) DNS64Server = settings.nat64.trim().split('\n')[0];
 				if (settings.httpsports && settings.httpsports.trim()) {
-                    httpsPorts = 整理(settings.httpsports);
+                    httpsPorts = await 整理(settings.httpsports);
                 }
                 if (settings.httpports && settings.httpports.trim()) {
-                    httpPorts = 整理(settings.httpports);
+                    httpPorts = await 整理(settings.httpports);
                 }
 				if (settings.notls) {
                     noTLS = settings.notls;
                 }
                 if (settings.ADD) {
-                    const 优选地址数组 = 整理(settings.ADD);
+                    const 优选地址数组 = await 整理(settings.ADD);
                     const 分类地址 = { 接口地址: new Set(), 链接地址: new Set(), 优选地址: new Set() };
                     for (const 元素 of 优选地址数组) {
                         if (元素.startsWith('https://')) 分类地址.接口地址.add(元素);
@@ -190,10 +190,10 @@ async function loadConfigurations(env) {
         subConverter = subConverter.split("//")[1] || subConverter;
     }
 
-    proxyIPs = 整理(proxyIP);
+    proxyIPs = await 整理(proxyIP);
     proxyIP = proxyIPs.length > 0 ? proxyIPs[Math.floor(Math.random() * proxyIPs.length)] : '';
 
-    socks5s = 整理(socks5Address);
+    socks5s = await 整理(socks5Address);
     socks5Address = socks5s.length > 0 ? socks5s[Math.floor(Math.random() * socks5s.length)] : '';
 	socks5Address = socks5Address.split('//')[1] || socks5Address;
 
@@ -231,27 +231,6 @@ function parseProxyIP(proxyString, defaultPort) {
     }
 
     return { address: address.toLowerCase(), port: Number(port) };
-}
-
-/**
- * 统一清理 WebSocket 和 Remote TCP Socket 连接
- * @param {import("@cloudflare/workers-types").WebSocket} webSocket 客户端WebSocket连接
- * @param {{ value: import("@cloudflare/workers-types").Socket | null }} remoteSocketWrapper 包装了到目标服务器的TCP Socket的对象
- * @param {(string, any?) => void} log 日志函数
- */
-function cleanupConnections(webSocket, remoteSocketWrapper, log) {
-    log('Initiating cleanup for both WebSocket and remote socket.');
-    safeCloseWebSocket(webSocket);
-
-    if (remoteSocketWrapper && remoteSocketWrapper.value) {
-        try {
-            // 标准的关闭Socket的方法
-            remoteSocketWrapper.value.close();
-            log('Remote socket closed successfully.');
-        } catch (error) {
-            log(`Error closing remote socket: ${error.message}`);
-        }
-    }
 }
 
 
@@ -303,12 +282,11 @@ function createWebSocketStream(webSocket, earlyDataHeader, log) {
 		},
 
 		cancel(reason) {
+			// 当流的消费者取消时（例如，pipeTo的另一端出错）
 			if (streamCancelled) return;
 			streamCancelled = true;
-			log(`Stream cancelled by consumer, reason: ${reason}`);
-            // 将取消事件作为错误抛出，以便被顶层的 try...catch 捕获。
-            // 这样做可以确保无论取消发生在哪个阶段，都能触发完整的清理逻辑（包括 remoteSocket）。
-            throw new Error(`WebSocket stream actively cancelled by consumer: ${reason}`);
+			log(`流被消费者取消，原因: ${reason}`);
+			safeCloseWebSocket(webSocket);
 		}
 	});
 
@@ -731,7 +709,7 @@ export default {
 				const 路径 = url.pathname.toLowerCase();
 				if (路径 == '/') {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(request, env.URL, url);
+					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
 						// 显示新的伪装页面
 						return await statusPage();
@@ -779,7 +757,7 @@ export default {
 					}
 				} else {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await 代理URL(request, env.URL, url);
+					else if (env.URL) return await 代理URL(env.URL, url);
 					else {
 						// 对于所有其他未知路径，显示新的伪装页面
 						return await statusPage();
@@ -845,83 +823,77 @@ async function secureProtoOverWSHandler(request) {
         const timestamp = new Date().toISOString();
         console.log(`[${timestamp}] [${address}:${portWithRandomLog}] ${info}`, event);
     };
-    
-    // remoteSocketWrapper 在这里定义，以便在 catch 块中也能访问到
-    const remoteSocketWrapper = {
+    const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
+    const readableWebSocketStream = createWebSocketStream(webSocket, earlyDataHeader, log);
+
+    let remoteSocketWrapper = {
         value: null
     };
+    let udpStreamProcessed = false;
+    const banHostsSet = new Set(banHosts);
+    let secureProtoResponseHeader = null;
 
-    // 使用顶层 try...catch 块包裹整个数据流处理过程
-    try {
-        const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
-        const readableWebSocketStream = createWebSocketStream(webSocket, earlyDataHeader, log);
+    readableWebSocketStream.pipeTo(new WritableStream({
+        async write(chunk, controller) {
+            if (udpStreamProcessed) {
+                return;
+            }
+            if (remoteSocketWrapper.value) {
+                const writer = remoteSocketWrapper.value.writable.getWriter();
+                await writer.write(chunk);
+                writer.releaseLock();
+                return;
+            }
 
-        let udpStreamProcessed = false;
-        let secureProtoResponseHeader = null;
+            const {
+                hasError,
+                message,
+                addressType,
+                portRemote = 443,
+                addressRemote = '',
+                rawDataIndex,
+                secureProtoVersion = new Uint8Array([0, 0]),
+                isUDP,
+            } = processsecureProtoHeader(chunk, userID);
 
-        await readableWebSocketStream.pipeTo(new WritableStream({
-            async write(chunk, controller) {
-                if (udpStreamProcessed) {
-                    return;
+            address = addressRemote;
+            portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
+            if (hasError) {
+                throw new Error(message);
+            }
+
+            secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
+            const rawClientData = chunk.slice(rawDataIndex);
+
+            if (isUDP) {
+                // UDP-specific handling
+                if (portRemote === 53) {
+                    const udpHandler = await handleUDPOutBound(webSocket, secureProtoResponseHeader, log);
+                    udpHandler.write(rawClientData);
+                    udpStreamProcessed = true;
+                } else {
+                    // All other UDP traffic is blocked
+                    throw new Error('UDP proxying is only enabled for DNS on port 53');
                 }
-                if (remoteSocketWrapper.value) {
-                    const writer = remoteSocketWrapper.value.writable.getWriter();
-                    await writer.write(chunk);
-                    writer.releaseLock();
-                    return;
-                }
+                return;
+            }
 
-                const {
-                    hasError,
-                    message,
-                    addressType,
-                    portRemote = 443,
-                    addressRemote = '',
-                    rawDataIndex,
-                    secureProtoVersion = new Uint8Array([0, 0]),
-                    isUDP,
-                } = processsecureProtoHeader(chunk, userID);
-
-                address = addressRemote;
-                portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
-                if (hasError) {
-                    throw new Error(message);
-                }
-
-                secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
-                const rawClientData = chunk.slice(rawDataIndex);
-
-                if (isUDP) {
-                    if (portRemote === 53) {
-                        const udpHandler = await handleUDPOutBound(webSocket, secureProtoResponseHeader, log);
-                        udpHandler.write(rawClientData);
-                        udpStreamProcessed = true;
-                    } else {
-                        throw new Error('UDP proxying is only enabled for DNS on port 53');
-                    }
-                    return;
-                }
-
-                if (banHosts.includes(addressRemote)) {
-                    throw new Error('Domain is blocked');
-                }
-                log(`Handling TCP outbound for ${addressRemote}:${portRemote}`);
-                await handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
-            },
-            close() {
-                log(`readableWebSocketStream is closed`);
-            },
-            abort(reason) {
-                log(`readableWebSocketStream is aborted`, JSON.stringify(reason));
-            },
-        }));
-
-    } catch (err) {
-        log('A critical error occurred in the main handler, initiating full cleanup.', err);
-        // 这里是最终的防线。任何从数据流管道中冒泡上来的错误都会在这里被捕获。
-        // 调用统一的清理函数来关闭所有相关连接。
-        cleanupConnections(webSocket, remoteSocketWrapper, log);
-    }
+            // TCP-specific handling
+            if (banHosts.includes(addressRemote)) {
+                throw new Error('Domain is blocked');
+            }
+            log(`Handling TCP outbound for ${addressRemote}:${portRemote}`);
+            await handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
+        },
+        close() {
+            log(`readableWebSocketStream is closed`);
+        },
+        abort(reason) {
+            log(`readableWebSocketStream is aborted`, JSON.stringify(reason));
+        },
+    })).catch((err) => {
+        log('readableWebSocketStream pipe error', err);
+    });
 
     return new Response(null, {
         status: 101,
@@ -1067,7 +1039,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
             // 关键点：如果本次连接失败，重试函数将用剩余的策略继续尝试
             const retryNext = () => tryConnectionStrategies(nextStrategies);
-            await remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
+            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
 
         } catch (error) {
             log(`Strategy '${currentStrategy.name}' failed: ${error.message}. Trying next strategy...`);
@@ -1222,49 +1194,49 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     };
 }
 
-// =================================================================
-// 正确的、经过修复的 remoteSocketToWS 函数
-// =================================================================
-function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
+async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
-    let header = responseHeader;
+    let header = responseHeader; // 用于发送初始响应头。
+    try {
+        await remoteSocket.readable.pipeTo(
+            new WritableStream({
 
-    // 这个 pipeTo 操作现在是“即发即忘”的，它会在后台持续运行
-    remoteSocket.readable.pipeTo(
-        new WritableStream({
-            async write(chunk) {
-                hasIncomingData = true;
-                if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                    return;
-                }
-                if (header) {
-                    const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-                    combinedData.set(new Uint8Array(header), 0);
-                    combinedData.set(new Uint8Array(chunk), header.byteLength);
-                    webSocket.send(combinedData);
-                    header = null;
-                } else {
-                    webSocket.send(chunk);
-                }
-            },
-            close() {
-                log(`Remote socket readable stream closed, hasIncomingData: ${hasIncomingData}`);
-                // 如果连接成功但从未收到任何数据，则触发重试机制
-                if (!hasIncomingData && retry) {
-                    log(`Connection successful but no data received, triggering retry mechanism...`);
-                    retry();
-                }
-            },
-            abort(reason) {
-                console.error(`Remote socket readable stream aborted:`, reason);
-            },
-        })
-    ).catch((error) => {
-        // 为后台运行的 pipeTo 添加独立的错误处理
-        console.error(`Caught error in remoteSocketToWS pipeTo:`, error.stack || error);
-        // 发生错误时，安全地关闭WebSocket连接
+                async write(chunk) {
+                    hasIncomingData = true;
+                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        return;
+                    }
+                    if (header) {
+                        const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                        combinedData.set(new Uint8Array(header), 0);
+                        combinedData.set(new Uint8Array(chunk), header.byteLength);
+                        webSocket.send(combinedData);
+                        header = null;
+                    } else {
+                        webSocket.send(chunk);
+                    }
+                },
+
+                close() {
+                    log(`远程连接的数据流已正常关闭, 是否接收到数据: ${hasIncomingData}`);
+                },
+                // abort 方法在数据流被异常中止时调用。
+                abort(reason) {
+                    console.error(`远程连接的数据流被中断:`, reason);
+                },
+            })
+        );
+    } catch (error) {
+        // 捕获在 pipeTo 过程中可能发生的任何错误。
+        console.error(`数据流传输时发生异常:`, error.stack || error);
+        // 发生错误时，安全地关闭WebSocket连接。
         safeCloseWebSocket(webSocket);
-    });
+    }
+
+    if (!hasIncomingData && retry) {
+        log(`连接成功但未收到任何数据，触发重试机制...`);
+        retry();
+    }
 }
 
 const WS_READY_STATE_OPEN = 1;
@@ -1593,7 +1565,7 @@ async function 双重哈希(文本) {
 
 async function 代理URL(request, 代理网址, 目标网址, 调试模式 = false) {
     try {
-        const 网址列表 = 整理(代理网址);
+        const 网址列表 = await 整理(代理网址);
         if (!网址列表 || 网址列表.length === 0) {
             throw new Error('代理网址列表为空');
         }
@@ -1675,7 +1647,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
-		const subs = 整理(sub);
+		const subs = await 整理(sub);
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
 
@@ -2352,7 +2324,7 @@ async function 整理优选列表(api) {
 				} else {
 					if (api[index].includes('proxyip=true')) {
 						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
-						proxyIPPool = proxyIPPool.concat((整理(content)).map(item => {
+						proxyIPPool = proxyIPPool.concat((await 整理(content)).map(item => {
 							const baseItem = item.split('#')[0] || item;
 							if (baseItem.includes(':')) {
 								const port = baseItem.split(':')[1];
@@ -2375,7 +2347,7 @@ async function 整理优选列表(api) {
 		clearTimeout(timeout);
 	}
 
-	const newAddressesapi = 整理(newapi);
+	const newAddressesapi = await 整理(newapi);
 
 	return newAddressesapi;
 }
@@ -2591,7 +2563,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 	return btoa(base64Response);
 }
 
-function 整理(内容) {
+async function 整理(内容) {
     if (!内容) return [];
     const 替换后的内容 = 内容.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',')
         .replace(/^,|,$/g, '');
