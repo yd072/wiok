@@ -461,69 +461,177 @@ async function statusPage() {
     });
 }
 
-async function resolveToIPv6(target, nat64Prefix) {
-    // 如果输入已经是 IPv6，直接返回
-    if (isIPv6(target)) {
-        return target;
+async function resolveToIPv6(target) {
+    // 检查是否为IPv4
+    function isIPv4(str) {
+        const parts = str.split('.');
+        return parts.length === 4 && parts.every(part => {
+            const num = parseInt(part, 10);
+            return num >= 0 && num <= 255 && part === num.toString();
+        });
     }
 
-    // 优先尝试直接解析真实的 AAAA 记录
-    try {
-        console.log(`Attempting direct AAAA resolution for ${target}...`);
-        const dohUrl = `https://dns.google/resolve?name=${encodeURIComponent(target)}&type=AAAA`;
-        const response = await fetch(dohUrl, { headers: { 'accept': 'application/dns-json' } });
-        if (response.ok) {
-            const data = await response.json();
-            const answer = data.Answer?.find(record => record.type === 28);
-            if (answer && answer.data) {
-                console.log(`Direct AAAA resolution successful: ${answer.data}`);
-                return answer.data;
+    // 检查是否为IPv6
+    function isIPv6(str) {
+        return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
+    }
+
+    // 获取域名的IPv4地址
+    async function fetchIPv4(domain) {
+        const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
+        const response = await fetch(url, {
+            headers: { 'Accept': 'application/dns-json' }
+        });
+
+        if (!response.ok) throw new Error('DNS查询失败');
+
+        const data = await response.json();
+        const ipv4s = (data.Answer || [])
+            .filter(record => record.type === 1)
+            .map(record => record.data);
+
+        if (ipv4s.length === 0) throw new Error('未找到IPv4地址');
+        return ipv4s[Math.floor(Math.random() * ipv4s.length)];
+    }
+
+    // 查询NAT64 IPv6地址
+    async function queryNAT64(domain) {
+        const socket = connect({
+            hostname: isIPv6(DNS64Server) ? `[${DNS64Server}]` : DNS64Server,
+            port: 53
+        });
+
+        const writer = socket.writable.getWriter();
+        const reader = socket.readable.getReader();
+
+        try {
+            // 发送DNS查询
+            const query = buildDNSQuery(domain);
+            const queryWithLength = new Uint8Array(query.length + 2);
+            queryWithLength[0] = query.length >> 8;
+            queryWithLength[1] = query.length & 0xFF;
+            queryWithLength.set(query, 2);
+            await writer.write(queryWithLength);
+
+            // 读取响应
+            const response = await readDNSResponse(reader);
+            const ipv6s = parseIPv6(response);
+
+            if (ipv6s.length > 0) {
+                return ipv6s[0];
+            } else {
+                throw new Error('No IPv6 address found in DNS response from NAT64 server');
+            }
+        } finally {
+            await writer.close();
+            await reader.cancel();
+        }
+    }
+
+    // 构建DNS查询包
+    function buildDNSQuery(domain) {
+        const buffer = new ArrayBuffer(512);
+        const view = new DataView(buffer);
+        let offset = 0;
+        view.setUint16(offset, Math.floor(Math.random() * 65536)); offset += 2;
+        view.setUint16(offset, 0x0100); offset += 2;
+        view.setUint16(offset, 1); offset += 2;
+        view.setUint16(offset, 0); offset += 6;
+		 // 域名编码
+        for (const label of domain.split('.')) {
+            view.setUint8(offset++, label.length);
+            for (let i = 0; i < label.length; i++) {
+                view.setUint8(offset++, label.charCodeAt(i));
             }
         }
-        console.log(`No direct AAAA record found for ${target}. Falling back to NAT64.`);
-    } catch (error) {
-        console.warn(`Direct AAAA resolution for ${target} failed. Falling back to NAT64. Error: ${error.message}`);
+        view.setUint8(offset++, 0);
+		// 查询类型和类
+        view.setUint16(offset, 28); offset += 2; // AAAA记录
+        view.setUint16(offset, 1); offset += 2; // IN类
+
+        return new Uint8Array(buffer, 0, offset);
     }
 
-    // --- 回退到 NAT64 逻辑 ---
-
-    // 1. 获取 IPv4 地址
-    let ipv4Address = '';
-    if (isIPv4(target)) {
-        ipv4Address = target;
-    } else {
-        try {
-            console.log(`Resolving A record for ${target} for NAT64...`);
-            const dohUrl = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(target)}&type=A`;
-            const response = await fetch(dohUrl, { headers: { 'accept': 'application/dns-json' } });
-            if (!response.ok) throw new Error(`DNS A record query failed with status ${response.status}`);
-            const data = await response.json();
-            const answer = data.Answer?.find(record => record.type === 1);
-            if (!answer || !answer.data) throw new Error("No A record found for NAT64 fallback.");
-            ipv4Address = answer.data;
-            console.log(`Resolved A record to ${ipv4Address}`);
-        } catch (error) {
-            throw new Error(`Failed to get A record for NAT64: ${error.message}`);
+    // 读取DNS响应
+    async function readDNSResponse(reader) {
+        const chunks = [];
+        let totalLength = 0;
+        let expectedLength = null;
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            totalLength += value.length;
+            if (expectedLength === null && totalLength >= 2) {
+                expectedLength = (chunks[0][0] << 8) | chunks[0][1];
+            }
+            if (expectedLength !== null && totalLength >= expectedLength + 2) {
+                break;
+            }
         }
+        const fullResponse = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+            fullResponse.set(chunk, offset);
+            offset += chunk.length;
+        }
+        return fullResponse.slice(2);
     }
 
-    // 2. 执行 NAT64 转换
-    if (!nat64Prefix || nat64Prefix.trim() === '') {
-        throw new Error("NAT64 fallback requires a valid DNS64/NAT64 prefix.");
+    // 解析IPv6地址
+    function parseIPv6(response) {
+        const view = new DataView(response.buffer);
+        let offset = 12;
+        while (view.getUint8(offset) !== 0) {
+            offset += view.getUint8(offset) + 1;
+        }
+        offset += 5;
+        const answers = [];
+        const answerCount = view.getUint16(6);
+        for (let i = 0; i < answerCount; i++) {
+            if ((view.getUint8(offset) & 0xC0) === 0xC0) {
+                offset += 2;
+            } else {
+                while (view.getUint8(offset) !== 0) {
+                    offset += view.getUint8(offset) + 1;
+                }
+                offset++;
+            }
+            const type = view.getUint16(offset); offset += 2;
+            offset += 6;
+            const dataLength = view.getUint16(offset); offset += 2;
+            if (type === 28 && dataLength === 16) {
+                const parts = [];
+                for (let j = 0; j < 8; j++) {
+                    parts.push(view.getUint16(offset + j * 2).toString(16));
+                }
+                answers.push(parts.join(':'));
+            }
+            offset += dataLength;
+        }
+        return answers;
     }
-    
-    if (nat64Prefix.endsWith('/96')) {
-        const prefix = nat64Prefix.split('/96')[0];
-        const ipv4Parts = ipv4Address.split('.').map(part => parseInt(part, 10));
-        const hexParts = ipv4Parts.map(part => part.toString(16).padStart(2, '0'));
-        // 确保前缀以冒号结尾
-        const normalizedPrefix = prefix.endsWith(':') ? prefix : prefix + ':';
-        const nat64Address = `${normalizedPrefix}${hexParts[0]}${hexParts[1]}:${hexParts[2]}${hexParts[3]}`;
-        console.log(`Constructed NAT64 address: ${nat64Address}`);
-        return nat64Address;
-    } else {
-        throw new Error("Unsupported NAT64 format. Only '/96' prefix is supported in this simplified version.");
+
+    function convertToNAT64IPv6(ipv4Address) {
+        const parts = ipv4Address.split('.');
+        if (parts.length !== 4) throw new Error('Invalid IPv4 address for NAT64 conversion');
+        const hex = parts.map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
+        return DNS64Server.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
     }
+
+    try {
+        if (isIPv6(target)) return target;
+        const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
+        const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
+
+        if (isIPv6(nat64)) {
+            return nat64;
+        } else {
+            throw new Error('Resolved NAT64 address is not a valid IPv6 address.');
+        }
+    } catch (error) {
+        throw new Error(`NAT64 resolution failed: ${error.message}`);
+	}
 }
 
 export default {
@@ -984,7 +1092,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         connectionStrategies.push({
             name: '用户配置的 NAT64',
             execute: async () => {
-                const nat64Address = await resolveToIPv6(addressRemote, DNS64Server);
+                const nat64Address = await resolveToIPv6(addressRemote);
                 return createConnection(`[${nat64Address}]`, 443);
             }
         });
@@ -1005,7 +1113,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             if (!DNS64Server || DNS64Server.trim() === '') {
                 DNS64Server = atob("ZG5zNjQuY21pLnp0dmkub3Jn");
             }
-            const nat64Address = await resolveToIPv6(addressRemote, DNS64Server);
+            const nat64Address = await resolveToIPv6(addressRemote);
             return createConnection(`[${nat64Address}]`, 443);
         }
     });
