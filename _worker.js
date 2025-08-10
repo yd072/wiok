@@ -3585,7 +3585,7 @@ async function handleGetRequest(env) {
 }
 
 /**
- * 新增：处理连接测试的后端函数
+ * 更新：处理连接测试的后端函数
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3609,7 +3609,7 @@ async function handleTestConnection(request) {
 
         try {
             log(`Testing type: ${type}, address: ${address}`);
-            let testSocket; // 用于 SOCKS 和 HTTP
+            let testSocket; 
 
             switch (type) {
                 case 'http':
@@ -3618,43 +3618,16 @@ async function handleTestConnection(request) {
                     break;
                 case 'socks5':
                     parsedSocks5Address = socks5AddressParser(address);
-                    // 地址类型2代表域名
                     testSocket = await socks5Connect(2, 'www.cloudflare.com', 443, log, controller.signal);
                     break;
                 
                 // ===================================================================
-                //  新的 PROXYIP 测试逻辑
+                //  恢复为可靠的 TCP 连接测试
                 // ===================================================================
                 case 'proxyip':
-                    // 解析地址，但不关心端口，因为 fetch HTTPS 总是用 443
-                    const { address: ip } = parseProxyIP(address, 443);
-                    
-                    // 使用 fetch 和 resolveOverride 来进行更严格的 TLS 验证
-                    // 我们尝试通过用户的 IP 去访问一个已知的有效网站 (cloudflare.com)
-                    const testUrl = 'https://www.cloudflare.com/cdn-cgi/trace';
-
-                    log(`Performing TLS validation test for PROXYIP ${ip} by fetching ${testUrl}`);
-
-                    const response = await fetch(testUrl, {
-                        signal: controller.signal,
-                        cf: {
-                            // 关键：强制 fetch 请求解析到用户提供的 IP 地址
-                            resolveOverride: ip
-                        }
-                    });
-
-                    // 如果 fetch 成功并且返回了预期的内容，说明代理是透明的
-                    if (response.ok) {
-                        const text = await response.text();
-                        if (text.includes('h=')) {
-                             log(`Test successful for PROXYIP: ${address}. It appears to be a transparent proxy.`);
-                             // 为了统一逻辑，我们不需要关闭任何东西，直接返回成功
-                        } else {
-                            throw new Error("响应内容不符合预期");
-                        }
-                    } else {
-                        throw new Error(`响应状态码不正确: ${response.status}`);
-                    }
+                    const { address: ip, port } = parseProxyIP(address, 443);
+                    log(`Performing basic TCP reachability test for PROXYIP ${ip}:${port}`);
+                    testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
                     break;
                 // ===================================================================
                 
@@ -3662,13 +3635,13 @@ async function handleTestConnection(request) {
                     throw new Error('不支持的测试类型');
             }
 
-            // SOCKS 和 HTTP 的成功逻辑
+            // 所有类型的成功逻辑
             if (testSocket) {
                 await testSocket.close();
             }
             
             log(`Test successful for ${type}: ${address}`);
-            return new Response(JSON.stringify({ success: true, message: '连接成功！' }), { 
+            return new Response(JSON.stringify({ success: true, message: '端口可达！' }), { 
                 status: 200,
                 headers: { 'Content-Type': 'application/json;charset=utf-8' } 
             });
@@ -3677,18 +3650,8 @@ async function handleTestConnection(request) {
             clearTimeout(timeoutId);
         }
     } catch (err) {
-        // 捕获所有类型的错误，包括 fetch 的 TypeError (证书错误) 和超时
         console.error(`[TestConnection] Error: ${err.stack || err}`);
-        let errorMessage = '连接失败';
-
-        if (err.message.includes('timeout')) {
-            errorMessage = '连接超时';
-        } else if (err.name === 'TypeError') {
-            // fetch 因证书问题失败时通常会抛出 TypeError
-            errorMessage = '证书验证失败 (可能导致私密连接错误)';
-        } else {
-            errorMessage = err.message;
-        }
+        const errorMessage = err.message.includes('timeout') ? '连接超时' : err.message;
         
         return new Response(JSON.stringify({ success: false, message: `连接失败: ${errorMessage}` }), { 
             status: 200,
