@@ -3332,7 +3332,7 @@ async function handleGetRequest(env) {
 
                         <!-- 统一的保存按钮 -->
                         <div style="margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="saveSettings()">保存高级设置</button>
+                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
@@ -3354,7 +3354,7 @@ async function handleGetRequest(env) {
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存优选列表</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                         <div class="divider"></div>
@@ -3585,7 +3585,7 @@ async function handleGetRequest(env) {
 }
 
 /**
- * 新增：处理连接测试的后端函数 (已更新逻辑)
+ * 新增：处理连接测试的后端函数 (使用 WebSocket 握手探针)
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3596,7 +3596,7 @@ async function handleTestConnection(request) {
 
     const log = (info) => { console.log(`[TestConnection] ${info}`); };
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort('连接超时 (秒)'), 5000);
+    const timeoutId = setTimeout(() => controller.abort('连接超时 (8秒)'), 8000);
 
     try {
         const { type, address } = await request.json();
@@ -3609,16 +3609,13 @@ async function handleTestConnection(request) {
 
         switch (type) {
             case 'http': {
-                // 将解析后的地址赋给全局变量，以便 httpConnect 函数能访问到
                 parsedHttpProxyAddress = httpProxyAddressParser(address);
                 const testSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal);
                 await testSocket.close();
                 break;
             }
             case 'socks5': {
-                 // 将解析后的地址赋给全局变量，以便 socks5Connect 函数能访问到
                 parsedSocks5Address = socks5AddressParser(address);
-                // 地址类型 2 代表域名
                 const testSocket = await socks5Connect(2, 'www.cloudflare.com', 443, log, controller.signal);
                 await testSocket.close();
                 break;
@@ -3630,36 +3627,49 @@ async function handleTestConnection(request) {
                 log(`PROXYIP Test: TCP 连接成功。`);
 
                 try {
-                    log(`PROXYIP Test: 步骤 2/2 - 正在发送探针...`);
+                    log(`PROXYIP Test: 步骤 2/2 - 正在发送 WebSocket 握手探针...`);
                     const writer = testSocket.writable.getWriter();
                     const workerHostname = new URL(request.url).hostname;
                     
-                    // 发送一个带有正确 Host 头的 HTTP HEAD 请求作为探针
-                    const httpRequest = `HEAD / HTTP/1.1\r\nHost: ${workerHostname}\r\nConnection: close\r\n\r\n`;
-                    await writer.write(new TextEncoder().encode(httpRequest));
+                    // 生成一个随机的 Sec-WebSocket-Key
+                    const randomKey = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+
+                    // 构造一个模拟的 VLESS over WebSocket 升级请求
+                    const wsUpgradeRequest = [
+                        `GET ${generateRandomPath()} HTTP/1.1`,
+                        `Host: ${workerHostname}`,
+                        'Connection: Upgrade',
+                        'Upgrade: websocket',
+                        `Sec-WebSocket-Version: 13`,
+                        `Sec-WebSocket-Key: ${randomKey}`,
+                        // 模拟早期数据
+                        `Sec-WebSocket-Protocol: ${btoa(new Uint8Array(24))}`, 
+                        '\r\n'
+                    ].join('\r\n');
+
+                    await writer.write(new TextEncoder().encode(wsUpgradeRequest));
                     writer.releaseLock();
-                    log(`PROXYIP Test: 已发送 HEAD 请求，Host: ${workerHostname}`);
+                    log(`PROXYIP Test: 已发送 WebSocket 升级请求，Host: ${workerHostname}`);
 
                     const reader = testSocket.readable.getReader();
                     const { value, done } = await reader.read();
                     reader.releaseLock();
 
                     if (done) {
-                        throw new Error("连接已关闭，未收到任何响应。这可能不是一个有效的反向代理IP。");
+                        throw new Error("连接已关闭，未收到任何响应。该IP无法正确处理WebSocket请求。");
                     }
 
                     const responseText = new TextDecoder().decode(value);
                     log(`PROXYIP Test: 收到响应:\n${responseText.split('\r\n')[0]}`);
 
-                    // 检查响应是否来自 Cloudflare。收到 400 错误是正常且预期的，因为它证明了流量被 Cloudflare 正确接收。
-                    if (responseText.toLowerCase().includes('server: cloudflare') || responseText.includes('HTTP/1.1 400 Bad Request')) {
-                        log(`PROXYIP Test: 响应确认来自 Cloudflare。测试通过。`);
-                        successMessage = '探测成功！该IP似乎是一个有效的Cloudflare节点。';
+                    // 检查是否收到了 WebSocket 握手成功的响应
+                    if (responseText.startsWith('HTTP/1.1 101 Switching Protocols')) {
+                        log(`PROXYIP Test: 收到 101 Switching Protocols。测试通过。`);
+                        successMessage = '探测成功！该IP能正确处理WebSocket流量。';
                     } else {
-                        throw new Error("收到意外响应，这可能不是一个有效的Cloudflare IP。");
+                        throw new Error(`收到非预期的响应: ${responseText.split('\r\n')[0].trim()}。该IP可能无法作为有效的PROXYIP。`);
                     }
                 } finally {
-                    // 确保在探测后关闭套接字
                     await testSocket.close();
                 }
                 break;
@@ -3667,8 +3677,7 @@ async function handleTestConnection(request) {
             default:
                 throw new Error('不支持的测试类型');
         }
-
-        // 所有测试都通过此通用成功路径返回
+        
         log(`Test successful for ${type}: ${address}`);
         return new Response(JSON.stringify({ success: true, message: successMessage }), { 
             status: 200,
@@ -3676,11 +3685,9 @@ async function handleTestConnection(request) {
         });
 
     } catch (err) {
-        // 所有错误都通过此通用失败路径返回
         console.error(`[TestConnection] Error: ${err.stack || err}`);
-        const errorMessage = err.message;
-        return new Response(JSON.stringify({ success: false, message: `连接失败: ${errorMessage}` }), { 
-            status: 200, // 始终返回 200 OK，以便前端能正常解析 JSON 中的错误信息
+        return new Response(JSON.stringify({ success: false, message: `测试失败: ${err.message}` }), { 
+            status: 200, 
             headers: { 'Content-Type': 'application/json;charset=utf-8' } 
         });
     } finally {
