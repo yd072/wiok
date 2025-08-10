@@ -469,7 +469,9 @@ async function statusPage() {
     });
 }
 
-async function resolveToIPv6(target) {
+async function resolveToIPv6(target, nat64ServerOverride = null) {
+	const serverToUse = nat64ServerOverride || DNS64Server;
+
     // 检查是否为IPv4
     function isIPv4(str) {
         const parts = str.split('.');
@@ -505,7 +507,7 @@ async function resolveToIPv6(target) {
     // 查询NAT64 IPv6地址
     async function queryNAT64(domain) {
         const socket = connect({
-            hostname: isIPv6(DNS64Server) ? `[${DNS64Server}]` : DNS64Server,
+            hostname: isIPv6(serverToUse) ? `[${serverToUse}]` : serverToUse,
             port: 53
         });
 
@@ -624,13 +626,14 @@ async function resolveToIPv6(target) {
         const parts = ipv4Address.split('.');
         if (parts.length !== 4) throw new Error('Invalid IPv4 address for NAT64 conversion');
         const hex = parts.map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
-        return DNS64Server.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
+        return serverToUse.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
     }
 
     try {
+		if (!serverToUse) throw new Error('NAT64/DNS64 server is not configured.');
         if (isIPv6(target)) return target;
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
-        const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
+        const nat64 = serverToUse.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
 
         if (isIPv6(nat64)) {
             return nat64;
@@ -3301,6 +3304,7 @@ async function handleGetRequest(env) {
                             <div class="setting-item-footer">
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'nat64')">测试连接</button>
                                 <span id="nat64-status" class="test-status"></span>
+                                <p class="test-note">（测试将尝试解析 ipv4.google.com）</p>
                             </div>
                         </div>
 						<script>
@@ -3686,20 +3690,13 @@ async function handleTestConnection(request) {
                 }
                 break;
             }
-            case 'nat64': {
-                // 临机设置服务器地址进行测试
-                DNS64Server = address;
-                log(`NAT64 Test: 步骤 1/2 - 正在使用服务器 ${address} 解析 www.cloudflare.com...`);
-                const ipv6Address = await resolveToIPv6('www.cloudflare.com');
-                log(`NAT64 Test: 解析成功，获得地址: ${ipv6Address}`);
-                
-                log(`NAT64 Test: 步骤 2/2 - 正在尝试连接到 [${ipv6Address}]:443...`);
-                const testSocket = await connect({ hostname: ipv6Address, port: 443, signal: controller.signal });
-                log(`NAT64 Test: TCP 连接成功。`);
-                await testSocket.close(); // 成功后立即关闭
-                successMessage = `连接成功 (解析地址: ${ipv6Address})`;
-                break;
-            }
+			case 'nat64': {
+				const testDomain = 'ipv4.google.com';
+				log(`NAT64 Test: 正在使用服务器 ${address} 解析 ${testDomain}`);
+				const resolvedIp = await resolveToIPv6(testDomain, address);
+				successMessage = `解析成功: ${resolvedIp}`;
+				break;
+			}
             default:
                 throw new Error('不支持的测试类型');
         }
