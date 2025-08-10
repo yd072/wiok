@@ -3304,7 +3304,7 @@ async function handleGetRequest(env) {
                             <div class="setting-item-footer">
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'nat64')">测试连接</button>
                                 <span id="nat64-status" class="test-status"></span>
-                                <p class="test-note">(DNS64将解析ipv4.google.com, /96前缀将连接8.8.8.8:53)</p>
+                                <p class="test-note">(DNS64将解析ipv4.google.com, /96前缀将连接1.1.1.1:80)</p>
                             </div>
                         </div>
 						<script>
@@ -3694,30 +3694,42 @@ async function handleTestConnection(request) {
 				log(`NAT64 Test: Testing server: ${address}`);
 	
 				if (address.endsWith('/96')) {
-					log('NAT64 Test: Detected /96 prefix. Performing active connection test.');
-					const prefix = address.split('/96')[0];
-					const testIPv4 = '8.8.8.8'; // A well-known, stable IPv4 address for testing
-					const testPort = 53;      // DNS port is a good universal target
+					// 对 /96 前缀进行真实的 fetch 测试，这是验证其连通性的最可靠方法。
+					log('NAT64 Test: Detected /96 prefix. Performing active fetch test.');
+					const prefixBase = address.replace('/96', '');
+					// 使用一个众所周知的、稳定的IPv4地址进行测试。
+					const testIPv4 = '1.1.1.1'; 
 	
-					// Manual conversion logic
-					const parts = testIPv4.split('.');
-					if (parts.length !== 4) throw new Error('Invalid test IPv4 address');
-					const hex = parts.map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
-					const synthesizedIPv6 = prefix + hex[0] + hex[1] + ":" + hex[2] + hex[3];
-	
-					const ipv6Regex = /^(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}$/i;
-					if (!ipv6Regex.test(synthesizedIPv6)) {
+					// 根据 RFC 6052 标准，将 IPv4 地址嵌入到 /96 前缀中。
+					// 1.1.1.1 -> 01.01.01.01 -> 01010101
+					const parts = testIPv4.split('.').map(p => parseInt(p, 10).toString(16).padStart(2, '0'));
+					const ipv4Hex = parts.join(''); // e.g., "01010101"
+					// 组合成IPv6地址，例如： "2001:db8::" + "0101" + ":" + "0101" -> "2001:db8::101:101"
+					const ipv6Addr = `${prefixBase}${ipv4Hex.slice(0, 4)}:${ipv4Hex.slice(4, 8)}`;
 					
+					// 构造一个到该IPv6地址的HTTP请求URL。1.1.1.1在80端口上会响应HTTP请求。
+					const testUrl = `http://[${ipv6Addr}]`;
+	
+					log(`NAT64 Test: Fetching ${testUrl} to validate /96 prefix...`);
+					
+					const response = await fetch(testUrl, {
+						method: 'GET',
+						redirect: 'manual', // 我们不需要跟随跳转，只需要能收到响应即可
+						signal: controller.signal // 应用超时控制器
+					});
+	
+					log(`NAT64 Test: Received response with status ${response.status}`);
+					// 任何 2xx 或 3xx 状态码都表示网络路径是通的，NAT64网关工作正常。
+					if (response.status >= 200 && response.status < 400) {
+						successMessage = `连接成功 (状态: ${response.status})! /96 前缀有效。`;
+					} else {
+						// 如果收到服务器错误（4xx, 5xx），说明网络通了但目标服务有问题，对我们测试来说也算成功。
+						// 但为了更清晰，我们特殊处理一下。
+						successMessage = `连接成功但收到非预期状态: ${response.status}。前缀本身可能有效。`;
 					}
 	
-					log(`NAT64 Test: Synthesized IPv6 for ${testIPv4} is [${synthesizedIPv6}]. Attempting to connect on port ${testPort}...`);
-					
-					const testSocket = await connect({ hostname: `[${synthesizedIPv6}]`, port: testPort, signal: controller.signal });
-					log(`NAT64 Test: Successfully connected to [${synthesizedIPv6}]:${testPort}. Closing socket.`);
-					await testSocket.close(); 
-					successMessage = '连接测试成功！/96 前缀有效。';
-	
 				} else {
+					// 对于DNS64服务器，执行DNS解析测试。
 					log('NAT64 Test: Detected DNS64 server. Performing resolution test.');
 					const testDomain = 'ipv4.google.com';
 					log(`NAT64 Test: Attempting to resolve ${testDomain} using ${address}...`);
