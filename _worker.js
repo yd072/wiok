@@ -3439,6 +3439,10 @@ async function handleGetRequest(env) {
                         allSettings.forEach(setting => {
                             setting.style.display = 'none';
                         });
+                        const allFooters = document.querySelectorAll('.setting-item-footer');
+                        allFooters.forEach(footer => {
+                            footer.style.display = 'none';
+                        });
                         const allHeaders = document.querySelectorAll('.setting-header');
                         allHeaders.forEach(header => {
                             header.classList.remove('open');
@@ -3671,9 +3675,9 @@ async function handleTestConnection(request) {
                     // 成功的关键标志：响应头中包含 "Server: cloudflare"
                     if (responseText.toLowerCase().includes('server: cloudflare')) {
                         log(`PROXYIP Test: 响应头包含 "Server: cloudflare"。测试通过。`);
-                        successMessage = '探测成功！该IP是有效的Cloudflare节点。';
+                        successMessage = '探测成功';
                     } else {
-                        throw new Error("收到的响应并非来自Cloudflare，该IP可能无效。");
+                        throw new Error("该IP可能无效。");
                     }
                     
                     // 确保最终关闭 socket
