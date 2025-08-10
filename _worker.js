@@ -3241,7 +3241,7 @@ async function handleGetRequest(env) {
                         <!-- HTTP Proxy 设置 -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>HTTP Proxy</strong></span>
+                                <span><strong>HTTP</strong></span>
                             </div>
                             <div class="setting-content">
                                 <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
