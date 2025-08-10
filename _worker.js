@@ -3603,51 +3603,47 @@ async function handleGetRequest(env) {
 
 /**
  * [ISOLATED]
- * Performs a direct DNS query to the specified server to test its availability and functionality as a DNS64/NAT64 resolver.
- * This function is self-contained and does not rely on global state.
- * @param {string} serverAddress The IP or hostname of the DNS server to test.
- * @returns {Promise<string>} The first resolved IPv6 address.
- * @throws {Error} If the test fails at any step.
+ * Performs a DNS-over-HTTPS (DoH) query to test a NAT64/DNS64 server.
+ * @param {string} serverAddress - The hostname of the DoH server (e.g., 'dns.google').
+ * @returns {Promise<string>} The resolved IPv6 address.
+ * @throws {Error} If the DoH query fails.
  */
-async function testNAT64Server(serverAddress) {
-    const log = (info) => console.log(`[NAT64Test] ${info}`);
-    log(`Testing server: ${serverAddress}`);
-    let socket;
+async function testNAT64ServerViaDoH(serverAddress) {
+    const log = (info) => console.log(`[NAT64Test-DoH] ${info}`);
+    log(`Testing server via DoH: ${serverAddress}`);
+    const dohUrl = `https://${serverAddress}/dns-query`;
+    const testDomain = 'www.cloudflare.com';
+
     try {
-        socket = connect({
-            hostname: isIPv6(serverAddress) ? `[${serverAddress}]` : serverAddress,
-            port: 53
+        const response = await fetch(`${dohUrl}?name=${testDomain}&type=AAAA`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/dns-json'
+            }
         });
 
-        const writer = socket.writable.getWriter();
-        const reader = socket.readable.getReader();
+        if (!response.ok) {
+            throw new Error(`服务器返回错误状态: ${response.status} ${response.statusText}`);
+        }
 
-        // Use a well-known domain for testing AAAA record resolution.
-        const testDomain = 'www.cloudflare.com';
-        const query = buildDNSQuery(testDomain); // reusing helper
-        const queryWithLength = new Uint8Array(query.length + 2);
-        queryWithLength[0] = query.length >> 8;
-        queryWithLength[1] = query.length & 0xFF;
-        queryWithLength.set(query, 2);
-        await writer.write(queryWithLength);
-        log(`Sent AAAA query for ${testDomain} to ${serverAddress}`);
+        const data = await response.json();
 
-        const response = await readDNSResponse(reader); // reusing helper
-        const ipv6s = parseIPv6(response); // reusing helper
+        const answers = (data.Answer || []).filter(record => record.type === 28); // 28 is AAAA
 
-        if (ipv6s.length > 0) {
-            log(`Received ${ipv6s.length} IPv6 addresses. First one: ${ipv6s[0]}`);
-            return ipv6s[0];
+        if (answers.length > 0) {
+            const ipv6 = answers[0].data;
+            log(`DoH query successful. Resolved IPv6: ${ipv6}`);
+            return ipv6;
         } else {
-            throw new Error('服务器未返回有效的IPv6 (AAAA)记录。它可能不是一个有效的DNS64/NAT64服务器。');
+            throw new Error('服务器未在DoH响应中返回有效的IPv6 (AAAA)记录。');
         }
+
     } catch (error) {
-        log(`Error during test: ${error.message}`);
-        throw new Error(`连接到 ${serverAddress}:53 失败。请检查地址是否正确。详细信息: ${error.message}`);
-    } finally {
-        if (socket) {
-            await socket.close().catch(e => log(`Error closing test socket: ${e.message}`));
+        log(`Error during DoH test: ${error.message}`);
+        if (error.message.includes('fetch failed') || error.message.includes('Failed to fetch')) {
+             throw new Error(`无法连接到DoH端点 ${dohUrl}。请检查域名是否正确以及该服务器是否支持DoH。`);
         }
+        throw new Error(`DoH测试失败。详细信息: ${error.message}`);
     }
 }
 
@@ -3749,11 +3745,11 @@ async function handleTestConnection(request) {
                         throw new Error(`无效的 /96 前缀格式: ${address}`);
                     }
                 } else {
-                    // It's a server address, perform a live test.
+                    // It's a server address, perform a live test via DoH.
                     log(`NAT64 Test: User provided server: ${address}`);
-                    const resolvedIp = await testNAT64Server(address); // Use the new isolated function
+                    const resolvedIp = await testNAT64ServerViaDoH(address); // Use the new isolated function
                     log(`NAT64 Test: Success. Resolved IP: ${resolvedIp}`);
-                    successMessage = `解析成功: www.cloudflare.com -> ${resolvedIp}`;
+                    successMessage = `DoH解析成功: www.cloudflare.com -> ${resolvedIp}`;
                 }
 				break;
 			}
