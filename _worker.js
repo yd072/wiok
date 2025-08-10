@@ -3664,7 +3664,7 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'proxyip': {
-                const { address: ip, port } = parseProxyIP(address, 443);
+                const { address: ip, port } = parseProxyIP(address, 443); 
                 log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
                 log(`PROXYIP Test: TCP 连接成功。`);
@@ -3708,11 +3708,27 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'nat64': {
-                // 使用新的、严格的测试函数
-                log(`NAT64 Test: 正在使用服务器 ${address} 解析 'ipv4.google.com'`);
-                const resolvedIPv6 = await testNAT64(address, controller.signal);
-                log(`NAT64 Test: 成功解析到 IPv6 地址: ${resolvedIPv6}`);
-                successMessage = '探测成功！该服务器能正确解析IPv4-only地址。';
+                if (address.endsWith('/96')) {
+                    // 这是 NAT64 前缀，执行本地格式验证
+                    log(`NAT64 Test: 检测到 /96 前缀, 执行格式验证。`);
+                    const prefix = address.split('/96')[0];
+                    const ipv4ToTest = '8.8.8.8'; // 一个示例 IPv4
+                    const hex = ipv4ToTest.split('.').map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
+                    const synthesizedIPv6 = prefix + hex[0] + hex[1] + ":" + hex[2] + hex[3];
+                    
+                    if (isIPv6(synthesizedIPv6)) {
+                        log(`NAT64 Test: 前缀格式正确，合成地址: ${synthesizedIPv6}`);
+                        successMessage = '前缀格式有效！';
+                    } else {
+                        throw new Error(`无法从该前缀合成有效的 IPv6 地址 (结果: ${synthesizedIPv6})`);
+                    }
+                } else {
+                    // 这是 DNS64 服务器地址，执行严格的在线解析测试
+                    log(`NAT64 Test: 检测到服务器地址, 执行在线解析测试。`);
+                    const resolvedIPv6 = await testNAT64(address, controller.signal);
+                    log(`NAT64 Test: 成功解析到 IPv6 地址: ${resolvedIPv6}`);
+                    successMessage = '探测成功！该服务器能正确解析IPv4-only地址。';
+                }
                 break;
             }
             default:
