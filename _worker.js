@@ -469,22 +469,115 @@ async function statusPage() {
     });
 }
 
+// ---------------------------------------------------
+// DNS and NAT64 Helper Functions
+// ---------------------------------------------------
+// check if a string is a valid IPv4 address
+function isIPv4(str) {
+    const parts = str.split('.');
+    return parts.length === 4 && parts.every(part => {
+        const num = parseInt(part, 10);
+        return num >= 0 && num <= 255 && part === num.toString();
+    });
+}
+
+// check if a string is a valid IPv6 address
+function isIPv6(str) {
+    return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
+}
+
+// build a DNS query packet
+function buildDNSQuery(domain) {
+    const buffer = new ArrayBuffer(512);
+    const view = new DataView(buffer);
+    let offset = 0;
+    view.setUint16(offset, Math.floor(Math.random() * 65536)); offset += 2;
+    view.setUint16(offset, 0x0100); offset += 2;
+    view.setUint16(offset, 1); offset += 2;
+    view.setUint16(offset, 0); offset += 6;
+    for (const label of domain.split('.')) {
+        view.setUint8(offset++, label.length);
+        for (let i = 0; i < label.length; i++) {
+            view.setUint8(offset++, label.charCodeAt(i));
+        }
+    }
+    view.setUint8(offset++, 0);
+    view.setUint16(offset, 28); offset += 2; // AAAA record
+    view.setUint16(offset, 1); offset += 2; // IN class
+    return new Uint8Array(buffer, 0, offset);
+}
+
+// read a DNS response from a socket reader
+async function readDNSResponse(reader) {
+    const chunks = [];
+    let totalLength = 0;
+    let expectedLength = null;
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        totalLength += value.length;
+        if (expectedLength === null && totalLength >= 2) {
+            expectedLength = (chunks[0][0] << 8) | chunks[0][1];
+        }
+        if (expectedLength !== null && totalLength >= expectedLength + 2) {
+            break;
+        }
+    }
+    const fullResponse = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+        fullResponse.set(chunk, offset);
+        offset += chunk.length;
+    }
+    return fullResponse.slice(2);
+}
+
+// parse IPv6 addresses from a DNS response
+function parseIPv6(response) {
+    const view = new DataView(response.buffer);
+    let offset = 12;
+    while (view.getUint8(offset) !== 0) {
+        offset += view.getUint8(offset) + 1;
+    }
+    offset += 5;
+    const answers = [];
+    const answerCount = view.getUint16(6);
+    for (let i = 0; i < answerCount; i++) {
+        if ((view.getUint8(offset) & 0xC0) === 0xC0) {
+            offset += 2;
+        } else {
+            while (view.getUint8(offset) !== 0) {
+                offset += view.getUint8(offset) + 1;
+            }
+            offset++;
+        }
+        const type = view.getUint16(offset); offset += 2;
+        offset += 6;
+        const dataLength = view.getUint16(offset); offset += 2;
+        if (type === 28 && dataLength === 16) {
+            const parts = [];
+            for (let j = 0; j < 8; j++) {
+                parts.push(view.getUint16(offset + j * 2).toString(16));
+            }
+            answers.push(parts.join(':'));
+        }
+        offset += dataLength;
+    }
+    return answers;
+}
+
+// convert an IPv4 address to a NAT64 IPv6 address
+function convertToNAT64IPv6(ipv4Address, nat64Prefix) {
+    const parts = ipv4Address.split('.');
+    if (parts.length !== 4) throw new Error('Invalid IPv4 address for NAT64 conversion');
+    const hex = parts.map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
+    return nat64Prefix.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
+}
+
+
 async function resolveToIPv6(target) {
-    // 检查是否为IPv4
-    function isIPv4(str) {
-        const parts = str.split('.');
-        return parts.length === 4 && parts.every(part => {
-            const num = parseInt(part, 10);
-            return num >= 0 && num <= 255 && part === num.toString();
-        });
-    }
-
-    // 检查是否为IPv6
-    function isIPv6(str) {
-        return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
-    }
-
-    // 获取域名的IPv4地址
+    // get the IPv4 address of a domain
     async function fetchIPv4(domain) {
         const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
         const response = await fetch(url, {
@@ -502,10 +595,10 @@ async function resolveToIPv6(target) {
         return ipv4s[Math.floor(Math.random() * ipv4s.length)];
     }
 
-    // 查询NAT64 IPv6地址
-    async function queryNAT64(domain) {
+    // query a NAT64 server for an IPv6 address
+    async function queryNAT64(domain, server) {
         const socket = connect({
-            hostname: isIPv6(DNS64Server) ? `[${DNS64Server}]` : DNS64Server,
+            hostname: isIPv6(server) ? `[${server}]` : server,
             port: 53
         });
 
@@ -513,7 +606,6 @@ async function resolveToIPv6(target) {
         const reader = socket.readable.getReader();
 
         try {
-            // 发送DNS查询
             const query = buildDNSQuery(domain);
             const queryWithLength = new Uint8Array(query.length + 2);
             queryWithLength[0] = query.length >> 8;
@@ -521,7 +613,6 @@ async function resolveToIPv6(target) {
             queryWithLength.set(query, 2);
             await writer.write(queryWithLength);
 
-            // 读取响应
             const response = await readDNSResponse(reader);
             const ipv6s = parseIPv6(response);
 
@@ -536,101 +627,14 @@ async function resolveToIPv6(target) {
         }
     }
 
-    // 构建DNS查询包
-    function buildDNSQuery(domain) {
-        const buffer = new ArrayBuffer(512);
-        const view = new DataView(buffer);
-        let offset = 0;
-        view.setUint16(offset, Math.floor(Math.random() * 65536)); offset += 2;
-        view.setUint16(offset, 0x0100); offset += 2;
-        view.setUint16(offset, 1); offset += 2;
-        view.setUint16(offset, 0); offset += 6;
-		 // 域名编码
-        for (const label of domain.split('.')) {
-            view.setUint8(offset++, label.length);
-            for (let i = 0; i < label.length; i++) {
-                view.setUint8(offset++, label.charCodeAt(i));
-            }
-        }
-        view.setUint8(offset++, 0);
-		// 查询类型和类
-        view.setUint16(offset, 28); offset += 2; // AAAA记录
-        view.setUint16(offset, 1); offset += 2; // IN类
-
-        return new Uint8Array(buffer, 0, offset);
-    }
-
-    // 读取DNS响应
-    async function readDNSResponse(reader) {
-        const chunks = [];
-        let totalLength = 0;
-        let expectedLength = null;
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-            totalLength += value.length;
-            if (expectedLength === null && totalLength >= 2) {
-                expectedLength = (chunks[0][0] << 8) | chunks[0][1];
-            }
-            if (expectedLength !== null && totalLength >= expectedLength + 2) {
-                break;
-            }
-        }
-        const fullResponse = new Uint8Array(totalLength);
-        let offset = 0;
-        for (const chunk of chunks) {
-            fullResponse.set(chunk, offset);
-            offset += chunk.length;
-        }
-        return fullResponse.slice(2);
-    }
-
-    // 解析IPv6地址
-    function parseIPv6(response) {
-        const view = new DataView(response.buffer);
-        let offset = 12;
-        while (view.getUint8(offset) !== 0) {
-            offset += view.getUint8(offset) + 1;
-        }
-        offset += 5;
-        const answers = [];
-        const answerCount = view.getUint16(6);
-        for (let i = 0; i < answerCount; i++) {
-            if ((view.getUint8(offset) & 0xC0) === 0xC0) {
-                offset += 2;
-            } else {
-                while (view.getUint8(offset) !== 0) {
-                    offset += view.getUint8(offset) + 1;
-                }
-                offset++;
-            }
-            const type = view.getUint16(offset); offset += 2;
-            offset += 6;
-            const dataLength = view.getUint16(offset); offset += 2;
-            if (type === 28 && dataLength === 16) {
-                const parts = [];
-                for (let j = 0; j < 8; j++) {
-                    parts.push(view.getUint16(offset + j * 2).toString(16));
-                }
-                answers.push(parts.join(':'));
-            }
-            offset += dataLength;
-        }
-        return answers;
-    }
-
-    function convertToNAT64IPv6(ipv4Address) {
-        const parts = ipv4Address.split('.');
-        if (parts.length !== 4) throw new Error('Invalid IPv4 address for NAT64 conversion');
-        const hex = parts.map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
-        return DNS64Server.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
-    }
-
     try {
         if (isIPv6(target)) return target;
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
-        const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
+        
+        // Use the globally configured DNS64Server
+        const nat64 = DNS64Server.endsWith('/96') 
+            ? convertToNAT64IPv6(ipv4, DNS64Server) 
+            : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='), DNS64Server);
 
         if (isIPv6(nat64)) {
             return nat64;
@@ -3598,7 +3602,58 @@ async function handleGetRequest(env) {
 }
 
 /**
- * 新增：处理连接测试的后端函数 (使用 HTTP 路由探针)
+ * [ISOLATED]
+ * Performs a direct DNS query to the specified server to test its availability and functionality as a DNS64/NAT64 resolver.
+ * This function is self-contained and does not rely on global state.
+ * @param {string} serverAddress The IP or hostname of the DNS server to test.
+ * @returns {Promise<string>} The first resolved IPv6 address.
+ * @throws {Error} If the test fails at any step.
+ */
+async function testNAT64Server(serverAddress) {
+    const log = (info) => console.log(`[NAT64Test] ${info}`);
+    log(`Testing server: ${serverAddress}`);
+    let socket;
+    try {
+        socket = connect({
+            hostname: isIPv6(serverAddress) ? `[${serverAddress}]` : serverAddress,
+            port: 53
+        });
+
+        const writer = socket.writable.getWriter();
+        const reader = socket.readable.getReader();
+
+        // Use a well-known domain for testing AAAA record resolution.
+        const testDomain = 'www.cloudflare.com';
+        const query = buildDNSQuery(testDomain); // reusing helper
+        const queryWithLength = new Uint8Array(query.length + 2);
+        queryWithLength[0] = query.length >> 8;
+        queryWithLength[1] = query.length & 0xFF;
+        queryWithLength.set(query, 2);
+        await writer.write(queryWithLength);
+        log(`Sent AAAA query for ${testDomain} to ${serverAddress}`);
+
+        const response = await readDNSResponse(reader); // reusing helper
+        const ipv6s = parseIPv6(response); // reusing helper
+
+        if (ipv6s.length > 0) {
+            log(`Received ${ipv6s.length} IPv6 addresses. First one: ${ipv6s[0]}`);
+            return ipv6s[0];
+        } else {
+            throw new Error('服务器未返回有效的IPv6 (AAAA)记录。它可能不是一个有效的DNS64/NAT64服务器。');
+        }
+    } catch (error) {
+        log(`Error during test: ${error.message}`);
+        throw new Error(`连接到 ${serverAddress}:53 失败。请检查地址是否正确。详细信息: ${error.message}`);
+    } finally {
+        if (socket) {
+            await socket.close().catch(e => log(`Error closing test socket: ${e.message}`));
+        }
+    }
+}
+
+
+/**
+ * 新增：处理连接测试的后端函数
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3634,7 +3689,6 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'proxyip': {
-                // 对于 PROXYIP，我们默认测试其作为 HTTP 反向代理的能力，所以使用 443 端口
                 const { address: ip, port } = parseProxyIP(address, 443);
                 log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
@@ -3645,12 +3699,11 @@ async function handleTestConnection(request) {
                     const writer = testSocket.writable.getWriter();
                     const workerHostname = new URL(request.url).hostname;
                     
-                    // 构造一个简单的 HTTP GET 请求作为探针
                     const httpProbeRequest = [
                         `GET / HTTP/1.1`,
                         `Host: ${workerHostname}`,
                         'User-Agent: Cloudflare-Connectivity-Test',
-                        'Connection: close', // 确保服务器在响应后关闭连接
+                        'Connection: close',
                         '\r\n'
                     ].join('\r\n');
 
@@ -3668,7 +3721,6 @@ async function handleTestConnection(request) {
                     const responseText = new TextDecoder().decode(value);
                     log(`PROXYIP Test: 收到响应:\n${responseText.substring(0, 200)}...`);
 
-                    // 成功的关键标志：响应头中包含 "Server: cloudflare"
                     if (responseText.toLowerCase().includes('server: cloudflare')) {
                         log(`PROXYIP Test: 响应头包含 "Server: cloudflare"。测试通过。`);
                         successMessage = '探测成功！该IP是有效的Cloudflare节点。';
@@ -3676,27 +3728,33 @@ async function handleTestConnection(request) {
                         throw new Error("收到的响应并非来自Cloudflare，该IP可能无效。");
                     }
                     
-                    // 确保最终关闭 socket
                     await testSocket.close();
                     reader.releaseLock();
 
                 } catch(err) {
-                    // 确保在内部块出错时也能关闭socket
                     if (testSocket) await testSocket.close();
-                    throw err; // 将错误重新抛出到外部catch块
+                    throw err; 
                 }
                 break;
             }
 			case 'nat64': {
-				// 临时设置全局变量以供 `resolveToIPv6` 函数使用
-				DNS64Server = address;
-				log(`NAT64 Test: 正在通过 ${DNS64Server} 解析 'www.cloudflare.com'`);
-				const resolvedIp = await resolveToIPv6('www.cloudflare.com');
-				if (!resolvedIp) {
-					throw new Error("未能解析到 IPv6 地址。");
-				}
-				log(`NAT64 Test: 成功解析到 ${resolvedIp}`);
-				successMessage = `解析成功: www.cloudflare.com -> ${resolvedIp}`;
+                if (address.endsWith('/96')) {
+                    // It's a prefix, not a server. We can only validate its format.
+                    log(`NAT64 Test: Detected /96 prefix format: ${address}`);
+                    const tempIPv6 = convertToNAT64IPv6('1.1.1.1', address);
+                    if (isIPv6(tempIPv6)) {
+                        successMessage = '格式正确 (前缀模式，无法测试连通性)';
+                        log(`NAT64 Test: Prefix format appears valid.`);
+                    } else {
+                        throw new Error(`无效的 /96 前缀格式: ${address}`);
+                    }
+                } else {
+                    // It's a server address, perform a live test.
+                    log(`NAT64 Test: User provided server: ${address}`);
+                    const resolvedIp = await testNAT64Server(address); // Use the new isolated function
+                    log(`NAT64 Test: Success. Resolved IP: ${resolvedIp}`);
+                    successMessage = `解析成功: www.cloudflare.com -> ${resolvedIp}`;
+                }
 				break;
 			}
             default:
