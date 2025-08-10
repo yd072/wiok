@@ -3584,110 +3584,90 @@ async function handleGetRequest(env) {
     });
 }
 
-/**
- * 最终版：处理连接测试的后端函数 (可检测证书问题)
- * @param {Request} request
- * @returns {Promise<Response>}
- */
+// 在 handleTestConnection 函数中
+
 async function handleTestConnection(request) {
-    if (request.method !== 'POST') {
-        return new Response('Method Not Allowed', { status: 405 });
-    }
+    // ...
+    // 从请求中获取 type 和 address，并新增一个 testTarget
+    const { type, address, testTarget } = await request.json(); 
+
+    // ...
 
     try {
-        const { type, address } = await request.json();
-        if (!type || !address || !address.trim()) {
-            return new Response(JSON.stringify({ success: false, message: '请求参数不完整或地址为空' }), { 
-                status: 200, 
-                headers: { 'Content-Type': 'application/json;charset=utf-8' } 
-            });
+        log(`Testing type: ${type}, address: ${address}, target: ${testTarget}`);
+
+        if (testTarget === 'certificate') {
+            // 这是新的证书测试逻辑
+            return await testProxyCertificate(address);
         }
-        
-        const log = (info) => { console.log(`[TestConnection] ${info}`); };
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 8000); // 8秒超时
 
-        try {
-            log(`Testing type: ${type}, address: ${address}`);
-            let testSocket; 
+        // ... 原有的 TCP 测试逻辑 ...
 
-            switch (type) {
-                case 'http':
-                    // HTTP 代理测试保持不变
-                    parsedHttpProxyAddress = httpProxyAddressParser(address);
-                    testSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal);
-                    break;
-                case 'socks5':
-                    // SOCKS5 代理测试保持不变
-                    parsedSocks5Address = socks5AddressParser(address);
-                    testSocket = await socks5Connect(2, 'www.cloudflare.com', 443, log, controller.signal);
-                    break;
-                
-                // ===================================================================
-                //  最终版 PROXYIP 测试逻辑：测试访问外部网站
-                // ===================================================================
-                case 'proxyip':
-                    // 解析 IP 地址
-                    const { address: ip } = parseProxyIP(address, 443);
-                    
-                    // 选择一个稳定且肯定不在 Cloudflare 上的目标进行测试
-                    const testUrl = "https://www.cloudflare.com"; 
-
-                    log(`Performing advanced TLS validation test for PROXYIP ${ip} by fetching an external site: ${testUrl}`);
-
-                    const response = await fetch(testUrl, {
-                        method: 'HEAD', // 使用 HEAD 请求更快，我们只需要响应头
-                        signal: controller.signal,
-                        cf: {
-                            // 关键：强制 fetch 请求解析到用户提供的 IP 地址
-                            resolveOverride: ip
-                        }
-                    });
-
-                    // 如果 fetch 成功并且服务器返回了 OK 状态，说明代理是透明且可用的
-                    if (response.ok) {
-                         log(`Test successful for PROXYIP: ${address}. It appears to be a usable transparent proxy.`);
-                         // 成功，跳出 switch
-                    } else {
-                        throw new Error(`连接正常但响应状态码不正确: ${response.status}`);
-                    }
-                    break;
-                // ===================================================================
-                
-                default:
-                    throw new Error('不支持的测试类型');
-            }
-
-            // 所有类型的成功逻辑
-            if (testSocket) {
-                await testSocket.close();
-            }
-            
-            return new Response(JSON.stringify({ success: true, message: '连接成功！此IP似乎可用。' }), { 
-                status: 200,
-                headers: { 'Content-Type': 'application/json;charset=utf-8' } 
-            });
-
-        } finally {
-            clearTimeout(timeoutId);
-        }
     } catch (err) {
-        // 捕获所有类型的错误
-        console.error(`[TestConnection] Error: ${err.stack || err}`);
-        let errorMessage;
+        // ...
+    }
+}
 
-        if (err.message.includes('timeout')) {
-            errorMessage = '连接超时';
-        } else if (err.name === 'TypeError' && err.message.includes('fetch')) {
-            // fetch 因证书问题或网络层错误失败时会抛出 TypeError
-            errorMessage = '证书验证失败或网络不可达 (会导致“连接不是私密连接”错误)';
-        } else {
-            errorMessage = err.message;
-        }
-        
-        return new Response(JSON.stringify({ success: false, message: `连接失败: ${errorMessage}` }), { 
+/**
+ * 新增：专门用于测试 PROXYIP 证书有效性的函数
+ * @param {string} proxyAddress - 例如 "1.2.3.4:443"
+ * @returns {Promise<Response>}
+ */
+async function testProxyCertificate(proxyAddress) {
+    const { address: ip, port } = parseProxyIP(proxyAddress, 443);
+    const targetUrl = `https://${ip}:${port}/`;
+
+    // 设置一个超时控制器
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort('Timeout'), 8000);
+
+    try {
+        // fetch 的关键： resolveOverride 强制 fetch 解析到我们指定的 IP 地址
+        // 而不是通过 DNS 查询域名。我们用 IP 本身作为域名。
+        const response = await fetch(targetUrl, {
+            method: 'HEAD', // 使用 HEAD 请求，我们不需要 body，只关心连接和头部
+            signal: controller.signal,
+            cf: {
+                // 这个选项让 Cloudflare 跳过 DNS，直接连接到我们提供的 IP。
+                // 注意：这可能需要 Enterprise plan。一个替代方案是直接 fetch(`https://ip-address`)
+                resolveOverride: ip 
+            }
+        });
+
+        clearTimeout(timeoutId);
+
+        // 如果 fetch 成功执行，即使是 4xx 或 5xx 错误，
+        // 也意味着 TLS 握手成功了！
+        return new Response(JSON.stringify({
+            success: true,
+            message: `证书有效 (HTTP状态码: ${response.status})`
+        }), {
             status: 200,
-            headers: { 'Content-Type': 'application/json;charset=utf-8' } 
+            headers: { 'Content-Type': 'application/json;charset=utf-8' }
+        });
+
+    } catch (err) {
+        clearTimeout(timeoutId);
+        
+        // 这里是关键：捕获 fetch 抛出的错误
+        let errorMessage = err.message;
+
+        // 根据错误类型判断证书问题
+        if (err.cause?.code?.includes('CERT')) { // e.g., CERT_HAS_EXPIRED, UNABLE_TO_VERIFY_LEAF_SIGNATURE
+            errorMessage = "证书无效或不可信";
+        } else if (err.message.includes('timeout')) {
+            errorMessage = "连接超时";
+        } else if (err.cause?.code === 'ENOTFOUND') {
+            errorMessage = "无法解析主机";
+        }
+
+        console.error(`[CertTest] Error for ${targetUrl}:`, err.cause || err);
+        return new Response(JSON.stringify({
+            success: false,
+            message: `测试失败: ${errorMessage}`
+        }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json;charset=utf-8' }
         });
     }
 }
