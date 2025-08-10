@@ -223,8 +223,16 @@ function parseProxyIP(proxyString, defaultPort) {
         [address, port] = address.split(']:');
         address += ']';
     } else if (address.includes(':')) {
-        [address, port] = address.split(':');
+        const parts = address.split(':');
+        // 处理IPv6地址中包含多个冒号的情况
+        if (parts.length > 2) {
+            port = parts.pop();
+            address = parts.join(':');
+        } else {
+            [address, port] = parts;
+        }
     }
+
 
     if (address.includes('.tp')) {
         port = address.split('.tp')[1].split('.')[0] || port;
@@ -3205,7 +3213,7 @@ async function handleGetRequest(env) {
                             </div>
                             <div class="setting-content">
                                 <p>每行一个IP，格式：IP:端口(可不添加端口)</p>
-                                <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJveHkuZXhhbXBsZS5jb20lM0E4NDQz'))}">${proxyIPContent}</textarea>
+                                <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E4MApwcml2YXRlLmV4YW1wbGUuY29tJTNBMjA1Mg=='))}">${proxyIPContent}</textarea>
                             </div>
                             <div class="setting-item-footer">
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'proxyip')">测试连接</button>
@@ -3332,7 +3340,7 @@ async function handleGetRequest(env) {
 
                         <!-- 统一的保存按钮 -->
                         <div style="margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+                            <button class="btn btn-primary" onclick="saveSettings()">保存高级设置</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
@@ -3354,7 +3362,7 @@ async function handleGetRequest(env) {
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存优选列表</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                         <div class="divider"></div>
@@ -3585,7 +3593,7 @@ async function handleGetRequest(env) {
 }
 
 /**
- * 新增：处理连接测试的后端函数 (使用 WebSocket 握手探针)
+ * 新增：处理连接测试的后端函数 (使用 HTTP 路由探针)
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3621,56 +3629,56 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'proxyip': {
-                const { address: ip, port } = parseProxyIP(address, 443);
+                // 对于 PROXYIP，我们默认测试其作为 HTTP 反向代理的能力，所以使用 80 端口
+                const { address: ip, port } = parseProxyIP(address, 80);
                 log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
                 log(`PROXYIP Test: TCP 连接成功。`);
 
                 try {
-                    log(`PROXYIP Test: 步骤 2/2 - 正在发送 WebSocket 握手探针...`);
+                    log(`PROXYIP Test: 步骤 2/2 - 正在发送 HTTP 路由探针...`);
                     const writer = testSocket.writable.getWriter();
                     const workerHostname = new URL(request.url).hostname;
                     
-                    // 生成一个随机的 Sec-WebSocket-Key
-                    const randomKey = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-
-                    // 构造一个模拟的 VLESS over WebSocket 升级请求
-                    const wsUpgradeRequest = [
-                        `GET ${generateRandomPath()} HTTP/1.1`,
+                    // 构造一个简单的 HTTP GET 请求作为探针
+                    const httpProbeRequest = [
+                        `GET / HTTP/1.1`,
                         `Host: ${workerHostname}`,
-                        'Connection: Upgrade',
-                        'Upgrade: websocket',
-                        `Sec-WebSocket-Version: 13`,
-                        `Sec-WebSocket-Key: ${randomKey}`,
-                        // 模拟早期数据
-                        `Sec-WebSocket-Protocol: ${btoa(new Uint8Array(24))}`, 
+                        'User-Agent: Cloudflare-Connectivity-Test',
+                        'Connection: close', // 确保服务器在响应后关闭连接
                         '\r\n'
                     ].join('\r\n');
 
-                    await writer.write(new TextEncoder().encode(wsUpgradeRequest));
+                    await writer.write(new TextEncoder().encode(httpProbeRequest));
                     writer.releaseLock();
-                    log(`PROXYIP Test: 已发送 WebSocket 升级请求，Host: ${workerHostname}`);
+                    log(`PROXYIP Test: 已发送 GET 请求, Host: ${workerHostname}`);
 
                     const reader = testSocket.readable.getReader();
                     const { value, done } = await reader.read();
-                    reader.releaseLock();
-
+                    
                     if (done) {
-                        throw new Error("连接已关闭，未收到任何响应。该IP无法正确处理WebSocket请求。");
+                        throw new Error("连接已关闭，未收到任何响应。");
                     }
 
                     const responseText = new TextDecoder().decode(value);
-                    log(`PROXYIP Test: 收到响应:\n${responseText.split('\r\n')[0]}`);
+                    log(`PROXYIP Test: 收到响应:\n${responseText.substring(0, 200)}...`);
 
-                    // 检查是否收到了 WebSocket 握手成功的响应
-                    if (responseText.startsWith('HTTP/1.1 101 Switching Protocols')) {
-                        log(`PROXYIP Test: 收到 101 Switching Protocols。测试通过。`);
-                        successMessage = '探测成功！该IP能正确处理WebSocket流量。';
+                    // 成功的关键标志：响应头中包含 "Server: cloudflare"
+                    if (responseText.toLowerCase().includes('server: cloudflare')) {
+                        log(`PROXYIP Test: 响应头包含 "Server: cloudflare"。测试通过。`);
+                        successMessage = '探测成功！该IP是有效的Cloudflare节点。';
                     } else {
-                        throw new Error(`收到非预期的响应: ${responseText.split('\r\n')[0].trim()}。该IP可能无法作为有效的PROXYIP。`);
+                        throw new Error("收到的响应并非来自Cloudflare，该IP可能无效。");
                     }
-                } finally {
+                    
+                    // 确保最终关闭 socket
                     await testSocket.close();
+                    reader.releaseLock();
+
+                } catch(err) {
+                    // 确保在内部块出错时也能关闭socket
+                    if (testSocket) await testSocket.close();
+                    throw err; // 将错误重新抛出到外部catch块
                 }
                 break;
             }
