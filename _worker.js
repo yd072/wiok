@@ -3630,7 +3630,7 @@ async function handleTestConnection(request) {
             }
             case 'proxyip': {
                 // 对于 PROXYIP，我们默认测试其作为 HTTP 反向代理的能力，所以使用 80 端口
-                const { address: ip, port } = parseProxyIP(address, 80);
+                const { address: ip, port } = parseProxyIP(address, 443);
                 log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
                 log(`PROXYIP Test: TCP 连接成功。`);
