@@ -3332,7 +3332,7 @@ async function handleGetRequest(env) {
 
                         <!-- 统一的保存按钮 -->
                         <div style="margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+                            <button class="btn btn-primary" onclick="saveSettings()">保存高级设置</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
@@ -3354,7 +3354,7 @@ async function handleGetRequest(env) {
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存优选列表</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                         <div class="divider"></div>
@@ -3584,69 +3584,8 @@ async function handleGetRequest(env) {
     });
 }
 
-
 /**
- * 新增: PROXYIP 智能测试函数 (最终可靠版)
- * 利用 fetch 的 resolveOverride 功能进行测试
- * @param {string} address - The IP address to test.
- * @param {number} port - The port to test.
- * @param {(string) => void} log - Logger function.
- * @returns {Promise<{success: boolean, message: string}>}
- */
-async function enhancedTestProxyIP(address, port, log) {
-    const testHostname = 'www.cloudflare.com';
-    const urlToFetch = `https://${testHostname}/`;
-    
-    // 使用 AbortController 实现超时控制
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort('Fetch timeout'), 6000); // 6秒超时
-
-    try {
-        log(`[Fetch Test] Testing ${address}:${port} by fetching ${urlToFetch}`);
-
-        const response = await fetch(urlToFetch, {
-            method: 'HEAD', // 使用 HEAD 请求，我们只关心连接和头部，不需要下载内容
-            signal: controller.signal,
-            redirect: 'manual',
-            cf: {
-                // 这是最关键的部分
-                resolveOverride: `${address}:${port}`,
-            },
-        });
-
-        clearTimeout(timeoutId);
-        log(`[Fetch Test] Received status: ${response.status}`);
-
-        // 如果能走到这里，说明 TCP 连接和 TLS 握手都成功了。
-        // 一个好的 PROXYIP 应该能成功获取到目标网站的响应。
-        if (response.status >= 200 && response.status < 400) {
-            return { success: true, message: '连接成功 (TLS已验证)' };
-        } else {
-            return { success: false, message: `连接成功但目标网站返回错误: ${response.status}` };
-        }
-
-    } catch (error) {
-        clearTimeout(timeoutId);
-        log(`[Fetch Test] Fetch failed: ${error.toString()}`);
-        
-        let errorMessage = '连接失败';
-        if (error.message.includes('certificate')) {
-            errorMessage = '证书验证失败 (名称不匹配或不可信)';
-        } else if (error.message.includes('timed out') || error.message.includes('timeout')) {
-            errorMessage = '连接超时';
-        } else if (error.message.includes('refused')) {
-            errorMessage = '连接被拒绝';
-        } else {
-             errorMessage = error.message;
-        }
-        
-        return { success: false, message: `连接失败: ${errorMessage}` };
-    }
-}
-
-
-/**
- * 新增：处理连接测试的后端函数 (适配最终版)
+ * 新增：处理连接测试的后端函数 (已更新逻辑)
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3655,62 +3594,96 @@ async function handleTestConnection(request) {
         return new Response('Method Not Allowed', { status: 405 });
     }
 
+    const log = (info) => { console.log(`[TestConnection] ${info}`); };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort('连接超时 (秒)'), 5000);
+
     try {
         const { type, address } = await request.json();
         if (!type || !address || address.trim() === '') {
-            return new Response(JSON.stringify({ success: false, message: '请求参数不完整或地址为空' }), { 
-                status: 200, 
-                headers: { 'Content-Type': 'application/json;charset=utf-8' } 
-            });
+            throw new Error('请求参数不完整或地址为空');
         }
-        
-        const log = (info) => { console.log(`[TestConnection] ${info}`); };
-        
-        const controller = new AbortController();
-        // 注意：超时现在由 enhancedTestProxyIP 内部的 fetch 控制，这里的外部超时可以移除或保留作为双重保险。
-        const timeoutId = setTimeout(() => controller.abort('Overall timeout'), 8000);
 
-        try {
-            log(`Testing type: ${type}, address: ${address}`);
-            let result;
+        log(`Testing type: ${type}, address: ${address}`);
+        let successMessage = '连接成功！';
 
-            switch (type) {
-                case 'proxyip':
-                    // ** 使用新的基于 fetch 的测试函数 **
-                    const { address: ip, port } = parseProxyIP(address, 443);
-                    result = await enhancedTestProxyIP(ip, port, log);
-                    break;
-                case 'http':
-                    // HTTP 和 SOCKS5 测试保持原样，因为它们不涉及 resolveOverride
-                    parsedHttpProxyAddress = httpProxyAddressParser(address);
-                    const httpSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal);
-                    if (httpSocket) await httpSocket.close();
-                    result = { success: true, message: '连接成功！' };
-                    break;
-                case 'socks5':
-                    parsedSocks5Address = socks5AddressParser(address);
-                    const socksSocket = await socks5Connect(2, 'www.cloudflare.com', 443, log, controller.signal);
-                    if (socksSocket) await socksSocket.close();
-                    result = { success: true, message: '连接成功！' };
-                    break;
-                default:
-                    throw new Error('不支持的测试类型');
+        switch (type) {
+            case 'http': {
+                // 将解析后的地址赋给全局变量，以便 httpConnect 函数能访问到
+                parsedHttpProxyAddress = httpProxyAddressParser(address);
+                const testSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal);
+                await testSocket.close();
+                break;
             }
-            
-            return new Response(JSON.stringify(result), { 
-                status: 200,
-                headers: { 'Content-Type': 'application/json;charset=utf-8' } 
-            });
+            case 'socks5': {
+                 // 将解析后的地址赋给全局变量，以便 socks5Connect 函数能访问到
+                parsedSocks5Address = socks5AddressParser(address);
+                // 地址类型 2 代表域名
+                const testSocket = await socks5Connect(2, 'www.cloudflare.com', 443, log, controller.signal);
+                await testSocket.close();
+                break;
+            }
+            case 'proxyip': {
+                const { address: ip, port } = parseProxyIP(address, 443);
+                log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
+                const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
+                log(`PROXYIP Test: TCP 连接成功。`);
 
-        } finally {
-            clearTimeout(timeoutId);
+                try {
+                    log(`PROXYIP Test: 步骤 2/2 - 正在发送探针...`);
+                    const writer = testSocket.writable.getWriter();
+                    const workerHostname = new URL(request.url).hostname;
+                    
+                    // 发送一个带有正确 Host 头的 HTTP HEAD 请求作为探针
+                    const httpRequest = `HEAD / HTTP/1.1\r\nHost: ${workerHostname}\r\nConnection: close\r\n\r\n`;
+                    await writer.write(new TextEncoder().encode(httpRequest));
+                    writer.releaseLock();
+                    log(`PROXYIP Test: 已发送 HEAD 请求，Host: ${workerHostname}`);
+
+                    const reader = testSocket.readable.getReader();
+                    const { value, done } = await reader.read();
+                    reader.releaseLock();
+
+                    if (done) {
+                        throw new Error("连接已关闭，未收到任何响应。这可能不是一个有效的反向代理IP。");
+                    }
+
+                    const responseText = new TextDecoder().decode(value);
+                    log(`PROXYIP Test: 收到响应:\n${responseText.split('\r\n')[0]}`);
+
+                    // 检查响应是否来自 Cloudflare。收到 400 错误是正常且预期的，因为它证明了流量被 Cloudflare 正确接收。
+                    if (responseText.toLowerCase().includes('server: cloudflare') || responseText.includes('HTTP/1.1 400 Bad Request')) {
+                        log(`PROXYIP Test: 响应确认来自 Cloudflare。测试通过。`);
+                        successMessage = '探测成功！该IP似乎是一个有效的Cloudflare节点。';
+                    } else {
+                        throw new Error("收到意外响应，这可能不是一个有效的Cloudflare IP。");
+                    }
+                } finally {
+                    // 确保在探测后关闭套接字
+                    await testSocket.close();
+                }
+                break;
+            }
+            default:
+                throw new Error('不支持的测试类型');
         }
-    } catch (err) {
-        console.error(`[TestConnection] Error: ${err.stack || err}`);
-        const errorMessage = err.message.includes('timeout') ? '连接超时' : err.message;
-        return new Response(JSON.stringify({ success: false, message: `连接失败: ${errorMessage}` }), { 
+
+        // 所有测试都通过此通用成功路径返回
+        log(`Test successful for ${type}: ${address}`);
+        return new Response(JSON.stringify({ success: true, message: successMessage }), { 
             status: 200,
             headers: { 'Content-Type': 'application/json;charset=utf-8' } 
         });
+
+    } catch (err) {
+        // 所有错误都通过此通用失败路径返回
+        console.error(`[TestConnection] Error: ${err.stack || err}`);
+        const errorMessage = err.message;
+        return new Response(JSON.stringify({ success: false, message: `连接失败: ${errorMessage}` }), { 
+            status: 200, // 始终返回 200 OK，以便前端能正常解析 JSON 中的错误信息
+            headers: { 'Content-Type': 'application/json;charset=utf-8' } 
+        });
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
