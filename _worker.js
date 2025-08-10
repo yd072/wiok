@@ -469,7 +469,7 @@ async function statusPage() {
     });
 }
 
-async function resolveToIPv6(target) {
+async function resolveToIPv6(target, dnsServer, signal = null) {
     // 检查是否为IPv4
     function isIPv4(str) {
         const parts = str.split('.');
@@ -488,7 +488,8 @@ async function resolveToIPv6(target) {
     async function fetchIPv4(domain) {
         const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
         const response = await fetch(url, {
-            headers: { 'Accept': 'application/dns-json' }
+            headers: { 'Accept': 'application/dns-json' },
+            signal: signal
         });
 
         if (!response.ok) throw new Error('DNS查询失败');
@@ -505,8 +506,9 @@ async function resolveToIPv6(target) {
     // 查询NAT64 IPv6地址
     async function queryNAT64(domain) {
         const socket = connect({
-            hostname: isIPv6(DNS64Server) ? `[${DNS64Server}]` : DNS64Server,
-            port: 53
+            hostname: isIPv6(dnsServer) ? `[${dnsServer}]` : dnsServer,
+            port: 53,
+            signal: signal
         });
 
         const writer = socket.writable.getWriter();
@@ -624,13 +626,13 @@ async function resolveToIPv6(target) {
         const parts = ipv4Address.split('.');
         if (parts.length !== 4) throw new Error('Invalid IPv4 address for NAT64 conversion');
         const hex = parts.map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
-        return DNS64Server.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
+        return dnsServer.split('/96')[0] + hex[0] + hex[1] + ":" + hex[2] + hex[3];
     }
 
     try {
         if (isIPv6(target)) return target;
         const ipv4 = isIPv4(target) ? target : await fetchIPv4(target);
-        const nat64 = DNS64Server.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
+        const nat64 = dnsServer.endsWith('/96') ? convertToNAT64IPv6(ipv4) : await queryNAT64(ipv4 + atob('LmlwLjA5MDIyNy54eXo='));
 
         if (isIPv6(nat64)) {
             return nat64;
@@ -1100,7 +1102,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         connectionStrategies.push({
             name: '用户配置的 NAT64',
             execute: async () => {
-                const nat64Address = await resolveToIPv6(addressRemote);
+                const nat64Address = await resolveToIPv6(addressRemote, DNS64Server);
                 return createConnection(`[${nat64Address}]`, 443);
             }
         });
@@ -1121,7 +1123,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             if (!DNS64Server || DNS64Server.trim() === '') {
                 DNS64Server = atob("ZG5zNjQuY21pLnp0dmkub3Jn");
             }
-            const nat64Address = await resolveToIPv6(addressRemote);
+            const nat64Address = await resolveToIPv6(addressRemote, DNS64Server);
             return createConnection(`[${nat64Address}]`, 443);
         }
     });
@@ -3213,7 +3215,7 @@ async function handleGetRequest(env) {
                             </div>
                             <div class="setting-content">
                                 <p>每行一个IP，格式：IP:端口(可不添加端口)</p>
-                                <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E4MApwcml2YXRlLmV4YW1wbGUuY29tJTNBMjA1Mg=='))}">${proxyIPContent}</textarea>
+                                <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E0NDMKcHJpdmFlLmV4YW1wbGUuY29tJTNBMjA1Mg=='))}">${proxyIPContent}</textarea>
                             </div>
                             <div class="setting-item-footer">
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'proxyip')">测试连接</button>
@@ -3253,7 +3255,7 @@ async function handleGetRequest(env) {
                                 <p class="test-note">（仅测试列表中的第一个地址）</p>
                             </div>
                         </div>
-
+                        
                         <!-- SUB设置 -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
@@ -3298,13 +3300,18 @@ async function handleGetRequest(env) {
                                 </p>
                                 <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
                             </div>
+                            <div class="setting-item-footer">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'nat64')">测试连接</button>
+                                <span id="nat64-status" class="test-status"></span>
+                                <p class="test-note">（仅测试列表中的第一个地址）</p>
+                            </div>
                         </div>
 						<script>
   							const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
   							const decodedURL = atob(encodedURL);
   							document.getElementById('nat64-link').setAttribute('href', decodedURL);
 						</script>
-						
+                                                						
 						<!-- HTTPS Ports Setting -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
@@ -3340,7 +3347,7 @@ async function handleGetRequest(env) {
 
                         <!-- 统一的保存按钮 -->
                         <div style="margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+                            <button class="btn btn-primary" onclick="saveSettings()">保存高级设置</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
@@ -3362,7 +3369,7 @@ async function handleGetRequest(env) {
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存优选列表</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                         <div class="divider"></div>
@@ -3593,7 +3600,7 @@ async function handleGetRequest(env) {
 }
 
 /**
- * 新增：处理连接测试的后端函数 (使用 HTTP 路由探针)
+ * 新增：处理连接测试的后端函数 (最终优化版)
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3629,8 +3636,7 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'proxyip': {
-                // 对于 PROXYIP，我们默认测试其作为 HTTP 反向代理的能力，所以使用 80 端口
-                const { address: ip, port } = parseProxyIP(address, 443);
+                const { address: ip, port } = parseProxyIP(address, 443); // 使用443作为默认和测试端口
                 log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
                 log(`PROXYIP Test: TCP 连接成功。`);
@@ -3640,30 +3646,22 @@ async function handleTestConnection(request) {
                     const writer = testSocket.writable.getWriter();
                     const workerHostname = new URL(request.url).hostname;
                     
-                    // 构造一个简单的 HTTP GET 请求作为探针
                     const httpProbeRequest = [
                         `GET / HTTP/1.1`,
                         `Host: ${workerHostname}`,
                         'User-Agent: Cloudflare-Connectivity-Test',
-                        'Connection: close', // 确保服务器在响应后关闭连接
+                        'Connection: close',
                         '\r\n'
                     ].join('\r\n');
 
                     await writer.write(new TextEncoder().encode(httpProbeRequest));
-                    writer.releaseLock();
                     log(`PROXYIP Test: 已发送 GET 请求, Host: ${workerHostname}`);
 
                     const reader = testSocket.readable.getReader();
-                    const { value, done } = await reader.read();
-                    
-                    if (done) {
-                        throw new Error("连接已关闭，未收到任何响应。");
-                    }
-
+                    const { value } = await reader.read();
                     const responseText = new TextDecoder().decode(value);
                     log(`PROXYIP Test: 收到响应:\n${responseText.substring(0, 200)}...`);
 
-                    // 成功的关键标志：响应头中包含 "Server: cloudflare"
                     if (responseText.toLowerCase().includes('server: cloudflare')) {
                         log(`PROXYIP Test: 响应头包含 "Server: cloudflare"。测试通过。`);
                         successMessage = '探测成功！该IP是有效的Cloudflare节点。';
@@ -3671,14 +3669,49 @@ async function handleTestConnection(request) {
                         throw new Error("收到的响应并非来自Cloudflare，该IP可能无效。");
                     }
                     
-                    // 确保最终关闭 socket
                     await testSocket.close();
-                    reader.releaseLock();
-
                 } catch(err) {
-                    // 确保在内部块出错时也能关闭socket
                     if (testSocket) await testSocket.close();
-                    throw err; // 将错误重新抛出到外部catch块
+                    throw err;
+                }
+                break;
+            }
+            case 'nat64': {
+                log(`NAT64 Test: 步骤 1/3 - 正在通过 ${address} 解析IPv4域名...`);
+                // 使用一个只有A记录的域名进行测试
+                const resolvedIp = await resolveToIPv6('ipv4.google.com', address, controller.signal);
+                log(`NAT64 Test: DNS64 解析成功, 获得合成IPv6地址: ${resolvedIp}`);
+
+                log(`NAT64 Test: 步骤 2/3 - 正在连接到合成地址的443端口...`);
+                const testSocket = await connect({ hostname: resolvedIp, port: 443, signal: controller.signal });
+                log(`NAT64 Test: TCP 连接成功。`);
+
+                try {
+                    log(`NAT64 Test: 步骤 3/3 - 正在发送 HTTP 探针...`);
+                    const writer = testSocket.writable.getWriter();
+                    const httpProbeRequest = [
+                        `GET / HTTP/1.1`,
+                        `Host: www.cloudflare.com`, // 测试到公网的连通性
+                        'User-Agent: Cloudflare-Connectivity-Test',
+                        'Connection: close',
+                        '\r\n'
+                    ].join('\r\n');
+                    
+                    await writer.write(new TextEncoder().encode(httpProbeRequest));
+                    const reader = testSocket.readable.getReader();
+                    const { value } = await reader.read();
+                    const responseText = new TextDecoder().decode(value);
+
+                    if (responseText.toLowerCase().includes('server: cloudflare')) {
+                        log(`NAT64 Test: 收到Cloudflare的响应。测试通过。`);
+                        successMessage = '探测成功！NAT64服务工作正常。';
+                    } else {
+                        throw new Error('NAT64通道似乎已连通，但无法访问公网服务。');
+                    }
+                    await testSocket.close();
+                } catch(err) {
+                    if (testSocket) await testSocket.close();
+                    throw err;
                 }
                 break;
             }
