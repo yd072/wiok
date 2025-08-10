@@ -675,6 +675,20 @@ async function testNAT64(serverAddress, signal) {
     }
 }
 
+// 新增：专门用于测试连接的DoH查询函数
+async function fetchIPv4ViaDoH(domain, signal) {
+    const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
+    const response = await fetch(url, {
+        headers: { 'Accept': 'application/dns-json' },
+        signal: signal
+    });
+    if (!response.ok) throw new Error('DoH查询失败');
+    const data = await response.json();
+    const ipv4s = (data.Answer || []).filter(record => record.type === 1).map(record => record.data);
+    if (ipv4s.length === 0) throw new Error(`未找到 ${domain} 的IPv4地址`);
+    return ipv4s[0];
+}
+
 
 export default {
 	async fetch(request, env, ctx) {
@@ -3708,27 +3722,39 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'nat64': {
+                let synthesizedIPv6;
+                const probeDomain = 'ipv4.google.com';
+
                 if (address.endsWith('/96')) {
-                    // 这是 NAT64 前缀，执行本地格式验证
-                    log(`NAT64 Test: 检测到 /96 前缀, 执行格式验证。`);
+                    // 1. 获取真实 IPv4
+                    log(`NAT64 Test (Prefix): 步骤 1/3 - 正在获取 '${probeDomain}' 的 IPv4 地址...`);
+                    const ipv4 = await fetchIPv4ViaDoH(probeDomain, controller.signal);
+                    log(`NAT64 Test (Prefix): 成功获取 IPv4: ${ipv4}`);
+
+                    // 2. 本地合成 IPv6
+                    log(`NAT64 Test (Prefix): 步骤 2/3 - 正在使用前缀 ${address} 合成 IPv6...`);
                     const prefix = address.split('/96')[0];
-                    const ipv4ToTest = '8.8.8.8'; // 一个示例 IPv4
-                    const hex = ipv4ToTest.split('.').map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
-                    const synthesizedIPv6 = prefix + hex[0] + hex[1] + ":" + hex[2] + hex[3];
-                    
-                    if (isIPv6(synthesizedIPv6)) {
-                        log(`NAT64 Test: 前缀格式正确，合成地址: ${synthesizedIPv6}`);
-                        successMessage = '前缀格式有效！';
-                    } else {
-                        throw new Error(`无法从该前缀合成有效的 IPv6 地址 (结果: ${synthesizedIPv6})`);
+                    const hex = ipv4.split('.').map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
+                    synthesizedIPv6 = prefix + hex[0] + hex[1] + ":" + hex[2] + hex[3];
+                    if (!isIPv6(synthesizedIPv6)) {
+                         throw new Error(`无法从该前缀合成有效的 IPv6 地址 (结果: ${synthesizedIPv6})`);
                     }
+                    log(`NAT64 Test (Prefix): 成功合成 IPv6: ${synthesizedIPv6}`);
+
                 } else {
-                    // 这是 DNS64 服务器地址，执行严格的在线解析测试
-                    log(`NAT64 Test: 检测到服务器地址, 执行在线解析测试。`);
-                    const resolvedIPv6 = await testNAT64(address, controller.signal);
-                    log(`NAT64 Test: 成功解析到 IPv6 地址: ${resolvedIPv6}`);
-                    successMessage = '探测成功！该服务器能正确解析IPv4-only地址。';
+                    // 1&2. 通过 DNS64 服务器直接解析
+                    log(`NAT64 Test (Server): 步骤 1-2/3 - 正在使用服务器 ${address} 解析 '${probeDomain}'...`);
+                    synthesizedIPv6 = await testNAT64(address, controller.signal);
+                    log(`NAT64 Test (Server): 成功解析到 IPv6: ${synthesizedIPv6}`);
                 }
+                
+                // 3. 验证合成的 IPv6 地址的连通性
+                log(`NAT64 Test (Final): 步骤 3/3 - 正在测试合成地址 ${synthesizedIPv6} 的连通性...`);
+                const testSocket = await connect({ hostname: synthesizedIPv6, port: 443, signal: controller.signal });
+                await testSocket.close();
+                log(`NAT64 Test (Final): 连通性测试成功！`);
+
+                successMessage = '探测成功！该NAT64服务有效且可达。';
                 break;
             }
             default:
