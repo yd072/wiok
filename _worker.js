@@ -3354,7 +3354,7 @@ async function handleGetRequest(env) {
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存优选列表</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                         <div class="divider"></div>
@@ -3586,7 +3586,67 @@ async function handleGetRequest(env) {
 
 
 /**
- * 新增：处理连接测试的后端函数
+ * 新增: PROXYIP 智能测试函数 (最终可靠版)
+ * 利用 fetch 的 resolveOverride 功能进行测试
+ * @param {string} address - The IP address to test.
+ * @param {number} port - The port to test.
+ * @param {(string) => void} log - Logger function.
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+async function enhancedTestProxyIP(address, port, log) {
+    const testHostname = 'www.cloudflare.com';
+    const urlToFetch = `https://${testHostname}/`;
+    
+    // 使用 AbortController 实现超时控制
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort('Fetch timeout'), 6000); // 6秒超时
+
+    try {
+        log(`[Fetch Test] Testing ${address}:${port} by fetching ${urlToFetch}`);
+
+        const response = await fetch(urlToFetch, {
+            method: 'HEAD', // 使用 HEAD 请求，我们只关心连接和头部，不需要下载内容
+            signal: controller.signal,
+            redirect: 'manual',
+            cf: {
+                // 这是最关键的部分
+                resolveOverride: `${address}:${port}`,
+            },
+        });
+
+        clearTimeout(timeoutId);
+        log(`[Fetch Test] Received status: ${response.status}`);
+
+        // 如果能走到这里，说明 TCP 连接和 TLS 握手都成功了。
+        // 一个好的 PROXYIP 应该能成功获取到目标网站的响应。
+        if (response.status >= 200 && response.status < 400) {
+            return { success: true, message: '连接成功 (TLS已验证)' };
+        } else {
+            return { success: false, message: `连接成功但目标网站返回错误: ${response.status}` };
+        }
+
+    } catch (error) {
+        clearTimeout(timeoutId);
+        log(`[Fetch Test] Fetch failed: ${error.toString()}`);
+        
+        let errorMessage = '连接失败';
+        if (error.message.includes('certificate')) {
+            errorMessage = '证书验证失败 (名称不匹配或不可信)';
+        } else if (error.message.includes('timed out') || error.message.includes('timeout')) {
+            errorMessage = '连接超时';
+        } else if (error.message.includes('refused')) {
+            errorMessage = '连接被拒绝';
+        } else {
+             errorMessage = error.message;
+        }
+        
+        return { success: false, message: `连接失败: ${errorMessage}` };
+    }
+}
+
+
+/**
+ * 新增：处理连接测试的后端函数 (适配最终版)
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3607,7 +3667,8 @@ async function handleTestConnection(request) {
         const log = (info) => { console.log(`[TestConnection] ${info}`); };
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 8000); // 8秒超时
+        // 注意：超时现在由 enhancedTestProxyIP 内部的 fetch 控制，这里的外部超时可以移除或保留作为双重保险。
+        const timeoutId = setTimeout(() => controller.abort('Overall timeout'), 8000);
 
         try {
             log(`Testing type: ${type}, address: ${address}`);
@@ -3615,11 +3676,12 @@ async function handleTestConnection(request) {
 
             switch (type) {
                 case 'proxyip':
-                    // ** 使用新的智能测试函数 **
+                    // ** 使用新的基于 fetch 的测试函数 **
                     const { address: ip, port } = parseProxyIP(address, 443);
                     result = await enhancedTestProxyIP(ip, port, log);
                     break;
                 case 'http':
+                    // HTTP 和 SOCKS5 测试保持原样，因为它们不涉及 resolveOverride
                     parsedHttpProxyAddress = httpProxyAddressParser(address);
                     const httpSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal);
                     if (httpSocket) await httpSocket.close();
@@ -3651,293 +3713,4 @@ async function handleTestConnection(request) {
             headers: { 'Content-Type': 'application/json;charset=utf-8' } 
         });
     }
-}
-
-/**
- * 新增: PROXYIP 智能测试函数
- * @param {string} address - The IP address to test.
- * @param {number} port - The port to test.
- * @param {(string) => void} log - Logger function.
- * @returns {Promise<{success: boolean, message: string}>}
- */
-async function enhancedTestProxyIP(address, port, log) {
-    let tcpSocket;
-    const testHostname = 'www.cloudflare.com';
-
-    try {
-        // --- 1. TCP 连接 ---
-        log(`[Enhanced] 1. Attempting TCP connection to ${address}:${port}`);
-        tcpSocket = await connect({ hostname: address, port: port });
-        log(`[Enhanced] 1. TCP connection successful.`);
-
-        // --- 2. TLS 握手 ---
-        log(`[Enhanced] 2. Performing TLS handshake with SNI: ${testHostname}`);
-        
-        const clientHello = createClientHello(testHostname);
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(clientHello);
-        writer.releaseLock();
-        log(`[Enhanced] 2. ClientHello sent.`);
-
-        // --- 3. 读取和解析响应 (改进的循环读取) ---
-        log(`[Enhanced] 3. Reading TLS response...`);
-        const reader = tcpSocket.readable.getReader();
-        
-        let fullResponseBuffer = new Uint8Array(0);
-        const startTime = Date.now();
-        
-        // 设置一个总的读取超时
-        const readTimeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("读取TLS响应超时")), 5000)
-        );
-
-        while (Date.now() - startTime < 4000) { // 最多读取4秒
-             const { value, done } = await Promise.race([reader.read(), readTimeoutPromise]);
-             if (done) {
-                 break;
-             }
-             const newBuffer = new Uint8Array(fullResponseBuffer.length + value.length);
-             newBuffer.set(fullResponseBuffer);
-             newBuffer.set(value, fullResponseBuffer.length);
-             fullResponseBuffer = newBuffer;
-
-             // 尝试尽早解析，如果成功就可以提前退出循环
-             const earlyResult = robustVerifyServerCertificate(fullResponseBuffer, testHostname, log);
-             if (earlyResult.success || (earlyResult.success === false && !earlyResult.message.includes('不完整'))) {
-                 log(`[Enhanced] Early parsing successful. Exiting read loop.`);
-                 reader.releaseLock();
-                 return earlyResult;
-             }
-        }
-        
-        reader.releaseLock();
-        log(`[Enhanced] 3. Received total ${fullResponseBuffer.byteLength} bytes. Final parsing...`);
-        
-        if (fullResponseBuffer.length === 0) {
-            throw new Error("对方未返回任何数据");
-        }
-
-        const verificationResult = robustVerifyServerCertificate(fullResponseBuffer, testHostname, log);
-
-        // --- 4. 返回结果 ---
-        return verificationResult;
-
-    } catch (error) {
-        log(`[Enhanced] Test failed: ${error.message}`);
-        return { success: false, message: `连接失败: ${error.message}` };
-    } finally {
-        if (tcpSocket) {
-            await tcpSocket.close();
-            log(`[Enhanced] Socket closed.`);
-        }
-    }
-}
-
-function createClientHello(hostname) {
-    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
-    const sessionId = crypto.getRandomValues(new Uint8Array(32));
-
-    const encoder = new TextEncoder();
-    const hostnameBytes = encoder.encode(hostname);
-
-    // Extension: server_name
-    const sniExtension = new Uint8Array([
-        0x00, 0x00, // Extension Type: server_name (0)
-        (hostnameBytes.length + 5) >> 8, (hostnameBytes.length + 5) & 0xff, // Extension Length
-        (hostnameBytes.length + 3) >> 8, (hostnameBytes.length + 3) & 0xff, // Server Name List Length
-        0x00, // Name Type: host_name (0)
-        hostnameBytes.length >> 8, hostnameBytes.length & 0xff, // Host Name Length
-        ...hostnameBytes
-    ]);
-
-    // 其他常用扩展，模拟真实浏览器
-    const supportedGroups = new Uint8Array([0x00, 0x0a, 0x00, 0x1d, 0x00, 0x17, 0x00, 0x18, 0x00, 0x19]); // x25519, secp256r1, secp384r1, secp521r1
-    const ecPointFormats = new Uint8Array([0x00, 0x02, 0x01, 0x00]); // uncompressed
-    const signatureAlgorithms = new Uint8Array([0x00, 0x12, 0x04, 0x03, 0x08, 0x04, 0x04, 0x01, 0x05, 0x03, 0x08, 0x05, 0x05, 0x01, 0x08, 0x06, 0x06, 0x01]);
-
-    const extensions = [
-        sniExtension,
-        new Uint8Array([0x00, 0x0a, supportedGroups.length >> 8, supportedGroups.length & 0xff, ...supportedGroups]), // supported_groups
-        new Uint8Array([0x00, 0x0b, ecPointFormats.length >> 8, ecPointFormats.length & 0xff, ...ecPointFormats]), // ec_point_formats
-        new Uint8Array([0x00, 0x0d, signatureAlgorithms.length >> 8, signatureAlgorithms.length & 0xff, ...signatureAlgorithms]), // signature_algorithms
-    ];
-    
-    let totalExtensionsLength = extensions.reduce((acc, ext) => acc + ext.length, 0);
-    
-    const clientHelloPayload = new Uint8Array([
-        0x03, 0x03, // TLS 1.2
-        ...randomBytes,
-        sessionId.length, ...sessionId,
-        0x00, 0x02, 0x13, 0x01, // Cipher Suite: TLS_AES_128_GCM_SHA256
-        0x01, 0x00, // Compression Method: null
-        totalExtensionsLength >> 8, totalExtensionsLength & 0xff,
-        ...extensions.flatMap(ext => [...ext])
-    ]);
-
-    const handshakeHeader = new Uint8Array([
-        0x01, // Handshake Type: Client Hello
-        (clientHelloPayload.length >> 16) & 0xff,
-        (clientHelloPayload.length >> 8) & 0xff,
-        clientHelloPayload.length & 0xff
-    ]);
-
-    const recordHeader = new Uint8Array([
-        0x16, // Content Type: Handshake
-        0x03, 0x01, // Version: TLS 1.0 (for compatibility)
-        (handshakeHeader.length + clientHelloPayload.length) >> 8,
-        (handshakeHeader.length + clientHelloPayload.length) & 0xff
-    ]);
-    
-    const finalBuffer = new Uint8Array(recordHeader.length + handshakeHeader.length + clientHelloPayload.length);
-    finalBuffer.set(recordHeader, 0);
-    finalBuffer.set(handshakeHeader, recordHeader.length);
-    finalBuffer.set(clientHelloPayload, recordHeader.length + handshakeHeader.length);
-
-    return finalBuffer;
-}
-
-
-/**
- * 一个更健壮的、不依赖完整库的证书解析器。
- * 它通过查找特定的二进制模式 (OID) 来提取域名。
- * @param {Uint8Array} buffer - The full TLS response buffer.
- * @param {string} expectedHostname
- * @param {(string) => void} log
- * @returns {{success: boolean, message: string}}
- */
-function robustVerifyServerCertificate(buffer, expectedHostname, log) {
-    try {
-        let offset = 0;
-        while (offset < buffer.length) {
-            if (buffer[offset] !== 0x16) { // Handshake Record Type
-                offset++;
-                continue;
-            }
-
-            if (offset + 5 > buffer.length) {
-                return { success: false, message: "解析TLS失败 (记录头不完整)" };
-            }
-
-            const recordLength = (buffer[offset + 3] << 8) | buffer[offset + 4];
-            const recordEnd = offset + 5 + recordLength;
-
-            if (recordEnd > buffer.length) {
-                return { success: false, message: "解析TLS失败 (记录体不完整)" };
-            }
-
-            let handshakeOffset = offset + 5;
-            while (handshakeOffset < recordEnd) {
-                const handshakeType = buffer[handshakeOffset];
-                if (handshakeOffset + 4 > buffer.length) break;
-
-                const handshakeLength = (buffer[handshakeOffset + 1] << 16) | (buffer[handshakeOffset + 2] << 8) | buffer[handshakeOffset + 3];
-
-                if (handshakeType === 2) { // ServerHello
-                    // 这是理想情况，说明服务器响应了握手。
-                    // 我们可以认为连接是通的，但需要继续寻找证书。
-                    log('[Verify] Found ServerHello message. Continuing to search for Certificate.');
-                }
-
-                if (handshakeType === 11) { // Certificate Message
-                    log('[Verify] Found Certificate message.');
-                    
-                    if (handshakeOffset + 4 + handshakeLength > buffer.length) {
-                         return { success: false, message: "解析TLS失败 (证书消息不完整)" };
-                    }
-
-                    const certData = buffer.slice(handshakeOffset, handshakeOffset + 4 + handshakeLength);
-                    
-                    // --- 开始在证书二进制数据中搜索域名 ---
-                    const foundDomains = findDomainsInCertificate(certData);
-                    log(`[Verify] Domains found in certificate: ${foundDomains.join(', ')}`);
-
-                    if (foundDomains.length === 0) {
-                        return { success: false, message: "证书中未找到任何域名" };
-                    }
-                    
-                    // 检查找到的域名是否与期望的域名匹配
-                    const wildcardHostname = `.${expectedHostname.split('.').slice(1).join('.')}`; // e.g., .cloudflare.com
-                    for (const domain of foundDomains) {
-                        if (domain === expectedHostname || domain === `*.${expectedHostname}` || domain === wildcardHostname) {
-                            return { success: true, message: '连接成功 (TLS已验证)' };
-                        }
-                    }
-                    
-                    // 如果没有匹配的，则报告名称不匹配
-                    return { success: false, message: `证书名称不匹配 (收到 ${foundDomains[0]} 证书)` };
-                }
-                
-                handshakeOffset += 4 + handshakeLength;
-            }
-            offset = recordEnd;
-        }
-
-        // 如果循环结束都没有找到证书，或者只找到了 ServerHello
-        if (buffer.length > 0) {
-            return { success: true, message: '连接成功 (TLS已验证)' };
-        }
-
-        return { success: false, message: '对方未返回有效的TLS证书' };
-
-    } catch (e) {
-        log(`[Verify] Error during parsing: ${e.message}`);
-        return { success: false, message: `解析TLS时出错: ${e.message}` };
-    }
-}
-
-/**
- * 在证书的二进制数据中搜索域名。
- * @param {Uint8Array} certData - The binary data of the certificate message.
- * @returns {string[]} An array of found domain names.
- */
-function findDomainsInCertificate(data) {
-    const domains = new Set();
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    
-    // OID for Common Name: 2.5.4.3 (represented as 06 03 55 04 03)
-    const cnOid = new Uint8Array([0x06, 0x03, 0x55, 0x04, 0x03]);
-    // OID for Subject Alternative Name extension: 2.5.29.17
-    const sanOid = new Uint8Array([0x06, 0x03, 0x55, 0x1D, 0x11]);
-
-    function bytesToString(bytes) {
-        try {
-            return decoder.decode(bytes);
-        } catch {
-            return '';
-        }
-    }
-
-    for (let i = 0; i < data.length - 5; i++) {
-        // Find Common Name
-        if (data.subarray(i, i + cnOid.length).every((val, index) => val === cnOid[index])) {
-            const lengthOffset = i + cnOid.length + 1;
-            if (lengthOffset < data.length) {
-                const len = data[lengthOffset];
-                if (i + cnOid.length + 2 + len <= data.length) {
-                    const domainBytes = data.subarray(i + cnOid.length + 2, i + cnOid.length + 2 + len);
-                    const domain = bytesToString(domainBytes);
-                    if (domain && domain.includes('.')) domains.add(domain);
-                }
-            }
-        }
-        
-        // Find Subject Alternative Names (more complex)
-        if (data.subarray(i, i + sanOid.length).every((val, index) => val === sanOid[index])) {
-             // This part is complex to parse without a full library. 
-             // We can do a simple string search in the vicinity as a heuristic.
-             const searchArea = data.subarray(i, Math.min(i + 512, data.length));
-             const text = bytesToString(searchArea);
-             const found = text.match(/([a-zA-Z0-9\-\_\*]+\.)+[a-zA-Z]{2,}/g);
-             if (found) {
-                 found.forEach(d => {
-                     // Basic filtering
-                     if (d.length > 3 && d.includes('.')) {
-                         domains.add(d.replace(/^\*/, ''));
-                     }
-                 });
-             }
-        }
-    }
-
-    return Array.from(domains);
 }
