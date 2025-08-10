@@ -3345,7 +3345,7 @@ async function handleGetRequest(env) {
 
                         <!-- 统一的保存按钮 -->
                         <div style="margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="saveSettings()">保存高级设置</button>
+                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
@@ -3367,7 +3367,7 @@ async function handleGetRequest(env) {
                             id="content">${content}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存优选列表</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                         <div class="divider"></div>
