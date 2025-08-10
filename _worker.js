@@ -3675,7 +3675,7 @@ async function handleTestConnection(request) {
                     // 成功的关键标志：响应头中包含 "Server: cloudflare"
                     if (responseText.toLowerCase().includes('server: cloudflare')) {
                         log(`PROXYIP Test: 响应头包含 "Server: cloudflare"。测试通过。`);
-                        successMessage = '探测成功';
+                        successMessage = '连接成功';
                     } else {
                         throw new Error("该IP可能无效。");
                     }
