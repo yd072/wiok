@@ -3689,10 +3689,15 @@ async function handleTestConnection(request) {
             case 'nat64': {
                 // 临机设置服务器地址进行测试
                 DNS64Server = address;
-                log(`NAT64 Test: 正在使用服务器 ${address} 解析 www.cloudflare.com...`);
+                log(`NAT64 Test: 步骤 1/2 - 正在使用服务器 ${address} 解析 www.cloudflare.com...`);
                 const ipv6Address = await resolveToIPv6('www.cloudflare.com');
                 log(`NAT64 Test: 解析成功，获得地址: ${ipv6Address}`);
-                successMessage = `解析成功: ${ipv6Address}`;
+                
+                log(`NAT64 Test: 步骤 2/2 - 正在尝试连接到 [${ipv6Address}]:443...`);
+                const testSocket = await connect({ hostname: ipv6Address, port: 443, signal: controller.signal });
+                log(`NAT64 Test: TCP 连接成功。`);
+                await testSocket.close(); // 成功后立即关闭
+                successMessage = `连接成功 (解析地址: ${ipv6Address})`;
                 break;
             }
             default:
