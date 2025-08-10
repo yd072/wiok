@@ -233,6 +233,7 @@ function parseProxyIP(proxyString, defaultPort) {
         }
     }
 
+
     if (address.includes('.tp')) {
         port = address.split('.tp')[1].split('.')[0] || port;
     }
@@ -468,102 +469,21 @@ async function statusPage() {
     });
 }
 
-// --- NAT64/DNS64 辅助函数 ---
-// 检查是否为IPv4
-function isIPv4(str) {
-    const parts = str.split('.');
-    return parts.length === 4 && parts.every(part => {
-        const num = parseInt(part, 10);
-        return num >= 0 && num <= 255 && part === num.toString();
-    });
-}
-// 检查是否为IPv6
-function isIPv6(str) {
-    return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
-}
-// 构建DNS查询包
-function buildDNSQuery(domain) {
-    const buffer = new ArrayBuffer(512);
-    const view = new DataView(buffer);
-    let offset = 0;
-    view.setUint16(offset, Math.floor(Math.random() * 65536)); offset += 2;
-    view.setUint16(offset, 0x0100); offset += 2;
-    view.setUint16(offset, 1); offset += 2;
-    view.setUint16(offset, 0); offset += 6;
-    // 域名编码
-    for (const label of domain.split('.')) {
-        view.setUint8(offset++, label.length);
-        for (let i = 0; i < label.length; i++) {
-            view.setUint8(offset++, label.charCodeAt(i));
-        }
-    }
-    view.setUint8(offset++, 0);
-    // 查询类型和类
-    view.setUint16(offset, 28); offset += 2; // AAAA记录
-    view.setUint16(offset, 1); offset += 2; // IN类
-    return new Uint8Array(buffer, 0, offset);
-}
-// 读取DNS响应
-async function readDNSResponse(reader) {
-    const chunks = [];
-    let totalLength = 0;
-    let expectedLength = null;
-    while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        totalLength += value.length;
-        if (expectedLength === null && totalLength >= 2) {
-            expectedLength = (chunks[0][0] << 8) | chunks[0][1];
-        }
-        if (expectedLength !== null && totalLength >= expectedLength + 2) {
-            break;
-        }
-    }
-    const fullResponse = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-        fullResponse.set(chunk, offset);
-        offset += chunk.length;
-    }
-    return fullResponse.slice(2);
-}
-// 解析IPv6地址
-function parseIPv6(response) {
-    const view = new DataView(response.buffer);
-    let offset = 12;
-    while (view.getUint8(offset) !== 0) {
-        offset += view.getUint8(offset) + 1;
-    }
-    offset += 5;
-    const answers = [];
-    const answerCount = view.getUint16(6);
-    for (let i = 0; i < answerCount; i++) {
-        if ((view.getUint8(offset) & 0xC0) === 0xC0) {
-            offset += 2;
-        } else {
-            while (view.getUint8(offset) !== 0) {
-                offset += view.getUint8(offset) + 1;
-            }
-            offset++;
-        }
-        const type = view.getUint16(offset); offset += 2;
-        offset += 6;
-        const dataLength = view.getUint16(offset); offset += 2;
-        if (type === 28 && dataLength === 16) {
-            const parts = [];
-            for (let j = 0; j < 8; j++) {
-                parts.push(view.getUint16(offset + j * 2).toString(16));
-            }
-            answers.push(parts.join(':'));
-        }
-        offset += dataLength;
-    }
-    return answers;
-}
-
-// 主 NAT64 解析函数
 async function resolveToIPv6(target) {
+    // 检查是否为IPv4
+    function isIPv4(str) {
+        const parts = str.split('.');
+        return parts.length === 4 && parts.every(part => {
+            const num = parseInt(part, 10);
+            return num >= 0 && num <= 255 && part === num.toString();
+        });
+    }
+
+    // 检查是否为IPv6
+    function isIPv6(str) {
+        return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
+    }
+
     // 获取域名的IPv4地址
     async function fetchIPv4(domain) {
         const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
@@ -615,6 +535,91 @@ async function resolveToIPv6(target) {
             await reader.cancel();
         }
     }
+
+    // 构建DNS查询包
+    function buildDNSQuery(domain) {
+        const buffer = new ArrayBuffer(512);
+        const view = new DataView(buffer);
+        let offset = 0;
+        view.setUint16(offset, Math.floor(Math.random() * 65536)); offset += 2;
+        view.setUint16(offset, 0x0100); offset += 2;
+        view.setUint16(offset, 1); offset += 2;
+        view.setUint16(offset, 0); offset += 6;
+		 // 域名编码
+        for (const label of domain.split('.')) {
+            view.setUint8(offset++, label.length);
+            for (let i = 0; i < label.length; i++) {
+                view.setUint8(offset++, label.charCodeAt(i));
+            }
+        }
+        view.setUint8(offset++, 0);
+		// 查询类型和类
+        view.setUint16(offset, 28); offset += 2; // AAAA记录
+        view.setUint16(offset, 1); offset += 2; // IN类
+
+        return new Uint8Array(buffer, 0, offset);
+    }
+
+    // 读取DNS响应
+    async function readDNSResponse(reader) {
+        const chunks = [];
+        let totalLength = 0;
+        let expectedLength = null;
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            totalLength += value.length;
+            if (expectedLength === null && totalLength >= 2) {
+                expectedLength = (chunks[0][0] << 8) | chunks[0][1];
+            }
+            if (expectedLength !== null && totalLength >= expectedLength + 2) {
+                break;
+            }
+        }
+        const fullResponse = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+            fullResponse.set(chunk, offset);
+            offset += chunk.length;
+        }
+        return fullResponse.slice(2);
+    }
+
+    // 解析IPv6地址
+    function parseIPv6(response) {
+        const view = new DataView(response.buffer);
+        let offset = 12;
+        while (view.getUint8(offset) !== 0) {
+            offset += view.getUint8(offset) + 1;
+        }
+        offset += 5;
+        const answers = [];
+        const answerCount = view.getUint16(6);
+        for (let i = 0; i < answerCount; i++) {
+            if ((view.getUint8(offset) & 0xC0) === 0xC0) {
+                offset += 2;
+            } else {
+                while (view.getUint8(offset) !== 0) {
+                    offset += view.getUint8(offset) + 1;
+                }
+                offset++;
+            }
+            const type = view.getUint16(offset); offset += 2;
+            offset += 6;
+            const dataLength = view.getUint16(offset); offset += 2;
+            if (type === 28 && dataLength === 16) {
+                const parts = [];
+                for (let j = 0; j < 8; j++) {
+                    parts.push(view.getUint16(offset + j * 2).toString(16));
+                }
+                answers.push(parts.join(':'));
+            }
+            offset += dataLength;
+        }
+        return answers;
+    }
+
     function convertToNAT64IPv6(ipv4Address) {
         const parts = ipv4Address.split('.');
         if (parts.length !== 4) throw new Error('Invalid IPv4 address for NAT64 conversion');
@@ -636,59 +641,6 @@ async function resolveToIPv6(target) {
         throw new Error(`NAT64 resolution failed: ${error.message}`);
 	}
 }
-
-// 新增：专门用于测试 NAT64 服务器的严格函数
-async function testNAT64(serverAddress, signal) {
-    const targetDomain = 'ipv4.google.com';
-
-    // 检查地址是否为 IPv6，这对于 connect() 很重要
-    const isServerIPv6 = isIPv6(serverAddress);
-
-    const socket = await connect({
-        hostname: isServerIPv6 ? `[${serverAddress}]` : serverAddress,
-        port: 53,
-        signal,
-    });
-
-    const writer = socket.writable.getWriter();
-    const reader = socket.readable.getReader();
-
-    try {
-        const query = buildDNSQuery(targetDomain);
-        const queryWithLength = new Uint8Array(query.length + 2);
-        queryWithLength[0] = query.length >> 8;
-        queryWithLength[1] = query.length & 0xFF;
-        queryWithLength.set(query, 2);
-        await writer.write(queryWithLength);
-
-        const response = await readDNSResponse(reader);
-        const ipv6s = parseIPv6(response);
-
-        if (ipv6s.length > 0 && isIPv6(ipv6s[0])) {
-            return ipv6s[0]; // 成功，返回解析到的IPv6地址
-        } else {
-            throw new Error('DNS响应中未找到有效的IPv6地址');
-        }
-    } finally {
-        await writer.close();
-        await reader.cancel();
-    }
-}
-
-// 新增：专门用于测试连接的DoH查询函数
-async function fetchIPv4ViaDoH(domain, signal) {
-    const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
-    const response = await fetch(url, {
-        headers: { 'Accept': 'application/dns-json' },
-        signal: signal
-    });
-    if (!response.ok) throw new Error('DoH查询失败');
-    const data = await response.json();
-    const ipv4s = (data.Answer || []).filter(record => record.type === 1).map(record => record.data);
-    if (ipv4s.length === 0) throw new Error(`未找到 ${domain} 的IPv4地址`);
-    return ipv4s[0];
-}
-
 
 export default {
 	async fetch(request, env, ctx) {
@@ -3345,13 +3297,17 @@ async function handleGetRequest(env) {
                                     <a id="nat64-link" target="_blank">自行查询</a>
                                 </p>
                                 <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
-                             </div>
-                             <div class="setting-item-footer">
+                            </div>
+                            <div class="setting-item-footer">
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'nat64')">测试连接</button>
                                 <span id="nat64-status" class="test-status"></span>
-                                <p class="test-note">（仅测试列表中的第一个地址）</p>
                             </div>
                         </div>
+						<script>
+  							const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
+  							const decodedURL = atob(encodedURL);
+  							document.getElementById('nat64-link').setAttribute('href', decodedURL);
+						</script>
 						
 						<!-- HTTPS Ports Setting -->
                         <div class="setting-item">
@@ -3640,9 +3596,8 @@ async function handleGetRequest(env) {
     });
 }
 
-
 /**
- * 最终优化的连接测试函数
+ * 新增：处理连接测试的后端函数 (使用 HTTP 路由探针)
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3653,8 +3608,7 @@ async function handleTestConnection(request) {
 
     const log = (info) => { console.log(`[TestConnection] ${info}`); };
     const controller = new AbortController();
-    // 将超时设置为 8 秒，以提供足够的时间进行应用层探测
-    const timeoutId = setTimeout(() => controller.abort('连接或响应超时 (8秒)'), 8000);
+    const timeoutId = setTimeout(() => controller.abort('连接超时 (5秒)'), 5000);
 
     try {
         const { type, address } = await request.json();
@@ -3662,7 +3616,7 @@ async function handleTestConnection(request) {
             throw new Error('请求参数不完整或地址为空');
         }
 
-        log(`开始测试 - 类型: ${type}, 地址: ${address}`);
+        log(`Testing type: ${type}, address: ${address}`);
         let successMessage = '连接成功！';
 
         switch (type) {
@@ -3679,7 +3633,7 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'proxyip': {
-                // PROXYIP 的测试逻辑保持不变，因为它本身就是一种应用层探测
+                // 对于 PROXYIP，我们默认测试其作为 HTTP 反向代理的能力，所以使用 443 端口
                 const { address: ip, port } = parseProxyIP(address, 443);
                 log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
@@ -3690,11 +3644,12 @@ async function handleTestConnection(request) {
                     const writer = testSocket.writable.getWriter();
                     const workerHostname = new URL(request.url).hostname;
                     
+                    // 构造一个简单的 HTTP GET 请求作为探针
                     const httpProbeRequest = [
                         `GET / HTTP/1.1`,
                         `Host: ${workerHostname}`,
                         'User-Agent: Cloudflare-Connectivity-Test',
-                        'Connection: close',
+                        'Connection: close', // 确保服务器在响应后关闭连接
                         '\r\n'
                     ].join('\r\n');
 
@@ -3703,10 +3658,16 @@ async function handleTestConnection(request) {
                     log(`PROXYIP Test: 已发送 GET 请求, Host: ${workerHostname}`);
 
                     const reader = testSocket.readable.getReader();
-                    const { value } = await reader.read();
-                    const responseText = new TextDecoder().decode(value || new Uint8Array());
-                    log(`PROXYIP Test: 收到响应: ${responseText.substring(0, 200)}...`);
+                    const { value, done } = await reader.read();
+                    
+                    if (done) {
+                        throw new Error("连接已关闭，未收到任何响应。");
+                    }
 
+                    const responseText = new TextDecoder().decode(value);
+                    log(`PROXYIP Test: 收到响应:\n${responseText.substring(0, 200)}...`);
+
+                    // 成功的关键标志：响应头中包含 "Server: cloudflare"
                     if (responseText.toLowerCase().includes('server: cloudflare')) {
                         log(`PROXYIP Test: 响应头包含 "Server: cloudflare"。测试通过。`);
                         successMessage = '探测成功！该IP是有效的Cloudflare节点。';
@@ -3714,91 +3675,38 @@ async function handleTestConnection(request) {
                         throw new Error("收到的响应并非来自Cloudflare，该IP可能无效。");
                     }
                     
+                    // 确保最终关闭 socket
                     await testSocket.close();
                     reader.releaseLock();
 
                 } catch(err) {
+                    // 确保在内部块出错时也能关闭socket
                     if (testSocket) await testSocket.close();
-                    throw err;
+                    throw err; // 将错误重新抛出到外部catch块
                 }
                 break;
             }
             case 'nat64': {
-                const probeDomain = 'ipv4.google.com'; // 使用一个稳定的、仅有IPv4地址的域名进行测试
-
-                if (address.endsWith('/96')) {
-                    // --- 针对 /96 前缀的全新、正确的测试逻辑 ---
-                    let synthesizedIPv6;
-                    try {
-                        log(`NAT64 Prefix Test: 步骤 1/3 - 获取 '${probeDomain}' 的 IPv4 地址...`);
-                        const ipv4 = await fetchIPv4ViaDoH(probeDomain, controller.signal);
-                        log(`NAT64 Prefix Test: 成功获取 IPv4: ${ipv4}`);
-
-                        log(`NAT64 Prefix Test: 步骤 2/3 - 使用前缀 ${address} 合成 IPv6...`);
-                        const prefix = address.split('/96')[0];
-                        const hex = ipv4.split('.').map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
-                        synthesizedIPv6 = prefix + hex[0] + hex[1] + ":" + hex[2] + hex[3];
-                        if (!isIPv6(synthesizedIPv6)) {
-                             throw new Error(`无法从该前缀合成有效的 IPv6 地址 (结果: ${synthesizedIPv6})`);
-                        }
-                        log(`NAT64 Prefix Test: 成功合成 IPv6: ${synthesizedIPv6}`);
-
-                    } catch (synthesisError) {
-                        throw new Error(`前缀处理失败: ${synthesisError.message}`);
-                    }
-
-                    log(`NAT64 Prefix Test: 步骤 3/3 - 对合成地址进行应用层探针...`);
-                    const testSocket = await connect({ hostname: synthesizedIPv6, port: 80, signal: controller.signal });
-                    
-                    try {
-                        const writer = testSocket.writable.getWriter();
-                        const httpProbe = `GET / HTTP/1.1\r\nHost: ${probeDomain}\r\nConnection: close\r\n\r\n`;
-                        await writer.write(new TextEncoder().encode(httpProbe));
-                        
-                        const reader = testSocket.readable.getReader();
-                        const { value } = await reader.read();
-                        const responseText = new TextDecoder().decode(value || new Uint8Array());
-                        
-                        // 检查是否收到了一个有效的 HTTP 响应头
-                        if (responseText.startsWith('HTTP/1.') && responseText.includes('200 OK')) {
-                            log(`NAT64 Prefix Test: 探测成功，收到 200 OK 响应。`);
-                            successMessage = '前缀有效：成功通过该前缀连接到 IPv4 服务。';
-                        } else {
-                            throw new Error(`连接成功但未收到有效的 HTTP 响应。收到的内容: ${responseText.substring(0, 100)}...`);
-                        }
-                    } finally {
-                        await testSocket.close();
-                    }
-
-                } else {
-                    // --- 针对 DNS64 服务器的测试逻辑（保持不变，但受益于更好的错误处理） ---
-                    log(`DNS64 Server Test: 步骤 1/2 - 使用服务器 ${address} 解析 '${probeDomain}'...`);
-                    const resolvedIPv6 = await testNAT64(address, controller.signal);
-                    log(`DNS64 Server Test: 成功解析到 IPv6: ${resolvedIPv6}`);
-                    
-                    log(`DNS64 Server Test: 步骤 2/2 - 测试解析地址 ${resolvedIPv6} 的连通性...`);
-                    const testSocket = await connect({ hostname: resolvedIPv6, port: 443, signal: controller.signal });
-                    await testSocket.close();
-                    log(`DNS64 Server Test: 连通性测试成功！`);
-
-                    successMessage = '服务器有效：成功解析并连接到目标。';
-                }
+                // 临机设置服务器地址进行测试
+                DNS64Server = address;
+                log(`NAT64 Test: 正在使用服务器 ${address} 解析 www.cloudflare.com...`);
+                const ipv6Address = await resolveToIPv6('www.cloudflare.com');
+                log(`NAT64 Test: 解析成功，获得地址: ${ipv6Address}`);
+                successMessage = `解析成功: ${ipv6Address}`;
                 break;
             }
             default:
                 throw new Error('不支持的测试类型');
         }
         
-        log(`测试成功 - 类型: ${type}, 地址: ${address}`);
+        log(`Test successful for ${type}: ${address}`);
         return new Response(JSON.stringify({ success: true, message: successMessage }), { 
             status: 200,
             headers: { 'Content-Type': 'application/json;charset=utf-8' } 
         });
 
     } catch (err) {
-        // 全局错误捕获，确保任何失败都会被正确报告
-        console.error(`[TestConnection] 测试失败: ${err.stack || err}`);
-        // 返回 200 状态码，但内容指明失败，这是为了让前端能稳定接收和处理错误信息
+        console.error(`[TestConnection] Error: ${err.stack || err}`);
         return new Response(JSON.stringify({ success: false, message: `测试失败: ${err.message}` }), { 
             status: 200, 
             headers: { 'Content-Type': 'application/json;charset=utf-8' } 
