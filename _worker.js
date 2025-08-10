@@ -3600,21 +3600,21 @@ async function handleGetRequest(env) {
  * 手动将 IPv4 地址和 NAT64 前缀合成为一个 IPv6 地址
  * @param {string} ipv4 - 例如 "1.1.1.1"
  * @param {string} prefix - 例如 "64:ff9b::/96"
- * @returns {string} - 例如 "64:ff9b::101:101"
+ * @returns {string} - 例如 "64:ff9b::0101:0101"
  */
 function synthesizeIPv6(ipv4, prefix) {
-    const prefixBase = prefix.split('/96')[0];
+    const prefixBase = prefix.split('/96')[0].replace(/:$/, ''); // 移除末尾可能存在的单个冒号
     const ipv4Parts = ipv4.split('.').map(part => parseInt(part, 10));
 
     // 将IPv4的四个部分两两组合成两个16位的十六进制数
     const hexPart1 = ((ipv4Parts[0] << 8) | ipv4Parts[1]).toString(16).padStart(4, '0');
     const hexPart2 = ((ipv4Parts[2] << 8) | ipv4Parts[3]).toString(16).padStart(4, '0');
     
-    // 移除前缀末尾可能存在的单个冒号，以处理 "prefix:" 和 "prefix::" 两种情况
-    const cleanPrefixBase = prefixBase.endsWith('::') ? prefixBase : prefixBase.replace(/:$/, '');
-
-    // 拼接成最终的IPv6地址
-    return `${cleanPrefixBase}::${hexPart1}:${hexPart2}`.replace(/:::+/, '::'); // 替换三个或更多冒号为一个双冒号
+    // 智能拼接，处理 "prefix:" 和 "prefix::" 两种情况
+    let combined = `${prefixBase}::${hexPart1}:${hexPart2}`;
+    
+    // 使用正则表达式将多个连续的冒号压缩成一个双冒号，以标准化地址
+    return combined.replace(/::{2,}/g, '::');
 }
 
 
@@ -3697,7 +3697,7 @@ async function handleTestConnection(request) {
             }
             case 'nat64': {
                 if (!address.endsWith('/96')) {
-                    throw new Error("测试仅支持 /96 前缀格式的NAT64。");
+                    throw new Error("测试仅支持 /96 前缀格式的NAT64地址。");
                 }
                 
                 log(`NAT64 Test: 步骤 1/2 - 正在手动合成IPv6地址...`);
@@ -3705,12 +3705,36 @@ async function handleTestConnection(request) {
                 const synthesizedIPv6 = synthesizeIPv6(targetIPv4, address);
                 log(`NAT64 Test: 已将 ${targetIPv4} 合成到 ${address} -> ${synthesizedIPv6}`);
 
-                log(`NAT64 Test: 步骤 2/2 - 正在尝试直接连接合成的IPv6地址...`);
+                log(`NAT64 Test: 步骤 2/2 - 正在连接并探测合成地址...`);
                 const testSocket = await connect({ hostname: synthesizedIPv6, port: 443, signal: controller.signal });
-                log(`NAT64 Test: TCP 连接成功，证明NAT64通道可用。`);
+                log(`NAT64 Test: TCP 连接成功。`);
 
-                await testSocket.close();
-                successMessage = '探测成功！NAT64服务工作正常。';
+                try {
+                    const writer = testSocket.writable.getWriter();
+                    const httpProbeRequest = [
+                        `GET / HTTP/1.1`,
+                        `Host: one.one.one.one`, // Host头必须与目标IPv4(1.1.1.1)对应
+                        'User-Agent: Cloudflare-Connectivity-Test',
+                        'Connection: close',
+                        '\r\n'
+                    ].join('\r\n');
+                    
+                    await writer.write(new TextEncoder().encode(httpProbeRequest));
+                    const reader = testSocket.readable.getReader();
+                    const { value } = await reader.read();
+                    const responseText = new TextDecoder().decode(value);
+
+                    if (responseText.toLowerCase().includes('http/')) { // 任何有效的HTTP响应都意味着成功
+                        log(`NAT64 Test: 收到有效的HTTP响应。测试通过。`);
+                        successMessage = '探测成功！NAT64服务工作正常。';
+                    } else {
+                        throw new Error('NAT64通道似乎已连通，但无法获取有效的HTTP响应。');
+                    }
+                    await testSocket.close();
+                } catch(err) {
+                    if (testSocket) await testSocket.close();
+                    throw err;
+                }
                 break;
             }
             default:
