@@ -3586,7 +3586,7 @@ async function handleGetRequest(env) {
 
 
 /**
- * 新增：处理连接测试的后端函数 (适配最终版)
+ * 新增：处理连接测试的后端函数
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3605,44 +3605,42 @@ async function handleTestConnection(request) {
         }
         
         const log = (info) => { console.log(`[TestConnection] ${info}`); };
-        
-        // 为 SOCKS 和 HTTP 创建一个通用的超时控制器
-        const genericController = new AbortController();
-        const genericTimeoutId = setTimeout(() => genericController.abort('Connection timeout'), 8000);
+        let testSocket;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort('Connection timeout'), 8000); // 8秒超时
 
         try {
             log(`Testing type: ${type}, address: ${address}`);
-            let result;
-
             switch (type) {
-                case 'proxyip':
-                    // ** 使用最终的手动 TLS 验证函数 **
-                    const { address: ip, port } = parseProxyIP(address, 443);
-                    result = await enhancedTestProxyIP(ip, port, log);
-                    break;
                 case 'http':
                     parsedHttpProxyAddress = httpProxyAddressParser(address);
-                    const httpSocket = await httpConnect('www.cloudflare.com', 443, log, genericController.signal);
-                    if (httpSocket) await httpSocket.close();
-                    result = { success: true, message: '连接成功！' };
+                    testSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal);
                     break;
                 case 'socks5':
                     parsedSocks5Address = socks5AddressParser(address);
-                    const socksSocket = await socks5Connect(2, 'www.cloudflare.com', 443, log, genericController.signal);
-                    if (socksSocket) await socksSocket.close();
-                    result = { success: true, message: '连接成功！' };
+                    // 地址类型2代表域名
+                    testSocket = await socks5Connect(2, 'www.cloudflare.com', 443, log, controller.signal);
+                    break;
+                case 'proxyip':
+                    const { address: ip, port } = parseProxyIP(address, 443);
+                    testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
                     break;
                 default:
                     throw new Error('不支持的测试类型');
             }
-            
-            return new Response(JSON.stringify(result), { 
-                status: 200,
-                headers: { 'Content-Type': 'application/json;charset=utf-8' } 
-            });
 
+            if (testSocket) {
+                await testSocket.close();
+                log(`Test successful for ${type}: ${address}`);
+                return new Response(JSON.stringify({ success: true, message: '连接成功！' }), { 
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json;charset=utf-8' } 
+                });
+            } else {
+                throw new Error("连接函数未返回有效的套接字");
+            }
         } finally {
-            clearTimeout(genericTimeoutId);
+            clearTimeout(timeoutId);
         }
     } catch (err) {
         console.error(`[TestConnection] Error: ${err.stack || err}`);
@@ -3652,252 +3650,4 @@ async function handleTestConnection(request) {
             headers: { 'Content-Type': 'application/json;charset=utf-8' } 
         });
     }
-}
-
-
-/**
- * 新增: PROXYIP 智能测试函数 (最终手动验证版)
- * @param {string} address - The IP address to test.
- * @param {number} port - The port to test.
- * @param {(string) => void} log - Logger function.
- * @returns {Promise<{success: boolean, message: string}>}
- */
-async function enhancedTestProxyIP(address, port, log) {
-    let tcpSocket;
-    const testHostname = 'www.cloudflare.com';
-
-    try {
-        // --- 1. TCP 连接 ---
-        log(`[Manual Test] 1. Attempting TCP connection to ${address}:${port}`);
-        const connectController = new AbortController();
-        const connectTimeout = setTimeout(() => connectController.abort('TCP connection timeout'), 4000);
-        tcpSocket = await connect({ hostname: address, port: port, signal: connectController.signal });
-        clearTimeout(connectTimeout);
-        log(`[Manual Test] 1. TCP connection successful.`);
-
-        // --- 2. 发送 ClientHello ---
-        log(`[Manual Test] 2. Performing TLS handshake with SNI: ${testHostname}`);
-        const clientHello = createClientHello(testHostname);
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(clientHello);
-        writer.releaseLock();
-        log(`[Manual Test] 2. ClientHello sent.`);
-
-        // --- 3. 读取和解析响应 (健壮的循环读取) ---
-        log(`[Manual Test] 3. Reading TLS response...`);
-        const reader = tcpSocket.readable.getReader();
-        
-        let fullResponseBuffer = new Uint8Array(0);
-        const startTime = Date.now();
-        const readTimeout = 4000;
-
-        while (Date.now() - startTime < readTimeout) {
-             try {
-                const { value, done } = await Promise.race([
-                    reader.read(),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Read operation timeout')), readTimeout))
-                ]);
-                 
-                if (done) break;
-
-                const newBuffer = new Uint8Array(fullResponseBuffer.length + value.length);
-                newBuffer.set(fullResponseBuffer);
-                newBuffer.set(value, fullResponseBuffer.length);
-                fullResponseBuffer = newBuffer;
-
-                const result = robustVerifyServerCertificate(fullResponseBuffer, testHostname, log);
-                 if (result.success || result.message.includes("证书名称不匹配")) {
-                     log(`[Manual Test] Early parsing successful. Result: ${result.message}`);
-                     reader.releaseLock();
-                     return result;
-                 }
-             } catch (e) {
-                // 如果是读取超时，就跳出循环，使用已有的数据进行最后一次解析
-                if (e.message.includes('Read operation timeout')) break;
-                throw e; // 其他错误则直接抛出
-             }
-        }
-        
-        reader.releaseLock();
-        log(`[Manual Test] 3. Received total ${fullResponseBuffer.byteLength} bytes. Final parsing...`);
-        
-        if (fullResponseBuffer.length === 0) {
-            throw new Error("对方未返回任何数据");
-        }
-
-        const verificationResult = robustVerifyServerCertificate(fullResponseBuffer, testHostname, log);
-        return verificationResult;
-
-    } catch (error) {
-        log(`[Manual Test] Test failed: ${error.message}`);
-        return { success: false, message: `连接失败: ${error.message}` };
-    } finally {
-        if (tcpSocket) {
-            await tcpSocket.close();
-            log(`[Manual Test] Socket closed.`);
-        }
-    }
-}
-
-
-/**
- * 构造一个 TLS v1.2 的 ClientHello 消息
- * @param {string} hostname
- * @returns {Uint8Array}
- */
-function createClientHello(hostname) {
-    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
-    const sessionId = crypto.getRandomValues(new Uint8Array(32));
-    const encoder = new TextEncoder();
-    const hostnameBytes = encoder.encode(hostname);
-
-    const extensions = [];
-    // SNI Extension (0)
-    extensions.push(0x00, 0x00, (hostnameBytes.length + 5) >> 8, (hostnameBytes.length + 5) & 0xff, (hostnameBytes.length + 3) >> 8, (hostnameBytes.length + 3) & 0xff, 0x00, hostnameBytes.length >> 8, hostnameBytes.length & 0xff, ...hostnameBytes);
-    // Supported Groups Extension (10)
-    extensions.push(0x00, 0x0a, 0x00, 0x0a, 0x00, 0x08, 0x00, 0x1d, 0x00, 0x17, 0x00, 0x18, 0x00, 0x19);
-    // EC Point Formats Extension (11)
-    extensions.push(0x00, 0x0b, 0x00, 0x02, 0x01, 0x00);
-    // Signature Algorithms Extension (13)
-    extensions.push(0x00, 0x0d, 0x00, 0x14, 0x00, 0x12, 0x04, 0x03, 0x08, 0x04, 0x04, 0x01, 0x05, 0x03, 0x08, 0x05, 0x05, 0x01, 0x08, 0x06, 0x06, 0x01);
-    // Session Ticket Extension (35)
-    extensions.push(0x00, 0x23, 0x00, 0x00);
-    // ALPN Extension (16)
-    extensions.push(0x00, 0x10, 0x00, 0x0e, 0x00, 0x0c, 0x02, 0x68, 0x32, 0x08, 0x68, 0x74, 0x74, 0x70, 0x2f, 0x31, 0x2e, 0x31);
-
-    const extensionsLength = extensions.length;
-
-    const clientHelloPayload = [
-        0x03, 0x03, // TLS 1.2
-        ...randomBytes,
-        sessionId.length, ...sessionId,
-        0x00, 0x02, 0x13, 0x01, // Cipher Suite: TLS_AES_128_GCM_SHA256
-        0x01, 0x00, // Compression Method: null
-        (extensionsLength >> 8) & 0xff, extensionsLength & 0xff,
-        ...extensions
-    ];
-
-    const handshakeHeader = [
-        0x01, // Handshake Type: Client Hello
-        (clientHelloPayload.length >> 16) & 0xff,
-        (clientHelloPayload.length >> 8) & 0xff,
-        clientHelloPayload.length & 0xff
-    ];
-
-    const recordHeader = [
-        0x16, // Content Type: Handshake
-        0x03, 0x01, // Version: TLS 1.0 (for compatibility)
-        (handshakeHeader.length + clientHelloPayload.length) >> 8,
-        (handshakeHeader.length + clientHelloPayload.length) & 0xff
-    ];
-
-    const finalBuffer = new Uint8Array(recordHeader.length + handshakeHeader.length + clientHelloPayload.length);
-    finalBuffer.set(recordHeader, 0);
-    finalBuffer.set(handshakeHeader, recordHeader.length);
-    finalBuffer.set(clientHelloPayload, recordHeader.length + handshakeHeader.length);
-
-    return finalBuffer;
-}
-
-
-/**
- * 一个健壮的、不依赖完整库的证书解析器。
- * @param {Uint8Array} buffer - The full TLS response buffer.
- * @param {string} expectedHostname
- * @param {(string) => void} log
- * @returns {{success: boolean, message: string}}
- */
-function robustVerifyServerCertificate(buffer, expectedHostname, log) {
-    try {
-        let offset = 0;
-        let serverHelloFound = false;
-
-        while (offset < buffer.length) {
-            if (buffer[offset] !== 0x16) { // Handshake Record Type
-                offset++;
-                continue;
-            }
-
-            if (offset + 5 > buffer.length) return { success: false, message: "解析失败(记录头不完整)" };
-            const recordLength = (buffer[offset + 3] << 8) | buffer[offset + 4];
-            const recordEnd = offset + 5 + recordLength;
-            if (recordEnd > buffer.length) return { success: false, message: "解析失败(记录体不完整)" };
-
-            let handshakeOffset = offset + 5;
-            while (handshakeOffset < recordEnd) {
-                if (handshakeOffset + 4 > buffer.length) break;
-                const handshakeType = buffer[handshakeOffset];
-                const handshakeLength = (buffer[handshakeOffset + 1] << 16) | (buffer[handshakeOffset + 2] << 8) | buffer[handshakeOffset + 3];
-                const handshakeEnd = handshakeOffset + 4 + handshakeLength;
-                if (handshakeEnd > recordEnd) break;
-                
-                if (handshakeType === 2) serverHelloFound = true;
-                if (handshakeType === 11) { // Certificate Message
-                    log('[Verify] Found Certificate message.');
-                    const foundDomains = findDomainsInCertificate(buffer.subarray(handshakeOffset, handshakeEnd));
-                    log(`[Verify] Domains found: ${foundDomains.join(', ')}`);
-
-                    if (foundDomains.length === 0) return { success: false, message: "证书中未找到任何域名" };
-                    
-                    for (const domain of foundDomains) {
-                         if (domain === expectedHostname || (domain.startsWith('*') && expectedHostname.endsWith(domain.slice(1)))) {
-                            return { success: true, message: '连接成功 (TLS已验证)' };
-                        }
-                    }
-                    
-                    return { success: false, message: `证书名称不匹配 (收到 ${foundDomains[0]} 证书)` };
-                }
-                handshakeOffset = handshakeEnd;
-            }
-            offset = recordEnd;
-        }
-
-        // 如果找到了ServerHello但没找到证书，这通常意味着PROXYIP是透明的，我们认为它成功
-        if (serverHelloFound) {
-            return { success: true, message: "连接成功 (TLS已验证)" };
-        }
-        
-        return { success: false, message: '对方未返回有效的TLS证书' };
-
-    } catch (e) {
-        log(`[Verify] Error during parsing: ${e.message}`);
-        return { success: false, message: `解析TLS时出错: ${e.message}` };
-    }
-}
-
-
-function findDomainsInCertificate(data) {
-    const domains = new Set();
-    const decoder = new TextDecoder();
-    
-    // OID for Common Name: 2.5.4.3 -> 06 03 55 04 03
-    const cnOid = new Uint8Array([0x06, 0x03, 0x55, 0x04, 0x03]);
-    // OID for Subject Alternative Name extension: 2.5.29.17 -> 06 03 55 1D 11
-    const sanOid = new Uint8Array([0x06, 0x03, 0x55, 0x1D, 0x11]);
-
-    for (let i = 0; i < data.length - cnOid.length; i++) {
-        if (data.subarray(i, i + cnOid.length).every((v, j) => v === cnOid[j])) {
-            const len = data[i + cnOid.length + 1];
-            const domainBytes = data.subarray(i + cnOid.length + 2, i + cnOid.length + 2 + len);
-            try {
-                const domain = decoder.decode(domainBytes);
-                if (domain.includes('.')) domains.add(domain);
-            } catch {}
-        }
-        if (data.subarray(i, i + sanOid.length).every((v, j) => v === sanOid[j])) {
-            // dNSName is context-specific tag [2]
-            for (let j = i + sanOid.length; j < data.length - 2; j++) {
-                if (data[j] === 0x82) { // tag for dNSName
-                    const len = data[j + 1];
-                    const domainBytes = data.subarray(j + 2, j + 2 + len);
-                    try {
-                        const domain = decoder.decode(domainBytes);
-                        if (domain.includes('.')) domains.add(domain);
-                    } catch {}
-                    j += 1 + len;
-                }
-            }
-        }
-    }
-    return Array.from(domains);
 }
