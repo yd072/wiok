@@ -3256,39 +3256,6 @@ async function handleGetRequest(env) {
                             </div>
                         </div>
                         
-                        <!-- SUB设置 -->
-                        <div class="setting-item">
-                            <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SUB</strong> (优选订阅生成器)</span>
-                            </div>
-                            <div class="setting-content">
-                                <p>只支持单个优选订阅生成器地址</p>
-                                <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
-                            </div>
-                        </div>
-
-                        <!-- SUBAPI设置 -->
-                        <div class="setting-item">
-                            <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SUBAPI</strong> (订阅转换后端)</span>
-                            </div>
-                            <div class="setting-content">
-                                <p>订阅转换后端地址</p>
-                                <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
-                            </div>
-                        </div>
-
-                        <!-- SUBCONFIG设置 -->
-                        <div class="setting-item">
-                            <div class="setting-header" onclick="toggleSetting(this)">
-                                <span><strong>SUBCONFIG</strong> (订阅转换配置)</span>
-                            </div>
-                            <div class="setting-content">
-                                <p>订阅转换配置文件地址</p>
-                                <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
-                            </div>
-                        </div>
-
                         <!-- NAT64/DNS64 设置 -->
                         <div class="setting-item">
                            <div class="setting-header" onclick="toggleSetting(this)">
@@ -3299,6 +3266,7 @@ async function handleGetRequest(env) {
                                     <a id="nat64-link" target="_blank">自行查询</a>
                                 </p>
                                 <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
+                                <p class="test-note">注意：连接测试仅对以 /96 结尾的NAT64前缀有效。</p>
                             </div>
                             <div class="setting-item-footer">
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'nat64')">测试连接</button>
@@ -3311,7 +3279,36 @@ async function handleGetRequest(env) {
   							const decodedURL = atob(encodedURL);
   							document.getElementById('nat64-link').setAttribute('href', decodedURL);
 						</script>
-                                                						
+                        
+                        <!-- 其他设置项 -->
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SUB</strong> (优选订阅生成器)</span>
+                            </div>
+                            <div class="setting-content">
+                                <p>只支持单个优选订阅生成器地址</p>
+                                <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SUBAPI</strong> (订阅转换后端)</span>
+                            </div>
+                            <div class="setting-content">
+                                <p>订阅转换后端地址</p>
+                                <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-header" onclick="toggleSetting(this)">
+                                <span><strong>SUBCONFIG</strong> (订阅转换配置)</span>
+                            </div>
+                            <div class="setting-content">
+                                <p>订阅转换配置文件地址</p>
+                                <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
+                            </div>
+                        </div>
+						
 						<!-- HTTPS Ports Setting -->
                         <div class="setting-item">
                             <div class="setting-header" onclick="toggleSetting(this)">
@@ -3600,6 +3597,28 @@ async function handleGetRequest(env) {
 }
 
 /**
+ * 手动将 IPv4 地址和 NAT64 前缀合成为一个 IPv6 地址
+ * @param {string} ipv4 - 例如 "8.8.8.8"
+ * @param {string} prefix - 例如 "64:ff9b::/96"
+ * @returns {string} - 例如 "64:ff9b::0808:0808"
+ */
+function synthesizeIPv6(ipv4, prefix) {
+    const prefixBase = prefix.split('/96')[0];
+    const ipv4Parts = ipv4.split('.').map(part => parseInt(part, 10));
+
+    const hexPart1 = ((ipv4Parts[0] << 8) | ipv4Parts[1]).toString(16).padStart(4, '0');
+    const hexPart2 = ((ipv4Parts[2] << 8) | ipv4Parts[3]).toString(16).padStart(4, '0');
+
+    // Jool's mapping style: prefix::[hex1]:[hex2]
+    if (prefixBase.endsWith('::')) {
+        return `${prefixBase}${hexPart1}:${hexPart2}`;
+    }
+    // Common mapping style: prefix:[hex1]:[hex2]
+    return `${prefixBase}${hexPart1}:${hexPart2}`;
+}
+
+
+/**
  * 新增：处理连接测试的后端函数 (最终优化版)
  * @param {Request} request
  * @returns {Promise<Response>}
@@ -3611,7 +3630,7 @@ async function handleTestConnection(request) {
 
     const log = (info) => { console.log(`[TestConnection] ${info}`); };
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort('连接超时 (5秒)'), 5000);
+    const timeoutId = setTimeout(() => controller.abort('连接超时 (8秒)'), 8000);
 
     try {
         const { type, address } = await request.json();
@@ -3677,13 +3696,17 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'nat64': {
-                log(`NAT64 Test: 步骤 1/3 - 正在通过 ${address} 解析IPv4域名...`);
-                // 使用一个只有A记录的域名进行测试
-                const resolvedIp = await resolveToIPv6('ipv4.google.com', address, controller.signal);
-                log(`NAT64 Test: DNS64 解析成功, 获得合成IPv6地址: ${resolvedIp}`);
+                if (!address.endsWith('/96')) {
+                    throw new Error("仅支持 /96 前缀格式的NAT64地址进行测试。");
+                }
+                
+                log(`NAT64 Test: 步骤 1/3 - 正在手动合成IPv6地址...`);
+                const targetIPv4 = '8.8.8.8'; // 使用一个稳定的公网IPv4进行测试
+                const synthesizedIPv6 = synthesizeIPv6(targetIPv4, address);
+                log(`NAT64 Test: 已将 ${targetIPv4} 合成到 ${address} -> ${synthesizedIPv6}`);
 
                 log(`NAT64 Test: 步骤 2/3 - 正在连接到合成地址的443端口...`);
-                const testSocket = await connect({ hostname: resolvedIp, port: 443, signal: controller.signal });
+                const testSocket = await connect({ hostname: synthesizedIPv6, port: 443, signal: controller.signal });
                 log(`NAT64 Test: TCP 连接成功。`);
 
                 try {
@@ -3702,11 +3725,11 @@ async function handleTestConnection(request) {
                     const { value } = await reader.read();
                     const responseText = new TextDecoder().decode(value);
 
-                    if (responseText.toLowerCase().includes('server: cloudflare')) {
-                        log(`NAT64 Test: 收到Cloudflare的响应。测试通过。`);
+                    if (responseText.toLowerCase().includes('http/')) { // 任何有效的HTTP响应都意味着成功
+                        log(`NAT64 Test: 收到有效的HTTP响应。测试通过。`);
                         successMessage = '探测成功！NAT64服务工作正常。';
                     } else {
-                        throw new Error('NAT64通道似乎已连通，但无法访问公网服务。');
+                        throw new Error('NAT64通道似乎已连通，但无法获取有效的HTTP响应。');
                     }
                     await testSocket.close();
                 } catch(err) {
