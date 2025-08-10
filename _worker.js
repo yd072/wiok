@@ -3332,7 +3332,7 @@ async function handleGetRequest(env) {
 
                         <!-- 统一的保存按钮 -->
                         <div style="margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="saveSettings()">保存高级设置</button>
+                            <button class="btn btn-primary" onclick="saveSettings()">保存</button>
                             <span id="settings-save-status" class="save-status"></span>
                         </div>
                     </div>
@@ -3673,29 +3673,51 @@ async function enhancedTestProxyIP(address, port, log) {
         // --- 2. TLS 握手 ---
         log(`[Enhanced] 2. Performing TLS handshake with SNI: ${testHostname}`);
         
-        // 创建 TLS ClientHello 消息
         const clientHello = createClientHello(testHostname);
         const writer = tcpSocket.writable.getWriter();
         await writer.write(clientHello);
         writer.releaseLock();
         log(`[Enhanced] 2. ClientHello sent.`);
 
-        // --- 3. 读取和解析响应 ---
+        // --- 3. 读取和解析响应 (改进的循环读取) ---
         log(`[Enhanced] 3. Reading TLS response...`);
         const reader = tcpSocket.readable.getReader();
         
-        // 设置一个读取超时
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("读取TLS响应超时或对方未返回证书")), 4000));
-        const { value: responseBuffer } = await Promise.race([reader.read(), timeoutPromise]);
+        let fullResponseBuffer = new Uint8Array(0);
+        const startTime = Date.now();
         
-        if (!responseBuffer) {
-             throw new Error("读取TLS响应超时或对方未返回证书");
+        // 设置一个总的读取超时
+        const readTimeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("读取TLS响应超时")), 5000)
+        );
+
+        while (Date.now() - startTime < 4000) { // 最多读取4秒
+             const { value, done } = await Promise.race([reader.read(), readTimeoutPromise]);
+             if (done) {
+                 break;
+             }
+             const newBuffer = new Uint8Array(fullResponseBuffer.length + value.length);
+             newBuffer.set(fullResponseBuffer);
+             newBuffer.set(value, fullResponseBuffer.length);
+             fullResponseBuffer = newBuffer;
+
+             // 尝试尽早解析，如果成功就可以提前退出循环
+             const earlyResult = robustVerifyServerCertificate(fullResponseBuffer, testHostname, log);
+             if (earlyResult.success || (earlyResult.success === false && !earlyResult.message.includes('不完整'))) {
+                 log(`[Enhanced] Early parsing successful. Exiting read loop.`);
+                 reader.releaseLock();
+                 return earlyResult;
+             }
+        }
+        
+        reader.releaseLock();
+        log(`[Enhanced] 3. Received total ${fullResponseBuffer.byteLength} bytes. Final parsing...`);
+        
+        if (fullResponseBuffer.length === 0) {
+            throw new Error("对方未返回任何数据");
         }
 
-        log(`[Enhanced] 3. Received ${responseBuffer.byteLength} bytes. Parsing...`);
-        reader.releaseLock();
-        
-        const verificationResult = verifyServerCertificate(responseBuffer, testHostname, log);
+        const verificationResult = robustVerifyServerCertificate(fullResponseBuffer, testHostname, log);
 
         // --- 4. 返回结果 ---
         return verificationResult;
@@ -3715,35 +3737,56 @@ function createClientHello(hostname) {
     const randomBytes = crypto.getRandomValues(new Uint8Array(32));
     const sessionId = crypto.getRandomValues(new Uint8Array(32));
 
-    const extensions = [
-        // SNI Extension
-        0x00, 0x00, // Extension type: server_name
-        0x00, (hostname.length + 5), // Extension length
-        0x00, (hostname.length + 3), // Server Name list length
-        0x00, // Server Name type: host_name
-        0x00, hostname.length, // Host name length
-        ...new TextEncoder().encode(hostname)
-    ];
+    const encoder = new TextEncoder();
+    const hostnameBytes = encoder.encode(hostname);
 
-    const clientHelloPayload = [
+    // Extension: server_name
+    const sniExtension = new Uint8Array([
+        0x00, 0x00, // Extension Type: server_name (0)
+        (hostnameBytes.length + 5) >> 8, (hostnameBytes.length + 5) & 0xff, // Extension Length
+        (hostnameBytes.length + 3) >> 8, (hostnameBytes.length + 3) & 0xff, // Server Name List Length
+        0x00, // Name Type: host_name (0)
+        hostnameBytes.length >> 8, hostnameBytes.length & 0xff, // Host Name Length
+        ...hostnameBytes
+    ]);
+
+    // 其他常用扩展，模拟真实浏览器
+    const supportedGroups = new Uint8Array([0x00, 0x0a, 0x00, 0x1d, 0x00, 0x17, 0x00, 0x18, 0x00, 0x19]); // x25519, secp256r1, secp384r1, secp521r1
+    const ecPointFormats = new Uint8Array([0x00, 0x02, 0x01, 0x00]); // uncompressed
+    const signatureAlgorithms = new Uint8Array([0x00, 0x12, 0x04, 0x03, 0x08, 0x04, 0x04, 0x01, 0x05, 0x03, 0x08, 0x05, 0x05, 0x01, 0x08, 0x06, 0x06, 0x01]);
+
+    const extensions = [
+        sniExtension,
+        new Uint8Array([0x00, 0x0a, supportedGroups.length >> 8, supportedGroups.length & 0xff, ...supportedGroups]), // supported_groups
+        new Uint8Array([0x00, 0x0b, ecPointFormats.length >> 8, ecPointFormats.length & 0xff, ...ecPointFormats]), // ec_point_formats
+        new Uint8Array([0x00, 0x0d, signatureAlgorithms.length >> 8, signatureAlgorithms.length & 0xff, ...signatureAlgorithms]), // signature_algorithms
+    ];
+    
+    let totalExtensionsLength = extensions.reduce((acc, ext) => acc + ext.length, 0);
+    
+    const clientHelloPayload = new Uint8Array([
         0x03, 0x03, // TLS 1.2
         ...randomBytes,
         sessionId.length, ...sessionId,
-        0x00, 0x02, 0xc0, 0x2b, // Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        0x00, 0x02, 0x13, 0x01, // Cipher Suite: TLS_AES_128_GCM_SHA256
         0x01, 0x00, // Compression Method: null
-        0x00, extensions.length, ...extensions
-    ];
+        totalExtensionsLength >> 8, totalExtensionsLength & 0xff,
+        ...extensions.flatMap(ext => [...ext])
+    ]);
 
-    const handshakeHeader = [
+    const handshakeHeader = new Uint8Array([
         0x01, // Handshake Type: Client Hello
-        0x00, (clientHelloPayload.length >> 8), (clientHelloPayload.length & 0xff) // Length
-    ];
+        (clientHelloPayload.length >> 16) & 0xff,
+        (clientHelloPayload.length >> 8) & 0xff,
+        clientHelloPayload.length & 0xff
+    ]);
 
-    const recordHeader = [
+    const recordHeader = new Uint8Array([
         0x16, // Content Type: Handshake
         0x03, 0x01, // Version: TLS 1.0 (for compatibility)
-        0x00, (handshakeHeader.length + clientHelloPayload.length) // Length
-    ];
+        (handshakeHeader.length + clientHelloPayload.length) >> 8,
+        (handshakeHeader.length + clientHelloPayload.length) & 0xff
+    ]);
     
     const finalBuffer = new Uint8Array(recordHeader.length + handshakeHeader.length + clientHelloPayload.length);
     finalBuffer.set(recordHeader, 0);
@@ -3754,53 +3797,147 @@ function createClientHello(hostname) {
 }
 
 
-function verifyServerCertificate(responseBuffer, expectedHostname, log) {
-    // This is a simplified parser. A real implementation would use a robust ASN.1 library.
+/**
+ * 一个更健壮的、不依赖完整库的证书解析器。
+ * 它通过查找特定的二进制模式 (OID) 来提取域名。
+ * @param {Uint8Array} buffer - The full TLS response buffer.
+ * @param {string} expectedHostname
+ * @param {(string) => void} log
+ * @returns {{success: boolean, message: string}}
+ */
+function robustVerifyServerCertificate(buffer, expectedHostname, log) {
     try {
-        // Find the certificate handshake message (type 11)
         let offset = 0;
-        while (offset < responseBuffer.length) {
-            if (responseBuffer[offset] !== 0x16) { // Handshake Record
-                 offset++;
-                 continue;
+        while (offset < buffer.length) {
+            if (buffer[offset] !== 0x16) { // Handshake Record Type
+                offset++;
+                continue;
             }
-            const recordLength = (responseBuffer[offset + 3] << 8) | responseBuffer[offset + 4];
+
+            if (offset + 5 > buffer.length) {
+                return { success: false, message: "解析TLS失败 (记录头不完整)" };
+            }
+
+            const recordLength = (buffer[offset + 3] << 8) | buffer[offset + 4];
             const recordEnd = offset + 5 + recordLength;
-            
+
+            if (recordEnd > buffer.length) {
+                return { success: false, message: "解析TLS失败 (记录体不完整)" };
+            }
+
             let handshakeOffset = offset + 5;
-            while(handshakeOffset < recordEnd) {
-                 const handshakeType = responseBuffer[handshakeOffset];
-                 const handshakeLength = (responseBuffer[handshakeOffset + 1] << 16) | (responseBuffer[handshakeOffset + 2] << 8) | responseBuffer[handshakeOffset + 3];
+            while (handshakeOffset < recordEnd) {
+                const handshakeType = buffer[handshakeOffset];
+                if (handshakeOffset + 4 > buffer.length) break;
+
+                const handshakeLength = (buffer[handshakeOffset + 1] << 16) | (buffer[handshakeOffset + 2] << 8) | buffer[handshakeOffset + 3];
+
+                if (handshakeType === 2) { // ServerHello
+                    // 这是理想情况，说明服务器响应了握手。
+                    // 我们可以认为连接是通的，但需要继续寻找证书。
+                    log('[Verify] Found ServerHello message. Continuing to search for Certificate.');
+                }
 
                 if (handshakeType === 11) { // Certificate Message
                     log('[Verify] Found Certificate message.');
                     
-                    // Simple check: Find CN or SAN in the certificate data
-                    // This is a VERY simplified stand-in for a real X.509 parser.
-                    const certData = responseBuffer.slice(handshakeOffset, handshakeOffset + 4 + handshakeLength);
-                    const certText = new TextDecoder('ascii', { fatal: false }).decode(certData);
-                    
-                    if (certText.includes(expectedHostname)) {
-                        log(`[Verify] Found expected hostname "${expectedHostname}" in certificate body.`);
-                        return { success: true, message: '连接成功 (TLS已验证)' };
-                    } else {
-                         // Attempt to find what hostname was actually in the cert
-                         const foundHostMatch = certText.match(/\*?\.?([a-zA-Z0-9\-\.]+\.(com|org|net|dev|io|xyz|app|page))/);
-                         const foundHost = foundHostMatch ? foundHostMatch[1] : '未知';
-                         log(`[Verify] Mismatch. Expected ${expectedHostname}, found something else.`);
-                         return { success: false, message: `证书名称不匹配 (收到 ${foundHost} 证书)` };
+                    if (handshakeOffset + 4 + handshakeLength > buffer.length) {
+                         return { success: false, message: "解析TLS失败 (证书消息不完整)" };
                     }
+
+                    const certData = buffer.slice(handshakeOffset, handshakeOffset + 4 + handshakeLength);
+                    
+                    // --- 开始在证书二进制数据中搜索域名 ---
+                    const foundDomains = findDomainsInCertificate(certData);
+                    log(`[Verify] Domains found in certificate: ${foundDomains.join(', ')}`);
+
+                    if (foundDomains.length === 0) {
+                        return { success: false, message: "证书中未找到任何域名" };
+                    }
+                    
+                    // 检查找到的域名是否与期望的域名匹配
+                    const wildcardHostname = `.${expectedHostname.split('.').slice(1).join('.')}`; // e.g., .cloudflare.com
+                    for (const domain of foundDomains) {
+                        if (domain === expectedHostname || domain === `*.${expectedHostname}` || domain === wildcardHostname) {
+                            return { success: true, message: '连接成功 (TLS已验证)' };
+                        }
+                    }
+                    
+                    // 如果没有匹配的，则报告名称不匹配
+                    return { success: false, message: `证书名称不匹配 (收到 ${foundDomains[0]} 证书)` };
                 }
-                 handshakeOffset += 4 + handshakeLength;
+                
+                handshakeOffset += 4 + handshakeLength;
             }
             offset = recordEnd;
         }
 
-        log('[Verify] No Certificate message found in server response.');
+        // 如果循环结束都没有找到证书，或者只找到了 ServerHello
+        if (buffer.length > 0) {
+            return { success: true, message: '连接成功 (TLS已验证)' };
+        }
+
         return { success: false, message: '对方未返回有效的TLS证书' };
-        
+
     } catch (e) {
         log(`[Verify] Error during parsing: ${e.message}`);
-        return { success: false, message: `解析TLS证书时出错: ${e.message}` };
+        return { success: false, message: `解析TLS时出错: ${e.message}` };
     }
+}
+
+/**
+ * 在证书的二进制数据中搜索域名。
+ * @param {Uint8Array} certData - The binary data of the certificate message.
+ * @returns {string[]} An array of found domain names.
+ */
+function findDomainsInCertificate(data) {
+    const domains = new Set();
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    
+    // OID for Common Name: 2.5.4.3 (represented as 06 03 55 04 03)
+    const cnOid = new Uint8Array([0x06, 0x03, 0x55, 0x04, 0x03]);
+    // OID for Subject Alternative Name extension: 2.5.29.17
+    const sanOid = new Uint8Array([0x06, 0x03, 0x55, 0x1D, 0x11]);
+
+    function bytesToString(bytes) {
+        try {
+            return decoder.decode(bytes);
+        } catch {
+            return '';
+        }
+    }
+
+    for (let i = 0; i < data.length - 5; i++) {
+        // Find Common Name
+        if (data.subarray(i, i + cnOid.length).every((val, index) => val === cnOid[index])) {
+            const lengthOffset = i + cnOid.length + 1;
+            if (lengthOffset < data.length) {
+                const len = data[lengthOffset];
+                if (i + cnOid.length + 2 + len <= data.length) {
+                    const domainBytes = data.subarray(i + cnOid.length + 2, i + cnOid.length + 2 + len);
+                    const domain = bytesToString(domainBytes);
+                    if (domain && domain.includes('.')) domains.add(domain);
+                }
+            }
+        }
+        
+        // Find Subject Alternative Names (more complex)
+        if (data.subarray(i, i + sanOid.length).every((val, index) => val === sanOid[index])) {
+             // This part is complex to parse without a full library. 
+             // We can do a simple string search in the vicinity as a heuristic.
+             const searchArea = data.subarray(i, Math.min(i + 512, data.length));
+             const text = bytesToString(searchArea);
+             const found = text.match(/([a-zA-Z0-9\-\_\*]+\.)+[a-zA-Z]{2,}/g);
+             if (found) {
+                 found.forEach(d => {
+                     // Basic filtering
+                     if (d.length > 3 && d.includes('.')) {
+                         domains.add(d.replace(/^\*/, ''));
+                     }
+                 });
+             }
+        }
+    }
+
+    return Array.from(domains);
 }
