@@ -669,6 +669,29 @@ export default {
 				return await statusPage();
 			}
 
+            const url = new URL(request.url);
+
+            // 新增：处理 NAT64 /96 前缀的真实性验证请求
+            if (url.pathname.startsWith('/nat64-test-probe')) {
+                const nat64Prefix = url.searchParams.get('prefix');
+                if (!nat64Prefix) {
+                    return new Response('Missing prefix parameter', { status: 400 });
+                }
+                try {
+                    const testIPv4 = '1.1.1.1';
+                    const testPort = 80;
+                    const parts = testIPv4.split('.').map(p => parseInt(p).toString(16).padStart(2, '0'));
+                    const synthesizedIPv6 = `${nat64Prefix}${parts[0]}${parts[1]}:${parts[2]}${parts[3]}`;
+
+                    const socket = await connect({ hostname: `[${synthesizedIPv6}]`, port: testPort });
+                    await socket.close();
+                    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' }});
+                } catch (err) {
+                    return new Response(JSON.stringify({ success: false, error: err.message }), { headers: { 'Content-Type': 'application/json' }, status: 500 });
+                }
+            }
+
+
             // 4. 生成伪装信息
 			const currentDate = new Date();
 			currentDate.setHours(0, 0, 0, 0);
@@ -701,7 +724,6 @@ export default {
 
             // 6. 根据请求类型（WebSocket 或 HTTP）进行路由
 			const upgradeHeader = request.headers.get('Upgrade');
-			const url = new URL(request.url);
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
 				// HTTP 请求处理
                 let sub = env.SUB || '';
@@ -2669,7 +2691,7 @@ async function handlePostRequest(request, env) {
 
     // 新增：根据 'action' 参数进行路由
     if (action === 'test') {
-        return handleTestConnection(request);
+        return handleTestConnection(request, url);
     }
 
     // 默认行为是保存配置
@@ -3601,18 +3623,19 @@ async function handleGetRequest(env) {
 }
 
 /**
- * 新增：处理连接测试的后端函数 (使用 HTTP 路由探针)
+ * 新增：处理连接测试的后端函数
  * @param {Request} request
+ * @param {URL} url
  * @returns {Promise<Response>}
  */
-async function handleTestConnection(request) {
+async function handleTestConnection(request, url) {
     if (request.method !== 'POST') {
         return new Response('Method Not Allowed', { status: 405 });
     }
 
     const log = (info) => { console.log(`[TestConnection] ${info}`); };
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort('连接超时 (5秒)'), 5000);
+    const timeoutId = setTimeout(() => controller.abort('连接超时 (8秒)'), 8000);
 
     try {
         const { type, address } = await request.json();
@@ -3637,99 +3660,46 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'proxyip': {
-                // 对于 PROXYIP，我们默认测试其作为 HTTP 反向代理的能力，所以使用 443 端口
                 const { address: ip, port } = parseProxyIP(address, 443);
-                log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
-                log(`PROXYIP Test: TCP 连接成功。`);
-
-                try {
-                    log(`PROXYIP Test: 步骤 2/2 - 正在发送 HTTP 路由探针...`);
-                    const writer = testSocket.writable.getWriter();
-                    const workerHostname = new URL(request.url).hostname;
-                    
-                    // 构造一个简单的 HTTP GET 请求作为探针
-                    const httpProbeRequest = [
-                        `GET / HTTP/1.1`,
-                        `Host: ${workerHostname}`,
-                        'User-Agent: Cloudflare-Connectivity-Test',
-                        'Connection: close', // 确保服务器在响应后关闭连接
-                        '\r\n'
-                    ].join('\r\n');
-
-                    await writer.write(new TextEncoder().encode(httpProbeRequest));
-                    writer.releaseLock();
-                    log(`PROXYIP Test: 已发送 GET 请求, Host: ${workerHostname}`);
-
-                    const reader = testSocket.readable.getReader();
-                    const { value, done } = await reader.read();
-                    
-                    if (done) {
-                        throw new Error("连接已关闭，未收到任何响应。");
-                    }
-
-                    const responseText = new TextDecoder().decode(value);
-                    log(`PROXYIP Test: 收到响应:\n${responseText.substring(0, 200)}...`);
-
-                    // 成功的关键标志：响应头中包含 "Server: cloudflare"
-                    if (responseText.toLowerCase().includes('server: cloudflare')) {
-                        log(`PROXYIP Test: 响应头包含 "Server: cloudflare"。测试通过。`);
-                        successMessage = '探测成功！该IP是有效的Cloudflare节点。';
-                    } else {
-                        throw new Error("收到的响应并非来自Cloudflare，该IP可能无效。");
-                    }
-                    
-                    // 确保最终关闭 socket
-                    await testSocket.close();
-                    reader.releaseLock();
-
-                } catch(err) {
-                    // 确保在内部块出错时也能关闭socket
-                    if (testSocket) await testSocket.close();
-                    throw err; // 将错误重新抛出到外部catch块
-                }
+                await testSocket.close();
+                successMessage = 'TCP 连接成功！该IP可用作优选。';
                 break;
             }
 			case 'nat64': {
 				log(`NAT64 Test: Testing server: ${address}`);
 	
 				if (address.endsWith('/96')) {
-					// 对 /96 前缀进行真实的 fetch 测试，这是验证其连通性的最可靠方法。
-					log('NAT64 Test: Detected /96 prefix. Performing active fetch test.');
-					const prefixBase = address.replace('/96', '');
-					// 使用一个众所周知的、稳定的IPv4地址进行测试。
-					const testIPv4 = '1.1.1.1'; 
-	
-					// 根据 RFC 6052 标准，将 IPv4 地址嵌入到 /96 前缀中。
-					// 1.1.1.1 -> 01.01.01.01 -> 01010101
-					const parts = testIPv4.split('.').map(p => parseInt(p, 10).toString(16).padStart(2, '0'));
-					const ipv4Hex = parts.join(''); // e.g., "01010101"
-					// 组合成IPv6地址，例如： "2001:db8::" + "0101" + ":" + "0101" -> "2001:db8::101:101"
-					const ipv6Addr = `${prefixBase}${ipv4Hex.slice(0, 4)}:${ipv4Hex.slice(4, 8)}`;
+					// 对 /96 前缀进行真实的网络回环测试
+					log('NAT64 Test: Detected /96 prefix. Performing loopback probe test.');
+					const nat64Prefix = address.replace('/96', '');
 					
-					// 构造一个到该IPv6地址的HTTP请求URL。1.1.1.1在80端口上会响应HTTP请求。
-					const testUrl = `http://[${ipv6Addr}]`;
-	
-					log(`NAT64 Test: Fetching ${testUrl} to validate /96 prefix...`);
+					// 构造一个指向自己的、包含待测前缀的URL
+					const probeUrl = new URL(url);
+					probeUrl.pathname = '/nat64-test-probe';
+					probeUrl.search = `?prefix=${encodeURIComponent(nat64Prefix)}`;
 					
-					const response = await fetch(testUrl, {
+					log(`NAT64 Test: Sending probe request to: ${probeUrl.toString()}`);
+
+					const probeResponse = await fetch(probeUrl.toString(), {
 						method: 'GET',
-						redirect: 'manual', // 我们不需要跟随跳转，只需要能收到响应即可
-						signal: controller.signal // 应用超时控制器
+						signal: controller.signal
 					});
-	
-					log(`NAT64 Test: Received response with status ${response.status}`);
-					// 任何 2xx 或 3xx 状态码都表示网络路径是通的，NAT64网关工作正常。
-					if (response.status >= 200 && response.status < 400) {
-						successMessage = `连接成功 (状态: ${response.status})! /96 前缀有效。`;
+
+					if (!probeResponse.ok) {
+						const errorBody = await probeResponse.json();
+						throw new Error(`Probe failed with status ${probeResponse.status}: ${errorBody.error || 'Unknown error'}`);
+					}
+
+					const result = await probeResponse.json();
+					if (result.success) {
+						successMessage = '连接测试成功！/96 前缀有效。';
 					} else {
-						// 如果收到服务器错误（4xx, 5xx），说明网络通了但目标服务有问题，对我们测试来说也算成功。
-						// 但为了更清晰，我们特殊处理一下。
-						successMessage = `连接成功但收到非预期状态: ${response.status}。前缀本身可能有效。`;
+						throw new Error(result.error || 'Probe returned failure');
 					}
 	
 				} else {
-					// 对于DNS64服务器，执行DNS解析测试。
+					// 对于DNS64服务器，执行DNS解析测试
 					log('NAT64 Test: Detected DNS64 server. Performing resolution test.');
 					const testDomain = 'ipv4.google.com';
 					log(`NAT64 Test: Attempting to resolve ${testDomain} using ${address}...`);
