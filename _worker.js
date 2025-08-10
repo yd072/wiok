@@ -3598,23 +3598,23 @@ async function handleGetRequest(env) {
 
 /**
  * 手动将 IPv4 地址和 NAT64 前缀合成为一个 IPv6 地址
- * @param {string} ipv4 - 例如 "8.8.8.8"
+ * @param {string} ipv4 - 例如 "1.1.1.1"
  * @param {string} prefix - 例如 "64:ff9b::/96"
- * @returns {string} - 例如 "64:ff9b::0808:0808"
+ * @returns {string} - 例如 "64:ff9b::0101:0101"
  */
 function synthesizeIPv6(ipv4, prefix) {
     const prefixBase = prefix.split('/96')[0];
     const ipv4Parts = ipv4.split('.').map(part => parseInt(part, 10));
 
+    // 将IPv4的四个部分两两组合成两个16位的十六进制数
     const hexPart1 = ((ipv4Parts[0] << 8) | ipv4Parts[1]).toString(16).padStart(4, '0');
     const hexPart2 = ((ipv4Parts[2] << 8) | ipv4Parts[3]).toString(16).padStart(4, '0');
+    
+    // 移除前缀末尾可能存在的单个冒号，以处理 "prefix:" 和 "prefix::" 两种情况
+    const cleanPrefixBase = prefixBase.endsWith('::') ? prefixBase : prefixBase.replace(/:$/, '');
 
-    // Jool's mapping style: prefix::[hex1]:[hex2]
-    if (prefixBase.endsWith('::')) {
-        return `${prefixBase}${hexPart1}:${hexPart2}`;
-    }
-    // Common mapping style: prefix:[hex1]:[hex2]
-    return `${prefixBase}${hexPart1}:${hexPart2}`;
+    // 拼接成最终的IPv6地址
+    return `${cleanPrefixBase}::${hexPart1}:${hexPart2}`.replace(/:::+/, '::'); // 替换三个或更多冒号为一个双冒号
 }
 
 
@@ -3700,21 +3700,20 @@ async function handleTestConnection(request) {
                     throw new Error("仅支持 /96 前缀格式的NAT64地址进行测试。");
                 }
                 
-                log(`NAT64 Test: 步骤 1/3 - 正在手动合成IPv6地址...`);
-                const targetIPv4 = '8.8.8.8'; // 使用一个稳定的公网IPv4进行测试
+                log(`NAT64 Test: 步骤 1/2 - 正在手动合成IPv6地址...`);
+                const targetIPv4 = '1.1.1.1'; // 使用一个稳定的、Cloudflare拥有的IPv4进行测试
                 const synthesizedIPv6 = synthesizeIPv6(targetIPv4, address);
                 log(`NAT64 Test: 已将 ${targetIPv4} 合成到 ${address} -> ${synthesizedIPv6}`);
 
-                log(`NAT64 Test: 步骤 2/3 - 正在连接到合成地址的443端口...`);
+                log(`NAT64 Test: 步骤 2/2 - 正在连接并探测合成地址...`);
                 const testSocket = await connect({ hostname: synthesizedIPv6, port: 443, signal: controller.signal });
                 log(`NAT64 Test: TCP 连接成功。`);
 
                 try {
-                    log(`NAT64 Test: 步骤 3/3 - 正在发送 HTTP 探针...`);
                     const writer = testSocket.writable.getWriter();
                     const httpProbeRequest = [
                         `GET / HTTP/1.1`,
-                        `Host: www.cloudflare.com`, // 测试到公网的连通性
+                        `Host: one.one.one.one`, // Host头必须与目标IPv4(1.1.1.1)对应
                         'User-Agent: Cloudflare-Connectivity-Test',
                         'Connection: close',
                         '\r\n'
