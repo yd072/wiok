@@ -3304,7 +3304,7 @@ async function handleGetRequest(env) {
                             <div class="setting-item-footer">
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'nat64')">测试连接</button>
                                 <span id="nat64-status" class="test-status"></span>
-                                <p class="test-note">（测试将尝试解析 ipv4.google.com）</p>
+                                <p class="test-note">(DNS64将解析ipv4.google.com, /96前缀将连接8.8.8.8:53)</p>
                             </div>
                         </div>
 						<script>
@@ -3691,10 +3691,39 @@ async function handleTestConnection(request) {
                 break;
             }
 			case 'nat64': {
-				const testDomain = 'ipv4.google.com';
-				log(`NAT64 Test: 正在使用服务器 ${address} 解析 ${testDomain}`);
-				const resolvedIp = await resolveToIPv6(testDomain, address);
-				successMessage = `解析成功: ${resolvedIp}`;
+				log(`NAT64 Test: Testing server: ${address}`);
+	
+				if (address.endsWith('/96')) {
+					log('NAT64 Test: Detected /96 prefix. Performing active connection test.');
+					const prefix = address.split('/96')[0];
+					const testIPv4 = '8.8.8.8'; // A well-known, stable IPv4 address for testing
+					const testPort = 53;      // DNS port is a good universal target
+	
+					// Manual conversion logic
+					const parts = testIPv4.split('.');
+					if (parts.length !== 4) throw new Error('Invalid test IPv4 address');
+					const hex = parts.map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
+					const synthesizedIPv6 = prefix + hex[0] + hex[1] + ":" + hex[2] + hex[3];
+	
+					const ipv6Regex = /^(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}$/i;
+					if (!ipv6Regex.test(synthesizedIPv6)) {
+					
+					}
+	
+					log(`NAT64 Test: Synthesized IPv6 for ${testIPv4} is [${synthesizedIPv6}]. Attempting to connect on port ${testPort}...`);
+					
+					const testSocket = await connect({ hostname: `[${synthesizedIPv6}]`, port: testPort, signal: controller.signal });
+					log(`NAT64 Test: Successfully connected to [${synthesizedIPv6}]:${testPort}. Closing socket.`);
+					await testSocket.close(); 
+					successMessage = '连接测试成功！/96 前缀有效。';
+	
+				} else {
+					log('NAT64 Test: Detected DNS64 server. Performing resolution test.');
+					const testDomain = 'ipv4.google.com';
+					log(`NAT64 Test: Attempting to resolve ${testDomain} using ${address}...`);
+					const resolvedIp = await resolveToIPv6(testDomain, address);
+					successMessage = `解析成功: ${resolvedIp}`;
+				}
 				break;
 			}
             default:
