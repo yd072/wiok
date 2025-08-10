@@ -3653,7 +3653,8 @@ async function handleTestConnection(request) {
 
     const log = (info) => { console.log(`[TestConnection] ${info}`); };
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort('连接超时 (10秒)'), 10000);
+    // 将超时设置为 8 秒，以提供足够的时间进行应用层探测
+    const timeoutId = setTimeout(() => controller.abort('连接或响应超时 (8秒)'), 8000);
 
     try {
         const { type, address } = await request.json();
@@ -3661,7 +3662,7 @@ async function handleTestConnection(request) {
             throw new Error('请求参数不完整或地址为空');
         }
 
-        log(`Testing type: ${type}, address: ${address}`);
+        log(`开始测试 - 类型: ${type}, 地址: ${address}`);
         let successMessage = '连接成功！';
 
         switch (type) {
@@ -3678,7 +3679,8 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'proxyip': {
-                const { address: ip, port } = parseProxyIP(address, 443); 
+                // PROXYIP 的测试逻辑保持不变，因为它本身就是一种应用层探测
+                const { address: ip, port } = parseProxyIP(address, 443);
                 log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
                 log(`PROXYIP Test: TCP 连接成功。`);
@@ -3722,53 +3724,81 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'nat64': {
-                let synthesizedIPv6;
-                const probeDomain = 'ipv4.google.com';
+                const probeDomain = 'ipv4.google.com'; // 使用一个稳定的、仅有IPv4地址的域名进行测试
 
                 if (address.endsWith('/96')) {
-                    // 1. 获取真实 IPv4
-                    log(`NAT64 Test (Prefix): 步骤 1/3 - 正在获取 '${probeDomain}' 的 IPv4 地址...`);
-                    const ipv4 = await fetchIPv4ViaDoH(probeDomain, controller.signal);
-                    log(`NAT64 Test (Prefix): 成功获取 IPv4: ${ipv4}`);
+                    // --- 针对 /96 前缀的全新、正确的测试逻辑 ---
+                    let synthesizedIPv6;
+                    try {
+                        log(`NAT64 Prefix Test: 步骤 1/3 - 获取 '${probeDomain}' 的 IPv4 地址...`);
+                        const ipv4 = await fetchIPv4ViaDoH(probeDomain, controller.signal);
+                        log(`NAT64 Prefix Test: 成功获取 IPv4: ${ipv4}`);
 
-                    // 2. 本地合成 IPv6
-                    log(`NAT64 Test (Prefix): 步骤 2/3 - 正在使用前缀 ${address} 合成 IPv6...`);
-                    const prefix = address.split('/96')[0];
-                    const hex = ipv4.split('.').map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
-                    synthesizedIPv6 = prefix + hex[0] + hex[1] + ":" + hex[2] + hex[3];
-                    if (!isIPv6(synthesizedIPv6)) {
-                         throw new Error(`无法从该前缀合成有效的 IPv6 地址 (结果: ${synthesizedIPv6})`);
+                        log(`NAT64 Prefix Test: 步骤 2/3 - 使用前缀 ${address} 合成 IPv6...`);
+                        const prefix = address.split('/96')[0];
+                        const hex = ipv4.split('.').map(part => parseInt(part, 10).toString(16).padStart(2, '0'));
+                        synthesizedIPv6 = prefix + hex[0] + hex[1] + ":" + hex[2] + hex[3];
+                        if (!isIPv6(synthesizedIPv6)) {
+                             throw new Error(`无法从该前缀合成有效的 IPv6 地址 (结果: ${synthesizedIPv6})`);
+                        }
+                        log(`NAT64 Prefix Test: 成功合成 IPv6: ${synthesizedIPv6}`);
+
+                    } catch (synthesisError) {
+                        throw new Error(`前缀处理失败: ${synthesisError.message}`);
                     }
-                    log(`NAT64 Test (Prefix): 成功合成 IPv6: ${synthesizedIPv6}`);
+
+                    log(`NAT64 Prefix Test: 步骤 3/3 - 对合成地址进行应用层探针...`);
+                    const testSocket = await connect({ hostname: synthesizedIPv6, port: 80, signal: controller.signal });
+                    
+                    try {
+                        const writer = testSocket.writable.getWriter();
+                        const httpProbe = `GET / HTTP/1.1\r\nHost: ${probeDomain}\r\nConnection: close\r\n\r\n`;
+                        await writer.write(new TextEncoder().encode(httpProbe));
+                        
+                        const reader = testSocket.readable.getReader();
+                        const { value } = await reader.read();
+                        const responseText = new TextDecoder().decode(value || new Uint8Array());
+                        
+                        // 检查是否收到了一个有效的 HTTP 响应头
+                        if (responseText.startsWith('HTTP/1.') && responseText.includes('200 OK')) {
+                            log(`NAT64 Prefix Test: 探测成功，收到 200 OK 响应。`);
+                            successMessage = '前缀有效：成功通过该前缀连接到 IPv4 服务。';
+                        } else {
+                            throw new Error(`连接成功但未收到有效的 HTTP 响应。收到的内容: ${responseText.substring(0, 100)}...`);
+                        }
+                    } finally {
+                        await testSocket.close();
+                    }
 
                 } else {
-                    // 1&2. 通过 DNS64 服务器直接解析
-                    log(`NAT64 Test (Server): 步骤 1-2/3 - 正在使用服务器 ${address} 解析 '${probeDomain}'...`);
-                    synthesizedIPv6 = await testNAT64(address, controller.signal);
-                    log(`NAT64 Test (Server): 成功解析到 IPv6: ${synthesizedIPv6}`);
-                }
-                
-                // 3. 验证合成的 IPv6 地址的连通性
-                log(`NAT64 Test (Final): 步骤 3/3 - 正在测试合成地址 ${synthesizedIPv6} 的连通性...`);
-                const testSocket = await connect({ hostname: synthesizedIPv6, port: 443, signal: controller.signal });
-                await testSocket.close();
-                log(`NAT64 Test (Final): 连通性测试成功！`);
+                    // --- 针对 DNS64 服务器的测试逻辑（保持不变，但受益于更好的错误处理） ---
+                    log(`DNS64 Server Test: 步骤 1/2 - 使用服务器 ${address} 解析 '${probeDomain}'...`);
+                    const resolvedIPv6 = await testNAT64(address, controller.signal);
+                    log(`DNS64 Server Test: 成功解析到 IPv6: ${resolvedIPv6}`);
+                    
+                    log(`DNS64 Server Test: 步骤 2/2 - 测试解析地址 ${resolvedIPv6} 的连通性...`);
+                    const testSocket = await connect({ hostname: resolvedIPv6, port: 443, signal: controller.signal });
+                    await testSocket.close();
+                    log(`DNS64 Server Test: 连通性测试成功！`);
 
-                successMessage = '探测成功！该NAT64服务有效且可达。';
+                    successMessage = '服务器有效：成功解析并连接到目标。';
+                }
                 break;
             }
             default:
                 throw new Error('不支持的测试类型');
         }
         
-        log(`Test successful for ${type}: ${address}`);
+        log(`测试成功 - 类型: ${type}, 地址: ${address}`);
         return new Response(JSON.stringify({ success: true, message: successMessage }), { 
             status: 200,
             headers: { 'Content-Type': 'application/json;charset=utf-8' } 
         });
 
     } catch (err) {
-        console.error(`[TestConnection] Error: ${err.stack || err}`);
+        // 全局错误捕获，确保任何失败都会被正确报告
+        console.error(`[TestConnection] 测试失败: ${err.stack || err}`);
+        // 返回 200 状态码，但内容指明失败，这是为了让前端能稳定接收和处理错误信息
         return new Response(JSON.stringify({ success: false, message: `测试失败: ${err.message}` }), { 
             status: 200, 
             headers: { 'Content-Type': 'application/json;charset=utf-8' } 
