@@ -2680,14 +2680,14 @@ function generateSingboxConfig(nodeObjects) {
     const outbounds = nodeObjects.map(p => {
         // 构建基础的 secureProto outbound 对象
         let outbound = {
-            type: p.type, // "secureProto"
+            type: p.type,
             tag: p.name,
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
-            // 移除了错误的 "encryption" 字段
+            encryption: "none", // secureProto 标准字段
             transport: {
-                type: 'ws', // transport type is 'ws'
+                type: p.network, // 'ws'
                 path: p['ws-opts'].path,
                 headers: {
                     Host: p.servername
