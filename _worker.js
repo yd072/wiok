@@ -2678,7 +2678,7 @@ rules:
 }
 
 /**
- * 生成Sing-box配置 (已更新至最新的官方规则 URL)
+ * 生成Sing-box配置 (适配 1.12.0+ 最新语法)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2725,6 +2725,17 @@ function generateSingboxConfig(nodeObjects) {
                 { "address": "https://8.8.8.8/dns-query" }
             ]
         },
+        // --- START: 主要变更 1 ---
+        // 将 geosite 和 geoip 定义移到顶层
+        "geoip": {
+            "download_url": "https://github.com/sing-box/geoip/releases/latest/download/geoip-cn.db",
+            "download_detour": "direct"
+        },
+        "geosite": {
+            "download_url": "https://github.com/sing-box/geosite/releases/latest/download/geosite-cn.db",
+            "download_detour": "direct"
+        },
+        // --- END: 主要变更 1 ---
         "inbounds": [
             { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
         ],
@@ -2741,26 +2752,22 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "direct", "tag": "direct" },
             { "type": "block", "tag": "block" }
         ],
+        // --- START: 主要变更 2 ---
+        // 路由规则现在直接引用，不再需要 rule_set
         "route": {
-            "rule_set": [
-                {
-                    "tag": "geosite-cn",
-                    "type": "remote",
-                    "format": "binary",
-                    // --- START: 这是本次修正的关键 ---
-                    "url": "https://github.com/sing-box/geosite/releases/latest/download/geosite-cn.srs",
-                    // --- END: 这是本次修正的关键 ---
-                    "download_detour": "direct"
-                }
-            ],
             "rules": [
                 {
-                    "rule_set": "geosite-cn",
+                    "geosite": "cn",
+                    "outbound": "direct"
+                },
+                {
+                    "geoip": "cn",
                     "outbound": "direct"
                 }
             ],
             "final": "manual-select"
         }
+        // --- END: 主要变更 2 ---
     };
     
     return JSON.stringify(config, null, 2);
