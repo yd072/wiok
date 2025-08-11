@@ -2647,7 +2647,6 @@ dns:
   
 proxies:
 ${proxiesYaml}
-
 proxy-groups:
   - name: ${JSON.stringify(autoSelectGroupName)}
     type: url-test
@@ -2672,7 +2671,7 @@ rules:
 
 
 /**
- * 【新增】生成Sing-box配置
+ * 【Sing-box 已修复】生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2685,7 +2684,6 @@ function generateSingboxConfig(nodeObjects) {
             server_port: p.port,
             uuid: p.uuid,
             security: 'none',
-            network: p.network,
             transport: {
                 type: p.network,
                 path: p['ws-opts'].path,
@@ -2717,8 +2715,8 @@ function generateSingboxConfig(nodeObjects) {
         },
         "dns": {
             "servers": [
-                { "address": "https://223.5.5.5/dns-query", "tag": "ali-dns" },
-                { "address": "https://8.8.8.8/dns-query", "tag": "google-dns" }
+                { "address": "https://223.5.5.5/dns-query" },
+                { "address": "https://8.8.8.8/dns-query" }
             ]
         },
         "inbounds": [
@@ -2733,8 +2731,7 @@ function generateSingboxConfig(nodeObjects) {
         ],
         "route": {
             "rules": [
-                { "geoip": "cn", "outbound": "direct" },
-                { "protocol": "dns", "outbound": "ali-dns" }
+                { "geoip": "cn", "outbound": "direct" }
             ],
             "default_outbound": "manual-select"
         }
