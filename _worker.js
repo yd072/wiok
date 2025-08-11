@@ -2685,9 +2685,9 @@ function generateSingboxConfig(nodeObjects) {
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
-            // 【修正】彻底移除不兼容的 "encryption" 字段
+            // 移除了错误的 "encryption" 字段
             transport: {
-                type: "ws",
+                type: 'ws', // transport type is 'ws'
                 path: p['ws-opts'].path,
                 headers: {
                     Host: p.servername
