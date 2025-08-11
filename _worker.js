@@ -2672,22 +2672,22 @@ rules:
 
 
 /**
- * 【最终修复版】生成Sing-box配置
+ * 【新增】生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
 function generateSingboxConfig(nodeObjects) {
     const outbounds = nodeObjects.map(p => {
-        // 构建基础的 secureProto outbound 对象
         let outbound = {
             type: p.type,
             tag: p.name,
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
-            encryption: "none", // secureProto 标准字段
+            security: 'none',
+            network: p.network,
             transport: {
-                type: p.network, // 'ws'
+                type: p.network,
                 path: p['ws-opts'].path,
                 headers: {
                     Host: p.servername
@@ -2695,7 +2695,6 @@ function generateSingboxConfig(nodeObjects) {
             }
         };
 
-        // 如果是 TLS 连接，添加 tls 对象
         if (p.tls) {
             outbound.tls = {
                 enabled: true,
