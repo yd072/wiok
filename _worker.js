@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2677,8 +2677,9 @@ rules:
     return config.trim();
 }
 
+
 /**
- * 生成Sing-box配置 (已更新至最新的官方规则 URL)
+ * 生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2742,25 +2743,11 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "block", "tag": "block" }
         ],
         "route": {
-            "rule_set": [
-                {
-                    "tag": "geosite-cn",
-                    "type": "remote",
-                    "format": "binary",
-                    // --- START: 这是本次修正的关键 ---
-                    "url": atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL1NhZ2VyTmV0L3NpbmctZ2Vvc2l0ZS9ydWxlLXNldC9nZW9zaXRlLWNuLnNycw=='),
-                    // --- END: 这是本次修正的关键 ---
-                    "download_detour": "direct"
-                }
-            ],
             "rules": [
-                {
-                    "rule_set": "geosite-cn",
-                    "outbound": "direct",
-                    "action": "reject"
-                }
+                { "geoip": "cn", "outbound": "direct" }
+                
             ],
-            "final": "manual-select"
+            "default_outbound": "manual-select"
         }
     };
     
