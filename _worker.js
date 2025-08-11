@@ -2748,7 +2748,7 @@ function generateSingboxConfig(nodeObjects) {
                     "type": "remote",
                     "format": "binary",
                     // --- START: 这是本次修正的关键 ---
-                    "url": "https://cdn.jsdelivr.net/gh/sing-box/geosite/geosite-cn.srs",
+                    "url": "https://github.com/sing-box/geosite/releases/latest/download/geosite-cn.srs",
                     // --- END: 这是本次修正的关键 ---
                     "download_detour": "direct"
                 }
