@@ -2742,10 +2742,18 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "direct", "tag": "direct" },
             { "type": "block", "tag": "block" }
         ],
+        "rule_sets": [
+            {
+                "tag": "geosite-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL1NhZ2VyTmV0L3NpbmctZ2Vvc2l0ZS9ydWxlLXNldC9nZW9zaXRlLWNuc3Jz'),
+                "download_detour": "direct"
+            }
+        ],
         "route": {
             "rules": [
                 { "rule_set": "geosite-cn", "outbound": "direct" }
-                
             ],
             "final": "manual-select"
         }
