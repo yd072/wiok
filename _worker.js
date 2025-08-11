@@ -2677,9 +2677,8 @@ rules:
     return config.trim();
 }
 
-
 /**
- * 生成Sing-box配置
+ * 生成Sing-box配置 (已更新至最新 rule_set 语法)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2742,22 +2741,26 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "direct", "tag": "direct" },
             { "type": "block", "tag": "block" }
         ],
-
+        // --- START: 更新路由部分 ---
         "route": {
-            "rule_sets": [
+            "rule_set": [
                 {
                     "tag": "geosite-cn",
                     "type": "remote",
                     "format": "binary",
-                    "url": atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL1NhZ2VyTmV0L3NpbmctZ2Vvc2l0ZS9ydWxlLXNldC9nZW9zaXRlLWNuc3Jz'),
-                    "download_detour": "direct"
+                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite/geosite-cn.srs",
+                    "download_detour": "direct" // 关键：指定用直连下载规则文件
                 }
-            ],            
+            ],
             "rules": [
-                { "rule_set": "geosite-cn", "outbound": "direct" }
+                {
+                    "rule_set": "geosite-cn", // 使用新的 rule_set 引用方式
+                    "outbound": "direct"
+                }
             ],
             "final": "manual-select"
         }
+        // --- END: 更新路由部分 ---
     };
     
     return JSON.stringify(config, null, 2);
