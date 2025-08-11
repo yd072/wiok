@@ -2254,7 +2254,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 return 恢复伪装信息(singboxConfig, userID, hostName, fakeUserID, fakeHostName, false);
             }
             
-            // 默认情况或请求 base64，则返回 VLESS 链接
+            // 默认情况或请求 base64，则返回 secureProto 链接
             const base64Content = await 生成本地订阅(nodeObjects);
             return 恢复伪装信息(base64Content, userID, hostName, fakeUserID, fakeHostName, true);
 		}
@@ -2571,7 +2571,7 @@ async function prepareNodeList(host, UUID, noTLS) {
  */
 function 生成本地订阅(nodeObjects) {
 	const 协议类型 = atob(protocolEncodedFlag);
-    const vlessLinks = nodeObjects.map(node => {
+    const secureProtoLinks = nodeObjects.map(node => {
         const link = `${协议类型}://${node.uuid}@${node.server}:${node.port}?` +
             `encryption=none&` +
             `security=${node.tls ? 'tls' : 'none'}&` +
@@ -2584,7 +2584,7 @@ function 生成本地订阅(nodeObjects) {
         return link;
     }).join('\n');
     
-    let finalLinks = vlessLinks;
+    let finalLinks = secureProtoLinks;
     if (link.length > 0) {
         finalLinks += '\n' + link.join('\n');
     }
@@ -2593,8 +2593,8 @@ function 生成本地订阅(nodeObjects) {
 
 /**
  * 【最终修复版】生成Clash配置
- * @param {Array} nodeObjects 
- * @returns {string} 
+ * @param {Array} nodeObjects - 节点对象数组
+ * @returns {string} - YAML 格式的 Clash 配置
  */
 function generateClashConfig(nodeObjects) {
     // 生成 proxies 部分的 YAML 字符串 (块格式)
@@ -2673,21 +2673,21 @@ rules:
 
 /**
  * 【最终修复版】生成Sing-box配置
- * @param {Array} nodeObjects 
- * @returns {string} 
+ * @param {Array} nodeObjects - 节点对象数组
+ * @returns {string} - JSON 格式的 Sing-box 配置
  */
 function generateSingboxConfig(nodeObjects) {
     const outbounds = nodeObjects.map(p => {
-        // 构建基础的 VLESS outbound 对象
+        // 构建基础的 secureProto outbound 对象
         let outbound = {
-            type: p.type,
+            type: p.type, // "secureProto"
             tag: p.name,
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
-            encryption: "none", // VLESS 标准字段
+            // 移除了错误的 "encryption" 字段
             transport: {
-                type: p.network, // 'ws'
+                type: 'ws', // transport type is 'ws'
                 path: p['ws-opts'].path,
                 headers: {
                     Host: p.servername
