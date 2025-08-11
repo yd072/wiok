@@ -2756,7 +2756,8 @@ function generateSingboxConfig(nodeObjects) {
             "rules": [
                 {
                     "rule_set": "geosite-cn",
-                    "outbound": "direct"
+                    "outbound": "direct",
+                    "action": "reject"
                 }
             ],
             "final": "manual-select"
