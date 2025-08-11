@@ -743,10 +743,10 @@ export default {
                     const isClashRequest = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || (url.searchParams.has('clash') && !userAgent.includes('subconverter'));
                     const isSingboxRequest = userAgent.includes('sing-box') || userAgent.includes('singbox') || ((url.searchParams.has('singbox') || url.searchParams.has('sb')) && !userAgent.includes('subconverter'));
                     
-					if (isClashRequest) {
-                        responseHeaders["Content-Disposition"] = `attachment; filename=clash.yaml; filename*=utf-8''${encodeURIComponent('Clash配置')}.yaml`;
-                    } else if (isSingboxRequest) {
-                        responseHeaders["Content-Disposition"] = `attachment; filename=singbox.json; filename*=utf-8''${encodeURIComponent('Sing-box配置')}.json`;
+					if (isClashRequest && !sub) { // 仅在内置生成时才修改文件名
+                        responseHeaders["Content-Disposition"] = `attachment; filename="clash.yaml"; filename*=utf-8''${encodeURIComponent('Clash配置')}.yaml`;
+                    } else if (isSingboxRequest && !sub) { // 仅在内置生成时才修改文件名
+                        responseHeaders["Content-Disposition"] = `attachment; filename="singbox.json"; filename*=utf-8''${encodeURIComponent('Sing-box配置')}.json`;
                     } else if (userAgent && !userAgent.includes('mozilla')) {
                          responseHeaders["Content-Disposition"] = `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`;
                     } else {
@@ -2592,27 +2592,41 @@ function 生成本地订阅(nodeObjects) {
 }
 
 /**
- * 【新增】生成Clash配置
- * @param {Array} nodeObjects 
- * @returns {string} - 
+ * 【已修复】生成Clash配置
+ * @param {Array} nodeObjects - 节点对象数组
+ * @returns {string} - YAML 格式的 Clash 配置
  */
 function generateClashConfig(nodeObjects) {
-    const proxies = nodeObjects.map(p => ({
-        name: p.name,
-        type: p.type,
-        server: p.server,
-        port: p.port,
-        uuid: p.uuid,
-        network: p.network,
-        tls: p.tls,
-        udp: true,
-        servername: p.servername,
-        'client-fingerprint': p['client-fingerprint'],
-        'ws-opts': p['ws-opts']
-    }));
+    // 生成 proxies 部分的 YAML 字符串
+    const proxiesYaml = nodeObjects.map(p => {
+        let proxyString = `  - name: ${JSON.stringify(p.name)}\n`;
+        proxyString += `    type: ${p.type}\n`;
+        proxyString += `    server: ${p.server}\n`;
+        proxyString += `    port: ${p.port}\n`;
+        proxyString += `    uuid: ${p.uuid}\n`;
+        proxyString += `    network: ${p.network}\n`;
+        proxyString += `    tls: ${p.tls}\n`;
+        proxyString += `    udp: true\n`;
+        if (p.tls) {
+            proxyString += `    servername: ${p.servername}\n`;
+            if (p['client-fingerprint']) {
+                proxyString += `    client-fingerprint: ${p['client-fingerprint']}\n`;
+            }
+        }
+        if (p['ws-opts']) {
+            proxyString += `    ws-opts:\n`;
+            proxyString += `      path: ${JSON.stringify(p['ws-opts'].path)}\n`;
+            if (p['ws-opts'].headers && p['ws-opts'].headers.Host) {
+                proxyString += `      headers:\n`;
+                proxyString += `        Host: ${p['ws-opts'].headers.Host}\n`;
+            }
+        }
+        return proxyString;
+    }).join('');
 
-    const proxyNames = proxies.map(p => p.name);
+    const proxyNames = nodeObjects.map(p => p.name);
 
+    // 拼接完整的 YAML 配置
     const config = `
 port: 7890
 socks-port: 7891
@@ -2628,13 +2642,12 @@ dns:
   fallback: []
   
 proxies:
-${proxies.map(p => `  - ${JSON.stringify(p)}`).join('\n')}
-
+${proxiesYaml}
 proxy-groups:
   - name: "🚀 Auto-Select"
     type: url-test
     proxies:
-${proxyNames.map(name => `      - ${name}`).join('\n')}
+${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
     url: 'http://www.gstatic.com/generate_204'
     interval: 300
   - name: " MANUAL-SELECT "
@@ -2642,19 +2655,20 @@ ${proxyNames.map(name => `      - ${name}`).join('\n')}
     proxies:
       - "🚀 Auto-Select"
       - DIRECT
-${proxyNames.map(name => `      - ${name}`).join('\n')}
+${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
 
 rules:
   - GEOIP,CN,DIRECT
-  - MATCH, MANUAL-SELECT 
+  - MATCH, " MANUAL-SELECT "
 `;
     return config.trim();
 }
 
+
 /**
  * 【新增】生成Sing-box配置
- * @param {Array} nodeObjects 
- * @returns {string} 
+ * @param {Array} nodeObjects - 节点对象数组
+ * @returns {string} - JSON 格式的 Sing-box 配置
  */
 function generateSingboxConfig(nodeObjects) {
     const outbounds = nodeObjects.map(p => {
@@ -3909,3 +3923,4 @@ async function handleTestConnection(request) {
         clearTimeout(timeoutId);
     }
 }
+
