@@ -2671,7 +2671,7 @@ rules:
 
 
 /**
- * 【Sing-box 已修复】生成Sing-box配置
+ * 【Sing-box 最终修复版】生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2724,7 +2724,13 @@ function generateSingboxConfig(nodeObjects) {
         ],
         "outbounds": [
             { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
-            { "type": "url-test", "tag": "auto-select", "outbounds": proxyNames },
+            { 
+              "type": "urltest", //【修复】将 "url-test" 改为 "urltest"
+              "tag": "auto-select", 
+              "outbounds": proxyNames,
+              "url": "http://www.gstatic.com/generate_204", //【修复】增加测速URL
+              "interval": "5m" //【修复】增加测速间隔
+            },
             ...outbounds,
             { "type": "direct", "tag": "direct" },
             { "type": "block", "tag": "block" }
@@ -2732,6 +2738,7 @@ function generateSingboxConfig(nodeObjects) {
         "route": {
             "rules": [
                 { "geoip": "cn", "outbound": "direct" }
+                // 【修复】移除了错误的 DNS 路由规则
             ],
             "default_outbound": "manual-select"
         }
