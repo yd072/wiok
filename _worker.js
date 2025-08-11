@@ -2592,12 +2592,12 @@ function 生成本地订阅(nodeObjects) {
 }
 
 /**
- * 【已修复】生成Clash配置
+ * 【最终修复版】生成Clash配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - YAML 格式的 Clash 配置
  */
 function generateClashConfig(nodeObjects) {
-    // 生成 proxies 部分的 YAML 字符串
+    // 生成 proxies 部分的 YAML 字符串 (块格式)
     const proxiesYaml = nodeObjects.map(p => {
         let proxyString = `  - name: ${JSON.stringify(p.name)}\n`;
         proxyString += `    type: ${p.type}\n`;
@@ -2625,6 +2625,10 @@ function generateClashConfig(nodeObjects) {
     }).join('');
 
     const proxyNames = nodeObjects.map(p => p.name);
+    
+    // 定义规范化的代理组名称
+    const autoSelectGroupName = "🚀 Auto-Select";
+    const manualSelectGroupName = "Manual-Select"; // 移除前后空格
 
     // 拼接完整的 YAML 配置
     const config = `
@@ -2643,23 +2647,25 @@ dns:
   
 proxies:
 ${proxiesYaml}
+
 proxy-groups:
-  - name: "🚀 Auto-Select"
+  - name: ${JSON.stringify(autoSelectGroupName)}
     type: url-test
     proxies:
 ${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
     url: 'http://www.gstatic.com/generate_204'
     interval: 300
-  - name: " MANUAL-SELECT "
+    
+  - name: ${JSON.stringify(manualSelectGroupName)}
     type: select
     proxies:
-      - "🚀 Auto-Select"
+      - ${JSON.stringify(autoSelectGroupName)}
       - DIRECT
 ${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
 
 rules:
   - GEOIP,CN,DIRECT
-  - MATCH, " MANUAL-SELECT "
+  - MATCH, ${manualSelectGroupName}
 `;
     return config.trim();
 }
@@ -3923,4 +3929,3 @@ async function handleTestConnection(request) {
         clearTimeout(timeoutId);
     }
 }
-
