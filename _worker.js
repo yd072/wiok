@@ -2759,11 +2759,8 @@ function generateSingboxConfig(nodeObjects) {
                 {
                     "geosite": "cn",
                     "outbound": "direct"
-                },
-                {
-                    "geoip": "cn",
-                    "outbound": "direct"
                 }
+
             ],
             "final": "manual-select"
         }
