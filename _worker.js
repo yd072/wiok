@@ -2593,8 +2593,8 @@ function 生成本地订阅(nodeObjects) {
 
 /**
  * 【最终修复版】生成Clash配置
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - YAML 格式的 Clash 配置
+ * @param {Array} nodeObjects 
+ * @returns {string} 
  */
 function generateClashConfig(nodeObjects) {
     // 生成 proxies 部分的 YAML 字符串 (块格式)
@@ -2672,22 +2672,22 @@ rules:
 
 
 /**
- * 【新增】生成Sing-box配置
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - JSON 格式的 Sing-box 配置
+ * 【最终修复版】生成Sing-box配置
+ * @param {Array} nodeObjects 
+ * @returns {string} 
  */
 function generateSingboxConfig(nodeObjects) {
     const outbounds = nodeObjects.map(p => {
+        // 构建基础的 VLESS outbound 对象
         let outbound = {
             type: p.type,
             tag: p.name,
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
-            security: 'none',
-            network: p.network,
+            encryption: "none", // VLESS 标准字段
             transport: {
-                type: p.network,
+                type: p.network, // 'ws'
                 path: p['ws-opts'].path,
                 headers: {
                     Host: p.servername
@@ -2695,6 +2695,7 @@ function generateSingboxConfig(nodeObjects) {
             }
         };
 
+        // 如果是 TLS 连接，添加 tls 对象
         if (p.tls) {
             outbound.tls = {
                 enabled: true,
