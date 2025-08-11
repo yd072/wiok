@@ -2744,7 +2744,7 @@ function generateSingboxConfig(nodeObjects) {
         ],
         "route": {
             "rules": [
-                { "geoip": "cn", "outbound": "direct" }
+                { "geosite": "cn", "outbound": "direct" }
                 
             ],
             "final": "manual-select"
