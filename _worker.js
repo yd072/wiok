@@ -2683,7 +2683,6 @@ function generateSingboxConfig(nodeObjects) {
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
-            security: 'none',
             transport: {
                 type: p.network,
                 path: p['ws-opts'].path,
