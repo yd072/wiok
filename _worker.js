@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2600,7 +2600,7 @@ function 生成本地订阅(nodeObjects) {
 }
 
 /**
- * 【最终修复版】生成Clash配置
+ * 生成Clash配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - YAML 格式的 Clash 配置
  */
@@ -2679,7 +2679,7 @@ rules:
 
 
 /**
- * 【Sing-box 最终修复版】生成Sing-box配置
+ * 生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2691,7 +2691,6 @@ function generateSingboxConfig(nodeObjects) {
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
-            // 【修复】移除了不兼容的 "security" 字段
             transport: {
                 type: p.network,
                 path: p['ws-opts'].path,
@@ -2733,11 +2732,11 @@ function generateSingboxConfig(nodeObjects) {
         "outbounds": [
             { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
             { 
-              "type": "urltest", //【修复】将 "url-test" 改为 "urltest"
+              "type": "urltest", 
               "tag": "auto-select", 
               "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204", //【修复】增加测速URL
-              "interval": "5m" //【修复】增加测速间隔
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
             },
             ...outbounds,
             { "type": "direct", "tag": "direct" },
@@ -2746,7 +2745,7 @@ function generateSingboxConfig(nodeObjects) {
         "route": {
             "rules": [
                 { "geoip": "cn", "outbound": "direct" }
-                // 【修复】移除了错误的 DNS 路由规则
+                
             ],
             "default_outbound": "manual-select"
         }
@@ -2756,7 +2755,7 @@ function generateSingboxConfig(nodeObjects) {
 }
 
 /**
- * 【新增】生成Loon配置
+ * 生成Loon配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - .conf 格式的 Loon 配置
  */
