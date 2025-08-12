@@ -1995,7 +1995,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					.subscription-buttons-container {
 						display: flex;
 						flex-wrap: wrap; 
-						gap: 15px; 
+						gap: 12px; 
 						justify-content: center;
 						margin-top: 15px;
 					}
@@ -2005,11 +2005,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						flex-direction: column;
 						align-items: center;
 						gap: 8px;
-						padding: 15px;
-						/* 【修改】移除了边框 */
+						padding: 12px; 
 						border-radius: 8px;
 						background-color: var(--section-bg);
-						min-width: 150px;
+						min-width: 135px; 
 						text-align: center;
 					}
 
@@ -2069,7 +2068,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 							</div>
 
 							<div class="subscription-button-item">
-								<span class="subscription-label">Base64 订阅</span>
+								<span class="subscription-label">Base64</span>
 								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64', 'qrcode_base64')">复制</button>
 								<div id="qrcode_base64" class="qrcode-container"></div>
 							</div>
