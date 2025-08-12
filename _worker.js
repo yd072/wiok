@@ -2719,7 +2719,6 @@ function generateSingboxConfig(nodeObjects) {
             "level": "info",
             "timestamp": true
         },
-        // --- 1. 新的 DNS 块：只定义服务器，不包含任何规则或策略 ---
         "dns": {
             "servers": [
                 {
@@ -2747,14 +2746,22 @@ function generateSingboxConfig(nodeObjects) {
               "interval": "5m"
             },
             ...outbounds,
-            { "type": "direct", "tag": "direct" },
+            // --- 核心修改点 1：创建一个附加了国内DNS解析器的自定义直连出站 ---
+            {
+                "type": "direct",
+                "tag": "direct-cn-dns", // 给它一个特殊的标签
+                "domain_resolver": {
+                    "server": "ali-dns", // 绑定阿里DNS
+                    "strategy": "prefer_ipv4"
+                }
+            },
+            { "type": "direct", "tag": "direct" }, // 保留默认的直连出站
             { "type": "block", "tag": "block" }
         ],
-        // --- 2. 新的 Route 块：在这里应用 DNS 解析器和策略 ---
         "route": {
-            // 设置一个全局默认的 DNS 解析器，用于所有未匹配到特定规则的流量
+            // 设置一个全局默认的DNS解析器，所有未被特殊规则指定的出站都会用它
             "default_domain_resolver": {
-                "server": "google-dns", // 默认使用 Google DNS
+                "server": "google-dns",
                 "strategy": "prefer_ipv4"
             },
             "rule_set": [
@@ -2769,23 +2776,16 @@ function generateSingboxConfig(nodeObjects) {
                 }
             ],
             "rules": [
+                // --- 核心修改点 2：将国内域名的流量指向我们新创建的 `direct-cn-dns` 出站 ---
                 {
-                    // 对于匹配 "geosite-cn" 规则集的域名...
                     "rule_set": "geosite-cn",
-                    // ...覆盖默认设置，为这条规则指定特定的 DNS 解析器
-                    "domain_resolver": {
-                       "server": "ali-dns", 
-                       "strategy": "prefer_ipv4"
-                    },
-                    
-                    "outbound": "direct"
+                    "outbound": "direct-cn-dns" // <--- 不再有 domain_resolver 字段，而是直接指向新的出站
                 },
                 {
                     "protocol": "dns",
                     "outbound": "direct"
                 }
             ],
-            // 所有其他未匹配的流量将走 "manual-select" 策略组
             "final": "manual-select"
         }
     };
