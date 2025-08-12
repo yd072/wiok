@@ -1,5 +1,4 @@
 
-
 import { connect } from 'cloudflare:sockets';
 
 // --- 全局配置缓存 ---
@@ -9,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -1879,22 +1878,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						margin: 15px 0;
 					}
 
-					.subscription-link {
-						display: block;
-						margin: 10px 0;
-						padding: 12px;
-						background: #f8f9fa;
-						border-radius: 6px;
-						border: 1px solid var(--border-color);
-						word-break: break-all;
-					}
-
-					html.dark-mode .subscription-link {
-						background: #3a3a3a;
-					}
-
 					.qrcode-container {
-						margin: 10px 0;
+						margin-top: 10px;
 						text-align: center;
 					}
 
@@ -1935,14 +1920,13 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 					.copy-button {
 						display: inline-block;
-						padding: 6px 12px;
+						padding: 8px 16px;
 						background: var(--primary-color);
 						color: #fff;
 						border: none;
 						border-radius: 4px;
 						cursor: pointer;
 						font-size: 14px;
-						margin: 5px 0;
 						transition: background-color: 0.2s;
 					}
 
@@ -2007,18 +1991,49 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						border-radius: 50%;
 					}
 
+					/* --- 新增的按钮样式 --- */
+					.subscription-buttons-container {
+						display: flex;
+						flex-wrap: wrap; /* 在小屏幕上自动换行 */
+						gap: 15px; /* 按钮之间的间距 */
+						justify-content: center; /* 居中对齐按钮 */
+						margin-top: 15px;
+					}
+
+					.subscription-button-item {
+						display: flex;
+						flex-direction: column;
+						align-items: center;
+						gap: 8px; /* 标签和按钮之间的距离 */
+						padding: 15px;
+						border: 1px solid var(--border-color);
+						border-radius: 8px;
+						background-color: var(--section-bg);
+						min-width: 150px;
+						text-align: center;
+					}
+
+					.subscription-label {
+						font-weight: 500;
+						font-size: 1em;
+					}
 
 					@media (max-width: 768px) {
 						body {
 							padding: 10px;
 						}
-
 						.container {
 							padding: 15px;
 						}
-
 						.section {
 							padding: 15px;
+						}
+						.subscription-buttons-container {
+							flex-direction: column;
+						}
+						.subscription-button-item {
+							width: 100%;
+							box-sizing: border-box;
 						}
 					}
 				</style>
@@ -2041,48 +2056,41 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					</label>
 				</div>
 				<div class="container">
+					
+					<!-- 【修改】将订阅链接替换为复制按钮 -->
 					<div class="section">
-						<div class="section-title">📋 订阅信息</div>
-						<div class="subscription-link">
-							自适应订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sub','qrcode_0')">
-								https://${proxyhost}${hostName}/${uuid}
-							</a>
-							<div id="qrcode_0" class="qrcode-container"></div>
-						</div>
+						<div class="section-title">📋 一键复制订阅</div>
+						
+						<div class="subscription-buttons-container">
+							
+							<div class="subscription-button-item">
+								<span class="subscription-label">通用订阅 (Base64)</span>
+								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}', 'qrcode_universal')">复制</button>
+								<div id="qrcode_universal" class="qrcode-container"></div>
+							</div>
 
-						<div class="subscription-link">
-							Base64订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64','qrcode_1')">
-								https://${proxyhost}${hostName}/${uuid}?b64
-							</a>
-							<div id="qrcode_1" class="qrcode-container"></div>
-						</div>
+							<div class="subscription-button-item">
+								<span class="subscription-label">Clash</span>
+								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash', 'qrcode_clash')">复制</button>
+								<div id="qrcode_clash" class="qrcode-container"></div>
+							</div>
+							
+							<div class="subscription-button-item">
+								<span class="subscription-label">Sing-box</span>
+								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb', 'qrcode_singbox')">复制</button>
+								<div id="qrcode_singbox" class="qrcode-container"></div>
+							</div>
 
-						<div class="subscription-link">
-							clash订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash','qrcode_2')">
-								https://${proxyhost}${hostName}/${uuid}?clash
-							</a>
-							<div id="qrcode_2" class="qrcode-container"></div>
-						</div>
+							<div class="subscription-button-item">
+								<span class="subscription-label">Loon</span>
+								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon', 'qrcode_loon')">复制</button>
+								<div id="qrcode_loon" class="qrcode-container"></div>
+							</div>
 
-						<div class="subscription-link">
-							singbox订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb','qrcode_3')">
-								https://${proxyhost}${hostName}/${uuid}?sb
-							</a>
-							<div id="qrcode_3" class="qrcode-container"></div>
-						</div>
-
-						<div class="subscription-link">
-							Loon订阅地址:<br>
-							<a href="javascript:void(0)" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?loon','qrcode_4')">
-								https://${proxyhost}${hostName}/${uuid}?loon
-							</a>
-							<div id="qrcode_4" class="qrcode-container"></div>
 						</div>
 					</div>
+					<!-- 替换结束 -->
+
 
 					<div class="section">
 						<div class="section-title">ℹ️ 使用说明</div>
@@ -2137,23 +2145,31 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 				<script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
 				<script>
-					function copyToClipboard(text, qrcode) {
+					function copyToClipboard(text, qrcodeId) {
 						navigator.clipboard.writeText(text).then(() => {
 							alert('已复制到剪贴板');
 						}).catch(err => {
 							console.error('复制失败:', err);
+							alert('复制失败，请检查浏览器权限或手动复制。');
 						});
-						const qrcodeDiv = document.getElementById(qrcode);
-						qrcodeDiv.innerHTML = '';
-						new QRCode(qrcodeDiv, {
-							text: text,
-							width: 220,
-							height: 220,
-							colorDark: "#000000",
-							colorLight: "#ffffff",
-							correctLevel: QRCode.CorrectLevel.Q,
-							scale: 1
+
+						// 清除所有二维码容器的内容
+						document.querySelectorAll('.qrcode-container').forEach(el => {
+							el.innerHTML = '';
 						});
+						
+						const qrcodeDiv = document.getElementById(qrcodeId);
+						if(qrcodeDiv) {
+							new QRCode(qrcodeDiv, {
+								text: text,
+								width: 220,
+								height: 220,
+								colorDark: "#000000",
+								colorLight: "#ffffff",
+								correctLevel: QRCode.CorrectLevel.Q,
+								scale: 1
+							});
+						}
 					}
 
 					function toggleNotice() {
@@ -3986,3 +4002,4 @@ async function handleTestConnection(request) {
         clearTimeout(timeoutId);
     }
 }
+
