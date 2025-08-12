@@ -2678,7 +2678,7 @@ rules:
 }
 
 /**
- * 生成Sing-box配置 (已更新至最新的官方规则 URL)
+ * 生成Sing-box配置 (已更新至最新的官方规则 URL 和 DNS 结构)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2711,7 +2711,7 @@ function generateSingboxConfig(nodeObjects) {
         }
         return outbound;
     });
-    
+
     const proxyNames = outbounds.map(o => o.tag);
 
     const config = {
@@ -2719,24 +2719,42 @@ function generateSingboxConfig(nodeObjects) {
             "level": "info",
             "timestamp": true
         },
+        // --- START: 这是完全重构后的新版 DNS 配置 ---
         "dns": {
             "servers": [
-                { "address": "https://223.5.5.5/dns-query", "detour": "direct" },
-                { "address": "https://8.8.8.8/dns-query", "detour": "direct" }
+                {
+                    "tag": "ali-dns", // 国内DNS
+                    "address": "https://223.5.5.5/dns-query",
+                    "detour": "direct" // 通过直连发出DNS请求
+                },
+                {
+                    "tag": "google-dns", // 国外DNS
+                    "address": "https://8.8.8.8/dns-query",
+                    "detour": "direct" // 也通过直连发出
+                }
             ],
-            "strategy": "prefer_ipv4"
+            "rules": [
+                {
+                    // 对于 geosite-cn 列表中的域名，使用国内DNS
+                    "rule_set": "geosite-cn",
+                    "server": "ali-dns"
+                }
+            ],
+            "final": "google-dns", // 其他所有域名查询使用此DNS
+            "strategy": "prefer_ipv4" // DNS解析策略
         },
+        // --- END: 新版 DNS 配置结束 ---
         "inbounds": [
-            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
+            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345, "sniff": true }
         ],
         "outbounds": [
             { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
-            { 
-              "type": "urltest", 
-              "tag": "auto-select", 
+            {
+              "type": "urltest",
+              "tag": "auto-select",
               "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204", 
-              "interval": "5m" 
+              "url": "http://www.gstatic.com/generate_204",
+              "interval": "5m"
             },
             ...outbounds,
             { "type": "direct", "tag": "direct" },
@@ -2758,12 +2776,16 @@ function generateSingboxConfig(nodeObjects) {
                 {
                     "rule_set": "geosite-cn",
                     "outbound": "direct"
+                },
+                {
+                    "protocol": "dns",
+                    "outbound": "direct"
                 }
             ],
             "final": "manual-select"
         }
     };
-    
+
     return JSON.stringify(config, null, 2);
 }
 
