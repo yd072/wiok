@@ -2723,12 +2723,11 @@ function generateSingboxConfig(nodeObjects) {
         "dns": {
             "servers": [
                 {
-                    "type": "local", // 国内DNS
-                    "address": "https://223.5.5.5/dns-query",
-                    "detour": "direct" // 通过直连发出DNS请求
+                    "type": "local" // 国内DNS
+
                 },
                 {
-                    "type": "google-dns", // 国外DNS
+                    "tag": "google-dns", // 国外DNS
                     "address": "https://dns.google/dns-query",
                     "detour": "direct" // 也通过直连发出
                 }
