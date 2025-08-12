@@ -2723,7 +2723,7 @@ function generateSingboxConfig(nodeObjects) {
         "dns": {
             "servers": [
                 {
-                    "tag": "ali-dns", // 国内DNS
+                    "tag": "local", // 国内DNS
                     "address": "https://223.5.5.5/dns-query",
                     "detour": "direct" // 通过直连发出DNS请求
                 },
