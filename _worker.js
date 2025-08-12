@@ -2677,9 +2677,8 @@ rules:
     return config.trim();
 }
 
-
 /**
- * 生成Sing-box配置
+ * 生成Sing-box配置 (已更新至最新的官方规则 URL)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2743,11 +2742,25 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "block", "tag": "block" }
         ],
         "route": {
-            "rules": [
-                { "geoip": "cn", "outbound": "direct" }
-                
+            "rule_set": [
+                {
+                    "tag": "geosite-cn",
+                    "type": "remote",
+                    "format": "binary",
+                    // --- START: 这是本次修正的关键 ---
+                    "url": atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL1NhZ2VyTmV0L3NpbmctZ2Vvc2l0ZS9ydWxlLXNldC9nZW9zaXRlLWNuLnNycw=='),
+                    // --- END: 这是本次修正的关键 ---
+                    "download_detour": "direct"
+                }
             ],
-            "default_outbound": "manual-select"
+            "rules": [
+                {
+                    "rule_set": "geosite-cn",
+                    "outbound": "direct",
+                    "action": "reject"
+                }
+            ],
+            "final": "manual-select"
         }
     };
     
