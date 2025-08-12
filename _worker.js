@@ -2678,7 +2678,7 @@ rules:
 }
 
 /**
- * 生成Sing-box配置 (已更新至最新的官方规则 URL 和 DNS 结构)
+ * 生成Sing-box配置 (完全遵循 v1.12+ 的新版 DNS 和路由结构)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2719,30 +2719,21 @@ function generateSingboxConfig(nodeObjects) {
             "level": "info",
             "timestamp": true
         },
-        // --- START: 这是完全重构后的新版 DNS 配置 ---
+        // --- 1. 新的 DNS 块：只定义服务器，不包含任何规则或策略 ---
         "dns": {
             "servers": [
                 {
-                    "type": "local" // 国内DNS
-
+                    "tag": "ali-dns",
+                    "address": "https://223.5.5.5/dns-query",
+                    "detour": "direct"
                 },
                 {
-                    "tag": "google-dns", // 国外DNS
-                    "address": "https://dns.google/dns-query",
-                    "detour": "direct" // 也通过直连发出
+                    "tag": "google-dns",
+                    "address": "https://8.8.8.8/dns-query",
+                    "detour": "direct"
                 }
-            ],
-            "rules": [
-                {
-                    // 对于 geosite-cn 列表中的域名，使用国内DNS
-                    "rule_set": "geosite-cn",
-                    "server": "ali-dns"
-                }
-            ],
-            "final": "google-dns", // 其他所有域名查询使用此DNS
-            "strategy": "prefer_ipv4" // DNS解析策略
+            ]
         },
-        // --- END: 新版 DNS 配置结束 ---
         "inbounds": [
             { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345, "sniff": true }
         ],
@@ -2759,7 +2750,13 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "direct", "tag": "direct" },
             { "type": "block", "tag": "block" }
         ],
+        // --- 2. 新的 Route 块：在这里应用 DNS 解析器和策略 ---
         "route": {
+            // 设置一个全局默认的 DNS 解析器，用于所有未匹配到特定规则的流量
+            "default_domain_resolver": {
+                "server": "google-dns", // 默认使用 Google DNS
+                "strategy": "prefer_ipv4"
+            },
             "rule_set": [
                 {
                     "tag": "geosite-cn",
@@ -2773,7 +2770,14 @@ function generateSingboxConfig(nodeObjects) {
             ],
             "rules": [
                 {
+                    // 对于匹配 "geosite-cn" 规则集的域名...
                     "rule_set": "geosite-cn",
+                    // ...覆盖默认设置，为这条规则指定特定的 DNS 解析器
+                    "domain_resolver": {
+                       "server": "ali-dns", 
+                       "strategy": "prefer_ipv4"
+                    },
+                    
                     "outbound": "direct"
                 },
                 {
@@ -2781,6 +2785,7 @@ function generateSingboxConfig(nodeObjects) {
                     "outbound": "direct"
                 }
             ],
+            // 所有其他未匹配的流量将走 "manual-select" 策略组
             "final": "manual-select"
         }
     };
