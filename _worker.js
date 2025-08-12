@@ -1,4 +1,5 @@
 
+
 import { connect } from 'cloudflare:sockets';
 
 // --- 全局配置缓存 ---
@@ -8,7 +9,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2677,8 +2678,9 @@ rules:
     return config.trim();
 }
 
+
 /**
- * 生成Sing-box配置 (完全遵循 v1.12+ 的新版 DNS 和路由结构)
+ * 生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2711,7 +2713,7 @@ function generateSingboxConfig(nodeObjects) {
         }
         return outbound;
     });
-
+    
     const proxyNames = outbounds.map(o => o.tag);
 
     const config = {
@@ -2721,75 +2723,35 @@ function generateSingboxConfig(nodeObjects) {
         },
         "dns": {
             "servers": [
-                {
-                    "tag": "ali-dns",
-                    "address": "https://223.5.5.5/dns-query",
-                    "detour": "direct"
-                },
-                {
-                    "tag": "google-dns",
-                    "address": "https://8.8.8.8/dns-query",
-                    "detour": "direct"
-                }
+                { "address": "https://223.5.5.5/dns-query" },
+                { "address": "https://8.8.8.8/dns-query" }
             ]
         },
         "inbounds": [
-            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345, "sniff": true }
+            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
         ],
         "outbounds": [
             { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
-            {
-              "type": "urltest",
-              "tag": "auto-select",
+            { 
+              "type": "urltest", 
+              "tag": "auto-select", 
               "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204",
-              "interval": "5m"
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
             },
             ...outbounds,
-            // --- 核心修改点 1：创建一个附加了国内DNS解析器的自定义直连出站 ---
-            {
-                "type": "direct",
-                "tag": "direct-cn-dns", // 给它一个特殊的标签
-                "domain_resolver": {
-                    "server": "ali-dns", // 绑定阿里DNS
-                    "strategy": "prefer_ipv4"
-                }
-            },
-            { "type": "direct", "tag": "direct" }, // 保留默认的直连出站
+            { "type": "direct", "tag": "direct" },
             { "type": "block", "tag": "block" }
         ],
         "route": {
-            // 设置一个全局默认的DNS解析器，所有未被特殊规则指定的出站都会用它
-            "default_domain_resolver": {
-                "server": "google-dns",
-                "strategy": "prefer_ipv4"
-            },
-            "rule_set": [
-                {
-                    "tag": "geosite-cn",
-                    "type": "remote",
-                    "format": "binary",
-                    // --- START: 这是本次修正的关键 ---
-                    "url": atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL1NhZ2VyTmV0L3NpbmctZ2Vvc2l0ZS9ydWxlLXNldC9nZW9zaXRlLWNuLnNycw=='),
-                    // --- END: 这是本次修正的关键 ---
-                    "download_detour": "direct"
-                }
-            ],
             "rules": [
-                // --- 核心修改点 2：将国内域名的流量指向我们新创建的 `direct-cn-dns` 出站 ---
-                {
-                    "rule_set": "geosite-cn",
-                    "outbound": "direct-cn-dns" // <--- 不再有 domain_resolver 字段，而是直接指向新的出站
-                },
-                {
-                    "protocol": "dns",
-                    "outbound": "direct"
-                }
+                { "geoip": "cn", "outbound": "direct" }
+                
             ],
-            "final": "manual-select"
+            "default_outbound": "manual-select"
         }
     };
-
+    
     return JSON.stringify(config, null, 2);
 }
 
