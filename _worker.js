@@ -1991,12 +1991,12 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						border-radius: 50%;
 					}
 
-					/* --- 新增的按钮样式 --- */
+					/* --- 按钮样式 --- */
 					.subscription-buttons-container {
 						display: flex;
-						flex-wrap: wrap; /* 在小屏幕上自动换行 */
-						gap: 15px; /* 按钮之间的间距 */
-						justify-content: center; /* 居中对齐按钮 */
+						flex-wrap: wrap; 
+						gap: 15px; 
+						justify-content: center;
 						margin-top: 15px;
 					}
 
@@ -2004,9 +2004,9 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						display: flex;
 						flex-direction: column;
 						align-items: center;
-						gap: 8px; /* 标签和按钮之间的距离 */
+						gap: 8px;
 						padding: 15px;
-						border: 1px solid var(--border-color);
+						/* 【修改】移除了边框 */
 						border-radius: 8px;
 						background-color: var(--section-bg);
 						min-width: 150px;
@@ -2057,16 +2057,21 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				</div>
 				<div class="container">
 					
-					<!-- 【修改】将订阅链接替换为复制按钮 -->
 					<div class="section">
 						<div class="section-title">📋 一键复制订阅</div>
 						
 						<div class="subscription-buttons-container">
 							
 							<div class="subscription-button-item">
-								<span class="subscription-label">通用订阅 (Base64)</span>
+								<span class="subscription-label">通用订阅</span>
 								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}', 'qrcode_universal')">复制</button>
 								<div id="qrcode_universal" class="qrcode-container"></div>
+							</div>
+
+							<div class="subscription-button-item">
+								<span class="subscription-label">Base64 订阅</span>
+								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64', 'qrcode_base64')">复制</button>
+								<div id="qrcode_base64" class="qrcode-container"></div>
 							</div>
 
 							<div class="subscription-button-item">
@@ -2089,7 +2094,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 						</div>
 					</div>
-					<!-- 替换结束 -->
 
 
 					<div class="section">
@@ -2099,7 +2103,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						</a>
 						<div id="noticeContent" class="notice-content" style="display: none">
 							<strong>1.</strong> 如您使用的是 PassWall、PassWall2 路由插件，订阅编辑的 <strong>用户代理(User-Agent)</strong> 设置为 <strong>PassWall</strong> 即可；<br><br>
-							<strong>2.</strong> 如您使用的是 SSR+ 等路由插件，推荐使用 <strong>Base64订阅地址</strong> 进行订阅；<br><br>
+							<strong>2.</strong> 如您使用的是 SSR+ 等路由插件，推荐使用 <strong>Base64 订阅</strong> 进行订阅；<br><br>
 							<strong>3.</strong> 快速切换 <a href='${atob('aHR0cHM6Ly9naXRodWIuY29tL2NtbGl1L1dvcmtlclZsZXNzMnN1Yg==')}'>优选订阅生成器</a> 至：sub.google.com，您可将"?sub=sub.google.com"参数添加到链接末尾，例如：<br>
 							&nbsp;&nbsp;https://${proxyhost}${hostName}/${uuid}<strong>?sub=sub.google.com</strong><br><br>
 							<strong>4.</strong> 快速更换 PROXYIP 至：proxyip.fxxk.dedyn.io:443，您可将"?proxyip=proxyip.fxxk.dedyn.io:443"参数添加到链接末尾，例如：<br>
@@ -4002,4 +4006,3 @@ async function handleTestConnection(request) {
         clearTimeout(timeoutId);
     }
 }
-
