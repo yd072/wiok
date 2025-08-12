@@ -2729,7 +2729,7 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "tag": "google-dns", // 国外DNS
-                    "address": "https://8.8.8.8/dns-query",
+                    "address": "https://dns.google/dns-query",
                     "detour": "direct" // 也通过直连发出
                 }
             ],
