@@ -2755,7 +2755,6 @@ function generateSingboxConfig(nodeObjects) {
     // 将用户提供的规则转换为Sing-box格式
     const customRules = [
         { "domain_suffix": ["googleapis.cn", "gstatic.com"], "outbound": "manual-select", "remarks": "Google cn" },
-        { "network": "udp", "port": 443, "outbound": "block", "remarks": "阻止udp443" },
         { "geosite": "category-ads-all", "outbound": "block", "remarks": "阻止广告" },
         { "geoip": "private", "outbound": "direct", "remarks": "绕过局域网IP" },
         { "geosite": "private", "outbound": "direct", "remarks": "绕过局域网域名" },
