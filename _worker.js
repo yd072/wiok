@@ -2676,22 +2676,39 @@ function generateClashConfig(nodeObjects, clashProfile = 'standard') {
         ];
         rulesYaml = metaRules.map(rule => `  - ${rule}`).join('\n');
     } else {
-        // --- 标准内核版本：只使用简单规则，无外链 ---
+        // --- 标准内核版本：必须强制直连Cloudflare IP段以打破路由循环 ---
         const standardRules = [
+            // Google服务代理规则
             `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
             `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
             `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
             // 简化版广告屏蔽
             'DOMAIN-SUFFIX,doubleclick.net,REJECT',
             'DOMAIN-SUFFIX,google-analytics.com,REJECT',
-            // 私有地址和局域网
+            // 局域网及私有地址直连
             'IP-CIDR,192.168.0.0/16,DIRECT,no-resolve',
             'IP-CIDR,10.0.0.0/8,DIRECT,no-resolve',
             'IP-CIDR,172.16.0.0/12,DIRECT,no-resolve',
             'IP-CIDR,127.0.0.0/8,DIRECT,no-resolve',
             'DOMAIN-SUFFIX,lan,DIRECT',
             'DOMAIN-SUFFIX,local,DIRECT',
-            // 国内域名和IP
+            // 强制直连Cloudflare IP段，打破路由循环 (核心修正)
+            'IP-CIDR,173.245.48.0/20,DIRECT,no-resolve',
+            'IP-CIDR,103.21.244.0/22,DIRECT,no-resolve',
+            'IP-CIDR,103.22.200.0/22,DIRECT,no-resolve',
+            'IP-CIDR,103.31.4.0/22,DIRECT,no-resolve',
+            'IP-CIDR,141.101.64.0/18,DIRECT,no-resolve',
+            'IP-CIDR,108.162.192.0/18,DIRECT,no-resolve',
+            'IP-CIDR,190.93.240.0/20,DIRECT,no-resolve',
+            'IP-CIDR,188.114.96.0/20,DIRECT,no-resolve',
+            'IP-CIDR,197.234.240.0/22,DIRECT,no-resolve',
+            'IP-CIDR,198.41.128.0/17,DIRECT,no-resolve',
+            'IP-CIDR,162.158.0.0/15,DIRECT,no-resolve',
+            'IP-CIDR,104.16.0.0/13,DIRECT,no-resolve',
+            'IP-CIDR,104.24.0.0/14,DIRECT,no-resolve',
+            'IP-CIDR,172.64.0.0/13,DIRECT,no-resolve',
+            'IP-CIDR,131.0.72.0/22,DIRECT,no-resolve',
+            // 国内域名和IP直连
             'GEOIP,CN,DIRECT',
             `MATCH,${manualSelectGroupName}`
         ];
