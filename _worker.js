@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2658,18 +2658,21 @@ function generateClashConfig(nodeObjects) {
     const autoSelectGroupName = "🚀 Auto-Select";
     const manualSelectGroupName = "Manual-Select";
 
-    // --- START: 新增的规则 ---
-    const customRules = `
-  - DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}
-  - DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}
-  - DOMAIN-KEYWORD,google,${manualSelectGroupName}
-  - GEOSITE,category-ads-all,REJECT
-  - GEOSITE,private,DIRECT
-  - GEOIP,private,DIRECT,no-resolve
-  - GEOSITE,cn,DIRECT
-  - GEOIP,CN,DIRECT
-`;
-    // --- END: 新增的规则 ---
+    // --- START: 将规则定义为数组以确保正确格式化 ---
+    const customRulesArray = [
+        `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
+        `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
+        `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
+        'GEOSITE,category-ads-all,REJECT',
+        'GEOSITE,private,DIRECT',
+        'GEOIP,private,DIRECT,no-resolve',
+        'GEOSITE,cn,DIRECT',
+        'GEOIP,CN,DIRECT',
+        `MATCH,${manualSelectGroupName}`
+    ];
+    // 将规则数组转换为格式正确的YAML字符串
+    const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
+    // --- END: 修正 ---
 
     // 拼接完整的 YAML 配置
     const config = `
@@ -2705,8 +2708,7 @@ ${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
 ${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
 
 rules:
-${customRules.trim()}
-  - MATCH,${manualSelectGroupName}
+${rulesYaml}
 `;
     return config.trim();
 }
@@ -2753,7 +2755,6 @@ function generateSingboxConfig(nodeObjects) {
     // 将用户提供的规则转换为Sing-box格式
     const customRules = [
         { "domain_suffix": ["googleapis.cn", "gstatic.com"], "outbound": "manual-select", "remarks": "Google cn" },
-        { "network": "udp", "port": 443, "outbound": "block", "remarks": "阻止udp443" },
         { "geosite": "category-ads-all", "outbound": "block", "remarks": "阻止广告" },
         { "geoip": "private", "outbound": "direct", "remarks": "绕过局域网IP" },
         { "geosite": "private", "outbound": "direct", "remarks": "绕过局域网域名" },
@@ -2809,7 +2810,7 @@ function generateSingboxConfig(nodeObjects) {
 }
 
 /**
- * 生成Loon配置
+ * 生成Loon配置 
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - .conf 格式的 Loon 配置
  */
