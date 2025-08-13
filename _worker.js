@@ -2663,7 +2663,6 @@ function generateClashConfig(nodeObjects) {
         `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
         `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
         `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
-		'DST-PORT,443,REJECT',
         'GEOSITE,category-ads-all,REJECT',
         'GEOSITE,private,DIRECT',
         'GEOIP,private,DIRECT,no-resolve',
@@ -2756,7 +2755,6 @@ function generateSingboxConfig(nodeObjects) {
     // 将用户提供的规则转换为Sing-box格式
     const customRules = [
         { "domain_suffix": ["googleapis.cn", "gstatic.com"], "outbound": "manual-select", "remarks": "Google cn" },
-		{ "protocol": "udp", "port": "443", "outbound": "block", "remarks": "禁用QUIC协议" },
         { "geosite": "category-ads-all", "outbound": "block", "remarks": "阻止广告" },
         { "geoip": "private", "outbound": "direct", "remarks": "绕过局域网IP" },
         { "geosite": "private", "outbound": "direct", "remarks": "绕过局域网域名" },
