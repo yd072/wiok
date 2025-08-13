@@ -2892,10 +2892,9 @@ FINAL, ${manualSelectGroupName}
 
 
 function 整理(内容) {
-    if (!内容) {
-        return [];
-    }
-    return 内容.split(/[\s,|"']+/).filter(Boolean);
+    return (内容 || '')
+        .split(/[\s,|"'\r\n]+/)
+        .filter(Boolean);
 }
 
 async function sendMessage(type, ip, add_data = "") {
