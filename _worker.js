@@ -2268,9 +2268,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
 
             if (isClashRequest) {
-                // 新增：根据URL参数决定生成哪种Clash配置
-                const clashProfile = _url.searchParams.get('clash') === 'meta' ? 'meta' : 'standard';
-                const clashConfig = generateClashConfig(nodeObjects, clashProfile);
+                const clashConfig = generateClashConfig(nodeObjects);
                 return 恢复伪装信息(clashConfig, userID, hostName, fakeUserID, fakeHostName, false);
             }
             
@@ -2595,7 +2593,7 @@ async function prepareNodeList(host, UUID, noTLS) {
 }
 
 /**
- * 【重构】根据节点对象数组生成 Base64 编码的订阅内容
+ * 根据节点对象数组生成 Base64 编码的订阅内容
  * @param {Array} nodeObjects - 由 prepareNodeList 生成的节点对象数组
  * @returns {string} - Base64 编码后的订阅链接字符串
  */
@@ -2622,12 +2620,11 @@ function 生成本地订阅(nodeObjects) {
 }
 
 /**
- * 生成Clash配置 (支持 standard 和 meta 两种模式)
+ * 生成Clash配置
  * @param {Array} nodeObjects - 节点对象数组
- * @param {string} clashProfile - 'standard' 或 'meta'
  * @returns {string} - YAML 格式的 Clash 配置
  */
-function generateClashConfig(nodeObjects, clashProfile = 'standard') {
+function generateClashConfig(nodeObjects) {
     // 生成 proxies 部分的 YAML 字符串
     const proxiesYaml = nodeObjects.map(p => {
         let proxyString = `  - name: ${JSON.stringify(p.name)}\n`;
@@ -2656,64 +2653,26 @@ function generateClashConfig(nodeObjects, clashProfile = 'standard') {
     }).join('');
 
     const proxyNames = nodeObjects.map(p => p.name);
+    
+    // 定义规范化的代理组名称
     const autoSelectGroupName = "🚀 Auto-Select";
     const manualSelectGroupName = "Manual-Select";
 
-    let rulesYaml;
-
-    if (clashProfile === 'meta') {
-        // --- Meta 内核版本：使用强大的 GEOSITE ---
-        const metaRules = [
-            `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
-            `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
-            `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
-            'GEOSITE,category-ads-all,REJECT',
-            'GEOSITE,private,DIRECT',
-            'GEOIP,private,DIRECT,no-resolve',
-            'GEOSITE,cn,DIRECT',
-            'GEOIP,CN,DIRECT',
-            `MATCH,${manualSelectGroupName}`
-        ];
-        rulesYaml = metaRules.map(rule => `  - ${rule}`).join('\n');
-    } else {
-        // --- 标准内核版本：必须强制直连Cloudflare IP段以打破路由循环 ---
-        const standardRules = [
-            // Google服务代理规则
-            `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
-            `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
-            `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
-            // 简化版广告屏蔽
-            'DOMAIN-SUFFIX,doubleclick.net,REJECT',
-            'DOMAIN-SUFFIX,google-analytics.com,REJECT',
-            // 局域网及私有地址直连
-            'IP-CIDR,192.168.0.0/16,DIRECT,no-resolve',
-            'IP-CIDR,10.0.0.0/8,DIRECT,no-resolve',
-            'IP-CIDR,172.16.0.0/12,DIRECT,no-resolve',
-            'IP-CIDR,127.0.0.0/8,DIRECT,no-resolve',
-            'DOMAIN-SUFFIX,lan,DIRECT',
-            'DOMAIN-SUFFIX,local,DIRECT',
-            // 强制直连Cloudflare IP段，打破路由循环 (核心修正)
-            'IP-CIDR,173.245.48.0/20,DIRECT,no-resolve',
-            'IP-CIDR,103.21.244.0/22,DIRECT,no-resolve',
-            'IP-CIDR,103.22.200.0/22,DIRECT,no-resolve',
-            'IP-CIDR,103.31.4.0/22,DIRECT,no-resolve',
-            'IP-CIDR,141.101.64.0/18,DIRECT,no-resolve',
-            'IP-CIDR,108.162.192.0/18,DIRECT,no-resolve',
-            'IP-CIDR,190.93.240.0/20,DIRECT,no-resolve',
-            'IP-CIDR,188.114.96.0/20,DIRECT,no-resolve',
-            'IP-CIDR,197.234.240.0/22,DIRECT,no-resolve',
-            'IP-CIDR,198.41.128.0/17,DIRECT,no-resolve',
-            'IP-CIDR,162.158.0.0/15,DIRECT,no-resolve',
-            'IP-CIDR,104.16.0.0/13,DIRECT,no-resolve',
-            'IP-CIDR,104.24.0.0/14,DIRECT,no-resolve',
-            'IP-CIDR,172.64.0.0/13,DIRECT,no-resolve',
-            'IP-CIDR,131.0.72.0/22,DIRECT,no-resolve',
-            // 国内域名和IP直连
-            'GEOIP,CN,DIRECT',
-            `MATCH,${manualSelectGroupName}`
-        ];
-        rulesYaml = standardRules.map(rule => `  - ${rule}`).join('\n');
-    }
+    // --- START: 将规则定义为数组以确保正确格式化 ---
+    const customRulesArray = [
+        `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
+        `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
+        `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
+        'GEOSITE,category-ads-all,REJECT',
+        'GEOSITE,private,DIRECT',
+        'GEOIP,private,DIRECT,no-resolve',
+        'GEOSITE,cn,DIRECT',
+        'GEOIP,CN,DIRECT',
+        `MATCH,${manualSelectGroupName}`
+    ];
+    // 将规则数组转换为格式正确的YAML字符串
+    const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
+    // --- END: 修正 ---
 
     // 拼接完整的 YAML 配置
     const config = `
@@ -2729,7 +2688,7 @@ dns:
   default-nameserver: [223.5.5.5, 119.29.29.29, 8.8.8.8]
   nameserver: ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query']
   fallback: []
-
+  
 proxies:
 ${proxiesYaml}
 proxy-groups:
