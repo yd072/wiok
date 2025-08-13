@@ -2668,6 +2668,7 @@ function generateClashConfig(nodeObjects, clashProfile = 'standard') {
             `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
             `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
             `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
+			'NETWORK,UDP,443,REJECT',
             'GEOSITE,category-ads-all,REJECT',
             'GEOSITE,private,DIRECT',
             'GEOIP,private,DIRECT,no-resolve',
