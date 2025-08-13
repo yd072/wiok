@@ -2268,9 +2268,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
 
             if (isClashRequest) {
-                // 新增：根据URL参数决定生成哪种Clash配置
-                const clashProfile = _url.searchParams.get('clash') === 'meta' ? 'meta' : 'standard';
-                const clashConfig = generateClashConfig(nodeObjects, clashProfile);
+                const clashConfig = generateClashConfig(nodeObjects);
                 return 恢复伪装信息(clashConfig, userID, hostName, fakeUserID, fakeHostName, false);
             }
             
@@ -2622,13 +2620,12 @@ function 生成本地订阅(nodeObjects) {
 }
 
 /**
- * 生成Clash配置 (支持 standard 和 meta 两种模式)
+ * 生成Clash配置
  * @param {Array} nodeObjects - 节点对象数组
- * @param {string} clashProfile - 'standard' 或 'meta'
  * @returns {string} - YAML 格式的 Clash 配置
  */
-function generateClashConfig(nodeObjects, clashProfile = 'standard') {
-    // ... (proxies 和 proxy-groups 的生成逻辑不变)
+function generateClashConfig(nodeObjects) {
+    // 生成 proxies 部分的 YAML 字符串
     const proxiesYaml = nodeObjects.map(p => {
         let proxyString = `  - name: ${JSON.stringify(p.name)}\n`;
         proxyString += `    type: ${p.type}\n`;
@@ -2656,48 +2653,26 @@ function generateClashConfig(nodeObjects, clashProfile = 'standard') {
     }).join('');
 
     const proxyNames = nodeObjects.map(p => p.name);
+    
+    // 定义规范化的代理组名称
     const autoSelectGroupName = "🚀 Auto-Select";
     const manualSelectGroupName = "Manual-Select";
 
-    let rulesYaml;
-    let ruleProvidersSection = ''; // 默认没有 rule-providers
-
-    if (clashProfile === 'meta') {
-        // --- Meta 内核版本：使用强大的 GEOSITE ---
-        const metaRules = [
-            `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
-            `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
-            `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
-            'GEOSITE,category-ads-all,REJECT',
-            'GEOSITE,private,DIRECT',
-            'GEOIP,private,DIRECT,no-resolve',
-            'GEOSITE,cn,DIRECT',
-            'GEOIP,CN,DIRECT',
-            `MATCH,${manualSelectGroupName}`
-        ];
-        rulesYaml = metaRules.map(rule => `  - ${rule}`).join('\n');
-    } else {
-        // --- 标准内核版本：只使用简单规则， ---
-        const standardRules = [
-            `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
-            `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
-            `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
-            // 简化版广告屏蔽
-            'DOMAIN-SUFFIX,doubleclick.net,REJECT',
-            'DOMAIN-SUFFIX,google-analytics.com,REJECT',
-            // 私有地址和局域网
-            'IP-CIDR,192.168.0.0/16,DIRECT,no-resolve',
-            'IP-CIDR,10.0.0.0/8,DIRECT,no-resolve',
-            'IP-CIDR,172.16.0.0/12,DIRECT,no-resolve',
-            'IP-CIDR,127.0.0.0/8,DIRECT,no-resolve',
-            'DOMAIN-SUFFIX,lan,DIRECT',
-            'DOMAIN-SUFFIX,local,DIRECT',
-            // 国内域名和IP
-            'GEOIP,CN,DIRECT',
-            `MATCH,${manualSelectGroupName}`
-        ];
-        rulesYaml = standardRules.map(rule => `  - ${rule}`).join('\n');
-    }
+    // --- START: 将规则定义为数组以确保正确格式化 ---
+    const customRulesArray = [
+        `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
+        `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
+        `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
+        'GEOSITE,category-ads-all,REJECT',
+        'GEOSITE,private,DIRECT',
+        'GEOIP,private,DIRECT,no-resolve',
+        'GEOSITE,cn,DIRECT',
+        'GEOIP,CN,DIRECT',
+        `MATCH,${manualSelectGroupName}`
+    ];
+    // 将规则数组转换为格式正确的YAML字符串
+    const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
+    // --- END: 修正 ---
 
     // 拼接完整的 YAML 配置
     const config = `
@@ -2713,7 +2688,7 @@ dns:
   default-nameserver: [223.5.5.5, 119.29.29.29, 8.8.8.8]
   nameserver: ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query']
   fallback: []
-${ruleProvidersSection}
+  
 proxies:
 ${proxiesYaml}
 proxy-groups:
