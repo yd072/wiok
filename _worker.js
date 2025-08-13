@@ -2663,8 +2663,6 @@ function generateClashConfig(nodeObjects) {
         `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
         `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
         `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
-        // 修正：使用 DST-PORT 替代无效的 NETWORK 规则来禁用QUIC
-        'DST-PORT,443,REJECT',
         'GEOSITE,category-ads-all,REJECT',
         'GEOSITE,private,DIRECT',
         'GEOIP,private,DIRECT,no-resolve',
