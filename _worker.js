@@ -2663,7 +2663,7 @@ function generateClashConfig(nodeObjects) {
         `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
         `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
         `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
-        'NETWORK,UDP,443,REJECT',
+        'DST-PORT,443,REJECT',
         'GEOSITE,category-ads-all,REJECT',
         'GEOSITE,private,DIRECT',
         'GEOIP,private,DIRECT,no-resolve',
@@ -2673,7 +2673,6 @@ function generateClashConfig(nodeObjects) {
     ];
     // 将规则数组转换为格式正确的YAML字符串
     const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
-    // --- END: 修正 ---
 
     // 拼接完整的 YAML 配置
     const config = `
