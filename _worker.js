@@ -2625,7 +2625,7 @@ function 生成本地订阅(nodeObjects) {
  * @returns {string} - YAML 格式的 Clash 配置
  */
 function generateClashConfig(nodeObjects) {
-    // 生成 proxies 部分的 YAML 字符串 (块格式)
+    // 生成 proxies 部分的 YAML 字符串
     const proxiesYaml = nodeObjects.map(p => {
         let proxyString = `  - name: ${JSON.stringify(p.name)}\n`;
         proxyString += `    type: ${p.type}\n`;
@@ -2658,19 +2658,22 @@ function generateClashConfig(nodeObjects) {
     const autoSelectGroupName = "🚀 Auto-Select";
     const manualSelectGroupName = "Manual-Select";
 
-    // --- START: 新增的规则 ---
-    const customRules = `
-  - DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}
-  - DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}
-  - DOMAIN-KEYWORD,google,${manualSelectGroupName}
-  - NETWORK,UDP,443,REJECT
-  - GEOSITE,category-ads-all,REJECT
-  - GEOSITE,private,DIRECT
-  - GEOIP,private,DIRECT,no-resolve
-  - GEOSITE,cn,DIRECT
-  - GEOIP,CN,DIRECT
-`;
-    // --- END: 新增的规则 ---
+    // --- START: 将规则定义为数组以确保正确格式化 ---
+    const customRulesArray = [
+        `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
+        `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
+        `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
+        'NETWORK,UDP,443,REJECT',
+        'GEOSITE,category-ads-all,REJECT',
+        'GEOSITE,private,DIRECT',
+        'GEOIP,private,DIRECT,no-resolve',
+        'GEOSITE,cn,DIRECT',
+        'GEOIP,CN,DIRECT',
+        `MATCH,${manualSelectGroupName}`
+    ];
+    // 将规则数组转换为格式正确的YAML字符串
+    const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
+    // --- END: 修正 ---
 
     // 拼接完整的 YAML 配置
     const config = `
@@ -2706,8 +2709,7 @@ ${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
 ${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
 
 rules:
-${customRules.trim()}
-  - MATCH,${manualSelectGroupName}
+${rulesYaml}
 `;
     return config.trim();
 }
@@ -2810,7 +2812,7 @@ function generateSingboxConfig(nodeObjects) {
 }
 
 /**
- * 生成Loon配置 (使用简单规则)
+ * 生成Loon配置 (使用简单规则，不依赖外链)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - .conf 格式的 Loon 配置
  */
