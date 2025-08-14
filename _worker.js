@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -3226,7 +3226,6 @@ async function handleGetRequest(env) {
                 .btn-primary:hover:not(:disabled) { background: var(--secondary-color); }
                 .save-status { font-size: 14px; color: var(--text-color); }
 
-                /* Test connection styles remain the same */
                 .test-group { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
                 .btn-sm { padding: 5px 10px; font-size: 12px; }
                 .btn-secondary { background: #6c757d; color: #fff; }
@@ -3235,11 +3234,34 @@ async function handleGetRequest(env) {
                 .test-status.success { color: #28a745; }
                 .test-status.error { color: #dc3545; }
 
-                /* Checkbox styles for ports */
                 .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; }
                 .checkbox-item { display: flex; align-items: center; gap: 5px; }
 
-                /* Theme switch remains the same */
+                /* --- Notice Styles --- */
+                .notice-toggle {
+                    color: var(--primary-color);
+                    cursor: pointer;
+                    display: inline-block;
+                    margin: 15px 0 10px 0;
+                    font-weight: 500;
+                }
+                .notice-content {
+                    display: none;
+                    background: #f8f9fa;
+                    border-left: 4px solid var(--primary-color);
+                    padding: 15px;
+                    margin-bottom: 15px;
+                    border-radius: 0 8px 8px 0;
+                    word-break: break-all;
+                }
+                html.dark-mode .notice-content {
+                    background: #3a3a3a;
+                }
+                a { color: var(--link-color); text-decoration: none; }
+                a:visited { color: var(--visited-link-color); }
+                a:hover { text-decoration: underline; }
+
+                /* Theme switch */
                 .theme-switch-wrapper { display: flex; align-items: center; position: fixed; top: 15px; right: 15px; }
                 .theme-switch { display: inline-block; height: 20px; position: relative; width: 36px; }
                 .theme-switch input { display:none; }
@@ -3252,7 +3274,6 @@ async function handleGetRequest(env) {
 
             </style>
             <script>
-                // Theme setup remains the same
                 (function() {
                     try {
                         const theme = localStorage.getItem('theme');
@@ -3273,7 +3294,6 @@ async function handleGetRequest(env) {
             <div class="container">
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
 
-                <!-- Tab links -->
                 <div class="tab-container">
                     <button class="tab-link active" onclick="openTab(event, 'tab-main')">优选列表 (ADD)</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-proxy')">代理设置</button>
@@ -3281,10 +3301,17 @@ async function handleGetRequest(env) {
                     <button class="tab-link" onclick="openTab(event, 'tab-network')">网络设置</button>
                 </div>
 
-                <!-- Tab content: Main List -->
                 <div id="tab-main" class="tab-content" style="display: block;">
                     ${hasKV ? `
-                        <textarea class="editor" id="content" placeholder="每行一个优选地址...">${content}</textarea>
+                        <textarea class="editor" id="content" placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}">${content}</textarea>
+                        
+                        <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
+                            ℹ️ 注意事项 ∨
+                        </a>
+                        <div id="noticeContent" class="notice-content">
+                            ${decodeURIComponent(atob('JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU1JUI4JUI4JUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUI3JUU2JThCJUFDJUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUE0JUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEExMjcuMC4wLjElM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5SVAlM0NiciUzRSUwQXZpc2EuY24lM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThEJTNDYnIlM0UlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjMlRTQlQkMlOTglRTklODAlODlJUHY2JTNDYnIlM0UlM0NiciUzRSUwQSUwQSUzQ3N0cm9uZyUzRTIuJTNDJTJGc3Ryb25nJTNFJTIwQUREQVBJJTIwJUU1JUE2JTgyJUU2JTlFJTlDJUU2JTk4JUFGJUU0JUJCJUEzJUU3JTkwJTg2SVAlRUYlQkMlOEMlRTUlOEYlQUYlRTQlQkQlOUMlRTQlQjglQkFQUk9YWUlQJUU3JTlBJTg0JUU4JUFGJTlEJUVGJUJDJThDJUU1JThGJUFGJUU1JUIwJTg2JTIyJTNGcHJveHlpcCUzRHRydWUlMjIlRTUlOEYlODIlRTYlOTUlQjAlRTYlQjclQkIlRTUlOEElQTAlRTUlODglQjAlRTklOTMlQkUlRTYlOEUlQTUlRTYlOUMlQUIlRTUlQjAlQkUlRUYlQkMlOEMlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQlM0Zwcm94eWlwJTNEdHJ1ZSUzQ2JyJTNFJTNDYnIlM0UlMEElMEElM0NzdHJvbmclM0UzLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5RSU5QyVFNiU5OCVBRiUyMCUzQ2ElMjBocmVmJTNEJ2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JyUzRUNsb3VkZmxhcmVTcGVlZFRlc3QlM0MlMkZhJTNFJTIwJUU3JTlBJTg0JTIwY3N2JTIwJUU3JUJCJTkzJUU2JTlFJTlDJUU2JTk2JTg3JUU0JUJCJUI2JUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
+                        </div>
+
                         <div class="button-group">
                             <button class="btn btn-primary" onclick="saveContent(this)">保存优选列表</button>
                             <span class="save-status" id="saveStatus"></span>
@@ -3292,12 +3319,11 @@ async function handleGetRequest(env) {
                     ` : '<p>未绑定KV空间</p>'}
                 </div>
 
-                <!-- Tab content: Proxy Settings -->
                 <div id="tab-proxy" class="tab-content">
                     <div class="setting-item">
                         <h4>PROXYIP</h4>
                         <p>每行一个IP，格式：IP:端口(可不添加端口)</p>
-                        <textarea id="proxyip" class="setting-editor">${proxyIPContent}</textarea>
+                        <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E4MApwcml2YXRlLmV4YW1wbGUuY29tJTNBMjA1Mg=='))}">${proxyIPContent}</textarea>
                         <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'proxyip')">测试连接</button>
                             <span id="proxyip-status" class="test-status"></span>
@@ -3306,7 +3332,7 @@ async function handleGetRequest(env) {
                     <div class="setting-item">
                         <h4>SOCKS5</h4>
                         <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
-                        <textarea id="socks5" class="setting-editor">${socks5Content}</textarea>
+                        <textarea id="socks5" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
                          <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'socks5')">测试连接</button>
                             <span id="socks5-status" class="test-status"></span>
@@ -3315,7 +3341,7 @@ async function handleGetRequest(env) {
                      <div class="setting-item">
                         <h4>HTTP 代理</h4>
                         <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
-                        <textarea id="httpproxy" class="setting-editor">${httpProxyContent}</textarea>
+                        <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
                          <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'http')">测试连接</button>
                             <span id="http-status" class="test-status"></span>
@@ -3327,22 +3353,21 @@ async function handleGetRequest(env) {
                     </div>
                 </div>
 
-                <!-- Tab content: Subscription Settings -->
                 <div id="tab-sub" class="tab-content">
                      <div class="setting-item">
                         <h4>SUB (优选订阅生成器)</h4>
                         <p>只支持单个优选订阅生成器地址，留空则使用内置生成。</p>
-                        <textarea id="sub" class="setting-editor">${subContent}</textarea>
+                        <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
                     </div>
                     <div class="setting-item">
                         <h4>SUBAPI (订阅转换后端)</h4>
                         <p>订阅转换后端地址，用于Clash/Sing-box等格式转换。</p>
-                        <textarea id="subapi" class="setting-editor">${subAPIContent}</textarea>
+                        <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
                     </div>
                     <div class="setting-item">
                         <h4>SUBCONFIG (订阅转换配置)</h4>
                         <p>订阅转换配置文件地址。</p>
-                        <textarea id="subconfig" class="setting-editor">${subConfigContent}</textarea>
+                        <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
                     </div>
                     <div class="button-group">
                         <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存订阅设置</button>
@@ -3350,12 +3375,11 @@ async function handleGetRequest(env) {
                     </div>
                 </div>
 
-                <!-- Tab content: Network Settings -->
                 <div id="tab-network" class="tab-content">
                     <div class="setting-item">
                         <h4>NAT64/DNS64</h4>
                         <p>用于将 IPv4 地址转换为 IPv6 地址。</p>
-                        <textarea id="nat64" class="setting-editor">${nat64Content}</textarea>
+                        <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
                         <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'nat64')">测试连接</button>
                             <span id="nat64-status" class="test-status"></span>
@@ -3381,7 +3405,6 @@ async function handleGetRequest(env) {
             </div>
 
             <script>
-                // --- Tab logic ---
                 function openTab(evt, tabName) {
                     var i, tabcontent, tablinks;
                     tabcontent = document.getElementsByClassName("tab-content");
@@ -3396,7 +3419,18 @@ async function handleGetRequest(env) {
                     evt.currentTarget.className += " active";
                 }
 
-                // --- Save logic ---
+                function toggleNotice() {
+                    const noticeContent = document.getElementById('noticeContent');
+                    const noticeToggle = document.getElementById('noticeToggle');
+                    if (noticeContent.style.display === 'none') {
+                        noticeContent.style.display = 'block';
+                        noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
+                    } else {
+                        noticeContent.style.display = 'none';
+                        noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
+                    }
+                }
+
                 async function saveContent(button) {
                     const saveStatus = document.getElementById('saveStatus');
                     await saveData(button, saveStatus, document.getElementById('content').value, '');
@@ -3411,7 +3445,8 @@ async function handleGetRequest(env) {
                         const selectedHttpsPorts = Array.from(document.querySelectorAll('input[name="httpsports"]:checked')).map(cb => cb.value).join(',');
                         const selectedHttpPorts = Array.from(document.querySelectorAll('input[name="httpports"]:checked')).map(cb => cb.value).join(',');
 
-                        const advancedSettings = {
+                        const settingsToSave = {
+                            ADD: document.getElementById('content').value, // Also save the main content
                             proxyip: document.getElementById('proxyip').value,
                             socks5: document.getElementById('socks5').value,
                             httpproxy: document.getElementById('httpproxy').value,
@@ -3423,7 +3458,7 @@ async function handleGetRequest(env) {
                             httpsports: selectedHttpsPorts,
                             httpports: selectedHttpPorts
                         };
-                        await saveData(button, statusEl, JSON.stringify(advancedSettings), '?type=advanced');
+                        await saveData(button, statusEl, JSON.stringify(settingsToSave), '?type=advanced');
                     } catch(error) {
                         statusEl.textContent = '❌ ' + error.message;
                         console.error('保存设置时发生错误:', error);
@@ -3451,8 +3486,7 @@ async function handleGetRequest(env) {
                         button.disabled = false;
                     }
                 }
-
-                // Test connection logic remains the same
+                
                 async function testSetting(event, type) {
                     const elementId = type === 'http' ? 'httpproxy' : type;
                     const address = document.getElementById(elementId).value.trim();
@@ -3486,7 +3520,6 @@ async function handleGetRequest(env) {
                     }
                 }
 
-                // Theme switch logic remains the same
                 const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
                 (function() {
                     const currentTheme = localStorage.getItem('theme');
