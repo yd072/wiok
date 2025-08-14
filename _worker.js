@@ -2828,7 +2828,7 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "rule_set": "geosite-ad",
-                    "action": "PROXY"
+                    "action": "reject"
                 },
                 {
                     "rule_set": ["geosite-cn", "geoip-cn"],
