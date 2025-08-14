@@ -1,4 +1,5 @@
 
+
 import { connect } from 'cloudflare:sockets';
 
 // --- 全局配置缓存 ---
@@ -2715,18 +2716,12 @@ ${rulesYaml}
 
 
 /**
- * 【最终现代化版本】生成Sing-box的简单配置
+ * 生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
- * @description
- *  此版本解决了 Sing-box 1.12.0+ 的所有弃用警告 (deprecation warnings)。
- *  1. 更新了 `dns` 块为现代格式，为 DNS 服务器添加了 tag 和 detour。
- *  2. 在 `route` 块中添加了 `default_domain_resolver`，明确指定了默认的 DNS 解析器。
- *  这是与最新 Sing-box 核心完全兼容的最终配置。
  */
 function generateSingboxConfig(nodeObjects) {
-    // 1. 从节点对象生成代理出站配置
-    const proxyOutbounds = nodeObjects.map(p => {
+    const outbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
             tag: p.name,
@@ -2754,67 +2749,64 @@ function generateSingboxConfig(nodeObjects) {
         }
         return outbound;
     });
-
-    // 如果没有可用的节点，返回一个错误的配置
-    if (proxyOutbounds.length === 0) {
-        return JSON.stringify({ "error": "没有可用于生成配置的节点。" }, null, 2);
-    }
     
-    // 获取所有代理节点的 tag
-    const proxyTags = proxyOutbounds.map(o => o.tag);
+    const proxyNames = outbounds.map(o => o.tag);
 
-    // 2. 创建一个与最新 Sing-box 核心完全兼容的配置结构
+    // --- START: 新增的规则 ---
+    // 将用户提供的规则转换为Sing-box格式
+    const customRules = [
+        { "domain_suffix": ["googleapis.cn", "gstatic.com"], "outbound": "manual-select", "remarks": "Google cn" },
+        { "geosite": "category-ads-all", "outbound": "block", "remarks": "阻止广告" },
+        { "geoip": "private", "outbound": "direct", "remarks": "绕过局域网IP" },
+        { "geosite": "private", "outbound": "direct", "remarks": "绕过局域网域名" },
+        {
+            "ip": [ "223.5.5.5", "223.6.6.6", "119.29.29.29", "1.12.12.12", "120.53.53.53", "180.76.76.76", "114.114.114.114", "114.114.115.115", "114.114.114.119", "114.114.115.119", "114.114.114.110", "114.114.115.110", "180.184.1.1", "180.184.2.2", "101.226.4.6", "218.30.118.6", "123.125.81.6", "140.207.198.6", "1.2.4.8", "210.2.4.8", "52.80.66.66", "117.50.22.22", "117.50.10.10", "52.80.52.52", "117.50.60.30", "52.80.60.30" ],
+            "outbound": "direct", "remarks": "绕过中国公共DNS IP"
+        },
+        { "domain": ["alidns.com", "doh.pub", "dot.pub", "360.cn", "onedns.net"], "outbound": "direct", "remarks": "绕过中国公共DNS域名" },
+        { "geoip": "cn", "outbound": "direct", "remarks": "绕过中国IP" },
+        { "geosite": "cn", "outbound": "direct", "remarks": "绕过中国域名" }
+    ];
+    // --- END: 新增的规则 ---
+
     const config = {
         "log": {
             "level": "info",
             "timestamp": true
         },
-        // 【修正】采用现代 DNS 配置格式
         "dns": {
             "servers": [
-                {
-                    "tag": "dns_proxy", // 用于解析被代理的域名
-                    "address": "https://8.8.8.8/dns-query",
-                    // 注意：这里需要一个代理出口，但为了避免循环依赖，我们先创建一个不带 domain_resolver 的特殊代理
-                    "detour": "PROXY" 
-                },
-                {
-                    "tag": "dns_direct", // 用于解析国内域名和规则
-                    "address": "https://223.5.5.5/dns-query",
-                    "detour": "DIRECT"
-                }
+                { "address": "https://223.5.5.5/dns-query" },
+                { "address": "https://8.8.8.8/dns-query" }
             ]
         },
         "inbounds": [
-            {
-                "type": "mixed",
-                "listen": "0.0.0.0",
-                "listen_port": 2345
-            }
+            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
         ],
         "outbounds": [
-            {
-                "type": "selector",
-                "tag": "PROXY",
-                "outbounds": [...proxyTags]
+            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
+            { 
+              "type": "urltest", 
+              "tag": "auto-select", 
+              "outbounds": proxyNames,
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
             },
-            ...proxyOutbounds,
-            {
-                "type": "direct",
-                "tag": "DIRECT"
-            }
+            ...outbounds,
+            { "type": "direct", "tag": "direct" },
+            { "type": "block", "tag": "block" }
         ],
         "route": {
-            // 【修正】明确指定默认的 DNS 解析器
-            "default_domain_resolver": "dns_direct", // 默认使用直连DNS
             "rules": [
-                // 您可以在未来在这里添加分流规则
+                ...customRules, // 在这里插入新规则
+                // 原始规则可以被 customRules 中的 `geoip:cn` 和 `geosite:cn` 覆盖，所以不再需要
+                // { "geoip": "cn", "outbound": "direct" }
             ],
-            "final": "PROXY" // 所有流量默认走代理
+            "final": "manual-select", // 使用 final 替代 default_outbound
+            "auto_detect_interface": true
         }
     };
     
-    // 3. 将配置对象转换为格式化的 JSON 字符串
     return JSON.stringify(config, null, 2);
 }
 
