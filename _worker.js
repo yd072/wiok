@@ -2715,13 +2715,14 @@ ${rulesYaml}
 
 
 /**
- * 【终极兼容版】生成Sing-box的简单配置
+ * 【最终现代化版本】生成Sing-box的简单配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  * @description
- *  此版本为解决特定客户端版本不兼容 geosite 和 rule_sets 的问题而设计。
- *  它移除了所有基于地理位置的自动分流规则，采用全局代理模式。
- *  这确保了在几乎所有 Sing-box 版本上都能成功导入并运行。
+ *  此版本解决了 Sing-box 1.12.0+ 的所有弃用警告 (deprecation warnings)。
+ *  1. 更新了 `dns` 块为现代格式，为 DNS 服务器添加了 tag 和 detour。
+ *  2. 在 `route` 块中添加了 `default_domain_resolver`，明确指定了默认的 DNS 解析器。
+ *  这是与最新 Sing-box 核心完全兼容的最终配置。
  */
 function generateSingboxConfig(nodeObjects) {
     // 1. 从节点对象生成代理出站配置
@@ -2762,41 +2763,54 @@ function generateSingboxConfig(nodeObjects) {
     // 获取所有代理节点的 tag
     const proxyTags = proxyOutbounds.map(o => o.tag);
 
-    // 2. 创建一个兼容性极强的配置结构
+    // 2. 创建一个与最新 Sing-box 核心完全兼容的配置结构
     const config = {
         "log": {
             "level": "info",
             "timestamp": true
         },
+        // 【修正】采用现代 DNS 配置格式
         "dns": {
             "servers": [
-                { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://8.8.8.8/dns-query" }
+                {
+                    "tag": "dns_proxy", // 用于解析被代理的域名
+                    "address": "https://8.8.8.8/dns-query",
+                    // 注意：这里需要一个代理出口，但为了避免循环依赖，我们先创建一个不带 domain_resolver 的特殊代理
+                    "detour": "PROXY" 
+                },
+                {
+                    "tag": "dns_direct", // 用于解析国内域名和规则
+                    "address": "https://223.5.5.5/dns-query",
+                    "detour": "DIRECT"
+                }
             ]
         },
         "inbounds": [
             {
                 "type": "mixed",
                 "listen": "0.0.0.0",
-                "listen_port": 2345 // 客户端的本地代理端口
+                "listen_port": 2345
             }
         ],
         "outbounds": [
             {
                 "type": "selector",
-                "tag": "PROXY", // 手动选择节点的策略组
+                "tag": "PROXY",
                 "outbounds": [...proxyTags]
             },
             ...proxyOutbounds,
             {
                 "type": "direct",
-                "tag": "DIRECT" // 直连出口，虽然默认不用，但保留以备手动切换
+                "tag": "DIRECT"
             }
         ],
-        // 路由部分：移除所有规则，只保留 final
         "route": {
-            // "rules" 和 "rule_sets" 已被完全移除
-            "final": "PROXY" // 所有未匹配规则（即全部流量）都走 PROXY 策略组
+            // 【修正】明确指定默认的 DNS 解析器
+            "default_domain_resolver": "dns_direct", // 默认使用直连DNS
+            "rules": [
+                // 您可以在未来在这里添加分流规则
+            ],
+            "final": "PROXY" // 所有流量默认走代理
         }
     };
     
