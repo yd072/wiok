@@ -2815,43 +2815,6 @@ function generateLoonConfig(nodeObjects) {
     const autoSelectGroupName = "🚀 自动选择";
     const manualSelectGroupName = "手机选择";
 
-    // --- START: 使用内置简单规则重写的规则集 ---
-    const customRules = `
-# 代理 Google 相关服务
-DOMAIN-SUFFIX, gstatic.com, ${manualSelectGroupName}
-DOMAIN-KEYWORD, googleapis, ${manualSelectGroupName}
-DOMAIN-KEYWORD, google, ${manualSelectGroupName}
-
-# 简单广告屏蔽规则 (无法替代完整的外部规则集)
-DOMAIN-SUFFIX, doubleclick.net, REJECT
-DOMAIN-SUFFIX, google-analytics.com, REJECT
-DOMAIN-SUFFIX, googletagservices.com, REJECT
-DOMAIN-SUFFIX, adservice.google.com, REJECT
-
-# 屏蔽 QUIC
-UDP, 443, REJECT
-
-# 局域网及私有地址直连
-IP-CIDR, 192.168.0.0/16, DIRECT
-IP-CIDR, 10.0.0.0/8, DIRECT
-IP-CIDR, 172.16.0.0/12, DIRECT
-IP-CIDR, 127.0.0.1/32, DIRECT
-DOMAIN-SUFFIX, lan, DIRECT
-DOMAIN-SUFFIX, local, DIRECT
-
-# 国内公共DNS直连
-DOMAIN-SUFFIX, alidns.com, DIRECT
-DOMAIN-SUFFIX, doh.pub, DIRECT
-DOMAIN-SUFFIX, 360.cn, DIRECT
-IP-CIDR, 223.5.5.5/32, DIRECT
-IP-CIDR, 119.29.29.29/32, DIRECT
-IP-CIDR, 180.76.76.76/32, DIRECT
-
-# 国内IP地址直连 (最核心的国内流量判断规则)
-GEOIP, CN, DIRECT
-`;
-    // --- END: 规则集 ---
-
     // [Proxy Group] 和 [Rule] 部分
     const config = `
 [General]
@@ -2862,11 +2825,11 @@ bypass-system = true
 ${proxiesConf}
 
 [Proxy Group]
-${manualSelectGroupName} = select, ${autoSelectGroupName}, DIRECT, REJECT, ${proxyNames.join(', ')}
+${manualSelectGroupName} = select, ${autoSelectGroupName}, DIRECT, ${proxyNames.join(', ')}
 ${autoSelectGroupName} = url-test, ${proxyNames.join(', ')}, url=http://www.gstatic.com/generate_204, interval=300, tolerance=100
 
 [Rule]
-${customRules.trim()}
+GEOIP, CN, DIRECT
 FINAL, ${manualSelectGroupName}
 `;
     return config.trim();
@@ -3410,7 +3373,7 @@ async function handleGetRequest(env) {
                     </div>
                     <div class="setting-item">
                         <h4>随机节点端口设置</h4>
-                        <p>勾选以启用 noTLS (不加密)，并选择用于随机生成节点时的端口。</p>
+                        <p>启用 noTLS (将不使用 TLS 加密)</p>
                         <div class="switch-container">
                              <label class="theme-switch" for="notls-checkbox">
                                 <input type="checkbox" id="notls-checkbox" ${noTLSContent === 'true' ? 'checked' : ''}>
