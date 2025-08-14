@@ -3171,13 +3171,14 @@ async function handleGetRequest(env) {
                     border-right: none;
                 }
 
+                /* HOVER EFFECT REMOVED
                 .tab-container button:hover {
                     background-color: #ddd;
                 }
-                
                 html.dark-mode .tab-container button:hover {
                      background-color: #444;
                 }
+                */
 
                 .tab-container button.active {
                     background-color: var(--section-bg);
