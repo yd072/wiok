@@ -3392,7 +3392,9 @@ async function handleGetRequest(env) {
                 <div id="tab-network" class="tab-content">
                     <div class="setting-item">
                         <h4>NAT64/DNS64</h4>
-                        <p>用于将 IPv4 地址转换为 IPv6 地址。</p>
+                        <p>用于将 IPv4 地址转换为 IPv6 地址。
+                           <a id="nat64-link" target="_blank" style="margin-left: 10px;">自行查询</a>
+                        </p>
                         <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
                         <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'nat64')">测试连接</button>
@@ -3426,6 +3428,18 @@ async function handleGetRequest(env) {
             </div>
 
             <script>
+                (function() {
+                    const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
+                    const decodedURL = atob(encodedURL);
+                    // Defer setting the href to ensure the element exists
+                    document.addEventListener('DOMContentLoaded', (event) => {
+                        const link = document.getElementById('nat64-link');
+                        if (link) {
+                            link.setAttribute('href', decodedURL);
+                        }
+                    });
+                })();
+
                 function openTab(evt, tabName) {
                     let i, tabcontent, tablinks;
                     tabcontent = document.getElementsByClassName("tab-content");
