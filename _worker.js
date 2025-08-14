@@ -2828,15 +2828,15 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "rule_set": "geosite-ad",
-                    "action": "reject"
+                    "action": "PROXY"
                 },
                 {
                     "rule_set": ["geosite-cn", "geoip-cn"],
-                    "outbound": "DIRECT"
+                    "outbound": "DPROXY"
                 },
                 {
                     "ip_is_private": true,
-                    "outbound": "DIRECT"
+                    "outbound": "PROXY"
                 },
                 {
                     "rule_set": "geosite-geolocation-!cn",
