@@ -3163,11 +3163,7 @@ async function handleGetRequest(env) {
                     padding: 14px 16px;
                     font-size: 16px;
                     color: var(--text-color);
-                    border-right: 1px solid var(--border-color);
-                }
-
-                .tab-container button:last-child {
-                    border-right: none;
+                    /* border-right is removed to make tabs seamless */
                 }
 
                 .tab-container button:hover {
@@ -3188,6 +3184,7 @@ async function handleGetRequest(env) {
                     display: none;
                     padding: 20px;
                     border: 1px solid var(--border-color);
+                    border-top: none; /* Make top border seamless with tab bar */
                     border-radius: 0 0 8px 8px;
                     animation: fadeEffect 0.5s;
                 }
@@ -3245,7 +3242,7 @@ async function handleGetRequest(env) {
                     color: var(--primary-color);
                     cursor: pointer;
                     display: inline-block;
-                    margin: 0 0 10px 0; /* Adjusted margin */
+                    margin: 0 0 10px 0;
                     font-weight: 500;
                 }
                 .notice-content {
@@ -3352,6 +3349,7 @@ async function handleGetRequest(env) {
                         </div>
                     </div>
                     <div class="button-group">
+                        <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                         <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存代理设置</button>
                         <span class="save-status" id="proxy-save-status"></span>
                     </div>
@@ -3374,6 +3372,7 @@ async function handleGetRequest(env) {
                         <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
                     </div>
                     <div class="button-group">
+                        <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                         <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存订阅设置</button>
                         <span class="save-status" id="sub-save-status"></span>
                     </div>
@@ -3401,6 +3400,7 @@ async function handleGetRequest(env) {
                         <div class="checkbox-grid" id="httpports-grid">${httpCheckboxesHTML}</div>
                     </div>
                     <div class="button-group">
+                        <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                         <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存网络设置</button>
                         <span class="save-status" id="network-save-status"></span>
                     </div>
