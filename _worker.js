@@ -3212,7 +3212,6 @@ async function handleGetRequest(env) {
                 .editor:focus, .setting-editor:focus {
                     outline: none;
                     border-color: var(--primary-color);
-                    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%, transparent);
                 }
 
                 .setting-item { margin-bottom: 20px; }
