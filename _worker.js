@@ -2713,7 +2713,6 @@ ${rulesYaml}
     return config.trim();
 }
 
-
 /**
  * 生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
@@ -2761,38 +2760,16 @@ function generateSingboxConfig(nodeObjects) {
             "timestamp": true
         },
         "dns": {
+            // 根据用户要求，简化DNS服务器配置
             "servers": [
-                // 添加一个本地DNS服务器以匹配路由中的 default_domain_resolver
                 {
-                    "tag": "local",
-                    "address": "223.5.5.5", // 使用一个可靠的公共DNS作为本地解析
-                    "detour": "DIRECT"
-                },
-                {
-                    "tag": "remote_dns",
-                    "address": "https://1.1.1.1/dns-query",
-                    "detour": "PROXY" // 假设通过代理来解析，避免DNS污染
-                },
-                 {
-                    "tag": "block",
-                    "address": "rcode://success"
+                    "address": "local",
+                    "tag": "local_dns"
                 }
             ],
-            "rules": [
-                 {
-                    "rule_set": "geosite-ad",
-                    "server": "block" // 广告域名直接拦截
-                },
-                {
-                    "rule_set": ["geosite-cn"],
-                    "server": "local" // 国内域名使用本地DNS
-                }
-            ],
-            "strategy": "ipv4_only",
-            "final": "remote_dns" // 默认或国外域名使用远程DNS
+            "strategy": "ipv4_only"
         },
         "inbounds": [
-            // 使用用户指定的TUN入站配置
             {
                 "type": "tun",
                 "tag": "tun-in",
@@ -2812,7 +2789,6 @@ function generateSingboxConfig(nodeObjects) {
                     "fc00::/7"
                 ]
             },
-            // 保留混合端口入站，方便其他客户端连接
             {
                 "type": "mixed",
                 "tag": "mixed-in",
@@ -2838,12 +2814,9 @@ function generateSingboxConfig(nodeObjects) {
                 "interval": "5m"
             },
             { "type": "direct", "tag": "DIRECT" },
-            { "type": "dns", "tag": "dns-out" }, // DNS出站，配合DNS规则使用
-            { "type": "block", "tag": "REJECT" } // block出站，用于广告拦截
+            { "type": "dns", "tag": "dns-out" }
         ],
         "route": {
-            // 使用用户指定的默认域名解析器
-            "default_domain_resolver": "local",
             "auto_detect_interface": true,
             "final": "PROXY",
             "rules": [
@@ -2851,15 +2824,16 @@ function generateSingboxConfig(nodeObjects) {
                     "protocol": "dns",
                     "outbound": "dns-out"
                 },
+                // 根据用户要求，修正广告拦截规则
                 {
                     "rule_set": "geosite-ad",
-                    "outbound": "REJECT" 
+                    "action": "reject"
                 },
                 {
                     "rule_set": ["geosite-cn", "geoip-cn"],
                     "outbound": "DIRECT"
                 },
-                 {
+                {
                     "ip_is_private": true,
                     "outbound": "DIRECT"
                 }
@@ -2869,26 +2843,26 @@ function generateSingboxConfig(nodeObjects) {
                     "tag": "geosite-ad",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs"
+                    "url": "https://proxydown.0031400.xyz?url=https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs"
                 },
                 {
                     "tag": "geosite-cn",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
+                    "url": "https://proxydown.0031400.xyz?url=https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
                 },
                 {
                     "tag": "geoip-cn",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"
+                    "url": "https://proxydown.0031400.xyz?url=https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"
                 }
             ]
         },
         "experimental": {
             "clash_api": {
                 "external_controller": "127.0.0.1:9090",
-                 "external_ui_download_url": "https://github.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip"
+                "external_ui_download_url": "https://proxydown.0031400.xyz?url=https://github.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip"
             }
         }
     };
