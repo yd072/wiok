@@ -2762,10 +2762,32 @@ function generateSingboxConfig(nodeObjects) {
             // 根据用户要求，使用指定的TCP DNS服务器
             "servers": [
                 {
-                    "type": "https",
-                    "server": "8.8.4.4"
+                    "address": "dhcp://auto",
+                    "tag": "dhcp_dns"
+                },
+                {
+                    "address": "https://1.1.1.1",
+                    "tag": "public_doh",
+                    "detour": "PROXY" // 让公共DNS通过代理访问，防污染
+                },
+                {
+                    "address": "rcode://success",
+                    "tag": "block_dns"
                 }
             ],
+            // 规则：国内域名优先尝试DHCP，广告拦截
+            "rules": [
+                {
+                    "rule_set": "geosite-ad",
+                    "server": "block_dns"
+                },
+                {
+                    "rule_set": ["geosite-cn"],
+                    "server": "dhcp_dns"
+                }
+            ],
+            // 最终解析器：当其他规则不匹配或dhcp_dns不可用时，使用此DNS
+            "final": "public_doh",
             "strategy": "ipv4_only"
         },
         "inbounds": [
@@ -2826,12 +2848,6 @@ function generateSingboxConfig(nodeObjects) {
                     "protocol": "dns",
                     "action": "hijack-dns"
                 },
-                // --- 新增规则：解决DNS路由死循环问题 ---
-                {
-                    "ip_cidr": ["1.1.1.1/32", "1.0.0.1/32"],
-                    "outbound": "DIRECT"
-                },
-                // --- 结束新增 ---
                 {
                     "rule_set": "geosite-ad",
                     "action": "reject"
