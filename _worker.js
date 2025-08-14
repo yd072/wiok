@@ -2476,15 +2476,6 @@ async function prepareNodeList(host, UUID, noTLS) {
 			addressid = match[3] || address;
 		}
 		
-		const localHttpsPorts = httpsPorts.length > 0 ? httpsPorts : ["443", "2053", "2083", "2087", "2096", "8443"];
-		if (!isValidIPv4(address) && port == "-1") {
-			for (let httpsPort of localHttpsPorts) {
-				if (address.includes(httpsPort)) {
-					port = httpsPort;
-					break;
-				}
-			}
-		}
 		if (port == "-1") port = "443";
         // ...
 
@@ -2556,15 +2547,6 @@ async function prepareNodeList(host, UUID, noTLS) {
 				addressid = match[3] || address;
 			}
 
-			const localHttpPorts = httpPorts.length > 0 ? httpPorts : ["80", "8080", "8880", "2052", "2082", "2086", "2095"];
-			if (!isValidIPv4(address) && port == "-1") {
-				for (let httpPort of localHttpPorts) {
-					if (address.includes(httpPort)) {
-						port = httpPort;
-						break;
-					}
-				}
-			}
 			if (port == "-1") port = "80";
             // ...
 
