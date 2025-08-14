@@ -2720,6 +2720,7 @@ ${rulesYaml}
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
 function generateSingboxConfig(nodeObjects) {
+    // 动态生成出站节点列表
     const outbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
@@ -2749,47 +2750,121 @@ function generateSingboxConfig(nodeObjects) {
         return outbound;
     });
     
+    // 获取所有生成的节点名称，用于策略组
     const proxyNames = outbounds.map(o => o.tag);
 
     const config = {
         "log": {
+            "disabled": false,
             "level": "info",
             "timestamp": true
         },
         "dns": {
             "servers": [
-                { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://8.8.8.8/dns-query" }
-            ]
+                {
+                    "tag": "cloudflare",
+                    "address": "tls://1.1.1.1"
+                },
+                {
+                    "tag": "local",
+                    "address": "223.5.5.5"
+                }
+            ],
+            "rules": [
+                {
+                    "rule_set": ["geosite-cn"],
+                    "server": "local"
+                },
+                {
+                    "rule_set": ["geosite-ad"],
+                    "server": "block"
+                }
+            ],
+            "strategy": "ipv4_only"
         },
         "inbounds": [
-            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
+            {
+                "type": "mixed",
+                "tag": "mixed-in",
+                "listen": "0.0.0.0",
+                "listen_port": 7890
+            },
+            {
+                "type": "tun",
+                "tag": "tun-in",
+                "interface_name": "tun0",
+                "inet4_address": "172.19.0.1/30",
+                "auto_route": true,
+                "strict_route": true
+            }
         ],
         "outbounds": [
-            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
-            { 
-              "type": "urltest", 
-              "tag": "auto-select", 
-              "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204", 
-              "interval": "5m" 
+            ...outbounds, // 展开所有动态生成的节点
+            {
+                "type": "selector",
+                "tag": "PROXY",
+                "outbounds": [
+                    "auto",
+                    ...proxyNames
+                ]
             },
-            ...outbounds,
-            { "type": "direct", "tag": "direct" },
+            {
+                "type": "urltest",
+                "tag": "auto",
+                "outbounds": proxyNames,
+                "interval": "1m"
+            },
+            { "type": "direct", "tag": "DIRECT" },
             { "type": "block", "tag": "block" }
         ],
         "route": {
+            "auto_detect_interface": true,
+            "final": "PROXY",
             "rules": [
-                { "geoip": "cn", "outbound": "direct" }
-                
+                {
+                    "protocol": "dns",
+                    "outbound": "dns-out"
+                },
+                {
+                    "rule_set": "geosite-ad",
+                    "outbound": "block"
+                },
+                {
+                    "rule_set": ["geosite-cn", "geoip-cn"],
+                    "outbound": "DIRECT"
+                }
             ],
-            "final": "manual-select", // 使用 final 替代 default_outbound
-            "auto_detect_interface": true
+            "rule_set": [
+                {
+                    "tag": "geosite-ad",
+                    "type": "remote",
+                    "format": "binary",
+                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs"
+                },
+                {
+                    "tag": "geosite-cn",
+                    "type": "remote",
+                    "format": "binary",
+                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
+                },
+                {
+                    "tag": "geoip-cn",
+                    "type": "remote",
+                    "format": "binary",
+                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"
+                }
+            ]
+        },
+        "experimental": {
+            "clash_api": {
+                "external_controller": "127.0.0.1:9090"
+            }
         }
     };
     
     return JSON.stringify(config, null, 2);
 }
+
 
 /**
  * 生成Loon配置 
