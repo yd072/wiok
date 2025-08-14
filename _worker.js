@@ -2715,7 +2715,7 @@ ${rulesYaml}
 
 
 /**
- * 【已再次修正】生成Sing-box的配置
+ * 【已简化】生成Sing-box的配置 (移除geosite，不添加rule_set)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2756,12 +2756,10 @@ function generateSingboxConfig(nodeObjects) {
     
     const proxyTags = proxyOutbounds.map(o => o.tag);
 
-    // 2. 转换您提供的路由规则为 Sing-box 格式 (已移除 "remarks" 字段)
+    // 2. 定义路由规则 (已移除所有 geosite 规则)
     const customRules = [
       { "domain_suffix": ["googleapis.cn", "gstatic.com"], "outbound": "PROXY" },
-      { "geosite": "category-ads-all", "outbound": "BLOCK" },
       { "geoip": "private", "outbound": "DIRECT" },
-      { "geosite": "private", "outbound": "DIRECT" },
       { 
         "ip_cidr": [
           "223.5.5.5", "223.6.6.6", "2400:3200::1", "2400:3200:baba::1", 
@@ -2777,8 +2775,7 @@ function generateSingboxConfig(nodeObjects) {
         "outbound": "DIRECT"
       },
       { "domain_suffix": ["alidns.com", "doh.pub", "dot.pub", "360.cn", "onedns.net"], "outbound": "DIRECT" },
-      { "geoip": "cn", "outbound": "DIRECT" },
-      { "geosite": "cn", "outbound": "DIRECT" }
+      { "geoip": "cn", "outbound": "DIRECT" }
     ];
 
     // 3. 创建完整的配置结构
@@ -2790,7 +2787,7 @@ function generateSingboxConfig(nodeObjects) {
         "dns": {
             "servers": [
                 { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://8.8.8.8/dns-query" }
+                { "address": "https://doh.pub/dns-query" }
             ]
         },
         "inbounds": [
@@ -2804,7 +2801,7 @@ function generateSingboxConfig(nodeObjects) {
             {
                 "type": "selector",
                 "tag": "PROXY",
-                "outbounds": ["AUTO", "DIRECT", "BLOCK", ...proxyTags]
+                "outbounds": ["AUTO", "DIRECT", ...proxyTags]
             },
             { 
               "type": "urltest", 
@@ -2815,8 +2812,10 @@ function generateSingboxConfig(nodeObjects) {
             },
             ...proxyOutbounds,
             { "type": "direct", "tag": "DIRECT" },
+            // BLOCK 出站现在没有规则使用，但保留以备将来手动添加规则
             { "type": "block", "tag": "BLOCK" }
         ],
+        // 路由部分
         "route": {
             "rules": customRules,
             "final": "PROXY",
