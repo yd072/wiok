@@ -2759,10 +2759,11 @@ function generateSingboxConfig(nodeObjects) {
             "timestamp": true
         },
         "dns": {
+            // 根据用户要求，使用指定的TCP DNS服务器
             "servers": [
                 {
-                    "address": "https://1.1.1.1",
-                    "tag": "doh_dns"
+                    "type": "https",
+                    "server": "8.8.4.4"
                 }
             ],
             "strategy": "ipv4_only"
@@ -2829,11 +2830,10 @@ function generateSingboxConfig(nodeObjects) {
                     "rule_set": "geosite-ad",
                     "action": "reject"
                 },
-                // **核心修改：移除了下面的国内直连规则**
-                // {
-                //     "rule_set": ["geosite-cn", "geoip-cn"],
-                //     "outbound": "DIRECT"
-                // },
+                {
+                    "rule_set": ["geosite-cn", "geoip-cn"],
+                    "outbound": "proxy"
+                },
                 {
                     "ip_is_private": true,
                     "outbound": "DIRECT"
