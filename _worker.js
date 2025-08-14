@@ -3267,7 +3267,8 @@ async function handleGetRequest(env) {
                 a:visited { color: var(--visited-link-color); }
                 a:hover { text-decoration: underline; }
 
-                /* Theme switch */
+                /* --- Switch Styles --- */
+                .switch-container { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
                 .theme-switch-wrapper { display: flex; align-items: center; position: fixed; top: 15px; right: 15px; }
                 .theme-switch { display: inline-block; height: 20px; position: relative; width: 36px; }
                 .theme-switch input { display:none; }
@@ -3292,8 +3293,8 @@ async function handleGetRequest(env) {
         </head>
         <body>
             <div class="theme-switch-wrapper">
-                <label class="theme-switch" for="checkbox">
-                    <input type="checkbox" id="checkbox" />
+                <label class="theme-switch" for="theme-checkbox">
+                    <input type="checkbox" id="theme-checkbox" />
                     <div class="slider round"></div>
                 </label>
             </div>
@@ -3401,7 +3402,13 @@ async function handleGetRequest(env) {
                     <div class="setting-item">
                         <h4>随机节点端口设置</h4>
                         <p>勾选以启用 noTLS (不加密)，并选择用于随机生成节点时的端口。</p>
-                        <label><input type="checkbox" id="notls-checkbox" ${noTLSContent === 'true' ? 'checked' : ''}> 启用 noTLS</label>
+                        <div class="switch-container">
+                             <label class="theme-switch" for="notls-checkbox">
+                                <input type="checkbox" id="notls-checkbox" ${noTLSContent === 'true' ? 'checked' : ''}>
+                                <div class="slider round"></div>
+                            </label>
+                            <span>启用 noTLS</span>
+                        </div>
                         
                         <h5 style="margin-top: 15px; margin-bottom: 5px;">TLS 端口</h5>
                         <div class="checkbox-grid" id="httpsports-grid">${httpsCheckboxesHTML}</div>
@@ -3542,11 +3549,11 @@ async function handleGetRequest(env) {
                     }
                 }
 
-                const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
+                const themeToggleSwitch = document.querySelector('#theme-checkbox');
                 (function() {
                     const currentTheme = localStorage.getItem('theme');
                     if (currentTheme === 'dark-mode') {
-                        toggleSwitch.checked = true;
+                        themeToggleSwitch.checked = true;
                     }
                 })();
                 function switchTheme(e) {
@@ -3558,7 +3565,7 @@ async function handleGetRequest(env) {
                         localStorage.setItem('theme', 'light-mode');
                     }    
                 }
-                toggleSwitch.addEventListener('change', switchTheme, false);
+                themeToggleSwitch.addEventListener('change', switchTheme, false);
             </script>
         </body>
         </html>
