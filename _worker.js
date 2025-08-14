@@ -2715,12 +2715,13 @@ ${rulesYaml}
 
 
 /**
- * 【已修正】生成Sing-box的简单配置
+ * 【最终修正】生成Sing-box的简单配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  * @description
- *  此版本已更新，使用 rule_set 替代了已废弃的 geosite 和 geoip，
- *  以兼容 Sing-box 1.8.0 及以上版本，解决了 "geosite is deprecated" 的错误。
+ *  此版本修正了 "unknown field 'rule_set'" 错误。
+ *  `rule_sets` 的定义已移至 `route` 对象内部，并使用了正确的复数形式 `rule_sets`。
+ *  这是兼容 Sing-box 1.8.0+ 的正确语法。
  */
 function generateSingboxConfig(nodeObjects) {
     // 1. 从节点对象生成代理出站配置
@@ -2773,23 +2774,6 @@ function generateSingboxConfig(nodeObjects) {
                 { "address": "https://doh.pub/dns-query" }
             ]
         },
-        // 新增：定义规则集，用于下载最新的 geosite 和 geoip 数据库
-        "rule_set": [
-            {
-                "tag": "geosite-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs", // 使用社区维护的规则地址
-                "download_detour": "DIRECT" // 指定下载规则时使用的出站
-            },
-            {
-                "tag": "geoip-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs", // 使用社区维护的规则地址
-                "download_detour": "DIRECT"
-            }
-        ],
         "inbounds": [
             {
                 "type": "mixed",
@@ -2809,8 +2793,25 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "DIRECT"
             }
         ],
-        // 路由部分：使用 rule_set 引用规则，而不是直接使用 geosite/geoip
+        // 路由部分
         "route": {
+            // 【修正】将 rule_sets (复数) 移入 route 对象内部
+            "rule_sets": [
+                {
+                    "tag": "geosite-cn",
+                    "type": "remote",
+                    "format": "binary",
+                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+                    "download_detour": "DIRECT"
+                },
+                {
+                    "tag": "geoip-cn",
+                    "type": "remote",
+                    "format": "binary",
+                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+                    "download_detour": "DIRECT"
+                }
+            ],
             "rules": [
                 {
                     "rule_set": "geosite-cn",
@@ -2821,7 +2822,7 @@ function generateSingboxConfig(nodeObjects) {
                     "outbound": "DIRECT"
                 }
             ],
-            "final": "PROXY" // 未匹配规则的流量走代理选择器
+            "final": "PROXY"
         }
     };
     
