@@ -80,6 +80,65 @@ const utils = {
 	},
 };
 
+// =================================================================
+// START: IP 和 CIDR 整数转换工具函数 (新增部分)
+// =================================================================
+
+/**
+ * 将点分十进制 IP 字符串转换为 32 位无符号整数
+ * @param {string} ip
+ * @returns {number}
+ */
+function ipToInt(ip) {
+    // 使用位运算以提高效率
+    return ip.split('.').reduce((int, octet) => (int << 8) | parseInt(octet, 10), 0) >>> 0;
+}
+
+/**
+ * 将 32 位无符号整数转换回点分十进制 IP 字符串
+ * @param {number} int
+ * @returns {string}
+ */
+function intToIp(int) {
+    // 使用位移运算提取每个八位字节
+    return `${(int >>> 24)}.${(int >>> 16) & 255}.${(int >>> 8) & 255}.${int & 255}`;
+}
+
+/**
+ * 将 CIDR 字符串转换为其起始和结束的整数范围
+ * @param {string} cidr
+ * @returns {{start: number, end: number} | null}
+ */
+function cidrToRange(cidr) {
+    const parts = cidr.split('/');
+    if (parts.length !== 2) return null;
+
+    const ip = parts[0];
+    const prefix = parseInt(parts[1], 10);
+
+    if (isNaN(prefix) || prefix < 0 || prefix > 32) return null;
+
+    try {
+        const ipInt = ipToInt(ip);
+        
+        // 在JavaScript中，32位全为1的整数是-1（二进制补码）
+        // 通过左移（32-prefix）位来创建网络掩码
+        const mask = (-1 << (32 - prefix)) >>> 0;
+
+        const start = (ipInt & mask) >>> 0;
+        const end = (start | (~mask >>> 0)) >>> 0;
+        
+        return { start, end };
+    } catch (e) {
+        return null;
+    }
+}
+
+// =================================================================
+// END: IP 和 CIDR 整数转换工具函数
+// =================================================================
+
+
 /**
  * 生成一个8位的随机路径
  * @returns {string} 例如 /aK7b2CDE
@@ -1671,41 +1730,15 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
 
+    // =================================================================
+    // START: 重构随机 IP 生成逻辑
+    // =================================================================
 	if ((addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-	    		let cfips = [
-		            '104.16.0.0/14',
-		            '104.21.0.0/16',
-		            '104.24.0.0/14',
-
-	    		];
-
-    		function ipToInt(ip) {
-        			return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
-    		}
-
-    			function intToIp(int) {
-        			return [
-            			(int >>> 24) & 255,
-            			(int >>> 16) & 255,
-            			(int >>> 8) & 255,
-            			int & 255
-        				].join('.');
-    				}
-
-        function generateRandomIPFromCIDR(cidr) {
-            const [base, mask] = cidr.split('/');
-                const baseInt = ipToInt(base);
-                const maskBits = parseInt(mask, 10);
-                const hostBits = 32 - maskBits;
-                if (hostBits < 2) {
-                return intToIp(baseInt);
-                }
-                const usableHosts = Math.pow(2, hostBits) - 2;
-                const randomOffset = Math.floor(Math.random() * usableHosts) + 1;
-
-                const randomIPInt = baseInt + randomOffset;
-            return intToIp(randomIPInt);
-        }
+	    let cfips = [
+            '104.16.0.0/14',
+            '104.21.0.0/16',
+            '104.24.0.0/14',
+	    ];
 
 	    let counter = 1;
 	    const totalIPsToGenerate = 10;
@@ -1714,16 +1747,33 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		    const randomPorts = httpPorts.length > 0 ? httpPorts : ['80'];
 		    for (let i = 0; i < totalIPsToGenerate; i++) {
 			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
-			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
+                const range = cidrToRange(randomCIDR);
+                if (!range) continue;
+                
+                // 排除网络地址和广播地址，确保生成可用的主机IP
+                const usableIpCount = range.end - range.start - 1;
+                if (usableIpCount <= 0) continue;
+
+                const randomInt = Math.floor(Math.random() * usableIpCount) + (range.start + 1);
+                const randomIP = intToIp(randomInt);
+
 			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
 			    addressesnotls.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
 		    }
 	    } else {
 		    const randomPorts = httpsPorts.length > 0 ? httpsPorts : ['443'];
-		        for (let i = 0; i < totalIPsToGenerate; i++) {
-			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
-			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
-			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
+            for (let i = 0; i < totalIPsToGenerate; i++) {
+                const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
+                const range = cidrToRange(randomCIDR);
+                if (!range) continue;
+
+                const usableIpCount = range.end - range.start - 1;
+                if (usableIpCount <= 0) continue;
+
+                const randomInt = Math.floor(Math.random() * usableIpCount) + (range.start + 1);
+                const randomIP = intToIp(randomInt);
+			    
+                const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
 			    addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
 		    }
 	    }
