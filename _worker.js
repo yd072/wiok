@@ -2712,7 +2712,6 @@ ${rulesYaml}
 `;
     return config.trim();
 }
-
 /**
  * 生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
@@ -2760,11 +2759,11 @@ function generateSingboxConfig(nodeObjects) {
             "timestamp": true
         },
         "dns": {
-            // 根据用户要求，简化DNS服务器配置
+            // 根据用户要求，使用指定的TCP DNS服务器
             "servers": [
                 {
-                    "address": "local",
-                    "tag": "local_dns"
+                    "address": "tcp://1.1.1.1",
+                    "tag": "tcp_dns"
                 }
             ],
             "strategy": "ipv4_only"
@@ -2813,18 +2812,20 @@ function generateSingboxConfig(nodeObjects) {
                 "outbounds": proxyNames,
                 "interval": "5m"
             },
-            { "type": "direct", "tag": "DIRECT" },
-            { "type": "dns", "tag": "dns-out" }
+            { "type": "direct", "tag": "DIRECT" }
         ],
         "route": {
             "auto_detect_interface": true,
             "final": "PROXY",
             "rules": [
+                // 根据用户要求，添加sniff和hijack-dns规则
+                {
+                    "action": "sniff"
+                },
                 {
                     "protocol": "dns",
-                    "outbound": "dns-out"
+                    "action": "hijack-dns"
                 },
-                // 根据用户要求，修正广告拦截规则
                 {
                     "rule_set": "geosite-ad",
                     "action": "reject"
