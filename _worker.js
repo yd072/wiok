@@ -3161,7 +3161,6 @@ async function handleGetRequest(env) {
                     outline: none;
                     cursor: pointer;
                     padding: 14px 16px;
-                    transition: background-color 0.3s;
                     font-size: 16px;
                     color: var(--text-color);
                     border-right: 1px solid var(--border-color);
@@ -3171,14 +3170,12 @@ async function handleGetRequest(env) {
                     border-right: none;
                 }
 
-                /* HOVER EFFECT REMOVED
                 .tab-container button:hover {
                     background-color: #ddd;
                 }
                 html.dark-mode .tab-container button:hover {
                      background-color: #444;
                 }
-                */
 
                 .tab-container button.active {
                     background-color: var(--section-bg);
