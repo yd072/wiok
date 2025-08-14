@@ -2763,7 +2763,7 @@ function generateSingboxConfig(nodeObjects) {
             "servers": [
                 {
                     "type": "https",
-                    "server": "1.1.1.1"
+                    "server": "8.8.4.4"
                 }
             ],
             "strategy": "ipv4_only"
