@@ -3280,6 +3280,19 @@ async function handleGetRequest(env) {
                 .slider.round { border-radius: 20px; }
                 .slider.round:before { border-radius: 50%; }
 
+                /* --- Footer Styles --- */
+                .footer {
+                    margin-top: 20px;
+                    padding-top: 20px;
+                    border-top: 1px solid var(--border-color);
+                    text-align: center;
+                    font-size: 14px;
+                    color: #6c757d;
+                }
+                html.dark-mode .footer {
+                    color: #aaa;
+                }
+
             </style>
             <script>
                 (function() {
@@ -3379,7 +3392,7 @@ async function handleGetRequest(env) {
                     </div>
                     <div class="setting-item">
                         <h4>SUBCONFIG (订阅转换配置)</h4>
-                        <p>订阅转换配置文件地址</p>
+                        <p>订阅转换配置文件地址。</p>
                         <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
                     </div>
                     <div class="button-group">
@@ -3393,7 +3406,6 @@ async function handleGetRequest(env) {
                     <div class="setting-item">
                         <h4>NAT64/DNS64</h4>
                         <p>
-                        
                            <a id="nat64-link" target="_blank" style="margin-left: 10px;">自行查询</a>
                         </p>
                         <script>
@@ -3435,6 +3447,10 @@ async function handleGetRequest(env) {
                         <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存</button>
                         <span class="save-status" id="network-save-status"></span>
                     </div>
+                </div>
+
+                <div class="footer">
+                    ${cmad}
                 </div>
             </div>
 
