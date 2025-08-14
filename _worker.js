@@ -2812,8 +2812,7 @@ function generateSingboxConfig(nodeObjects) {
                 "outbounds": proxyNames,
                 "interval": "5m"
             },
-            { "type": "direct", "tag": "DIRECT" },
-            { "type": "dns", "tag": "dns-out" }
+            { "type": "direct", "tag": "DIRECT" }
         ],
         "route": {
             "auto_detect_interface": true,
@@ -2825,7 +2824,7 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "protocol": "dns",
-                    "outbound": "dns-out" // DNS请求交由DNS模块处理
+                    "action": "hijack-dns"
                 },
                 {
                     "rule_set": "geosite-ad",
@@ -2849,13 +2848,13 @@ function generateSingboxConfig(nodeObjects) {
                     "tag": "geosite-ad",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs"
+                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs"
                 },
                 {
                     "tag": "geosite-cn",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs"
+                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
                 },
                 {
                     "tag": "geoip-cn",
