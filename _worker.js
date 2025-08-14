@@ -2812,7 +2812,8 @@ function generateSingboxConfig(nodeObjects) {
                 "outbounds": proxyNames,
                 "interval": "5m"
             },
-            { "type": "direct", "tag": "DIRECT" }
+            { "type": "direct", "tag": "DIRECT" },
+            { "type": "dns", "tag": "dns-out" }
         ],
         "route": {
             "auto_detect_interface": true,
@@ -2824,7 +2825,7 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "protocol": "dns",
-                    "action": "hijack-dns"
+                    "outbound": "dns-out" // DNS请求交由DNS模块处理
                 },
                 {
                     "rule_set": "geosite-ad",
@@ -2832,11 +2833,15 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "rule_set": ["geosite-cn", "geoip-cn"],
-                    "outbound": "proxy"
+                    "outbound": "DIRECT"
                 },
                 {
                     "ip_is_private": true,
                     "outbound": "DIRECT"
+                },
+                {
+                    "rule_set": "geosite-geolocation-!cn",
+                    "outbound": "PROXY"
                 }
             ],
             "rule_set": [
@@ -2844,26 +2849,32 @@ function generateSingboxConfig(nodeObjects) {
                     "tag": "geosite-ad",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs"
+                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs"
                 },
                 {
                     "tag": "geosite-cn",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
+                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs"
                 },
                 {
                     "tag": "geoip-cn",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"
+                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs"
+                },
+                {
+                    "tag": "geosite-geolocation-!cn",
+                    "type": "remote",
+                    "format": "binary",
+                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-geolocation-!cn.srs"
                 }
             ]
         },
         "experimental": {
             "clash_api": {
                 "external_controller": "127.0.0.1:9090",
-                "external_ui_download_url": "https://github.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip"
+                "external_ui_download_url": "https://hub.gitmirror.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip"
             }
         }
     };
