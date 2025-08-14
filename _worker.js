@@ -2715,9 +2715,12 @@ ${rulesYaml}
 
 
 /**
- * 【已修改】生成Sing-box的简单配置
+ * 【已修正】生成Sing-box的简单配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
+ * @description
+ *  此版本已更新，使用 rule_set 替代了已废弃的 geosite 和 geoip，
+ *  以兼容 Sing-box 1.8.0 及以上版本，解决了 "geosite is deprecated" 的错误。
  */
 function generateSingboxConfig(nodeObjects) {
     // 1. 从节点对象生成代理出站配置
@@ -2750,7 +2753,7 @@ function generateSingboxConfig(nodeObjects) {
         return outbound;
     });
 
-    // 如果没有可用的节点，返回一个空的或错误的配置
+    // 如果没有可用的节点，返回一个错误的配置
     if (proxyOutbounds.length === 0) {
         return JSON.stringify({ "error": "没有可用于生成配置的节点。" }, null, 2);
     }
@@ -2758,52 +2761,63 @@ function generateSingboxConfig(nodeObjects) {
     // 获取所有代理节点的 tag
     const proxyTags = proxyOutbounds.map(o => o.tag);
 
-    // 2. 创建一个简单的配置结构
+    // 2. 创建一个符合新版 Sing-box 规范的配置结构
     const config = {
-        // 日志部分：建议保留用于排错
         "log": {
             "level": "info",
             "timestamp": true
         },
-        // DNS 部分：使用常见的公共 DNS
         "dns": {
             "servers": [
-                { "address": "https://223.5.5.5/dns-query", "tag": "alidns" },
-                { "address": "https://doh.pub/dns-query", "tag": "tencentdns" }
+                { "address": "https://223.5.5.5/dns-query" },
+                { "address": "https://doh.pub/dns-query" }
             ]
         },
-        // 入站部分：必须有，以便客户端连接
+        // 新增：定义规则集，用于下载最新的 geosite 和 geoip 数据库
+        "rule_set": [
+            {
+                "tag": "geosite-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs", // 使用社区维护的规则地址
+                "download_detour": "DIRECT" // 指定下载规则时使用的出站
+            },
+            {
+                "tag": "geoip-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs", // 使用社区维护的规则地址
+                "download_detour": "DIRECT"
+            }
+        ],
         "inbounds": [
             {
-                "type": "mixed", // 'mixed' 支持 socks 和 http 
+                "type": "mixed",
                 "listen": "0.0.0.0",
-                "listen_port": 2345 // 一个常见的代理端口
+                "listen_port": 2345
             }
         ],
-        // 出站部分：包含一个选择器和所有代理节点
         "outbounds": [
             {
-                // 创建一个手动选择器，让用户可以在客户端切换节点
                 "type": "selector",
-                "tag": "PROXY", // 策略组名
-                "outbounds": [...proxyTags] // 将所有代理节点加入选择
+                "tag": "PROXY",
+                "outbounds": [...proxyTags]
             },
-            ...proxyOutbounds, // 代理节点本身
+            ...proxyOutbounds,
             {
                 "type": "direct",
-                "tag": "DIRECT" // 直连
+                "tag": "DIRECT"
             }
         ],
-        // 路由部分：非常简单，默认所有流量都走 PROXY 策略组
+        // 路由部分：使用 rule_set 引用规则，而不是直接使用 geosite/geoip
         "route": {
             "rules": [
-                // 保留最基本的规则：国内网站和IP直连
-                 {
-                    "geosite": "cn",
+                {
+                    "rule_set": "geosite-cn",
                     "outbound": "DIRECT"
                 },
-                 {
-                    "geoip": "cn",
+                {
+                    "rule_set": "geoip-cn",
                     "outbound": "DIRECT"
                 }
             ],
