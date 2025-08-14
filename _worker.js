@@ -2832,16 +2832,12 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "rule_set": ["geosite-cn", "geoip-cn"],
-                    "outbound": "DPROXY"
+                    "outbound": "DIRECT"
                 },
                 {
                     "ip_is_private": true,
-                    "outbound": "PROXY"
+                    "outbound": "DIRECT"
                 },
-                {
-                    "rule_set": "geosite-geolocation-!cn",
-                    "outbound": "PROXY"
-                }
             ],
             "rule_set": [
                 {
@@ -2862,20 +2858,9 @@ function generateSingboxConfig(nodeObjects) {
                     "format": "binary",
                     "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs"
                 },
-                {
-                    "tag": "geosite-geolocation-!cn",
-                    "type": "remote",
-                    "format": "binary",
-                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-geolocation-!cn.srs"
-                }
             ]
-        },
-        "experimental": {
-            "clash_api": {
-                "external_controller": "127.0.0.1:9090",
-                "external_ui_download_url": "https://hub.gitmirror.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip"
-            }
         }
+
     };
     
     // 4. 返回格式化后的JSON字符串
