@@ -3336,7 +3336,7 @@ async function handleGetRequest(env) {
                         <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'proxyip')">测试连接</button>
                             <span id="proxyip-status" class="test-status"></span>
-                            <span class="test-note">（仅测试列表中的第一个地址）</span>
+                            <span class="test-note">（仅测试一个地址）</span>
                         </div>
                     </div>
                     <div class="setting-item">
@@ -3346,7 +3346,7 @@ async function handleGetRequest(env) {
                          <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'socks5')">测试连接</button>
                             <span id="socks5-status" class="test-status"></span>
-                            <span class="test-note">（仅测试列表中的第一个地址）</span>
+                            <span class="test-note">（仅测试一个地址）</span>
                         </div>
                     </div>
                      <div class="setting-item">
@@ -3356,7 +3356,7 @@ async function handleGetRequest(env) {
                          <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'http')">测试连接</button>
                             <span id="http-status" class="test-status"></span>
-                            <span class="test-note">（仅测试列表中的第一个地址）</span>
+                            <span class="test-note">（仅测试一个地址）</span>
                         </div>
                     </div>
                     <div class="button-group">
