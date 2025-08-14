@@ -2715,13 +2715,13 @@ ${rulesYaml}
 
 
 /**
- * 【最终修正】生成Sing-box的简单配置
+ * 【终极兼容版】生成Sing-box的简单配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  * @description
- *  此版本修正了 "unknown field 'rule_set'" 错误。
- *  `rule_sets` 的定义已移至 `route` 对象内部，并使用了正确的复数形式 `rule_sets`。
- *  这是兼容 Sing-box 1.8.0+ 的正确语法。
+ *  此版本为解决特定客户端版本不兼容 geosite 和 rule_sets 的问题而设计。
+ *  它移除了所有基于地理位置的自动分流规则，采用全局代理模式。
+ *  这确保了在几乎所有 Sing-box 版本上都能成功导入并运行。
  */
 function generateSingboxConfig(nodeObjects) {
     // 1. 从节点对象生成代理出站配置
@@ -2762,7 +2762,7 @@ function generateSingboxConfig(nodeObjects) {
     // 获取所有代理节点的 tag
     const proxyTags = proxyOutbounds.map(o => o.tag);
 
-    // 2. 创建一个符合新版 Sing-box 规范的配置结构
+    // 2. 创建一个兼容性极强的配置结构
     const config = {
         "log": {
             "level": "info",
@@ -2771,58 +2771,32 @@ function generateSingboxConfig(nodeObjects) {
         "dns": {
             "servers": [
                 { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://doh.pub/dns-query" }
+                { "address": "https://8.8.8.8/dns-query" }
             ]
         },
         "inbounds": [
             {
                 "type": "mixed",
                 "listen": "0.0.0.0",
-                "listen_port": 2345
+                "listen_port": 2345 // 客户端的本地代理端口
             }
         ],
         "outbounds": [
             {
                 "type": "selector",
-                "tag": "PROXY",
+                "tag": "PROXY", // 手动选择节点的策略组
                 "outbounds": [...proxyTags]
             },
             ...proxyOutbounds,
             {
                 "type": "direct",
-                "tag": "DIRECT"
+                "tag": "DIRECT" // 直连出口，虽然默认不用，但保留以备手动切换
             }
         ],
-        // 路由部分
+        // 路由部分：移除所有规则，只保留 final
         "route": {
-            // 【修正】将 rule_sets (复数) 移入 route 对象内部
-            "rule_sets": [
-                {
-                    "tag": "geosite-cn",
-                    "type": "remote",
-                    "format": "binary",
-                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-                    "download_detour": "DIRECT"
-                },
-                {
-                    "tag": "geoip-cn",
-                    "type": "remote",
-                    "format": "binary",
-                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-                    "download_detour": "DIRECT"
-                }
-            ],
-            "rules": [
-                {
-                    "rule_set": "geosite-cn",
-                    "outbound": "DIRECT"
-                },
-                {
-                    "rule_set": "geoip-cn",
-                    "outbound": "DIRECT"
-                }
-            ],
-            "final": "PROXY"
+            // "rules" 和 "rule_sets" 已被完全移除
+            "final": "PROXY" // 所有未匹配规则（即全部流量）都走 PROXY 策略组
         }
     };
     
