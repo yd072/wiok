@@ -2826,6 +2826,12 @@ function generateSingboxConfig(nodeObjects) {
                     "protocol": "dns",
                     "action": "hijack-dns"
                 },
+                // --- 新增规则：解决DNS路由死循环问题 ---
+                {
+                    "ip_cidr": ["1.1.1.1/32", "1.0.0.1/32"],
+                    "outbound": "DIRECT"
+                },
+                // --- 结束新增 ---
                 {
                     "rule_set": "geosite-ad",
                     "action": "reject"
