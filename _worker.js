@@ -2759,35 +2759,12 @@ function generateSingboxConfig(nodeObjects) {
             "timestamp": true
         },
         "dns": {
-            // 根据用户要求，使用指定的TCP DNS服务器
             "servers": [
                 {
-                    "address": "dhcp://auto",
-                    "tag": "dhcp_dns"
-                },
-                {
                     "address": "https://1.1.1.1",
-                    "tag": "public_doh",
-                    "detour": "PROXY" // 让公共DNS通过代理访问，防污染
-                },
-                {
-                    "address": "rcode://success",
-                    "tag": "block_dns"
+                    "tag": "doh_dns"
                 }
             ],
-            // 规则：国内域名优先尝试DHCP，广告拦截
-            "rules": [
-                {
-                    "rule_set": "geosite-ad",
-                    "server": "block_dns"
-                },
-                {
-                    "rule_set": ["geosite-cn"],
-                    "server": "dhcp_dns"
-                }
-            ],
-            // 最终解析器：当其他规则不匹配或dhcp_dns不可用时，使用此DNS
-            "final": "public_doh",
             "strategy": "ipv4_only"
         },
         "inbounds": [
@@ -2852,10 +2829,11 @@ function generateSingboxConfig(nodeObjects) {
                     "rule_set": "geosite-ad",
                     "action": "reject"
                 },
-                {
-                    "rule_set": ["geosite-cn", "geoip-cn"],
-                    "outbound": "DIRECT"
-                },
+                // **核心修改：移除了下面的国内直连规则**
+                // {
+                //     "rule_set": ["geosite-cn", "geoip-cn"],
+                //     "outbound": "DIRECT"
+                // },
                 {
                     "ip_is_private": true,
                     "outbound": "DIRECT"
