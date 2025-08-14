@@ -2715,7 +2715,7 @@ ${rulesYaml}
 
 
 /**
- * 【最终修正版】生成Sing-box的配置
+ * 【已修改】生成Sing-box的简单配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2750,106 +2750,68 @@ function generateSingboxConfig(nodeObjects) {
         return outbound;
     });
 
+    // 如果没有可用的节点，返回一个空的或错误的配置
     if (proxyOutbounds.length === 0) {
         return JSON.stringify({ "error": "没有可用于生成配置的节点。" }, null, 2);
     }
     
+    // 获取所有代理节点的 tag
     const proxyTags = proxyOutbounds.map(o => o.tag);
 
-    // 2. 定义远程规则集 (替代 geosite)
-    const rule_sets = [
-        {
-        "tag": "geoip-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-        "download_detour": "proxy"
-        },
-        {
-        "tag": "geosite-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-        "download_detour": "proxy"
-        },
-        {
-        "tag": "geosite-private",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-private.srs",
-        "download_detour": "proxy"
-        }
-    ];
-
-    // 3. 定义路由规则，使用 rule_set 替代 geosite
-    const customRules = [
-      { "domain_suffix": ["googleapis.cn", "gstatic.com"], "outbound": "PROXY" },
-      { "rule_set": "GEO_ADS", "outbound": "BLOCK" },
-      { "rule_set": "GEO_PRIVATE", "outbound": "DIRECT" },
-      { 
-        "ip_cidr": [
-          "223.5.5.5", "223.6.6.6", "2400:3200::1", "2400:3200:baba::1", 
-          "119.29.29.29", "1.12.12.12", "120.53.53.53", "2402:4e00::", 
-          "2402:4e00:1::", "180.76.76.76", "2400:da00::6666", "114.114.114.114", 
-          "114.114.115.115", "114.114.114.119", "114.114.115.119", "114.114.114.110", 
-          "114.114.115.110", "180.184.1.1", "180.184.2.2", "101.226.4.6", 
-          "218.30.118.6", "123.125.81.6", "140.207.198.6", "1.2.4.8", 
-          "210.2.4.8", "52.80.66.66", "117.50.22.22", "2400:7fc0:849e:200::4", 
-          "2404:c2c0:85d8:901::4", "117.50.10.10", "52.80.52.52", "2400:7fc0:849e:200::8", 
-          "2404:c2c0:85d8:901::8", "117.50.60.30", "52.80.60.30"
-        ], 
-        "outbound": "DIRECT"
-      },
-      { "domain_suffix": ["alidns.com", "doh.pub", "dot.pub", "360.cn", "onedns.net"], "outbound": "DIRECT" },
-      { "rule_set": "GEO_CN", "outbound": "DIRECT" }
-    ];
-
-    // 4. 创建完整的配置结构
+    // 2. 创建一个简单的配置结构
     const config = {
+        // 日志部分：建议保留用于排错
         "log": {
             "level": "info",
             "timestamp": true
         },
+        // DNS 部分：使用常见的公共 DNS
         "dns": {
             "servers": [
-                { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://doh.pub/dns-query" }
+                { "address": "https://223.5.5.5/dns-query", "tag": "alidns" },
+                { "address": "https://doh.pub/dns-query", "tag": "tencentdns" }
             ]
         },
+        // 入站部分：必须有，以便客户端连接
         "inbounds": [
             {
-                "type": "mixed",
+                "type": "mixed", // 'mixed' 支持 socks 和 http 
                 "listen": "0.0.0.0",
-                "listen_port": 2345
+                "listen_port": 2345 // 一个常见的代理端口
             }
         ],
+        // 出站部分：包含一个选择器和所有代理节点
         "outbounds": [
             {
+                // 创建一个手动选择器，让用户可以在客户端切换节点
                 "type": "selector",
-                "tag": "PROXY",
-                "outbounds": ["AUTO", "DIRECT", "BLOCK", ...proxyTags]
+                "tag": "PROXY", // 策略组名
+                "outbounds": [...proxyTags] // 将所有代理节点加入选择
             },
-            { 
-              "type": "urltest", 
-              "tag": "AUTO", 
-              "outbounds": proxyTags,
-              "url": "http://www.gstatic.com/generate_204", 
-              "interval": "5m" 
-            },
-            ...proxyOutbounds,
-            { "type": "direct", "tag": "DIRECT" },
-            { "type": "block", "tag": "BLOCK" }
+            ...proxyOutbounds, // 代理节点本身
+            {
+                "type": "direct",
+                "tag": "DIRECT" // 直连
+            }
         ],
-        // 添加 rule_set 定义
-        "rule_set": rule_sets,
-        // 路由部分
+        // 路由部分：非常简单，默认所有流量都走 PROXY 策略组
         "route": {
-            "rules": customRules,
-            "final": "PROXY",
-            "auto_detect_interface": true
+            "rules": [
+                // 保留最基本的规则：国内网站和IP直连
+                 {
+                    "geosite": "cn",
+                    "outbound": "DIRECT"
+                },
+                 {
+                    "geoip": "cn",
+                    "outbound": "DIRECT"
+                }
+            ],
+            "final": "PROXY" // 未匹配规则的流量走代理选择器
         }
     };
     
+    // 3. 将配置对象转换为格式化的 JSON 字符串
     return JSON.stringify(config, null, 2);
 }
 
