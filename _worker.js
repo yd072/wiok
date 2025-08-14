@@ -3232,7 +3232,12 @@ async function handleGetRequest(env) {
                 .test-status { font-size: 14px; font-weight: 500; }
                 .test-status.success { color: #28a745; }
                 .test-status.error { color: #dc3545; }
-                .test-note { font-size: 12px; color: #6c757d; }
+                .test-note { 
+                    font-size: 14px; 
+                    color: #6c757d;
+                    align-self: center;
+                    padding-left: 5px;
+                }
                 html.dark-mode .test-note { color: #aaa; }
 
                 .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; }
