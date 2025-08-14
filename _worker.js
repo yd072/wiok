@@ -2762,8 +2762,8 @@ function generateSingboxConfig(nodeObjects) {
             // 根据用户要求，使用指定的TCP DNS服务器
             "servers": [
                 {
-                    "address": "tcp://1.1.1.1",
-                    "tag": "tcp_dns"
+                    "type": "https",
+                    "server": "1.1.1.1"
                 }
             ],
             "strategy": "ipv4_only"
