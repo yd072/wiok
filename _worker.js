@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2715,12 +2715,13 @@ ${rulesYaml}
 
 
 /**
- * 生成Sing-box配置
+ * 【已修改】生成Sing-box的配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
 function generateSingboxConfig(nodeObjects) {
-    const outbounds = nodeObjects.map(p => {
+    // 1. 从节点对象生成代理出站配置
+    const proxyOutbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
             tag: p.name,
@@ -2748,26 +2749,26 @@ function generateSingboxConfig(nodeObjects) {
         }
         return outbound;
     });
+
+    if (proxyOutbounds.length === 0) {
+        return JSON.stringify({ "error": "没有可用于生成配置的节点。" }, null, 2);
+    }
     
-    const proxyNames = outbounds.map(o => o.tag);
+    const proxyTags = proxyOutbounds.map(o => o.tag);
 
-    // --- START: 新增的规则 ---
-    // 将用户提供的规则转换为Sing-box格式
+    // 2. 转换您提供的路由规则
     const customRules = [
-        { "domain_suffix": ["googleapis.cn", "gstatic.com"], "outbound": "manual-select", "remarks": "Google cn" },
-        { "geosite": "category-ads-all", "outbound": "block", "remarks": "阻止广告" },
-        { "geoip": "private", "outbound": "direct", "remarks": "绕过局域网IP" },
-        { "geosite": "private", "outbound": "direct", "remarks": "绕过局域网域名" },
-        {
-            "ip": [ "223.5.5.5", "223.6.6.6", "119.29.29.29", "1.12.12.12", "120.53.53.53", "180.76.76.76", "114.114.114.114", "114.114.115.115", "114.114.114.119", "114.114.115.119", "114.114.114.110", "114.114.115.110", "180.184.1.1", "180.184.2.2", "101.226.4.6", "218.30.118.6", "123.125.81.6", "140.207.198.6", "1.2.4.8", "210.2.4.8", "52.80.66.66", "117.50.22.22", "117.50.10.10", "52.80.52.52", "117.50.60.30", "52.80.60.30" ],
-            "outbound": "direct", "remarks": "绕过中国公共DNS IP"
-        },
-        { "domain": ["alidns.com", "doh.pub", "dot.pub", "360.cn", "onedns.net"], "outbound": "direct", "remarks": "绕过中国公共DNS域名" },
-        { "geoip": "cn", "outbound": "direct", "remarks": "绕过中国IP" },
-        { "geosite": "cn", "outbound": "direct", "remarks": "绕过中国域名" }
+      { "domain_suffix": ["googleapis.cn", "gstatic.com"], "outbound": "PROXY" },
+      { "geosite": "category-ads-all", "outbound": "BLOCK" },
+      { "geoip": "private", "outbound": "DIRECT" },
+      { "geosite": "private", "outbound": "DIRECT" },
+      { "ip": ["223.5.5.5", "223.6.6.6", "2400:3200::1", "2400:3200:baba::1", "119.29.29.29", "1.12.12.12", "120.53.53.53", "2402:4e00::", "2402:4e00:1::", "180.76.76.76", "2400:da00::6666", "114.114.114.114", "114.114.115.115", "114.114.114.119", "114.114.115.119", "114.114.114.110", "114.114.115.110", "180.184.1.1", "180.184.2.2", "101.226.4.6", "218.30.118.6", "123.125.81.6", "140.207.198.6", "1.2.4.8", "210.2.4.8", "52.80.66.66", "117.50.22.22", "2400:7fc0:849e:200::4", "2404:c2c0:85d8:901::4", "117.50.10.10", "52.80.52.52", "2400:7fc0:849e:200::8", "2404:c2c0:85d8:901::8", "117.50.60.30", "52.80.60.30"], "outbound": "DIRECT" },
+      { "domain_suffix": ["alidns.com", "doh.pub", "dot.pub", "360.cn", "onedns.net"], "outbound": "DIRECT" },
+      { "geoip": "cn", "outbound": "DIRECT" },
+      { "geosite": "cn", "outbound": "DIRECT" }
     ];
-    // --- END: 新增的规则 ---
 
+    // 3. 创建完整的配置结构
     const config = {
         "log": {
             "level": "info",
@@ -2776,32 +2777,36 @@ function generateSingboxConfig(nodeObjects) {
         "dns": {
             "servers": [
                 { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://8.8.8.8/dns-query" }
+                { "address": "https://doh.pub/dns-query" }
             ]
         },
         "inbounds": [
-            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
+            {
+                "type": "mixed",
+                "listen": "0.0.0.0",
+                "listen_port": 2345
+            }
         ],
         "outbounds": [
-            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
+            {
+                "type": "selector",
+                "tag": "PROXY",
+                "outbounds": ["AUTO", "DIRECT", "BLOCK", ...proxyTags]
+            },
             { 
               "type": "urltest", 
-              "tag": "auto-select", 
-              "outbounds": proxyNames,
+              "tag": "AUTO", 
+              "outbounds": proxyTags,
               "url": "http://www.gstatic.com/generate_204", 
               "interval": "5m" 
             },
-            ...outbounds,
-            { "type": "direct", "tag": "direct" },
-            { "type": "block", "tag": "block" }
+            ...proxyOutbounds,
+            { "type": "direct", "tag": "DIRECT" },
+            { "type": "block", "tag": "BLOCK" }
         ],
         "route": {
-            "rules": [
-                ...customRules, // 在这里插入新规则
-                // 原始规则可以被 customRules 中的 `geoip:cn` 和 `geosite:cn` 覆盖，所以不再需要
-                // { "geoip": "cn", "outbound": "direct" }
-            ],
-            "final": "manual-select", // 使用 final 替代 default_outbound
+            "rules": customRules,
+            "final": "PROXY",
             "auto_detect_interface": true
         }
     };
