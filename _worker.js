@@ -3322,7 +3322,7 @@ async function handleGetRequest(env) {
 
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存优选列表</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                     ` : '<p>未绑定KV空间</p>'}
@@ -3350,7 +3350,7 @@ async function handleGetRequest(env) {
                         </div>
                     </div>
                      <div class="setting-item">
-                        <h4>HTTP 代理</h4>
+                        <h4>HTTP </h4>
                         <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
                         <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
                          <div class="test-group">
@@ -3361,7 +3361,7 @@ async function handleGetRequest(env) {
                     </div>
                     <div class="button-group">
                         <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                        <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存代理设置</button>
+                        <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存</button>
                         <span class="save-status" id="proxy-save-status"></span>
                     </div>
                 </div>
@@ -3369,22 +3369,22 @@ async function handleGetRequest(env) {
                 <div id="tab-sub" class="tab-content">
                      <div class="setting-item">
                         <h4>SUB (优选订阅生成器)</h4>
-                        <p>只支持单个优选订阅生成器地址，留空则使用内置生成。</p>
+                        <p>只支持单个优选订阅生成器地址</p>
                         <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
                     </div>
                     <div class="setting-item">
                         <h4>SUBAPI (订阅转换后端)</h4>
-                        <p>订阅转换后端地址，用于Clash/Sing-box等格式转换。</p>
+                        <p>订阅转换后端地址</p>
                         <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
                     </div>
                     <div class="setting-item">
                         <h4>SUBCONFIG (订阅转换配置)</h4>
-                        <p>订阅转换配置文件地址。</p>
+                        <p>订阅转换配置文件地址</p>
                         <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
                     </div>
                     <div class="button-group">
                         <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                        <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存订阅设置</button>
+                        <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存</button>
                         <span class="save-status" id="sub-save-status"></span>
                     </div>
                 </div>
@@ -3432,7 +3432,7 @@ async function handleGetRequest(env) {
                     </div>
                     <div class="button-group">
                         <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                        <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存网络设置</button>
+                        <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存</button>
                         <span class="save-status" id="network-save-status"></span>
                     </div>
                 </div>
