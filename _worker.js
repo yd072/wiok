@@ -3163,7 +3163,6 @@ async function handleGetRequest(env) {
                     padding: 14px 16px;
                     font-size: 16px;
                     color: var(--text-color);
-                    /* border-right is removed to make tabs seamless */
                 }
 
                 .tab-container button:hover {
@@ -3184,7 +3183,7 @@ async function handleGetRequest(env) {
                     display: none;
                     padding: 20px;
                     border: 1px solid var(--border-color);
-                    border-top: none; /* Make top border seamless with tab bar */
+                    border-top: none;
                     border-radius: 0 0 8px 8px;
                     animation: fadeEffect 0.5s;
                 }
@@ -3233,6 +3232,8 @@ async function handleGetRequest(env) {
                 .test-status { font-size: 14px; font-weight: 500; }
                 .test-status.success { color: #28a745; }
                 .test-status.error { color: #dc3545; }
+                .test-note { font-size: 12px; color: #6c757d; }
+                html.dark-mode .test-note { color: #aaa; }
 
                 .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; }
                 .checkbox-item { display: flex; align-items: center; gap: 5px; }
@@ -3328,6 +3329,7 @@ async function handleGetRequest(env) {
                         <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'proxyip')">测试连接</button>
                             <span id="proxyip-status" class="test-status"></span>
+                            <span class="test-note">（仅测试列表中的第一个地址）</span>
                         </div>
                     </div>
                     <div class="setting-item">
@@ -3337,6 +3339,7 @@ async function handleGetRequest(env) {
                          <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'socks5')">测试连接</button>
                             <span id="socks5-status" class="test-status"></span>
+                            <span class="test-note">（仅测试列表中的第一个地址）</span>
                         </div>
                     </div>
                      <div class="setting-item">
@@ -3346,6 +3349,7 @@ async function handleGetRequest(env) {
                          <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'http')">测试连接</button>
                             <span id="http-status" class="test-status"></span>
+                            <span class="test-note">（仅测试列表中的第一个地址）</span>
                         </div>
                     </div>
                     <div class="button-group">
@@ -3386,6 +3390,7 @@ async function handleGetRequest(env) {
                         <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'nat64')">测试连接</button>
                             <span id="nat64-status" class="test-status"></span>
+                            <span class="test-note">（将尝试解析 www.cloudflare.com）</span>
                         </div>
                     </div>
                     <div class="setting-item">
@@ -3443,7 +3448,6 @@ async function handleGetRequest(env) {
 
                 async function saveContent(button) {
                     const saveStatus = document.getElementById('saveStatus');
-                    // When saving the main list, we still need to collect all settings to not overwrite them.
                     await saveAdvancedSettings(button, saveStatus);
                 }
                 
