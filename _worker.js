@@ -2843,26 +2843,26 @@ function generateSingboxConfig(nodeObjects) {
                     "tag": "geosite-ad",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://proxydown.0031400.xyz?url=https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs"
+                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs"
                 },
                 {
                     "tag": "geosite-cn",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://proxydown.0031400.xyz?url=https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
+                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
                 },
                 {
                     "tag": "geoip-cn",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://proxydown.0031400.xyz?url=https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"
+                    "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"
                 }
             ]
         },
         "experimental": {
             "clash_api": {
                 "external_controller": "127.0.0.1:9090",
-                "external_ui_download_url": "https://proxydown.0031400.xyz?url=https://github.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip"
+                "external_ui_download_url": "https://github.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip"
             }
         }
     };
