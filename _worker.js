@@ -3283,11 +3283,12 @@ async function handleGetRequest(env) {
                 /* --- Footer Styles --- */
                 .footer {
                     margin-top: 20px;
-                    padding-top: 20px;
+                    padding-top: 15px;
                     border-top: 1px solid var(--border-color);
-                    text-align: center;
-                    font-size: 14px;
+                    text-align: left;
+                    font-size: 1em;
                     color: #6c757d;
+                    line-height: 1.6;
                 }
                 html.dark-mode .footer {
                     color: #aaa;
