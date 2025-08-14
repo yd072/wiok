@@ -2720,7 +2720,7 @@ ${rulesYaml}
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
 function generateSingboxConfig(nodeObjects) {
-    // 动态生成出站节点列表
+    // 1. 动态生成出站节点列表
     const outbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
@@ -2750,9 +2750,10 @@ function generateSingboxConfig(nodeObjects) {
         return outbound;
     });
     
-    // 获取所有生成的节点名称，用于策略组
+    // 2. 获取所有生成的节点名称，用于策略组
     const proxyNames = outbounds.map(o => o.tag);
 
+    // 3. 构建完整的Sing-box配置对象
     const config = {
         "log": {
             "disabled": false,
@@ -2761,41 +2762,62 @@ function generateSingboxConfig(nodeObjects) {
         },
         "dns": {
             "servers": [
-                {
-                    "tag": "cloudflare",
-                    "address": "tls://1.1.1.1"
-                },
+                // 添加一个本地DNS服务器以匹配路由中的 default_domain_resolver
                 {
                     "tag": "local",
-                    "address": "223.5.5.5"
+                    "address": "223.5.5.5", // 使用一个可靠的公共DNS作为本地解析
+                    "detour": "DIRECT"
+                },
+                {
+                    "tag": "remote_dns",
+                    "address": "https://1.1.1.1/dns-query",
+                    "detour": "PROXY" // 假设通过代理来解析，避免DNS污染
+                },
+                 {
+                    "tag": "block",
+                    "address": "rcode://success"
                 }
             ],
             "rules": [
-                {
-                    "rule_set": ["geosite-cn"],
-                    "server": "local"
+                 {
+                    "rule_set": "geosite-ad",
+                    "server": "block" // 广告域名直接拦截
                 },
                 {
-                    "rule_set": ["geosite-ad"],
-                    "server": "block"
+                    "rule_set": ["geosite-cn"],
+                    "server": "local" // 国内域名使用本地DNS
                 }
             ],
-            "strategy": "ipv4_only"
+            "strategy": "ipv4_only",
+            "final": "remote_dns" // 默认或国外域名使用远程DNS
         },
         "inbounds": [
+            // 使用用户指定的TUN入站配置
+            {
+                "type": "tun",
+                "tag": "tun-in",
+                "interface_name": "tun0",
+                "address": [
+                    "172.19.0.1/30",
+                    "fdfe:dcba:9876::1/126"
+                ],
+                "route_address": [
+                    "0.0.0.0/1",
+                    "128.0.0.0/1",
+                    "::/1",
+                    "8000::/1"
+                ],
+                "route_exclude_address": [
+                    "192.168.0.0/16",
+                    "fc00::/7"
+                ]
+            },
+            // 保留混合端口入站，方便其他客户端连接
             {
                 "type": "mixed",
                 "tag": "mixed-in",
                 "listen": "0.0.0.0",
                 "listen_port": 7890
-            },
-            {
-                "type": "tun",
-                "tag": "tun-in",
-                "interface_name": "tun0",
-                "inet4_address": "172.19.0.1/30",
-                "auto_route": true,
-                "strict_route": true
             }
         ],
         "outbounds": [
@@ -2806,18 +2828,22 @@ function generateSingboxConfig(nodeObjects) {
                 "outbounds": [
                     "auto",
                     ...proxyNames
-                ]
+                ],
+                "default": "auto"
             },
             {
                 "type": "urltest",
                 "tag": "auto",
                 "outbounds": proxyNames,
-                "interval": "1m"
+                "interval": "5m"
             },
             { "type": "direct", "tag": "DIRECT" },
-            { "type": "block", "tag": "block" }
+            { "type": "dns", "tag": "dns-out" }, // DNS出站，配合DNS规则使用
+            { "type": "block", "tag": "REJECT" } // block出站，用于广告拦截
         ],
         "route": {
+            // 使用用户指定的默认域名解析器
+            "default_domain_resolver": "local",
             "auto_detect_interface": true,
             "final": "PROXY",
             "rules": [
@@ -2827,10 +2853,14 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "rule_set": "geosite-ad",
-                    "outbound": "block"
+                    "outbound": "REJECT" 
                 },
                 {
                     "rule_set": ["geosite-cn", "geoip-cn"],
+                    "outbound": "DIRECT"
+                },
+                 {
+                    "ip_is_private": true,
                     "outbound": "DIRECT"
                 }
             ],
@@ -2857,14 +2887,15 @@ function generateSingboxConfig(nodeObjects) {
         },
         "experimental": {
             "clash_api": {
-                "external_controller": "127.0.0.1:9090"
+                "external_controller": "127.0.0.1:9090",
+                 "external_ui_download_url": "https://github.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip"
             }
         }
     };
     
+    // 4. 返回格式化后的JSON字符串
     return JSON.stringify(config, null, 2);
 }
-
 
 /**
  * 生成Loon配置 
