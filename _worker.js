@@ -3656,13 +3656,13 @@ async function handleTestConnection(request) {
         switch (type) {
             case 'http': {
                 const parsed = httpProxyAddressParser(address);
-                const testSocket = await httpConnect('www.google.com', 443, log, controller.signal, parsed);
+                const testSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal, parsed);
                 await testSocket.close();
                 break;
             }
             case 'socks5': {
                 const parsed = socks5AddressParser(address);
-                const testSocket = await socks5Connect(2, 'www.google.com', 443, log, controller.signal, parsed);
+                const testSocket = await socks5Connect(2, 'www.cloudflare.com', 443, log, controller.signal, parsed);
                 await testSocket.close();
                 break;
             }
