@@ -2712,13 +2712,14 @@ ${rulesYaml}
 `;
     return config.trim();
 }
+
+
 /**
  * 生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
 function generateSingboxConfig(nodeObjects) {
-    // 1. 动态生成出站节点列表
     const outbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
@@ -2748,122 +2749,45 @@ function generateSingboxConfig(nodeObjects) {
         return outbound;
     });
     
-    // 2. 获取所有生成的节点名称，用于策略组
     const proxyNames = outbounds.map(o => o.tag);
 
-    // 3. 构建完整的Sing-box配置对象
     const config = {
         "log": {
-            "disabled": false,
             "level": "info",
             "timestamp": true
         },
         "dns": {
-            // 根据用户要求，使用指定的TCP DNS服务器
             "servers": [
-                {
-                    "type": "https",
-                    "server": "8.8.4.4"
-                }
-            ],
-            "strategy": "ipv4_only"
+                { "address": "https://223.5.5.5/dns-query" },
+                { "address": "https://8.8.8.8/dns-query" }
+            ]
         },
         "inbounds": [
-            {
-                "type": "tun",
-                "tag": "tun-in",
-                "interface_name": "tun0",
-                "address": [
-                    "172.19.0.1/30",
-                    "fdfe:dcba:9876::1/126"
-                ],
-                "route_address": [
-                    "0.0.0.0/1",
-                    "128.0.0.0/1",
-                    "::/1",
-                    "8000::/1"
-                ],
-                "route_exclude_address": [
-                    "192.168.0.0/16",
-                    "fc00::/7"
-                ]
-            },
-            {
-                "type": "mixed",
-                "tag": "mixed-in",
-                "listen": "0.0.0.0",
-                "listen_port": 7890
-            }
+            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
         ],
         "outbounds": [
-            ...outbounds, // 展开所有动态生成的节点
-            {
-                "type": "selector",
-                "tag": "PROXY",
-                "outbounds": [
-                    "auto",
-                    ...proxyNames
-                ],
-                "default": "auto"
+            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
+            { 
+              "type": "urltest", 
+              "tag": "auto-select", 
+              "outbounds": proxyNames,
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
             },
-            {
-                "type": "urltest",
-                "tag": "auto",
-                "outbounds": proxyNames,
-                "interval": "5m"
-            },
-            { "type": "direct", "tag": "DIRECT" }
+            ...outbounds,
+            { "type": "direct", "tag": "direct" },
+            { "type": "block", "tag": "block" }
         ],
         "route": {
-            "auto_detect_interface": true,
-            "final": "PROXY",
             "rules": [
-                // 根据用户要求，添加sniff和hijack-dns规则
-                {
-                    "action": "sniff"
-                },
-                {
-                    "protocol": "dns",
-                    "action": "hijack-dns"
-                },
-                {
-                    "rule_set": "geosite-ad",
-                    "action": "reject"
-                },
-                {
-                    "rule_set": ["geosite-cn", "geoip-cn"],
-                    "outbound": "DIRECT"
-                },
-                {
-                    "ip_is_private": true,
-                    "outbound": "DIRECT"
-                },
+                { "geoip": "cn", "outbound": "direct" }
+                
             ],
-            "rule_set": [
-                {
-                    "tag": "geosite-ad",
-                    "type": "remote",
-                    "format": "binary",
-                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs"
-                },
-                {
-                    "tag": "geosite-cn",
-                    "type": "remote",
-                    "format": "binary",
-                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs"
-                },
-                {
-                    "tag": "geoip-cn",
-                    "type": "remote",
-                    "format": "binary",
-                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs"
-                },
-            ]
+            "final": "manual-select", // 使用 final 替代 default_outbound
+            "auto_detect_interface": true
         }
-
     };
     
-    // 4. 返回格式化后的JSON字符串
     return JSON.stringify(config, null, 2);
 }
 
