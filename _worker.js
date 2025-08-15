@@ -50,6 +50,7 @@ let 更新时间 = 3;
 let userIDLow;
 let userIDTime = "";
 let proxyIPPool = [];
+let clashRules = [];
 // let path = '/?ed=2560'; // 已被随机路径取代
 let 动态UUID = null;
 let link = [];
@@ -130,6 +131,8 @@ async function loadConfigurations(env) {
     if (env.LINK) link = 整理(env.LINK);
     if (env.GO2SOCKS5) go2Socks5s = 整理(env.GO2SOCKS5);
     if (env.BAN) banHosts = 整理(env.BAN);
+    // 从环境变量加载Clash规则
+    if (env.CLASH_RULES) clashRules = env.CLASH_RULES.split(/\r?\n/).filter(line => line.trim() !== '');
 
     if (env.DLS) DLS = Number(env.DLS);
     if (env.CSVREMARK) remarkIndex = Number(env.CSVREMARK);
@@ -164,6 +167,11 @@ async function loadConfigurations(env) {
 				if (settings.notls) {
                     noTLS = settings.notls;
                 }
+                // --- 新增：从KV加载Clash规则，这会覆盖环境变量中的设置 ---
+                if (settings.clash_rules) {
+                    clashRules = settings.clash_rules.split(/\r?\n/).filter(line => line.trim() !== '');
+                }
+                // --------------------------------------------------------
                 if (settings.ADD) {
                     const 优选地址数组 = 整理(settings.ADD);
                     const 分类地址 = { 接口地址: new Set(), 链接地址: new Set(), 优选地址: new Set() };
@@ -207,7 +215,6 @@ async function loadConfigurations(env) {
         }
     }
 }
-
 
 /**
  * 解析 PROXYIP 字符串，提取地址和端口
@@ -2213,13 +2220,14 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			</body>
 			</html>
 		`;
-		return new Response(节点配置页, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+		return 节点配置页;
 	} else {
 		// 非浏览器访问，生成订阅内容
 		if (typeof fetch != 'function') {
 			return 'Error: fetch is not available in this environment.';
 		}
 
+		// 确定伪装域名
 		if (hostName.includes(".workers.dev") || noTLS === 'true') {
 			noTLS = 'true';
 			fakeHostName = `${fakeHostName}.workers.dev`;
@@ -2237,9 +2245,9 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
         const isSingboxRequest = userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'));
         const isLoonRequest = userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'));
 
+		// 如果使用外部subconverter
 		if (sub) {
-            // 原有的外部 SUB 逻辑，保持不变
-            let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`;
+            let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`; // Path is now dynamic inside the node
 			let isBase64 = true;
 
 			if (isClashRequest) {
@@ -2266,74 +2274,22 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             // 使用内置生成
             const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
 
-            if (nodeObjects.length === 0) {
-                return new Response("错误：未能从任何来源 (ADD, ADDAPI, ADDCSV) 获取到有效的优选节点。", { status: 500 });
-            }
-
-            const shouldUseExternalConverter = (isClashRequest || isSingboxRequest || isLoonRequest) && subConverter && subConfig;
-
-            if (shouldUseExternalConverter) {
-                // 将内置节点列表转换为原始订阅文本 (vless://...)
-                const base64NodeList = await 生成本地订阅(nodeObjects);
-                const rawNodeList = atob(base64NodeList);
-                
-                let target = 'base64';
-                if (isClashRequest) target = 'clash';
-                if (isSingboxRequest) target = 'singbox';
-                if (isLoonRequest) target = 'loon';
-
-                // 构建不含 url 参数的 subconverter 请求 URL
-                let finalUrl = `${subProtocol}://${subConverter}/sub?target=${target}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-                
-                console.log(`[INFO] Calling subconverter via POST: ${finalUrl}`);
-
-                try {
-                    // 使用 POST 方法，将节点列表放在请求体中发送
-                    const response = await fetch(finalUrl, { 
-                        method: 'POST',
-                        headers: {
-                            'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ=='),
-                            'Content-Type': 'text/plain; charset=utf-8'
-                        },
-                        body: rawNodeList
-                    });
-                    const content = await response.text();
-                    
-                    console.log(`[INFO] Subconverter Status: ${response.status}`);
-
-                    if (!response.ok) {
-                        console.error(`[ERROR] Subconverter returned an error:`, content);
-                        return new Response(`订阅转换失败 (Subconverter Error):\n\nStatus: ${response.status}\n\nResponse:\n${content}`, {
-                            status: 502, // Bad Gateway
-                            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-                        });
-                    }
-                    
-                    return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, false);
-                } catch (error) {
-                    console.error('[ERROR] Fetch to subconverter failed:', error);
-                    return new Response(`订阅转换失败：无法连接到 Subconverter 服务。\n\nError: ${error.message}`, {
-                        status: 502,
-                        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-                    });
-                }
-            }
-
-            // 如果不使用外部转换器，则回退到原始的内置生成逻辑
             if (isClashRequest) {
                 const clashConfig = generateClashConfig(nodeObjects);
                 return 恢复伪装信息(clashConfig, userID, hostName, fakeUserID, fakeHostName, false);
             }
+            
             if (isSingboxRequest) {
                 const singboxConfig = generateSingboxConfig(nodeObjects);
                 return 恢复伪装信息(singboxConfig, userID, hostName, fakeUserID, fakeHostName, false);
             }
+
             if (isLoonRequest) {
                 const loonConfig = generateLoonConfig(nodeObjects);
                 return 恢复伪装信息(loonConfig, userID, hostName, fakeUserID, fakeHostName, false);
             }
             
-            // 默认情况或请求 base64，则返回 vless 链接
+            // 默认情况或请求 base64，则返回 secureProto 链接
             const base64Content = await 生成本地订阅(nodeObjects);
             return 恢复伪装信息(base64Content, userID, hostName, fakeUserID, fakeHostName, true);
 		}
@@ -2709,8 +2665,9 @@ function generateClashConfig(nodeObjects) {
     const autoSelectGroupName = "🚀 自动选择";
     const manualSelectGroupName = "手动选择";
 
-    // --- START: 将规则定义为数组以确保正确格式化 ---
-    const customRulesArray = [
+    // --- START: 规则逻辑修改 ---
+    // 定义一套内置的默认规则，以防用户没有提供自定义规则
+    const defaultRulesArray = [
         `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
         `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
         `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
@@ -2721,9 +2678,21 @@ function generateClashConfig(nodeObjects) {
         'GEOIP,CN,DIRECT',
         `MATCH,${manualSelectGroupName}`
     ];
+
+    let finalRulesArray;
+
+    // 检查全局变量 clashRules 是否有内容
+    if (clashRules && clashRules.length > 0) {
+        console.log("[INFO] 正在使用来自 CLASH_RULES 环境变量的自定义规则。");
+        finalRulesArray = clashRules;
+    } else {
+        console.log("[INFO] 未找到自定义规则，正在使用内置的默认规则。");
+        finalRulesArray = defaultRulesArray;
+    }
+
     // 将规则数组转换为格式正确的YAML字符串
-    const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
-    // --- END: 修正 ---
+    const rulesYaml = finalRulesArray.map(rule => `  - ${rule}`).join('\n');
+    // --- END: 规则逻辑修改 ---
 
     // 拼接完整的 YAML 配置
     const config = `
@@ -3031,13 +3000,14 @@ async function handleGetRequest(env) {
 	let httpsPortsContent = '';
     let httpPortsContent = '';
     let noTLSContent = 'false';
+    let clashRulesContent = ''; // 新增变量，用于存储Clash规则
 
     if (hasKV) {
         try {
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
-                content = settings.ADD || ''; // 从 'ADD' 字段加载主内容
+                content = settings.ADD || '';
                 proxyIPContent = settings.proxyip || '';
                 socks5Content = settings.socks5 || '';
                 httpProxyContent = settings.httpproxy || '';
@@ -3048,6 +3018,7 @@ async function handleGetRequest(env) {
 				httpsPortsContent = settings.httpsports || httpsPorts.join(',');
                 httpPortsContent = settings.httpports || httpPorts.join(',');
                 noTLSContent = settings.notls || 'false';
+                clashRulesContent = settings.clash_rules || ''; // 从KV中读取规则内容
             } else {
 				httpsPortsContent = httpsPorts.join(',');
 				httpPortsContent = httpPorts.join(',');
@@ -3148,17 +3119,20 @@ async function handleGetRequest(env) {
                     border-bottom: none;
                     border-radius: 8px 8px 0 0;
                     background-color: var(--tab-inactive-bg);
+                    display: flex;
+                    flex-wrap: wrap;
                 }
 
                 .tab-container button {
                     background-color: inherit;
-                    float: left;
                     border: none;
                     outline: none;
                     cursor: pointer;
                     padding: 14px 16px;
                     font-size: 16px;
                     color: var(--text-color);
+                    flex-grow: 1;
+                    text-align: center;
                 }
 
                 .tab-container button:hover {
@@ -3337,6 +3311,7 @@ async function handleGetRequest(env) {
                     <button class="tab-link active" onclick="openTab(event, 'tab-main')">优选列表 (ADD)</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-proxy')">代理设置</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-sub')">订阅设置</button>
+                    <button class="tab-link" onclick="openTab(event, 'tab-clash')">Clash 规则</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-network')">网络设置</button>
                 </div>
 
@@ -3345,15 +3320,13 @@ async function handleGetRequest(env) {
                         <a href="javascript:void(0);" id="noticeToggle" class="notice-toggle" onclick="toggleNotice()">
                             ℹ️ 注意事项 ∨
                         </a>
-                        <div id="noticeContent" class="notice-content">
+                        <div id="noticeContent" class="notice-content" style="display: none;">
                             ${decodeURIComponent(atob('JTNDc3Ryb25nJTNFMS4lM0MlMkZzdHJvbmclM0UlMjBBREQlRTYlQTAlQkMlRTUlQkMlOEYlRTglQUYlQjclRTYlQUMlQTElRTclQUMlQUMlRTQlQjglODAlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTglRUYlQkMlOENJUHY2JUU1JTlDJUIwJUU1JTlEJTgwJUU5JTgwJTlBJUU1JUI4JUI4JUU4JUE2JTgxJUU3JTk0JUE4JUU0JUI4JUFEJUU2JThCJUFDJUU1JThGJUI3JUU2JThCJUFDJUU4JUI1JUI3JUU1JUI5JUI2JUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUVGJUJDJThDJUU0JUI4JThEJUU1JThBJUEwJUU3JUFCJUFGJUU1JThGJUEzJUU5JUJCJTk4JUU4JUFFJUE0JUU0JUI4JUJBJTIyNDQzJTIyJUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEExMjcuMC4wLjElM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5SVAlM0NiciUzRSUwQXZpc2EuY24lM0EyMDUzJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThEJTNDYnIlM0UlMEElNUIyNjA2JTNBNDcwMCUzQSUzQSU1RCUzQTIwNTMlMjMlRTQlQkMlOTglRTklODAlODlJUHY2JTNDYnIlM0UlM0NiciUzRSUwQSUwQSUzQ3N0cm9uZyUzRTIuJTNDJTJGc3Ryb25nJTNFJTIwQUREQVBJJTIwJUU1JUE2JTgyJUU2JTlFJTlDJUU2JTk4JUFGJUU0JUJCJUEzJUU3JTkwJTg2SVAlRUYlQkMlOEMlRTUlOEYlQUYlRTQlQkQlOUMlRTQlQjglQkFQUk9YWUlQJUU3JTlBJTg0JUU4JUFGJTlEJUVGJUJDJThDJUU1JThGJUFGJUU1JUIwJTg2JTIyJTNGcHJveHlpcCUzRHRydWUlMjIlRTUlOEYlODIlRTYlOTUlQjAlRTYlQjclQkIlRTUlOEElQTAlRTUlODglQjAlRTklOTMlQkUlRTYlOEUlQTUlRTYlOUMlQUIlRTUlQjAlQkUlRUYlQkMlOEMlRTQlQkUlOEIlRTUlQTYlODIlRUYlQkMlOUElM0NiciUzRSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQlM0Zwcm94eWlwJTNEdHJ1ZSUzQ2JyJTNFJTNDYnIlM0UlMEElMEElM0NzdHJvbmclM0UzLiUzQyUyRnN0cm9uZyUzRSUyMEFEREFQSSUyMCVFNSVBNiU4MiVFNiU5RSU5QyVFNiU5OCVBRiUyMCUzQ2ElMjBocmVmJTNEJ2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRlhJVTIlMkZDbG91ZGZsYXJlU3BlZWRUZXN0JyUzRUNsb3VkZmxhcmVTcGVlZFRlc3QlM0MlMkZhJTNFJTIwJUU3JTlBJTg0JTIwY3N2JTIwJUU3JUJCJTkzJUU2JTlFJTlDJUU2JTk2JTg3JUU0JUJCJUI2JUUzJTgwJTgyJUU0JUJFJThCJUU1JUE2JTgyJUVGJUJDJTlBJTNDYnIlM0UlMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRm1haW4lMkZDbG91ZGZsYXJlU3BlZWRUZXN0LmNzdiUzQ2JyJTNF'))}
                         </div>
-
                         <textarea class="editor" id="content" placeholder="${decodeURIComponent(atob('QUREJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCnZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQKMTI3LjAuMC4xJTNBMTIzNCUyM0NGbmF0CiU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QQolRTYlQUYlOEYlRTglQTElOEMlRTQlQjglODAlRTQlQjglQUElRTUlOUMlQjAlRTUlOUQlODAlRUYlQkMlOEMlRTYlQTAlQkMlRTUlQkMlOEYlRTQlQjglQkElMjAlRTUlOUMlQjAlRTUlOUQlODAlM0ElRTclQUIlQUYlRTUlOEYlQTMlMjMlRTUlQTQlODclRTYlQjMlQTgKSVB2NiVFNSU5QyVCMCVFNSU5RCU4MCVFOSU5QyU4MCVFOCVBNiU4MSVFNyU5NCVBOCVFNCVCOCVBRCVFNiU4QiVBQyVFNSU4RiVCNyVFNiU4QiVBQyVFOCVCNSVCNyVFNiU5RCVBNSVFRiVCQyU4QyVFNSVBNiU4MiVFRiVCQyU5QSU1QjI2MDYlM0E0NzAwJTNBJTNBJTVEJTNBMjA1MwolRTclQUIlQUYlRTUlOEYlQTMlRTQlQjglOEQlRTUlODYlOTklRUYlQkMlOEMlRTklQkIlOTglRTglQUUlQTQlRTQlQjglQkElMjA0NDMlMjAlRTclQUIlQUYlRTUlOEYlQTMlRUYlQkMlOEMlRTUlQTYlODIlRUYlQkMlOUF2aXNhLmNuJTIzJUU0JUJDJTk4JUU5JTgwJTg5JUU1JTlGJTlGJUU1JTkwJThECgoKQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQKCiVFNiVCMyVBOCVFNiU4NCU4RiVFRiVCQyU5QUFEREFQSSVFNyU5QiVCNCVFNiU4RSVBNSVFNiVCNyVCQiVFNSU4QSVBMCVFNyU5QiVCNCVFOSU5MyVCRSVFNSU4RCVCMyVFNSU4RiVBRg=='))}">${content}</textarea>
-
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
+                            <button class="btn btn-primary" onclick="saveAdvancedSettings(this)">保存</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                     ` : '<p>未绑定KV空间</p>'}
@@ -3401,7 +3374,7 @@ async function handleGetRequest(env) {
                 </div>
 
                 <div id="tab-sub" class="tab-content">
-                     <div class="setting-item">
+                    <div class="setting-item">
                         <h4>SUB (优选订阅生成器)</h4>
                         <p>只支持单个优选订阅生成器地址</p>
                         <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
@@ -3420,6 +3393,23 @@ async function handleGetRequest(env) {
                         <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                         <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存</button>
                         <span class="save-status" id="sub-save-status"></span>
+                    </div>
+                </div>
+
+                <div id="tab-clash" class="tab-content">
+                    <div class="setting-item">
+                        <h4>Clash 自定义规则</h4>
+                        <p>
+                            在此处定义的规则将覆盖内置规则。每行一条，格式为 <code>类型,值,策略组</code>。<br>
+                            可用的策略组名：<code>"手动选择"</code>, <code>"🚀 自动选择"</code>, <code>"DIRECT"</code>, <code>"REJECT"</code>。<br>
+                            <b>注意：</b>此功能启用后，将不再需要 <code>SUBAPI</code> 和 <code>SUBCONFIG</code>。
+                        </p>
+                        <textarea id="clash_rules" class="editor" placeholder="${'# 广告拦截\nGEOSITE,category-ads-all,REJECT\n# 常用国外服务走代理\nGEOSITE,google,手动选择\nGEOSITE,telegram,手动选择\n# 国内网站直连\nGEOSITE,cn,DIRECT\nGEOIP,CN,DIRECT\n# 默认走代理\nMATCH,手动选择'}">${clashRulesContent}</textarea>
+                    </div>
+                    <div class="button-group">
+                        <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+                        <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存</button>
+                        <span class="save-status" id="clash-save-status"></span>
                     </div>
                 </div>
 
@@ -3537,7 +3527,8 @@ async function handleGetRequest(env) {
                             nat64: document.getElementById('nat64').value,
                             notls: document.getElementById('notls-checkbox').checked.toString(),
                             httpsports: selectedHttpsPorts,
-                            httpports: selectedHttpPorts
+                            httpports: selectedHttpPorts,
+                            clash_rules: document.getElementById('clash_rules').value
                         };
                         await saveData(button, statusEl, JSON.stringify(settingsToSave), '?type=advanced');
                     } catch(error) {
