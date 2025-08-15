@@ -2714,7 +2714,7 @@ ${rulesYaml}
 }
 
 /**
- * 生成Sing-box配置 (已根据DoH格式修正，兼容 sing-box 1.14+)
+ * 生成Sing-box配置 (最终修正版，解决DNS detour问题，兼容 sing-box 1.14+)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2770,19 +2770,19 @@ function generateSingboxConfig(nodeObjects) {
       },
       "dns": {
         "servers": [
-          // 【已修正】用于客户端应用的常规DNS查询
+          // 【已修正】常规DNS查询。移除了不合逻辑的 detour。
           {
             "tag": "remote-dns",
             "type": "https",
-            "server": "223.5.5.5", // 修正：仅保留 IP 或域名
-            "path": "/dns-query",   // 修正：将路径提取到 path 字段
-            "detour": "🎯 全球直连"
+            "server": "223.5.5.5",
+            "path": "/dns-query"
+            // "detour" has been removed
           },
-          // 用于解析代理服务器域名，防止DNS泄漏
+          // 【已修正】用于解析代理服务器域名。移除了不必要的 detour。
           {
             "tag": "local-dns",
-            "type": "local",
-            "detour": "🎯 全球直连"
+            "type": "local"
+            // "detour" has been removed
           }
         ],
         "rules": [
