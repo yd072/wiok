@@ -3635,7 +3635,7 @@ async function handleGetRequest(env) {
 // #################################################################
 
 /**
- * 新增：处理连接测试的后端函数 (使用 HTTP 路由探针)
+ * 升级版：处理连接测试的后端函数，能检测专用IP (Error 1034)
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3672,27 +3672,28 @@ async function handleTestConnection(request) {
             }
             case 'proxyip': {
                 const { address: ip, port } = parseProxyIP(address, 443);
-                log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
+                log(`PROXYIP Test: 步骤 1/3 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
                 log(`PROXYIP Test: TCP 连接成功。`);
 
                 try {
-                    log(`PROXYIP Test: 步骤 2/2 - 正在发送 HTTP 路由探针...`);
+                    // 步骤 2: 尝试访问 Cloudflare 官方诊断页
+                    log(`PROXYIP Test: 步骤 2/3 - 正在通过该 IP 发送对 www.cloudflare.com/cdn-cgi/trace 的请求...`);
                     const writer = testSocket.writable.getWriter();
-                    const workerHostname = new URL(request.url).hostname;
                     
-                    const httpProbeRequest = [
-                        `GET / HTTP/1.1`,
-                        `Host: ${workerHostname}`,
-                        'User-Agent: Cloudflare-Connectivity-Test',
+                    // 构造一个对外部网站的 HTTP GET 请求
+                    const externalProbeRequest = [
+                        `GET /cdn-cgi/trace HTTP/1.1`,
+                        `Host: www.cloudflare.com`, // 关键：Host 头是外部目标网站
+                        'User-Agent: Cloudflare-Connectivity-Test/2.0',
+                        'Accept: */*',
                         'Connection: close',
                         '\r\n'
                     ].join('\r\n');
 
-                    await writer.write(new TextEncoder().encode(httpProbeRequest));
+                    await writer.write(new TextEncoder().encode(externalProbeRequest));
                     writer.releaseLock();
-                    log(`PROXYIP Test: 已发送 GET 请求, Host: ${workerHostname}`);
-
+                    
                     const reader = testSocket.readable.getReader();
                     const { value, done } = await reader.read();
                     
@@ -3701,26 +3702,31 @@ async function handleTestConnection(request) {
                     }
 
                     const responseText = new TextDecoder().decode(value);
-                    log(`PROXYIP Test: 收到响应:\n${responseText.substring(0, 200)}...`);
+                    log(`PROXYIP Test: 收到响应:\n${responseText.substring(0, 300)}...`);
 
-                    if (responseText.toLowerCase().includes('server: cloudflare')) {
-                        log(`PROXYIP Test: 响应头包含 "Server: cloudflare"。测试通过。`);
-                        successMessage = '连接成功';
+                    // 步骤 3: 验证响应内容
+                    if (responseText.startsWith('HTTP/1.1 200 OK') && responseText.includes('h=www.cloudflare.com')) {
+                        log(`PROXYIP Test: 步骤 3/3 - 收到有效的 trace 响应。该 IP 是通用 IP。测试通过！`);
+                        successMessage = '连接成功 (通用 IP)';
                     } else {
-                        throw new Error("该IP可能无效。");
+                        log(`PROXYIP Test: 步骤 3/3 - 收到无效响应或错误页面。该 IP 可能是专用 IP。测试失败。`);
+                        if (responseText.includes('Error 1034') || responseText.includes('Edge IP Restricted')) {
+                           throw new Error("专用 IP (Error 1034)");
+                        }
+                        throw new Error("无效响应或非通用 IP");
                     }
                     
                     await testSocket.close();
                     reader.releaseLock();
 
                 } catch(err) {
-                    if (testSocket) await testSocket.close();
-                    throw err;
+                    if (testSocket && !testSocket.closed) await testSocket.close();
+                    throw err; // 将错误重新抛出
                 }
                 break;
             }
             case 'nat64': {
-                DNS64Server = address;
+                DNS64Server = address; // 临时设置全局变量
                 if (!DNS64Server || DNS64Server.trim() === '') {
                     throw new Error("NAT64/DNS64 服务器地址不能为空");
                 }
@@ -3761,7 +3767,7 @@ async function handleTestConnection(request) {
                     await testSocket.close();
                     reader.releaseLock();
                 } catch(err) {
-                    if (testSocket) await testSocket.close();
+                    if (testSocket && !testSocket.closed) await testSocket.close();
                     throw err;
                 }
                 break;
