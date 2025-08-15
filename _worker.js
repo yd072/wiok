@@ -2713,22 +2713,22 @@ ${rulesYaml}
     return config.trim();
 }
 
+
 /**
- * 生成Sing-box配置 (最终版，集成sniff和hijack-dns，兼容 sing-box 1.14+)
+ * 生成Sing-box配置
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
 function generateSingboxConfig(nodeObjects) {
-    // 1. 从节点对象数组生成出站代理配置
-    const proxyOutbounds = nodeObjects.map(p => {
+    const outbounds = nodeObjects.map(p => {
         let outbound = {
-            type: p.type, // 'vless'
+            type: p.type,
             tag: p.name,
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
             transport: {
-                type: p.network, // 'ws'
+                type: p.network,
                 path: p['ws-opts'].path,
                 headers: {
                     Host: p.servername
@@ -2748,166 +2748,48 @@ function generateSingboxConfig(nodeObjects) {
         }
         return outbound;
     });
+    
+    const proxyNames = outbounds.map(o => o.tag);
 
-    // 2. 提取所有代理节点的名称
-    const proxyNames = nodeObjects.map(p => p.name);
-
-    // 3. 构建完整的Sing-box配置对象
     const config = {
-      "log": {
-        "disabled": false,
-        "level": "info",
-        "output": "",
-        "timestamp": false
-      },
-      "experimental": {
-        "clash_api": {
-          "external_controller": "127.0.0.1:20123",
-          "external_ui": "",
-          "secret": "",
-          "default_mode": "rule"
+        "log": {
+            "level": "info",
+            "timestamp": true
+        },
+        "dns": {
+            "servers": [
+                { "address": "https://223.5.5.5/dns-query" },
+                { "address": "https://8.8.8.8/dns-query" }
+            ]
+        },
+        "inbounds": [
+            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
+        ],
+        "outbounds": [
+            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
+            { 
+              "type": "urltest", 
+              "tag": "auto-select", 
+              "outbounds": proxyNames,
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
+            },
+            ...outbounds,
+            { "type": "direct", "tag": "direct" },
+            { "type": "block", "tag": "block" }
+        ],
+        "route": {
+            "rules": [
+                { "geoip": "cn", "outbound": "direct" }
+                
+            ],
+            "final": "manual-select", // 使用 final 替代 default_outbound
+            "auto_detect_interface": true
         }
-      },
-      "dns": {
-        "servers": [
-          {
-            "tag": "remote-dns",
-            "type": "https",
-            "server": "223.5.5.5",
-            "path": "/dns-query"
-          },
-          {
-            "tag": "local-dns",
-            "type": "local"
-          }
-        ],
-        "rules": [
-          {
-            "rule_set": ["GeoSite-CN"],
-            "server": "remote-dns"
-          }
-        ],
-        "final": "remote-dns",
-        "strategy": "ipv4_only"
-      },
-      "inbounds": [
-        {
-          "type": "mixed",
-          "tag": "mixed-in",
-          "listen": "127.0.0.1",
-          "listen_port": 20122
-        }
-      ],
-      "outbounds": [
-        {
-          "type": "selector",
-          "tag": "🚀 节点选择",
-          "outbounds": [
-            "🎈 自动选择",
-            ...proxyNames
-          ]
-        },
-        {
-          "type": "urltest",
-          "tag": "🎈 自动选择",
-          "url": "https://www.gstatic.com/generate_204",
-          "interval": "3m",
-          "outbounds": proxyNames
-        },
-        {
-          "type": "direct",
-          "tag": "🎯 全球直连"
-        },
-        {
-            "type": "block",
-            "tag": "🚫 广告拦截"
-        },
-        {
-          "type": "selector",
-          "tag": "🐟 漏网之鱼",
-          "outbounds": [
-            "🚀 节点选择",
-            "🎯 全球直连"
-          ]
-        },
-        ...proxyOutbounds
-      ],
-      "route": {
-        "default_domain_resolver": {
-          "server": "local-dns"
-        },
-        "rules": [
-          // 新增：拦截所有DNS请求并交由内部DNS处理
-          {
-            "protocol": "dns",
-            "action": "hijack-dns"
-          },
-          // 新增：启用流量嗅探
-          {
-            "action": "sniff"
-          },
-          // 广告拦截规则
-          {
-            "rule_set": ["Category-Ads"],
-            "outbound": "🚫 广告拦截"
-          },
-          // 私有地址和中国大陆地址直连
-          {
-            "rule_set": ["GeoSite-Private", "GeoIP-Private"],
-            "outbound": "🎯 全球直连"
-          },
-          {
-            "rule_set": ["GeoSite-CN", "GeoIP-CN"],
-            "outbound": "🎯 全球直连"
-          }
-        ],
-        "rule_set": [
-            {
-              "tag": "Category-Ads",
-              "type": "remote",
-              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs",
-              "format": "binary",
-              "download_detour": "🎯 全球直连"
-            },
-            {
-              "tag": "GeoIP-Private",
-              "type": "remote",
-              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/private.srs",
-              "format": "binary",
-              "download_detour": "🎯 全球直连"
-            },
-            {
-              "tag": "GeoSite-Private",
-              "type": "remote",
-              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/private.srs",
-              "format": "binary",
-              "download_detour": "🎯 全球直连"
-            },
-            {
-              "tag": "GeoIP-CN",
-              "type": "remote",
-              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-              "format": "binary",
-              "download_detour": "🎯 全球直连"
-            },
-            {
-              "tag": "GeoSite-CN",
-              "type": "remote",
-              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
-              "format": "binary",
-              "download_detour": "🎯 全球直连"
-            }
-        ],
-        "auto_detect_interface": true,
-        "final": "🚀 节点选择"
-      }
     };
     
-    // 将配置对象转换为格式化的JSON字符串并返回
     return JSON.stringify(config, null, 2);
 }
-
-这个版本集成了您需要的高级路由功能，同时保留了之前配置的所有优点（如DNS防泄漏、广告拦截等），是目前最完善的版本。
 
 /**
  * 生成Loon配置 
