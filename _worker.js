@@ -167,11 +167,10 @@ async function loadConfigurations(env) {
 				if (settings.notls) {
                     noTLS = settings.notls;
                 }
-                // --- 新增：从KV加载Clash规则，这会覆盖环境变量中的设置 ---
+                // 从KV加载Clash规则文本，优先级高于下面的外部URL
                 if (settings.clash_rules) {
                     clashRules = settings.clash_rules.split(/\r?\n/).filter(line => line.trim() !== '');
                 }
-                // --------------------------------------------------------
                 if (settings.ADD) {
                     const 优选地址数组 = 整理(settings.ADD);
                     const 分类地址 = { 接口地址: new Set(), 链接地址: new Set(), 优选地址: new Set() };
@@ -189,6 +188,29 @@ async function loadConfigurations(env) {
             console.error("从KV加载配置时出错: ", e);
         }
     }
+    
+    // --- 新增逻辑：如果未定义SUBAPI，但定义了SUBCONFIG，则尝试将其作为外部规则URL来抓取 ---
+    // 这个逻辑在KV加载之后，确保KV里的subapi和subconfig设置也被考虑到
+    const useSubConfigAsRules = (!subConverter || subConverter.trim() === '') && subConfig && subConfig.startsWith('http');
+
+    if (useSubConfigAsRules && clashRules.length === 0) { // 仅当没有更优先的内置规则时才抓取
+        try {
+            console.log(`[INFO] 未找到SUBAPI，正在尝试从 SUBCONFIG URL 抓取外部规则: ${subConfig}`);
+            const response = await fetch(subConfig);
+            if (response.ok) {
+                const ruleText = await response.text();
+                // 假设规则文件是Clash rule-provider格式或者就是规则列表
+                clashRules = ruleText.split(/\r?\n/).filter(line => line.trim() !== '' && !line.trim().startsWith('#') && !line.trim().startsWith('payload:'));
+                console.log(`[INFO] 成功从外部URL加载了 ${clashRules.length} 条规则。`);
+            } else {
+                console.error(`[ERROR] 抓取外部规则失败，状态码: ${response.status}`);
+            }
+        } catch (error) {
+            console.error(`[ERROR] 抓取外部规则时发生网络错误: ${error.message}`);
+        }
+    }
+    // --- 逻辑结束 ---
+
 
     // 4. 最终处理
     if (subConverter.includes("http://")) {
