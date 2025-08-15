@@ -2213,14 +2213,13 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			</body>
 			</html>
 		`;
-		return 节点配置页;
+		return new Response(节点配置页, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 	} else {
 		// 非浏览器访问，生成订阅内容
 		if (typeof fetch != 'function') {
 			return 'Error: fetch is not available in this environment.';
 		}
 
-		// 确定伪装域名
 		if (hostName.includes(".workers.dev") || noTLS === 'true') {
 			noTLS = 'true';
 			fakeHostName = `${fakeHostName}.workers.dev`;
@@ -2238,9 +2237,9 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
         const isSingboxRequest = userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'));
         const isLoonRequest = userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'));
 
-		// 如果使用外部subconverter
 		if (sub) {
-            let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`; // Path is now dynamic inside the node
+            // 原有的外部 SUB 逻辑，保持不变
+            let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`;
 			let isBase64 = true;
 
 			if (isClashRequest) {
@@ -2267,55 +2266,74 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             // 使用内置生成
             const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
 
-            // 检查是否应该使用外部 subconverter 来处理内置节点
+            if (nodeObjects.length === 0) {
+                return new Response("错误：未能从任何来源 (ADD, ADDAPI, ADDCSV) 获取到有效的优选节点。", { status: 500 });
+            }
+
             const shouldUseExternalConverter = (isClashRequest || isSingboxRequest || isLoonRequest) && subConverter && subConfig;
 
             if (shouldUseExternalConverter) {
-                // 1. 将内置节点列表转换为 Base64 编码的订阅内容
+                // 将内置节点列表转换为原始订阅文本 (vless://...)
                 const base64NodeList = await 生成本地订阅(nodeObjects);
-
-                // 2. 创建一个 Data URI，它将作为 subconverter 的输入源
-                const dataUri = 'data:text/plain;base64,' + base64NodeList;
+                const rawNodeList = atob(base64NodeList);
                 
-                // 3. 确定转换目标
-                let target = 'base64'; // 默认
+                let target = 'base64';
                 if (isClashRequest) target = 'clash';
                 if (isSingboxRequest) target = 'singbox';
                 if (isLoonRequest) target = 'loon';
 
-                // 4. 构建指向 subconverter 的 URL
-                let finalUrl = `${subProtocol}://${subConverter}/sub?target=${target}&url=${encodeURIComponent(dataUri)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                // 构建不含 url 参数的 subconverter 请求 URL
+                let finalUrl = `${subProtocol}://${subConverter}/sub?target=${target}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
                 
+                console.log(`[INFO] Calling subconverter via POST: ${finalUrl}`);
+
                 try {
-                    // 5. 调用 subconverter 并返回结果
-                    const response = await fetch(finalUrl, { headers: { 'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==') } });
+                    // 使用 POST 方法，将节点列表放在请求体中发送
+                    const response = await fetch(finalUrl, { 
+                        method: 'POST',
+                        headers: {
+                            'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ=='),
+                            'Content-Type': 'text/plain; charset=utf-8'
+                        },
+                        body: rawNodeList
+                    });
                     const content = await response.text();
-                    // 对于Clash/Sing-box等，返回的是纯文本，所以isBase64为false
+                    
+                    console.log(`[INFO] Subconverter Status: ${response.status}`);
+
+                    if (!response.ok) {
+                        console.error(`[ERROR] Subconverter returned an error:`, content);
+                        return new Response(`订阅转换失败 (Subconverter Error):\n\nStatus: ${response.status}\n\nResponse:\n${content}`, {
+                            status: 502, // Bad Gateway
+                            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+                        });
+                    }
+                    
                     return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, false);
                 } catch (error) {
-                    console.error('Error fetching external subconverter with internal nodes:', error);
-                    return `Error fetching content from subconverter: ${error.message}`;
+                    console.error('[ERROR] Fetch to subconverter failed:', error);
+                    return new Response(`订阅转换失败：无法连接到 Subconverter 服务。\n\nError: ${error.message}`, {
+                        status: 502,
+                        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+                    });
                 }
             }
-
 
             // 如果不使用外部转换器，则回退到原始的内置生成逻辑
             if (isClashRequest) {
                 const clashConfig = generateClashConfig(nodeObjects);
                 return 恢复伪装信息(clashConfig, userID, hostName, fakeUserID, fakeHostName, false);
             }
-            
             if (isSingboxRequest) {
                 const singboxConfig = generateSingboxConfig(nodeObjects);
                 return 恢复伪装信息(singboxConfig, userID, hostName, fakeUserID, fakeHostName, false);
             }
-
             if (isLoonRequest) {
                 const loonConfig = generateLoonConfig(nodeObjects);
                 return 恢复伪装信息(loonConfig, userID, hostName, fakeUserID, fakeHostName, false);
             }
             
-            // 默认情况或请求 base64，则返回 secureProto 链接
+            // 默认情况或请求 base64，则返回 vless 链接
             const base64Content = await 生成本地订阅(nodeObjects);
             return 恢复伪装信息(base64Content, userID, hostName, fakeUserID, fakeHostName, true);
 		}
