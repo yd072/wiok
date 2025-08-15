@@ -2770,8 +2770,11 @@ function generateSingboxConfig(nodeObjects) {
       },
       "dns": {
         "servers": [
-          // 用于客户端应用的常规DNS查询
-          {
+            {
+            "type": "https",
+            "server":"1.1.1.1"
+            },
+            {
             "tag": "remote-dns",
             "address": "https://223.5.5.5/dns-query",
             "detour": "🎯 全球直连"
