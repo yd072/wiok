@@ -2714,7 +2714,7 @@ ${rulesYaml}
 }
 
 /**
- * 生成Sing-box配置 (最终修正版，彻底解决DNS detour问题，兼容 sing-box 1.14+)
+ * 生成Sing-box配置 (最终版，集成广告拦截规则，兼容 sing-box 1.14+)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2770,14 +2770,12 @@ function generateSingboxConfig(nodeObjects) {
       },
       "dns": {
         "servers": [
-          // 【已彻底修正】常规DNS查询。移除了不合逻辑的 detour。
           {
             "tag": "remote-dns",
             "type": "https",
             "server": "223.5.5.5",
             "path": "/dns-query"
           },
-          // 【已彻底修正】用于解析代理服务器域名。
           {
             "tag": "local-dns",
             "type": "local"
@@ -2824,6 +2822,11 @@ function generateSingboxConfig(nodeObjects) {
             "type": "dns",
             "tag": "dns-out"
         },
+        // 新增：用于拦截的 block 出站
+        {
+            "type": "block",
+            "tag": "🚫 广告拦截"
+        },
         {
           "type": "selector",
           "tag": "🐟 漏网之鱼",
@@ -2843,6 +2846,11 @@ function generateSingboxConfig(nodeObjects) {
             "protocol": "dns",
             "outbound": "dns-out"
           },
+          // 新增：广告拦截规则，必须放在其他规则前面
+          {
+            "rule_set": ["Category-Ads"],
+            "outbound": "🚫 广告拦截"
+          },
           {
             "rule_set": ["GeoSite-Private", "GeoIP-Private"],
             "outbound": "🎯 全球直连"
@@ -2853,6 +2861,14 @@ function generateSingboxConfig(nodeObjects) {
           }
         ],
         "rule_set": [
+            // 新增：广告规则集定义
+            {
+              "tag": "Category-Ads",
+              "type": "remote",
+              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs",
+              "format": "binary",
+              "download_detour": "🎯 全球直连"
+            },
             {
               "tag": "GeoIP-Private",
               "type": "remote",
