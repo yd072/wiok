@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
+let subConverter = '';
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -3634,7 +3634,11 @@ async function handleGetRequest(env) {
 // ############### END OF TABBED UI REPLACEMENT ####################
 // #################################################################
 
-// Worker 后端代码 - 最终优化版的 handleTestConnection 函数
+/**
+ * 新增：处理连接测试的后端函数 (使用 HTTP 路由探针)
+ * @param {Request} request
+ * @returns {Promise<Response>}
+ */
 async function handleTestConnection(request) {
     if (request.method !== 'POST') {
         return new Response('Method Not Allowed', { status: 405 });
@@ -3656,7 +3660,7 @@ async function handleTestConnection(request) {
         switch (type) {
             case 'http': {
                 const parsed = httpProxyAddressParser(address);
-                const testSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal, parsed);
+                const testSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal, parsed); // www.gstatic.com, 443
                 await testSocket.close();
                 break;
             }
@@ -3667,18 +3671,53 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'proxyip': {
-                // --- 这是新的、更可靠的测试逻辑 ---
+                // 对于 PROXYIP，默认测试其作为 HTTP 反向代理的能力，所以使用 443 端口
                 const { address: ip, port } = parseProxyIP(address, 443);
-                log(`PROXYIP Test: 正在尝试与 ${ip}:${port} 建立 TCP 连接...`);
-                
-                // 1. 尝试连接
+                log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
-                
-                // 2. 如果连接成功，立即关闭
-                await testSocket.close();
-                
                 log(`PROXYIP Test: TCP 连接成功。`);
-                successMessage = 'TCP 连接成功，IP 可达'; // 提供更准确的成功信息
+
+                try {
+                    log(`PROXYIP Test: 步骤 2/2 - 正在发送 HTTP 路由探针...`);
+                    const writer = testSocket.writable.getWriter();
+                    const workerHostname = new URL(request.url).hostname;
+                    
+                    const httpProbeRequest = [
+                        `GET / HTTP/1.1`,
+                        `Host: ${workerHostname}`,
+                        'User-Agent: Cloudflare-Connectivity-Test',
+                        'Connection: close',
+                        '\r\n'
+                    ].join('\r\n');
+
+                    await writer.write(new TextEncoder().encode(httpProbeRequest));
+                    writer.releaseLock();
+                    log(`PROXYIP Test: 已发送 GET 请求, Host: ${workerHostname}`);
+
+                    const reader = testSocket.readable.getReader();
+                    const { value, done } = await reader.read();
+                    
+                    if (done || !value) {
+                        throw new Error("连接已关闭，未收到任何响应。");
+                    }
+
+                    const responseText = new TextDecoder().decode(value);
+                    log(`PROXYIP Test: 收到响应:\n${responseText.substring(0, 200)}...`);
+
+                    if (responseText.toLowerCase().includes('server: cloudflare')) {
+                        log(`PROXYIP Test: 响应头包含 "Server: cloudflare"。测试通过。`);
+                        successMessage = '连接成功';
+                    } else {
+                        throw new Error("该IP可能无效。");
+                    }
+                    
+                    await testSocket.close();
+                    reader.releaseLock();
+
+                } catch(err) {
+                    if (testSocket) await testSocket.close();
+                    throw err;
+                }
                 break;
             }
             case 'nat64': {
@@ -3686,8 +3725,46 @@ async function handleTestConnection(request) {
                 if (!DNS64Server || DNS64Server.trim() === '') {
                     throw new Error("NAT64/DNS64 服务器地址不能为空");
                 }
+                log(`NAT64 Test: 步骤 1/2 - 正在使用 ${DNS64Server} 解析 www.cloudflare.com...`);
                 const ipv6Address = await resolveToIPv6('www.cloudflare.com');
-                successMessage = `可用！解析到 ${ipv6Address}`;
+                log(`NAT64 Test: 解析成功，获得 IPv6 地址: ${ipv6Address}`);
+
+                log(`NAT64 Test: 步骤 2/2 - 正在通过 Socket 连接到 [${ipv6Address}]:80 并请求 /cdn-cgi/trace...`);
+                const testSocket = await connect({ hostname: `[${ipv6Address}]`, port: 80, signal: controller.signal });
+                log(`NAT64 Test: TCP 连接成功。`);
+                try {
+                    const writer = testSocket.writable.getWriter();
+                    const httpProbeRequest = [
+                        `GET /cdn-cgi/trace HTTP/1.1`,
+                        `Host: www.cloudflare.com`,
+                        'User-Agent: Cloudflare-NAT64-Test',
+                        'Connection: close',
+                        '\r\n'
+                    ].join('\r\n');
+
+                    await writer.write(new TextEncoder().encode(httpProbeRequest));
+                    writer.releaseLock();
+                    
+                    const reader = testSocket.readable.getReader();
+                    const { value, done } = await reader.read();
+
+                    if (done || !value) {
+                        throw new Error("连接已关闭，未收到任何响应。");
+                    }
+                    
+                    const responseText = new TextDecoder().decode(value);
+                    if (responseText.includes('h=www.cloudflare.com') && responseText.includes('colo=')) {
+                        log(`NAT64 Test: /cdn-cgi/trace 响应有效。测试通过。`);
+                        successMessage = `可用！解析到 ${ipv6Address}`;
+                    } else {
+                        throw new Error("收到的响应无效，或非 Cloudflare trace 信息。");
+                    }
+                    await testSocket.close();
+                    reader.releaseLock();
+                } catch(err) {
+                    if (testSocket) await testSocket.close();
+                    throw err;
+                }
                 break;
             }
             default:
