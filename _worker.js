@@ -3635,7 +3635,8 @@ async function handleGetRequest(env) {
 // #################################################################
 
 /**
- * 升级版：处理连接测试的后端函数，能检测专用IP (Error 1034)
+ * 最终修复版：处理连接测试的后端函数。
+ * 修复了单次 read() 导致响应不完整的问题，能正确检测专用IP。
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3677,15 +3678,13 @@ async function handleTestConnection(request) {
                 log(`PROXYIP Test: TCP 连接成功。`);
 
                 try {
-                    // 步骤 2: 尝试访问 Cloudflare 官方诊断页
                     log(`PROXYIP Test: 步骤 2/3 - 正在通过该 IP 发送对 www.cloudflare.com/cdn-cgi/trace 的请求...`);
                     const writer = testSocket.writable.getWriter();
                     
-                    // 构造一个对外部网站的 HTTP GET 请求
                     const externalProbeRequest = [
                         `GET /cdn-cgi/trace HTTP/1.1`,
-                        `Host: www.cloudflare.com`, // 关键：Host 头是外部目标网站
-                        'User-Agent: Cloudflare-Connectivity-Test/2.0',
+                        `Host: www.cloudflare.com`,
+                        'User-Agent: Cloudflare-Connectivity-Test/2.1',
                         'Accept: */*',
                         'Connection: close',
                         '\r\n'
@@ -3695,38 +3694,47 @@ async function handleTestConnection(request) {
                     writer.releaseLock();
                     
                     const reader = testSocket.readable.getReader();
-                    const { value, done } = await reader.read();
                     
-                    if (done || !value) {
-                        throw new Error("连接已关闭，未收到任何响应。");
+                    // START: 关键修复 - 循环读取所有数据块
+                    let responseBuffer = new Uint8Array(0);
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) {
+                            break; // 连接关闭，读取完成
+                        }
+                        const newBuffer = new Uint8Array(responseBuffer.length + value.length);
+                        newBuffer.set(responseBuffer);
+                        newBuffer.set(value, responseBuffer.length);
+                        responseBuffer = newBuffer;
                     }
+                    const responseText = new TextDecoder().decode(responseBuffer);
+                    // END: 关键修复
 
-                    const responseText = new TextDecoder().decode(value);
-                    log(`PROXYIP Test: 收到响应:\n${responseText.substring(0, 300)}...`);
+                    log(`PROXYIP Test: 收到完整响应:\n${responseText.substring(0, 300)}...`);
 
-                    // 步骤 3: 验证响应内容
+                    log(`PROXYIP Test: 步骤 3/3 - 正在验证响应...`);
                     if (responseText.startsWith('HTTP/1.1 200 OK') && responseText.includes('h=www.cloudflare.com')) {
-                        log(`PROXYIP Test: 步骤 3/3 - 收到有效的 trace 响应。该 IP 是通用 IP。测试通过！`);
+                        log(`PROXYIP Test: 收到有效的 trace 响应。该 IP 是通用 IP。测试通过！`);
                         successMessage = '连接成功 (通用 IP)';
                     } else {
-                        log(`PROXYIP Test: 步骤 3/3 - 收到无效响应或错误页面。该 IP 可能是专用 IP。测试失败。`);
+                        log(`PROXYIP Test: 收到无效响应或错误页面。该 IP 可能是专用 IP。测试失败。`);
                         if (responseText.includes('Error 1034') || responseText.includes('Edge IP Restricted')) {
                            throw new Error("专用 IP (Error 1034)");
                         }
                         throw new Error("无效响应或非通用 IP");
                     }
                     
-                    await testSocket.close();
+                    // 连接已由服务器关闭，无需再调用 testSocket.close()
                     reader.releaseLock();
 
                 } catch(err) {
                     if (testSocket && !testSocket.closed) await testSocket.close();
-                    throw err; // 将错误重新抛出
+                    throw err;
                 }
                 break;
             }
             case 'nat64': {
-                DNS64Server = address; // 临时设置全局变量
+                DNS64Server = address;
                 if (!DNS64Server || DNS64Server.trim() === '') {
                     throw new Error("NAT64/DNS64 服务器地址不能为空");
                 }
@@ -3751,20 +3759,28 @@ async function handleTestConnection(request) {
                     writer.releaseLock();
                     
                     const reader = testSocket.readable.getReader();
-                    const { value, done } = await reader.read();
 
-                    if (done || !value) {
-                        throw new Error("连接已关闭，未收到任何响应。");
+                    // START: 关键修复 - 同样为 NAT64 测试应用循环读取
+                    let responseBuffer = new Uint8Array(0);
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) {
+                            break;
+                        }
+                        const newBuffer = new Uint8Array(responseBuffer.length + value.length);
+                        newBuffer.set(responseBuffer);
+                        newBuffer.set(value, responseBuffer.length);
+                        responseBuffer = newBuffer;
                     }
-                    
-                    const responseText = new TextDecoder().decode(value);
+                    const responseText = new TextDecoder().decode(responseBuffer);
+                    // END: 关键修复
+
                     if (responseText.includes('h=www.cloudflare.com') && responseText.includes('colo=')) {
                         log(`NAT64 Test: /cdn-cgi/trace 响应有效。测试通过。`);
                         successMessage = `可用！解析到 ${ipv6Address}`;
                     } else {
                         throw new Error("收到的响应无效，或非 Cloudflare trace 信息。");
                     }
-                    await testSocket.close();
                     reader.releaseLock();
                 } catch(err) {
                     if (testSocket && !testSocket.closed) await testSocket.close();
