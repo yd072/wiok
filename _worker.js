@@ -2713,9 +2713,8 @@ ${rulesYaml}
     return config.trim();
 }
 
-
 /**
- * 生成Sing-box配置
+ * 生成Sing-box配置 (已根据新的DNS防泄漏要求更新)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2737,7 +2736,6 @@ function generateSingboxConfig(nodeObjects) {
             }
         };
 
-        // 仅在启用TLS时添加TLS配置
         if (p.tls) {
             outbound.tls = {
                 enabled: true,
@@ -2754,7 +2752,7 @@ function generateSingboxConfig(nodeObjects) {
     // 2. 提取所有代理节点的名称
     const proxyNames = nodeObjects.map(p => p.name);
 
-    // 3. 构建完整的Sing-box配置对象，使用您提供的模板结构
+    // 3. 构建完整的Sing-box配置对象
     const config = {
       "log": {
         "disabled": false,
@@ -2766,43 +2764,49 @@ function generateSingboxConfig(nodeObjects) {
         "clash_api": {
           "external_controller": "127.0.0.1:20123",
           "external_ui": "",
-          "external_ui_download_url": "",
-          "external_ui_download_detour": "🎯 全球直连",
-          "secret": "2efebf4c2d7e0c7c4461e20b09c99b2e92e714dc6c8db8f9120be722367e43b3",
-          "default_mode": "rule",
-          "access_control_allow_origin": [
-            "*"
-          ],
-          "access_control_allow_private_network": false
-        },
-        "cache_file": {
-          "enabled": true,
-          "path": "cache.db",
-          "cache_id": "",
-          "store_fakeip": true,
-          "store_rdrc": true,
-          "rdrc_timeout": "7d"
+          "secret": "",
+          "default_mode": "rule"
         }
+      },
+      "dns": {
+        "servers": [
+          // 用于客户端应用的常规DNS查询
+          {
+            "tag": "remote-dns",
+            "address": "https://223.5.5.5/dns-query",
+            "detour": "🎯 全球直连"
+          },
+          // 用于解析代理服务器域名，防止DNS泄漏
+          {
+            "tag": "local-dns",
+            "address": "local",
+            "detour": "🎯 全球直连"
+          }
+        ],
+        "rules": [
+          {
+            "rule_set": ["GeoSite-CN"],
+            "server": "remote-dns"
+          }
+        ],
+        "final": "remote-dns",
+        "strategy": "ipv4_only"
       },
       "inbounds": [
         {
           "type": "mixed",
           "tag": "mixed-in",
           "listen": "127.0.0.1",
-          "listen_port": 20122,
-          "tcp_fast_open": false,
-          "tcp_multi_path": false,
-          "udp_fragment": false
+          "listen_port": 20122
         }
       ],
       "outbounds": [
         {
           "type": "selector",
           "tag": "🚀 节点选择",
-          "interrupt_exist_connections": true,
           "outbounds": [
             "🎈 自动选择",
-            ...proxyNames // 动态填充所有节点名称
+            ...proxyNames
           ]
         },
         {
@@ -2810,9 +2814,7 @@ function generateSingboxConfig(nodeObjects) {
           "tag": "🎈 自动选择",
           "url": "https://www.gstatic.com/generate_204",
           "interval": "3m",
-          "tolerance": 150,
-          "interrupt_exist_connections": true,
-          "outbounds": proxyNames // 动态填充所有节点名称
+          "outbounds": proxyNames
         },
         {
           "type": "direct",
@@ -2821,194 +2823,64 @@ function generateSingboxConfig(nodeObjects) {
         {
           "type": "selector",
           "tag": "🐟 漏网之鱼",
-          "interrupt_exist_connections": true,
           "outbounds": [
             "🚀 节点选择",
             "🎯 全球直连"
           ]
         },
-        {
-          "type": "selector",
-          "tag": "GLOBAL",
-          "interrupt_exist_connections": true,
-          "outbounds": [
-            "🚀 节点选择",
-            "🎈 自动选择",
-            "🎯 全球直连",
-            "🐟 漏网之鱼"
-          ]
-        },
-        ...proxyOutbounds // 动态填充所有生成的节点配置
+        ...proxyOutbounds
       ],
       "route": {
+        // 在这里为所有出站连接统一指定域名解析器
+        "default_domain_resolver": {
+          "server": "local-dns" // 指向上面定义的 local-dns
+        },
         "rules": [
           {
-            "action": "hijack-dns",
-            "protocol": "dns"
+            "protocol": "dns",
+            "outbound": "dns-out"
           },
           {
-            "action": "route",
-            "clash_mode": "direct",
+            "rule_set": ["GeoSite-Private", "GeoIP-Private"],
             "outbound": "🎯 全球直连"
           },
           {
-            "action": "route",
-            "clash_mode": "global",
-            "outbound": "GLOBAL"
-          },
-          {
-            "action": "reject",
-            "protocol": "quic"
-          },
-          {
-            "action": "reject",
-            "rule_set": [
-              "Category-Ads"
-            ]
-          },
-          {
-            "action": "route",
-            "rule_set": [
-              "GeoSite-Private"
-            ],
+            "rule_set": ["GeoSite-CN", "GeoIP-CN"],
             "outbound": "🎯 全球直连"
-          },
-          {
-            "action": "route",
-            "rule_set": [
-              "GeoSite-CN"
-            ],
-            "outbound": "🎯 全球直连"
-          },
-          {
-            "action": "route",
-            "rule_set": [
-              "GeoIP-Private"
-            ],
-            "outbound": "🎯 全球直连"
-          },
-          {
-            "action": "route",
-            "rule_set": [
-              "GeoIP-CN"
-            ],
-            "outbound": "🎯 全球直连"
-          },
-          {
-            "action": "route",
-            "rule_set": [
-              "GeoLocation-!CN"
-            ],
-            "outbound": "🚀 节点选择"
           }
         ],
         "rule_set": [
-          {
-            "tag": "Category-Ads",
-            "type": "remote",
-            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs",
-            "format": "binary",
-            "download_detour": "🎯 全球直连"
-          },
-          {
-            "tag": "GeoIP-Private",
-            "type": "remote",
-            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/private.srs",
-            "format": "binary",
-            "download_detour": "🎯 全球直连"
-          },
-          {
-            "tag": "GeoSite-Private",
-            "type": "remote",
-            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/private.srs",
-            "format": "binary",
-            "download_detour": "🎯 全球直连"
-          },
-          {
-            "tag": "GeoIP-CN",
-            "type": "remote",
-            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-            "format": "binary",
-            "download_detour": "🎯 全球直连"
-          },
-          {
-            "tag": "GeoSite-CN",
-            "type": "remote",
-            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
-            "format": "binary",
-            "download_detour": "🎯 全球直连"
-          },
-          {
-            "tag": "GeoLocation-!CN",
-            "type": "remote",
-            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
-            "format": "binary",
-            "download_detour": "🎯 全球直连"
-          }
+            {
+              "tag": "GeoIP-Private",
+              "type": "remote",
+              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/private.srs",
+              "format": "binary",
+              "download_detour": "🎯 全球直连"
+            },
+            {
+              "tag": "GeoSite-Private",
+              "type": "remote",
+              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/private.srs",
+              "format": "binary",
+              "download_detour": "🎯 全球直连"
+            },
+            {
+              "tag": "GeoIP-CN",
+              "type": "remote",
+              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+              "format": "binary",
+              "download_detour": "🎯 全球直连"
+            },
+            {
+              "tag": "GeoSite-CN",
+              "type": "remote",
+              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
+              "format": "binary",
+              "download_detour": "🎯 全球直连"
+            }
         ],
         "auto_detect_interface": true,
-        "final": "🐟 漏网之鱼"
-      },
-      "dns": {
-        "servers": [
-          {
-            "tag": "Local-DNS",
-            "address": "https://223.5.5.5:443/dns-query",
-            "address_resolver": "Local-DNS-Resolver",
-            "detour": "🎯 全球直连"
-          },
-          {
-            "tag": "Local-DNS-Resolver",
-            "address": "udp://223.5.5.5:53",
-            "detour": "🎯 全球直连"
-          },
-          {
-            "tag": "Remote-DNS",
-            "address": "tls://8.8.8.8:853",
-            "address_resolver": "Remote-DNS-Resolver",
-            "detour": "🚀 节点选择"
-          },
-          {
-            "tag": "Remote-DNS-Resolver",
-            "address": "udp://8.8.8.8:53",
-            "detour": "🚀 节点选择"
-          }
-        ],
-        "rules": [
-          {
-            "action": "route",
-            "server": "Local-DNS",
-            "outbound": "any"
-          },
-          {
-            "action": "route",
-            "clash_mode": "direct",
-            "server": "Local-DNS"
-          },
-          {
-            "action": "route",
-            "clash_mode": "global",
-            "server": "Remote-DNS"
-          },
-          {
-            "action": "route",
-            "rule_set": [
-              "GeoSite-CN"
-            ],
-            "server": "Local-DNS"
-          },
-          {
-            "action": "route",
-            "rule_set": [
-              "GeoLocation-!CN"
-            ],
-            "server": "Remote-DNS"
-          }
-        ],
-        "disable_cache": false,
-        "disable_expire": false,
-        "independent_cache": false,
-        "final": "Remote-DNS"
+        "final": "🚀 节点选择"
       }
     };
     
