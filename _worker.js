@@ -2844,13 +2844,13 @@ function generateSingboxConfig(nodeObjects) {
                     "tag": "geosite-ad",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs"
+                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs"
                 },
                 {
                     "tag": "geosite-cn",
                     "type": "remote",
                     "format": "binary",
-                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
+                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs"
                 },
                 {
                     "tag": "geoip-cn",
