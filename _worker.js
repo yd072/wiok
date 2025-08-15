@@ -2714,7 +2714,7 @@ ${rulesYaml}
 }
 
 /**
- * 生成Sing-box配置 (已根据新的DNS标准更新，兼容 sing-box 1.14+)
+ * 生成Sing-box配置 (已根据DoH格式修正，兼容 sing-box 1.14+)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2770,17 +2770,18 @@ function generateSingboxConfig(nodeObjects) {
       },
       "dns": {
         "servers": [
-          // 【新格式】用于客户端应用的常规DNS查询
+          // 【已修正】用于客户端应用的常规DNS查询
           {
             "tag": "remote-dns",
-            "type": "https", // 改动点: 明确指定类型为 https
-            "server": "https://223.5.5.5/dns-query", // 改动点: 字段名从 address 改为 server
+            "type": "https",
+            "server": "223.5.5.5", // 修正：仅保留 IP 或域名
+            "path": "/dns-query",   // 修正：将路径提取到 path 字段
             "detour": "🎯 全球直连"
           },
-          // 【新格式】用于解析代理服务器域名，防止DNS泄漏
+          // 用于解析代理服务器域名，防止DNS泄漏
           {
             "tag": "local-dns",
-            "type": "local", // 改动点: 明确指定类型为 local，不再需要 address 字段
+            "type": "local",
             "detour": "🎯 全球直连"
           }
         ],
@@ -2822,6 +2823,10 @@ function generateSingboxConfig(nodeObjects) {
           "tag": "🎯 全球直连"
         },
         {
+            "type": "dns",
+            "tag": "dns-out"
+        },
+        {
           "type": "selector",
           "tag": "🐟 漏网之鱼",
           "outbounds": [
@@ -2832,14 +2837,13 @@ function generateSingboxConfig(nodeObjects) {
         ...proxyOutbounds
       ],
       "route": {
-        // 在这里为所有出站连接统一指定域名解析器
         "default_domain_resolver": {
-          "server": "local-dns" // 指向上面定义的 local-dns
+          "server": "local-dns"
         },
         "rules": [
           {
             "protocol": "dns",
-            "outbound": "dns-out" // 修正：Sing-box 中 DNS 规则通常指向一个 tag 为 "dns-out" 的特殊出站
+            "outbound": "dns-out"
           },
           {
             "rule_set": ["GeoSite-Private", "GeoIP-Private"],
