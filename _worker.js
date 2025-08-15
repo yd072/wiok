@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2267,6 +2267,39 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             // 使用内置生成
             const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
 
+            // 检查是否应该使用外部 subconverter 来处理内置节点
+            const shouldUseExternalConverter = (isClashRequest || isSingboxRequest || isLoonRequest) && subConverter && subConfig;
+
+            if (shouldUseExternalConverter) {
+                // 1. 将内置节点列表转换为 Base64 编码的订阅内容
+                const base64NodeList = await 生成本地订阅(nodeObjects);
+
+                // 2. 创建一个 Data URI，它将作为 subconverter 的输入源
+                const dataUri = 'data:text/plain;base64,' + base64NodeList;
+                
+                // 3. 确定转换目标
+                let target = 'base64'; // 默认
+                if (isClashRequest) target = 'clash';
+                if (isSingboxRequest) target = 'singbox';
+                if (isLoonRequest) target = 'loon';
+
+                // 4. 构建指向 subconverter 的 URL
+                let finalUrl = `${subProtocol}://${subConverter}/sub?target=${target}&url=${encodeURIComponent(dataUri)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                
+                try {
+                    // 5. 调用 subconverter 并返回结果
+                    const response = await fetch(finalUrl, { headers: { 'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==') } });
+                    const content = await response.text();
+                    // 对于Clash/Sing-box等，返回的是纯文本，所以isBase64为false
+                    return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, false);
+                } catch (error) {
+                    console.error('Error fetching external subconverter with internal nodes:', error);
+                    return `Error fetching content from subconverter: ${error.message}`;
+                }
+            }
+
+
+            // 如果不使用外部转换器，则回退到原始的内置生成逻辑
             if (isClashRequest) {
                 const clashConfig = generateClashConfig(nodeObjects);
                 return 恢复伪装信息(clashConfig, userID, hostName, fakeUserID, fakeHostName, false);
