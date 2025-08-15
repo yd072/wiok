@@ -2714,7 +2714,7 @@ ${rulesYaml}
 }
 
 /**
- * 生成Sing-box配置 (已根据新的DNS防泄漏要求更新)
+ * 生成Sing-box配置 (已根据新的DNS标准更新，兼容 sing-box 1.14+)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2770,15 +2770,17 @@ function generateSingboxConfig(nodeObjects) {
       },
       "dns": {
         "servers": [
-            {
+          // 【新格式】用于客户端应用的常规DNS查询
+          {
             "tag": "remote-dns",
-            "server": "https://223.5.5.5/dns-query",
+            "type": "https", // 改动点: 明确指定类型为 https
+            "server": "https://223.5.5.5/dns-query", // 改动点: 字段名从 address 改为 server
             "detour": "🎯 全球直连"
           },
-          // 用于解析代理服务器域名，防止DNS泄漏
+          // 【新格式】用于解析代理服务器域名，防止DNS泄漏
           {
             "tag": "local-dns",
-            "address": "local",
+            "type": "local", // 改动点: 明确指定类型为 local，不再需要 address 字段
             "detour": "🎯 全球直连"
           }
         ],
@@ -2837,7 +2839,7 @@ function generateSingboxConfig(nodeObjects) {
         "rules": [
           {
             "protocol": "dns",
-            "outbound": "dns-out"
+            "outbound": "dns-out" // 修正：Sing-box 中 DNS 规则通常指向一个 tag 为 "dns-out" 的特殊出站
           },
           {
             "rule_set": ["GeoSite-Private", "GeoIP-Private"],
