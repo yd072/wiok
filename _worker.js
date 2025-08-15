@@ -3660,7 +3660,7 @@ async function handleTestConnection(request) {
         switch (type) {
             case 'http': {
                 const parsed = httpProxyAddressParser(address);
-                const testSocket = await httpConnect('www.gstatic.com', 443, log, controller.signal, parsed);
+                const testSocket = await httpConnect('www.gstatic.com', 80, log, controller.signal, parsed);
                 await testSocket.close();
                 break;
             }
