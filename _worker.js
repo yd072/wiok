@@ -2771,12 +2771,8 @@ function generateSingboxConfig(nodeObjects) {
       "dns": {
         "servers": [
             {
-            "type": "https",
-            "server":"1.1.1.1"
-            },
-            {
             "tag": "remote-dns",
-            "address": "https://223.5.5.5/dns-query",
+            "server": "https://223.5.5.5/dns-query",
             "detour": "🎯 全球直连"
           },
           // 用于解析代理服务器域名，防止DNS泄漏
