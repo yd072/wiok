@@ -259,7 +259,7 @@ function createWebSocketStream(webSocket, earlyDataHeader, log) {
 
 			// 监听 WebSocket 事件
 			webSocket.addEventListener('message', event => {
-				// TransformStream 自动处理背压，我们只需将数据写入即可
+				// TransformStream 自动处理背压，只需将数据写入即可
 				if (streamCancelled) return;
 				try {
 					controller.enqueue(event.data);
@@ -1066,25 +1066,25 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     }
 
-    // --- 组装策略列表 ---
+    // --- 组装策略列表 (新顺序) ---
     const connectionStrategies = [];
     const shouldUseSocks = enableSocks && go2Socks5s.some(pattern => new RegExp(`^${pattern.replace(/\*/g, '.*')}$`, 'i').test(addressRemote));
 
     // 1. 主要连接策略
-    if (enableHttpProxy) {
-        connectionStrategies.push({
-            name: 'HTTP Proxy',
-            execute: () => createConnection(addressRemote, portRemote, { type: 'http' })
-        });
-    } else if (shouldUseSocks) {
+    connectionStrategies.push({
+        name: 'Direct Connection',
+        execute: () => createConnection(addressRemote, portRemote, null)
+    });
+    if (shouldUseSocks) {
         connectionStrategies.push({
             name: 'SOCKS5 Proxy (go2Socks5s)',
             execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
         });
-    } else {
+    }
+    if (enableHttpProxy) {
         connectionStrategies.push({
-            name: 'Direct Connection',
-            execute: () => createConnection(addressRemote, portRemote, null)
+            name: 'HTTP Proxy',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'http' })
         });
     }
 
@@ -1507,7 +1507,7 @@ async function httpConnect(addressRemote, portRemote, log, signal = null, custom
 				if (headers.startsWith('HTTP/1.1 200') || headers.startsWith('HTTP/1.0 200')) {
 					connected = true;
 
-					// 如果响应头之后还有数据，我们需要保存这些数据以便后续处理
+					// 如果响应头之后还有数据，需要保存这些数据以便后续处理
 					if (headersEndPos < responseBuffer.length) {
 						const remainingData = responseBuffer.slice(headersEndPos);
 						// 创建一个缓冲区来存储这些数据，以便稍后使用
@@ -3316,7 +3316,7 @@ async function handleGetRequest(env) {
                         <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'proxyip')">测试连接</button>
                             <span id="proxyip-status" class="test-status"></span>
-                            <span class="test-note">（将自动移除失败地址）</span>
+                            <span class="test-note">（批量测试并自动移除失败地址）</span>
                         </div>
                         <div id="proxyip-results" class="test-results-container"></div>
                     </div>
@@ -3327,7 +3327,7 @@ async function handleGetRequest(env) {
                          <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'socks5')">测试连接</button>
                             <span id="socks5-status" class="test-status"></span>
-                            <span class="test-note">（将自动移除失败地址）</span>
+                            <span class="test-note">（批量测试并自动移除失败地址）</span>
                         </div>
                         <div id="socks5-results" class="test-results-container"></div>
                     </div>
@@ -3338,7 +3338,7 @@ async function handleGetRequest(env) {
                          <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'http')">测试连接</button>
                             <span id="http-status" class="test-status"></span>
-                            <span class="test-note">（将自动移除失败地址）</span>
+                            <span class="test-note">（批量测试并自动移除失败地址）</span>
                         </div>
                         <div id="http-results" class="test-results-container"></div>
                     </div>
@@ -3660,7 +3660,7 @@ async function handleTestConnection(request) {
         switch (type) {
             case 'http': {
                 const parsed = httpProxyAddressParser(address);
-                const testSocket = await httpConnect('www.gstatic.com', 80, log, controller.signal, parsed);
+                const testSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal, parsed); // www.gstatic.com, 443
                 await testSocket.close();
                 break;
             }
@@ -3671,6 +3671,7 @@ async function handleTestConnection(request) {
                 break;
             }
             case 'proxyip': {
+                // 对于 PROXYIP，默认测试其作为 HTTP 反向代理的能力，所以使用 443 端口
                 const { address: ip, port } = parseProxyIP(address, 443);
                 log(`PROXYIP Test: 步骤 1/2 - 正在连接到 ${ip}:${port}`);
                 const testSocket = await connect({ hostname: ip, port: port, signal: controller.signal });
