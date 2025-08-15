@@ -2714,7 +2714,7 @@ ${rulesYaml}
 }
 
 /**
- * 生成Sing-box配置 (最终版，集成广告拦截规则，兼容 sing-box 1.14+)
+ * 生成Sing-box配置 (最终版，集成sniff和hijack-dns，兼容 sing-box 1.14+)
  * @param {Array} nodeObjects - 节点对象数组
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
@@ -2819,11 +2819,6 @@ function generateSingboxConfig(nodeObjects) {
           "tag": "🎯 全球直连"
         },
         {
-            "type": "dns",
-            "tag": "dns-out"
-        },
-        // 新增：用于拦截的 block 出站
-        {
             "type": "block",
             "tag": "🚫 广告拦截"
         },
@@ -2842,15 +2837,21 @@ function generateSingboxConfig(nodeObjects) {
           "server": "local-dns"
         },
         "rules": [
+          // 新增：拦截所有DNS请求并交由内部DNS处理
           {
             "protocol": "dns",
-            "outbound": "dns-out"
+            "action": "hijack-dns"
           },
-          // 新增：广告拦截规则，必须放在其他规则前面
+          // 新增：启用流量嗅探
+          {
+            "action": "sniff"
+          },
+          // 广告拦截规则
           {
             "rule_set": ["Category-Ads"],
             "outbound": "🚫 广告拦截"
           },
+          // 私有地址和中国大陆地址直连
           {
             "rule_set": ["GeoSite-Private", "GeoIP-Private"],
             "outbound": "🎯 全球直连"
@@ -2861,7 +2862,6 @@ function generateSingboxConfig(nodeObjects) {
           }
         ],
         "rule_set": [
-            // 新增：广告规则集定义
             {
               "tag": "Category-Ads",
               "type": "remote",
@@ -2906,6 +2906,8 @@ function generateSingboxConfig(nodeObjects) {
     // 将配置对象转换为格式化的JSON字符串并返回
     return JSON.stringify(config, null, 2);
 }
+
+这个版本集成了您需要的高级路由功能，同时保留了之前配置的所有优点（如DNS防泄漏、广告拦截等），是目前最完善的版本。
 
 /**
  * 生成Loon配置 
