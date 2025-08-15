@@ -2720,15 +2720,16 @@ ${rulesYaml}
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
 function generateSingboxConfig(nodeObjects) {
-    const outbounds = nodeObjects.map(p => {
+    // 1. 从节点对象数组生成出站代理配置
+    const proxyOutbounds = nodeObjects.map(p => {
         let outbound = {
-            type: p.type,
+            type: p.type, // 'vless'
             tag: p.name,
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
             transport: {
-                type: p.network,
+                type: p.network, // 'ws'
                 path: p['ws-opts'].path,
                 headers: {
                     Host: p.servername
@@ -2736,6 +2737,7 @@ function generateSingboxConfig(nodeObjects) {
             }
         };
 
+        // 仅在启用TLS时添加TLS配置
         if (p.tls) {
             outbound.tls = {
                 enabled: true,
@@ -2748,46 +2750,269 @@ function generateSingboxConfig(nodeObjects) {
         }
         return outbound;
     });
-    
-    const proxyNames = outbounds.map(o => o.tag);
 
+    // 2. 提取所有代理节点的名称
+    const proxyNames = nodeObjects.map(p => p.name);
+
+    // 3. 构建完整的Sing-box配置对象，使用您提供的模板结构
     const config = {
-        "log": {
-            "level": "info",
-            "timestamp": true
+      "log": {
+        "disabled": false,
+        "level": "info",
+        "output": "",
+        "timestamp": false
+      },
+      "experimental": {
+        "clash_api": {
+          "external_controller": "127.0.0.1:20123",
+          "external_ui": "",
+          "external_ui_download_url": "",
+          "external_ui_download_detour": "🎯 全球直连",
+          "secret": "2efebf4c2d7e0c7c4461e20b09c99b2e92e714dc6c8db8f9120be722367e43b3",
+          "default_mode": "rule",
+          "access_control_allow_origin": [
+            "*"
+          ],
+          "access_control_allow_private_network": false
         },
-        "dns": {
-            "servers": [
-                { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://8.8.8.8/dns-query" }
-            ]
-        },
-        "inbounds": [
-            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
-        ],
-        "outbounds": [
-            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
-            { 
-              "type": "urltest", 
-              "tag": "auto-select", 
-              "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204", 
-              "interval": "5m" 
-            },
-            ...outbounds,
-            { "type": "direct", "tag": "direct" },
-            { "type": "block", "tag": "block" }
-        ],
-        "route": {
-            "rules": [
-                { "geoip": "cn", "outbound": "direct" }
-                
-            ],
-            "final": "manual-select", // 使用 final 替代 default_outbound
-            "auto_detect_interface": true
+        "cache_file": {
+          "enabled": true,
+          "path": "cache.db",
+          "cache_id": "",
+          "store_fakeip": true,
+          "store_rdrc": true,
+          "rdrc_timeout": "7d"
         }
+      },
+      "inbounds": [
+        {
+          "type": "mixed",
+          "tag": "mixed-in",
+          "listen": "127.0.0.1",
+          "listen_port": 20122,
+          "tcp_fast_open": false,
+          "tcp_multi_path": false,
+          "udp_fragment": false
+        }
+      ],
+      "outbounds": [
+        {
+          "type": "selector",
+          "tag": "🚀 节点选择",
+          "interrupt_exist_connections": true,
+          "outbounds": [
+            "🎈 自动选择",
+            ...proxyNames // 动态填充所有节点名称
+          ]
+        },
+        {
+          "type": "urltest",
+          "tag": "🎈 自动选择",
+          "url": "https://www.gstatic.com/generate_204",
+          "interval": "3m",
+          "tolerance": 150,
+          "interrupt_exist_connections": true,
+          "outbounds": proxyNames // 动态填充所有节点名称
+        },
+        {
+          "type": "direct",
+          "tag": "🎯 全球直连"
+        },
+        {
+          "type": "selector",
+          "tag": "🐟 漏网之鱼",
+          "interrupt_exist_connections": true,
+          "outbounds": [
+            "🚀 节点选择",
+            "🎯 全球直连"
+          ]
+        },
+        {
+          "type": "selector",
+          "tag": "GLOBAL",
+          "interrupt_exist_connections": true,
+          "outbounds": [
+            "🚀 节点选择",
+            "🎈 自动选择",
+            "🎯 全球直连",
+            "🐟 漏网之鱼"
+          ]
+        },
+        ...proxyOutbounds // 动态填充所有生成的节点配置
+      ],
+      "route": {
+        "rules": [
+          {
+            "action": "hijack-dns",
+            "protocol": "dns"
+          },
+          {
+            "action": "route",
+            "clash_mode": "direct",
+            "outbound": "🎯 全球直连"
+          },
+          {
+            "action": "route",
+            "clash_mode": "global",
+            "outbound": "GLOBAL"
+          },
+          {
+            "action": "reject",
+            "protocol": "quic"
+          },
+          {
+            "action": "reject",
+            "rule_set": [
+              "Category-Ads"
+            ]
+          },
+          {
+            "action": "route",
+            "rule_set": [
+              "GeoSite-Private"
+            ],
+            "outbound": "🎯 全球直连"
+          },
+          {
+            "action": "route",
+            "rule_set": [
+              "GeoSite-CN"
+            ],
+            "outbound": "🎯 全球直连"
+          },
+          {
+            "action": "route",
+            "rule_set": [
+              "GeoIP-Private"
+            ],
+            "outbound": "🎯 全球直连"
+          },
+          {
+            "action": "route",
+            "rule_set": [
+              "GeoIP-CN"
+            ],
+            "outbound": "🎯 全球直连"
+          },
+          {
+            "action": "route",
+            "rule_set": [
+              "GeoLocation-!CN"
+            ],
+            "outbound": "🚀 节点选择"
+          }
+        ],
+        "rule_set": [
+          {
+            "tag": "Category-Ads",
+            "type": "remote",
+            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs",
+            "format": "binary",
+            "download_detour": "🎯 全球直连"
+          },
+          {
+            "tag": "GeoIP-Private",
+            "type": "remote",
+            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/private.srs",
+            "format": "binary",
+            "download_detour": "🎯 全球直连"
+          },
+          {
+            "tag": "GeoSite-Private",
+            "type": "remote",
+            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/private.srs",
+            "format": "binary",
+            "download_detour": "🎯 全球直连"
+          },
+          {
+            "tag": "GeoIP-CN",
+            "type": "remote",
+            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+            "format": "binary",
+            "download_detour": "🎯 全球直连"
+          },
+          {
+            "tag": "GeoSite-CN",
+            "type": "remote",
+            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
+            "format": "binary",
+            "download_detour": "🎯 全球直连"
+          },
+          {
+            "tag": "GeoLocation-!CN",
+            "type": "remote",
+            "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
+            "format": "binary",
+            "download_detour": "🎯 全球直连"
+          }
+        ],
+        "auto_detect_interface": true,
+        "final": "🐟 漏网之鱼"
+      },
+      "dns": {
+        "servers": [
+          {
+            "tag": "Local-DNS",
+            "address": "https://223.5.5.5:443/dns-query",
+            "address_resolver": "Local-DNS-Resolver",
+            "detour": "🎯 全球直连"
+          },
+          {
+            "tag": "Local-DNS-Resolver",
+            "address": "udp://223.5.5.5:53",
+            "detour": "🎯 全球直连"
+          },
+          {
+            "tag": "Remote-DNS",
+            "address": "tls://8.8.8.8:853",
+            "address_resolver": "Remote-DNS-Resolver",
+            "detour": "🚀 节点选择"
+          },
+          {
+            "tag": "Remote-DNS-Resolver",
+            "address": "udp://8.8.8.8:53",
+            "detour": "🚀 节点选择"
+          }
+        ],
+        "rules": [
+          {
+            "action": "route",
+            "server": "Local-DNS",
+            "outbound": "any"
+          },
+          {
+            "action": "route",
+            "clash_mode": "direct",
+            "server": "Local-DNS"
+          },
+          {
+            "action": "route",
+            "clash_mode": "global",
+            "server": "Remote-DNS"
+          },
+          {
+            "action": "route",
+            "rule_set": [
+              "GeoSite-CN"
+            ],
+            "server": "Local-DNS"
+          },
+          {
+            "action": "route",
+            "rule_set": [
+              "GeoLocation-!CN"
+            ],
+            "server": "Remote-DNS"
+          }
+        ],
+        "disable_cache": false,
+        "disable_expire": false,
+        "independent_cache": false,
+        "final": "Remote-DNS"
+      }
     };
     
+    // 将配置对象转换为格式化的JSON字符串并返回
     return JSON.stringify(config, null, 2);
 }
 
