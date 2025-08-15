@@ -1066,25 +1066,25 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     }
 
-    // --- 组装策略列表 ---
+    // --- 组装策略列表 (新顺序) ---
     const connectionStrategies = [];
     const shouldUseSocks = enableSocks && go2Socks5s.some(pattern => new RegExp(`^${pattern.replace(/\*/g, '.*')}$`, 'i').test(addressRemote));
 
     // 1. 主要连接策略
-    if (enableHttpProxy) {
-        connectionStrategies.push({
-            name: 'HTTP Proxy',
-            execute: () => createConnection(addressRemote, portRemote, { type: 'http' })
-        });
-    } else if (shouldUseSocks) {
+    connectionStrategies.push({
+        name: 'Direct Connection',
+        execute: () => createConnection(addressRemote, portRemote, null)
+    });
+    if (shouldUseSocks) {
         connectionStrategies.push({
             name: 'SOCKS5 Proxy (go2Socks5s)',
             execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
         });
-    } else {
+    }
+    if (enableHttpProxy) {
         connectionStrategies.push({
-            name: 'Direct Connection',
-            execute: () => createConnection(addressRemote, portRemote, null)
+            name: 'HTTP Proxy',
+            execute: () => createConnection(addressRemote, portRemote, { type: 'http' })
         });
     }
 
@@ -3635,9 +3635,7 @@ async function handleGetRequest(env) {
 // #################################################################
 
 /**
- * 处理连接测试的后端函数。
- * 接收一个包含 { type, address } 的JSON体，
- * 对单个地址进行严格的端到端测试，并返回结果。
+ * 新增：处理连接测试的后端函数 (使用 HTTP 路由探针)
  * @param {Request} request
  * @returns {Promise<Response>}
  */
@@ -3662,46 +3660,8 @@ async function handleTestConnection(request) {
         switch (type) {
             case 'http': {
                 const parsed = httpProxyAddressParser(address);
-                // 步骤 1: 建立隧道
                 const testSocket = await httpConnect('www.cloudflare.com', 443, log, controller.signal, parsed);
-                log('HTTP Test: CONNECT tunnel established successfully.');
-
-                try {
-                    // 步骤 2: 通过隧道发送真实请求
-                    const writer = testSocket.writable.getWriter();
-                    const httpProbeRequest = [
-                        `GET /cdn-cgi/trace HTTP/1.1`,
-                        `Host: www.cloudflare.com`,
-                        'User-Agent: Cloudflare-Proxy-Test',
-                        'Connection: close',
-                        '\r\n'
-                    ].join('\r\n');
-
-                    await writer.write(new TextEncoder().encode(httpProbeRequest));
-                    writer.releaseLock();
-                    log('HTTP Test: Sent GET /cdn-cgi/trace request through the tunnel.');
-
-                    // 步骤 3: 验证响应
-                    const reader = testSocket.readable.getReader();
-                    const { value, done } = await reader.read();
-
-                    if (done || !value) {
-                        throw new Error("隧道已建立，但未从目标服务器收到任何响应。");
-                    }
-                    
-                    const responseText = new TextDecoder().decode(value);
-                    if (responseText.includes('h=www.cloudflare.com') && responseText.includes('colo=')) {
-                        log('HTTP Test: Received a valid trace response. Test successful.');
-                        successMessage = '连接和数据传输均成功！';
-                    } else {
-                        throw new Error("收到的响应无效，或非 Cloudflare 的响应。");
-                    }
-                } finally {
-                    // 步骤 4: 确保关闭 socket
-                    if (testSocket) {
-                        await testSocket.close();
-                    }
-                }
+                await testSocket.close();
                 break;
             }
             case 'socks5': {
@@ -3749,13 +3709,18 @@ async function handleTestConnection(request) {
                     } else {
                         throw new Error("该IP可能无效。");
                     }
-                } finally {
+                    
+                    await testSocket.close();
+                    reader.releaseLock();
+
+                } catch(err) {
                     if (testSocket) await testSocket.close();
+                    throw err;
                 }
                 break;
             }
             case 'nat64': {
-                DNS64Server = address; // 临时设置
+                DNS64Server = address;
                 if (!DNS64Server || DNS64Server.trim() === '') {
                     throw new Error("NAT64/DNS64 服务器地址不能为空");
                 }
@@ -3763,7 +3728,7 @@ async function handleTestConnection(request) {
                 const ipv6Address = await resolveToIPv6('www.cloudflare.com');
                 log(`NAT64 Test: 解析成功，获得 IPv6 地址: ${ipv6Address}`);
 
-                log(`NAT64 Test: 步骤 2/2 - 正在连接到 [${ipv6Address}]:80...`);
+                log(`NAT64 Test: 步骤 2/2 - 正在通过 Socket 连接到 [${ipv6Address}]:80 并请求 /cdn-cgi/trace...`);
                 const testSocket = await connect({ hostname: `[${ipv6Address}]`, port: 80, signal: controller.signal });
                 log(`NAT64 Test: TCP 连接成功。`);
                 try {
@@ -3793,8 +3758,11 @@ async function handleTestConnection(request) {
                     } else {
                         throw new Error("收到的响应无效，或非 Cloudflare trace 信息。");
                     }
-                } finally {
+                    await testSocket.close();
+                    reader.releaseLock();
+                } catch(err) {
                     if (testSocket) await testSocket.close();
+                    throw err;
                 }
                 break;
             }
