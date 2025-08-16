@@ -723,6 +723,7 @@ export default {
 						return await statusPage();
 					}
 				} else if (路径 === `/${fakeUserID}`) {
+					// ***** 修正 *****
 					// 这是来自 subConverter 的回调请求，必须直接返回原始节点列表
 					console.log(`Internal callback request received for /${fakeUserID}`);
 					
@@ -743,6 +744,7 @@ export default {
 						status: 200,
 						headers: { 'Content-Type': 'text/plain;charset=utf-8' },
 					});
+					// ***** 修正结束 *****
 				}
 				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
 					return await KV(request, env);
@@ -2287,7 +2289,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             // 1. 如果是需要复杂模板的格式 (Clash/Sing-box/Loon)
             if (isClashRequest || isSingboxRequest || isLoonRequest) {
                 // 生成一个指向自身worker的“虚假订阅”链接作为原料
-                const selfSubUrl = `https://${hostName}/${fakeUserID}${_url.search}`;
+                const selfSubUrl = `https://${hostName}/${fakeUserID}${ noTLS === 'true' ? '?notls' : '' }`;
                 console.log(`为外部转换器生成自身订阅链接: ${selfSubUrl}`);
 
                 let target = 'clash';
