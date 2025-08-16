@@ -2585,7 +2585,7 @@ async function prepareNodeList(host, UUID, noTLS) {
 
 		return {
             name: name,
-            type: atob('protocolEncodedFlag'),
+            type: atob(protocolEncodedFlag),
             server: server,
             port: parseInt(port, 10),
             uuid: UUID,
