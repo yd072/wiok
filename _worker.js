@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -914,7 +914,7 @@ async function secureProtoOverWSHandler(request) {
 }
 
 /**
- * 处理出站 UDP (DNS over HTTPS) 
+ * 处理出站 
  * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
  * @param {ArrayBuffer} secureProtoResponseHeader 
  * @param {(string)=> void} log 
@@ -1034,7 +1034,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         if (!strategies || strategies.length === 0) {
             log('All connection strategies failed. Closing WebSocket.');
             
-            // 自愈机制：当所有策略都失败后，清空缓存，强制下一次请求从KV重新加载。
+            // 自愈机制
             log('Invalidating configuration cache due to connection failures.');
             cachedSettings = null;
             
@@ -1049,7 +1049,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             const tcpSocket = await currentStrategy.execute();
             log(`Strategy '${currentStrategy.name}' connected successfully. Piping data.`);
 
-            // 关键点：如果本次连接失败，重试函数将用剩余的策略继续尝试
+            // 如果本次连接失败，重试函数将用剩余的策略继续尝试
             const retryNext = () => tryConnectionStrategies(nextStrategies);
             remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
 
@@ -1592,14 +1592,14 @@ async function 代理URL(request, 代理网址, 目标网址, 调试模式 = fal
 
         // 复制原始请求头，并可以进行一些清理
         const newHeaders = new Headers(request.headers);
-        newHeaders.set('Host', 解析后的网址.hostname); // 将Host头修改为代理目标的域名
-        newHeaders.set('Referer', 解析后的网址.origin); // 可选：伪造或设置正确的Referer
+        newHeaders.set('Host', 解析后的网址.hostname); 
+        newHeaders.set('Referer', 解析后的网址.origin); 
 
         const 响应 = await fetch(目标URL.toString(), {
-            method: request.method, // 传递原始请求方法
-            headers: newHeaders,    // 传递处理过的请求头，增强伪装
-            body: request.body,     // 传递请求体，支持POST等方法
-            redirect: 'manual'      // 手动处理重定向
+            method: request.method, 
+            headers: newHeaders, 
+            body: request.body,  
+            redirect: 'manual' 
         });
 
         const 新响应 = new Response(响应.body, {
@@ -1984,7 +1984,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						border-radius: 50%;
 					}
 
-					/* --- 按钮样式 --- */
 					.subscription-buttons-container {
 						display: flex;
 						flex-wrap: wrap; 
@@ -2261,7 +2260,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 }
             });
         }
-        // --- END: 内置配置生成逻辑 ---
+        // ---配置生成逻辑 ---
         
 		if (typeof fetch != 'function') {
 			return 'Error: fetch is not available in this environment.';
@@ -2342,7 +2341,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		try {
 			let content;
 			if ((!sub || sub == "") && isBase64 == true) {
-                // This old path is now handled by the new built-in generator logic
+                
                 const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
 				content = 生成本地订阅(nodeObjects);
 			} else {
@@ -2410,7 +2409,6 @@ async function 整理优选列表(api) {
 					}
 				} else {
 					if (api[index].includes('proxyip=true')) {
-						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
 						proxyIPPool = proxyIPPool.concat((整理(content)).map(item => {
 							const baseItem = item.split('#')[0] || item;
 							if (baseItem.includes(':')) {
@@ -2478,7 +2476,6 @@ async function 整理测速结果(tls) {
 			for (let i = 1; i < lines.length; i++) {
 				const columns = lines[i].split(',');
 				const speedIndex = columns.length - 1;
-				// 检查TLS是否为"TRUE"且速度大于DLS
 				if (columns[tlsIndex].toUpperCase() === tls && parseFloat(columns[speedIndex]) > DLS) {
 					const ipAddress = columns[ipAddressIndex];
 					const port = columns[portIndex];
@@ -2487,7 +2484,6 @@ async function 整理测速结果(tls) {
 					const formattedAddress = `${ipAddress}:${port}#${dataCenter}`;
 					newAddressescsv.push(formattedAddress);
 					if (csvUrl.includes('proxyip=true') && columns[tlsIndex].toUpperCase() == 'true' && !httpsPorts.includes(port)) {
-						// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
 						proxyIPPool.push(`${ipAddress}:${port}`);
 					}
 				}
@@ -2501,13 +2497,7 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-/**
- * 从各种来源收集和解析节点信息，生成一个结构化的节点对象数组
- * @param {string} host - 用于SNI和Host头的域名
- * @param {string} UUID - 用户的UUID
- * @param {string} noTLS - 是否为 noTLS 模式 ('true' 或 'false')
- * @returns {Promise<Array>} - 节点对象数组
- */
+ //收集和解析节点信息
 async function prepareNodeList(host, UUID, noTLS) {
 	let allAddresses = [];
 	
@@ -2602,15 +2592,10 @@ async function prepareNodeList(host, UUID, noTLS) {
         };
 	});
 
-	return nodeObjects.filter(Boolean); // 过滤掉可能解析失败的 null 值
+	return nodeObjects.filter(Boolean); 
 }
 
-
-/**
- * 根据节点对象数组生成 Base64 编码的订阅内容
- * @param {Array} nodeObjects - 由 prepareNodeList 生成的节点对象数组
- * @returns {string} - Base64 编码后的订阅链接字符串
- */
+//根据节点对象数组生成 Base64 编码的订阅内容
 function 生成本地订阅(nodeObjects) {
 	const 协议类型 = atob(protocolEncodedFlag);
     const secureProtoLinks = nodeObjects.map(node => {
@@ -2633,13 +2618,8 @@ function 生成本地订阅(nodeObjects) {
 	return btoa(finalLinks);
 }
 
-/**
- * 生成Clash配置
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - YAML 格式的 Clash 配置
- */
+//生成Clash配置
 function generateClashConfig(nodeObjects) {
-    // 生成 proxies 部分的 YAML 字符串
     const proxiesYaml = nodeObjects.map(p => {
         let proxyString = `  - name: ${JSON.stringify(p.name)}\n`;
         proxyString += `    type: ${p.type}\n`;
@@ -2686,7 +2666,6 @@ function generateClashConfig(nodeObjects) {
     ];
     // 将规则数组转换为格式正确的YAML字符串
     const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
-    // --- END: 修正 ---
 
     // 拼接完整的 YAML 配置
     const config = `
@@ -2727,12 +2706,7 @@ ${rulesYaml}
     return config.trim();
 }
 
-
-/**
- * 生成Sing-box配置
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - JSON 格式的 Sing-box 配置
- */
+//Sing-box配置
 function generateSingboxConfig(nodeObjects) {
     const outbounds = nodeObjects.map(p => {
         let outbound = {
@@ -2797,7 +2771,7 @@ function generateSingboxConfig(nodeObjects) {
                 { "geoip": "cn", "outbound": "direct" }
                 
             ],
-            "final": "manual-select", // 使用 final 替代 default_outbound
+            "final": "manual-select", 
             "auto_detect_interface": true
         }
     };
@@ -2805,13 +2779,8 @@ function generateSingboxConfig(nodeObjects) {
     return JSON.stringify(config, null, 2);
 }
 
-/**
- * 生成Loon配置 
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - .conf 格式的 Loon 配置
- */
+//Loon配置 
 function generateLoonConfig(nodeObjects) {
-    // [Proxy] 部分
     const proxiesConf = nodeObjects.map(p => {
         let proxyLine = `${JSON.stringify(p.name)} = ${p.type}, ${p.server}, ${p.port}, uuid=${p.uuid}, ws=true`;
         if (p.tls) {
@@ -2939,7 +2908,7 @@ async function handlePostRequest(request, env) {
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
 
-    // 新增：根据 'action' 参数进行路由
+    // 根据 'action' 参数进行路由
     if (action === 'test') {
         return handleTestConnection(request);
     }
@@ -2999,7 +2968,7 @@ async function handleGetRequest(env) {
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
-                content = settings.ADD || ''; // 从 'ADD' 字段加载主内容
+                content = settings.ADD || ''; 
                 proxyIPContent = settings.proxyip || '';
                 socks5Content = settings.socks5 || '';
                 httpProxyContent = settings.httpproxy || '';
