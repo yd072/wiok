@@ -747,7 +747,7 @@ export default {
 					let workersSum = UD;
 					let total = 24 * 1099511627776;
 
-					if (userAgent && userAgent.includes('mozilla')) {
+					if (userAgent && userAgent.includes('mozilla') && !subParams.some(p => url.searchParams.has(p))) {
 						return new Response(secureProtoConfig, {
 							status: 200,
 							headers: {
@@ -758,10 +758,10 @@ export default {
 							}
 						});
 					} else {
-						return new Response(`${secureProtoConfig}`, {
+                        // 对于 Base64 的请求，直接返回文本，而不是作为文件下载
+						return new Response(secureProtoConfig, {
 							status: 200,
 							headers: {
-								"Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
 								"Content-Type": "text/plain;charset=utf-8",
 								"Profile-Update-Interval": "6",
 								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
@@ -1653,7 +1653,7 @@ function 配置信息(UUID, 域名地址) {
 	return [威图瑞, 猫猫猫];
 }
 
-let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
+let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb', 'loon'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQo='));
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
@@ -2228,6 +2228,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             let configContent = '';
             let contentType = 'text/plain;charset=utf-8';
             let isBase64 = false;
+            let finalFileName = FileName;
             
             const wantsClash = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash');
             const wantsSingbox = userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb');
@@ -2236,22 +2237,27 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             if (wantsClash) {
                 configContent = generateClashConfig(nodeObjects);
                 contentType = 'application/x-yaml;charset=utf-8';
+                finalFileName += '.yaml';
             } else if (wantsSingbox) {
                 configContent = generateSingboxConfig(nodeObjects);
                 contentType = 'application/json;charset=utf-8';
+                finalFileName += '.json';
             } else if (wantsLoon) {
                 configContent = generateLoonConfig(nodeObjects);
                 contentType = 'text/plain;charset=utf-8';
+                finalFileName += '.conf';
             } else {
-                configContent = 生成本地订阅(nodeObjects);
-                isBase64 = true;
+                // Base64 格式，直接返回内容，不触发下载
+                const base64Config = 生成本地订阅(nodeObjects);
+                const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
+                return new Response(restoredConfig);
             }
             
-            const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, isBase64);
+            const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, false); // 注意 isBase64 为 false
 
             return new Response(finalContent, {
                 headers: {
-                    "Content-Disposition": `attachment; filename=${FileName}`,
+                    "Content-Disposition": `attachment; filename=${finalFileName}; filename*=utf-8''${encodeURIComponent(finalFileName)}`,
                     "Content-Type": contentType,
                 }
             });
