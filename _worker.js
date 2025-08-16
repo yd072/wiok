@@ -723,22 +723,26 @@ export default {
 						return await statusPage();
 					}
 				} else if (路径 === `/${fakeUserID}`) {
-					// ********* FIX START *********
-                    // This is a callback from the subconverter. It MUST return the raw node list.
-                    // It should not enter the full recursive logic of 生成配置信息.
-                    console.log(`Internal callback request received for /${fakeUserID}`);
-                    // 确定伪装域名 for node generation
-                    let callbackFakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
-                    if (url.searchParams.has('notls')) {
-                         callbackFakeHostName += '.workers.dev';
-                    } else {
-                        callbackFakeHostName += '.xyz';
-                    }
-                    const nodeObjects = await prepareNodeList(callbackFakeHostName, userID, url.searchParams.has('notls') ? 'true' : 'false');
-                    const base64Content = await 生成本地订阅(nodeObjects);
-                    // Return plain text for the converter
-                    return new Response(atob(base64Content));
-                    // ********* FIX END *********
+					// 这是来自 subConverter 的回调请求，必须直接返回原始节点列表
+					console.log(`Internal callback request received for /${fakeUserID}`);
+					
+					// 确定伪装域名
+					let callbackFakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
+					const isNoTLS = url.searchParams.has('notls');
+					if (isNoTLS) {
+						 callbackFakeHostName += '.workers.dev';
+					} else {
+						callbackFakeHostName += '.xyz';
+					}
+
+					const nodeObjects = await prepareNodeList(callbackFakeHostName, userID, isNoTLS ? 'true' : 'false');
+					const base64Content = await 生成本地订阅(nodeObjects);
+					
+					// 以纯文本形式返回解码后的节点列表
+					return new Response(atob(base64Content), {
+						status: 200,
+						headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+					});
 				}
 				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
 					return await KV(request, env);
@@ -2283,8 +2287,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             // 1. 如果是需要复杂模板的格式 (Clash/Sing-box/Loon)
             if (isClashRequest || isSingboxRequest || isLoonRequest) {
                 // 生成一个指向自身worker的“虚假订阅”链接作为原料
-				// ** FIX: The callback URL for nodes should be clean, without other parameters like ?clash
-                const selfSubUrl = `https://${hostName}/${fakeUserID}${ noTLS === 'true' ? '?notls' : '' }`;
+                const selfSubUrl = `https://${hostName}/${fakeUserID}${_url.search}`;
                 console.log(`为外部转换器生成自身订阅链接: ${selfSubUrl}`);
 
                 let target = 'clash';
