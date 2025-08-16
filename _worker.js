@@ -723,28 +723,8 @@ export default {
 						return await statusPage();
 					}
 				} else if (路径 === `/${fakeUserID}`) {
-					// ***** 修正 *****
-					// 这是来自 subConverter 的回调请求，必须直接返回原始节点列表
-					console.log(`Internal callback request received for /${fakeUserID}`);
-					
-					// 确定伪装域名
-					let callbackFakeHostName = `${fakeUserIDSHA256.slice(6, 9)}.${fakeUserIDSHA256.slice(13, 19)}`;
-					const isNoTLS = url.searchParams.has('notls');
-					if (isNoTLS) {
-						 callbackFakeHostName += '.workers.dev';
-					} else {
-						callbackFakeHostName += '.xyz';
-					}
-
-					const nodeObjects = await prepareNodeList(callbackFakeHostName, userID, isNoTLS ? 'true' : 'false');
-					const base64Content = await 生成本地订阅(nodeObjects);
-					
-					// 以纯文本形式返回解码后的节点列表
-					return new Response(atob(base64Content), {
-						status: 200,
-						headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-					});
-					// ***** 修正结束 *****
+					const fakeConfig = await 生成配置信息(userID, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url, fakeUserID, fakeHostName, env);
+					return new Response(`${fakeConfig}`, { status: 200 });
 				}
 				else if ((动态UUID && url.pathname === `/${动态UUID}/edit`) || 路径 === `/${userID}/edit`) {
 					return await KV(request, env);
@@ -753,29 +733,6 @@ export default {
 
 					const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
 					const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
-                    
-                    // START: 检查返回类型并设置正确的头
-                    let responseHeaders = {
-                        "Content-Type": "text/plain;charset=utf-8",
-                        "Cache-Control": "no-store",
-                    };
-
-                    const isClashRequest = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || (url.searchParams.has('clash') && !userAgent.includes('subconverter'));
-                    const isSingboxRequest = userAgent.includes('sing-box') || userAgent.includes('singbox') || ((url.searchParams.has('singbox') || url.searchParams.has('sb')) && !userAgent.includes('subconverter'));
-                    const isLoonRequest = userAgent.includes('loon') || (url.searchParams.has('loon') && !userAgent.includes('subconverter'));
-					
-					if (isClashRequest && !sub) { // 仅在内置生成时才修改文件名
-                        responseHeaders["Content-Disposition"] = `attachment; filename="clash.yaml"; filename*=utf-8''${encodeURIComponent('Clash配置')}.yaml`;
-                    } else if (isSingboxRequest && !sub) { // 仅在内置生成时才修改文件名
-                        responseHeaders["Content-Disposition"] = `attachment; filename="singbox.json"; filename*=utf-8''${encodeURIComponent('Sing-box配置')}.json`;
-					} else if (isLoonRequest && !sub) { // 仅在内置生成时才修改文件名
-						responseHeaders["Content-Disposition"] = `attachment; filename="loon.conf"; filename*=utf-8''${encodeURIComponent('Loon配置')}.conf`;
-                    } else if (userAgent && !userAgent.includes('mozilla')) {
-                         responseHeaders["Content-Disposition"] = `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`;
-                    } else {
-                        // 对于浏览器访问，返回 HTML
-                        responseHeaders["Content-Type"] = "text/html;charset=utf-8";
-                    }
 
 					const now = Date.now();
 					const today = new Date(now);
@@ -784,16 +741,28 @@ export default {
 					let pagesSum = UD;
 					let workersSum = UD;
 					let total = 24 * 1099511627776;
-                    
-                    responseHeaders["Profile-Update-Interval"] = "6";
-                    responseHeaders["Subscription-Userinfo"] = `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`;
-                    
-                    return new Response(secureProtoConfig, {
-                        status: 200,
-                        headers: responseHeaders
-                    });
-                    // END: 检查返回类型并设置正确的头
 
+					if (userAgent && userAgent.includes('mozilla')) {
+						return new Response(secureProtoConfig, {
+							status: 200,
+							headers: {
+								"Content-Type": "text/html;charset=utf-8",
+								"Profile-Update-Interval": "6",
+								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+								"Cache-Control": "no-store",
+							}
+						});
+					} else {
+						return new Response(`${secureProtoConfig}`, {
+							status: 200,
+							headers: {
+								"Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
+								"Content-Type": "text/plain;charset=utf-8",
+								"Profile-Update-Interval": "6",
+								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+							}
+						});
+					}
 				} else {
 					if (env.URL302) return Response.redirect(env.URL302, 302);
 					else if (env.URL) return await 代理URL(env.URL, url);
@@ -1086,15 +1055,15 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         }
     }
 
-    // --- 组装策略列表 (新顺序) ---
+    // --- 组装策略列表 ---
     const connectionStrategies = [];
     const shouldUseSocks = enableSocks && go2Socks5s.some(pattern => new RegExp(`^${pattern.replace(/\*/g, '.*')}$`, 'i').test(addressRemote));
 
     // 1. 主要连接策略
-    connectionStrategies.push({
+        connectionStrategies.push({
         name: 'Direct Connection',
         execute: () => createConnection(addressRemote, portRemote, null)
-    });
+        });
     if (shouldUseSocks) {
         connectionStrategies.push({
             name: 'SOCKS5 Proxy (go2Socks5s)',
@@ -1679,7 +1648,7 @@ function 配置信息(UUID, 域名地址) {
 	return [威图瑞, 猫猫猫];
 }
 
-let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb', 'loon'];
+let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQo='));
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
@@ -2085,25 +2054,25 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 								<span class="subscription-label">通用订阅</span>
 								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}', 'qrcode_universal')">复制</button>
 								<div id="qrcode_universal" class="qrcode-container"></div>
-							</div>
+						</div>
 
 							<div class="subscription-button-item">
 								<span class="subscription-label">Base64</span>
 								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?b64', 'qrcode_base64')">复制</button>
 								<div id="qrcode_base64" class="qrcode-container"></div>
-							</div>
+						</div>
 
 							<div class="subscription-button-item">
 								<span class="subscription-label">Clash</span>
 								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?clash', 'qrcode_clash')">复制</button>
 								<div id="qrcode_clash" class="qrcode-container"></div>
-							</div>
-							
+						</div>
+
 							<div class="subscription-button-item">
 								<span class="subscription-label">Sing-box</span>
 								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}?sb', 'qrcode_singbox')">复制</button>
 								<div id="qrcode_singbox" class="qrcode-container"></div>
-							</div>
+						</div>
 
 							<div class="subscription-button-item">
 								<span class="subscription-label">Loon</span>
@@ -2183,15 +2152,15 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						
 						const qrcodeDiv = document.getElementById(qrcodeId);
 						if(qrcodeDiv) {
-							new QRCode(qrcodeDiv, {
-								text: text,
-								width: 220,
-								height: 220,
-								colorDark: "#000000",
-								colorLight: "#ffffff",
-								correctLevel: QRCode.CorrectLevel.Q,
-								scale: 1
-							});
+						new QRCode(qrcodeDiv, {
+							text: text,
+							width: 220,
+							height: 220,
+							colorDark: "#000000",
+							colorLight: "#ffffff",
+							correctLevel: QRCode.CorrectLevel.Q,
+							scale: 1
+						});
 						}
 					}
 
@@ -2235,86 +2204,103 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		`;
 		return 节点配置页;
 	} else {
-        // 非浏览器访问，生成订阅内容
 		if (typeof fetch != 'function') {
 			return 'Error: fetch is not available in this environment.';
 		}
 
-		// 确定伪装域名
+		let newAddressesapi = [];
+		let newAddressescsv = [];
+		let newAddressesnotlsapi = [];
+		let newAddressesnotlscsv = [];
+
 		if (hostName.includes(".workers.dev") || noTLS === 'true') {
 			noTLS = 'true';
 			fakeHostName = `${fakeHostName}.workers.dev`;
+			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+			newAddressesnotlscsv = await 整理测速结果('FALSE');
 		} else if (hostName.includes(".pages.dev")) {
 			fakeHostName = `${fakeHostName}.pages.dev`;
 		} else if (hostName.includes("worker") || hostName.includes("notls")) {
 			noTLS = 'true';
 			fakeHostName = `notls${fakeHostName}.net`;
+			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+			newAddressesnotlscsv = await 整理测速结果('FALSE');
 		} else {
 			fakeHostName = `${fakeHostName}.xyz`
 		}
 		console.log(`虚假HOST: ${fakeHostName}`);
         
-        const isClashRequest = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'));
-        const isSingboxRequest = userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'));
-        const isLoonRequest = userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'));
+		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`; // Path is now dynamic inside the node
+		let isBase64 = true;
 
-        // 如果用户提供了 sub 源，则准备外部转换URL
-        if (sub) {
-            let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`;
-			let isBase64 = true;
+		if (!sub || sub == "") {
+			if (hostName.includes('workers.dev')) {
+				if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
+					try {
+						const response = await fetch(proxyhostsURL);
 
-			if (isClashRequest) {
+						if (!response.ok) {
+							console.error('获取地址时出错:', response.status, response.statusText);
+							return;
+						}
+
+						const text = await response.text();
+						const lines = text.split('\n');
+						const nonEmptyLines = lines.filter(line => line.trim() !== '');
+
+						proxyhosts = proxyhosts.concat(nonEmptyLines);
+					} catch (error) {
+						console.error('获取地址时出错:', error);
+					}
+				}
+				proxyhosts = [...new Set(proxyhosts)];
+			}
+
+			newAddressesapi = await 整理优选列表(addressesapi);
+			newAddressescsv = await 整理测速结果('TRUE');
+			url = `https://${hostName}/${fakeUserID + _url.search}`;
+			if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
+				if (_url.search) url += '&notls';
+				else url += '?notls';
+			}
+			console.log(`虚假订阅: ${url}`);
+		}
+
+		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
+			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
 				url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
-			} else if (isSingboxRequest) {
+			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
 				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
-			} else if (isLoonRequest) {
+			} else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
+				// 添加Loon支持
 				url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			}
-            
-            try {
-                const response = await fetch(url, { headers: { 'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==') } });
-                const content = await response.text();
-                return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
-            } catch (error) {
-                console.error('Error fetching external subconverter:', error);
-                return `Error fetching content from subconverter: ${error.message}`;
-            }
+		}
 
-        } else {
-            // 如果用户没有提供 sub 源，则根据请求格式分工处理
-            
-            // 1. 如果是需要复杂模板的格式 (Clash/Sing-box/Loon)
-            if (isClashRequest || isSingboxRequest || isLoonRequest) {
-                // 生成一个指向自身worker的“虚假订阅”链接作为原料
-                const selfSubUrl = `https://${hostName}/${fakeUserID}${ noTLS === 'true' ? '?notls' : '' }`;
-                console.log(`为外部转换器生成自身订阅链接: ${selfSubUrl}`);
+		try {
+			let content;
+			if ((!sub || sub == "") && isBase64 == true) {
+				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
+			} else {
+				const response = await fetch(url, {
+					headers: {
+						'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
+					}
+				});
+				content = await response.text();
+			}
 
-                let target = 'clash';
-                if (isSingboxRequest) target = 'singbox';
-                if (isLoonRequest) target = 'loon';
+			if (_url.pathname == `/${fakeUserID}`) return content;
 
-                // 构建指向外部 subConverter 的最终URL
-                const finalUrl = `${subProtocol}://${subConverter}/sub?target=${target}&url=${encodeURIComponent(selfSubUrl)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-                
-                try {
-                    const response = await fetch(finalUrl, { headers: { 'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==') } });
-                    const content = await response.text();
-                    return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, false);
-                } catch (error) {
-                    console.error('Error fetching external subconverter for internal nodes:', error);
-                    return `Error fetching content from subconverter for internal nodes: ${error.message}`;
-                }
+			return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
 
-            } else {
-                // 2. 如果是默认的 Base64 格式，则使用内置生成
-                const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
-                const base64Content = await 生成本地订阅(nodeObjects);
-                return 恢复伪装信息(base64Content, userID, hostName, fakeUserID, fakeHostName, true);
-            }
-        }
+		} catch (error) {
+			console.error('Error fetching content:', error);
+			return `Error fetching content: ${error.message}`;
+		}
 	}
 }
 
@@ -2454,111 +2440,21 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
+function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
+	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
+	addresses = addresses.concat(newAddressesapi);
+	addresses = addresses.concat(newAddressescsv);
+	let notlsresponseBody;
+	if (noTLS == 'true') {
+		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
+		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
+		const uniqueAddressesnotls = [...new Set(addressesnotls)];
 
-/**
- * 【新增】从所有地址源准备一个结构化的节点对象列表
- * @param {string} host - 伪装域名
- * @param {string} UUID - 用户UUID
- * @param {string} noTLS - 是否为 noTLS 模式 ('true' 或 'false')
- * @returns {Promise<Array>} - 一个包含节点对象的数组
- */
-async function prepareNodeList(host, UUID, noTLS) {
-    let nodeObjects = [];
-    const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
-	const 协议类型 = atob(protocolEncodedFlag);
+		notlsresponseBody = uniqueAddressesnotls.map(address => {
+			let port = "-1";
+			let addressid = address;
 
-    // 1. TLS 节点处理
-	let newAddressesapi = await 整理优选列表(addressesapi);
-	let newAddressescsv = await 整理测速结果('TRUE');
-    const tlsAddresses = [...new Set(addresses.concat(newAddressesapi, newAddressescsv))];
-
-    tlsAddresses.forEach(addressStr => {
-        let port = "-1";
-        let address = addressStr;
-        let addressid = addressStr;
-
-        const match = addressid.match(regex);
-        // ... (原有的地址解析逻辑)
-		if (!match) {
-			if (address.includes(':') && address.includes('#')) {
-				const parts = address.split(':');
-				address = parts[0];
-				const subParts = parts[1].split('#');
-				port = subParts[0];
-				addressid = subParts[1];
-			} else if (address.includes(':')) {
-				const parts = address.split(':');
-				address = parts[0];
-				port = parts[1];
-			} else if (address.includes('#')) {
-				const parts = address.split('#');
-				address = parts[0];
-				addressid = parts[1];
-			}
-
-			if (addressid.includes(':')) {
-				addressid = addressid.split(':')[0];
-			}
-		} else {
-			address = match[1];
-			port = match[2] || port;
-			addressid = match[3] || address;
-		}
-		
-		const localHttpsPorts = httpsPorts.length > 0 ? httpsPorts : ["443", "2053", "2083", "2087", "2096", "8443"];
-		if (!isValidIPv4(address) && port == "-1") {
-			for (let httpsPort of localHttpsPorts) {
-				if (address.includes(httpsPort)) {
-					port = httpsPort;
-					break;
-				}
-			}
-		}
-		if (port == "-1") port = "443";
-        // ...
-
-        let 伪装域名 = host;
-		let 最终路径 = generateRandomPath(); // <-- 每个节点都有自己的随机路径
-		let 节点备注 = '';
-		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
-
-		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
-			最终路径 = `/${伪装域名}${最终路径}`;
-			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
-			节点备注 = ` (域名中转)`;
-		}
-        
-        nodeObjects.push({
-            name: (addressid || address) + 节点备注,
-            type: 协议类型,
-            server: address,
-            port: parseInt(port),
-            uuid: UUID,
-            tls: true,
-            network: 'ws',
-            'client-fingerprint': getRandomFingerprint(),
-            servername: 伪装域名,
-            'ws-opts': {
-                path: 最终路径,
-                headers: { Host: 伪装域名 }
-            }
-        });
-    });
-
-    // 2. noTLS 节点处理
-    if (noTLS === 'true') {
-        let newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-        let newAddressesnotlscsv = await 整理测速结果('FALSE');
-        const notlsAddresses = [...new Set(addressesnotls.concat(newAddressesnotlsapi, newAddressesnotlscsv))];
-
-        notlsAddresses.forEach(addressStr => {
-            let port = "-1";
-            let address = addressStr;
-            let addressid = addressStr;
-
-            const match = addressid.match(regex);
-            // ... (原有的地址解析逻辑)
+			const match = addressid.match(regex);
 			if (!match) {
 				if (address.includes(':') && address.includes('#')) {
 					const parts = address.split(':');
@@ -2595,275 +2491,103 @@ async function prepareNodeList(host, UUID, noTLS) {
 				}
 			}
 			if (port == "-1") port = "80";
-            // ...
 
-            let 伪装域名 = host;
+			let 伪装域名 = host;
 			let 最终路径 = generateRandomPath();
-			let 节点备注 = ' (noTLS)';
-            
-            nodeObjects.push({
-                name: (addressid || address) + 节点备注,
-                type: 协议类型,
-                server: address,
-                port: parseInt(port),
-                uuid: UUID,
-                tls: false,
-                network: 'ws',
-                servername: 伪装域名, // noTLS 也需要 host
-                'ws-opts': {
-                    path: 最终路径,
-                    headers: { Host: 伪装域名 }
-                }
-            });
-        });
-    }
+			let 节点备注 = '';
+			const 协议类型 = atob(protocolEncodedFlag);
 
-    return nodeObjects;
+            const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` +
+                `encryption=none&` +
+                `security=none&` +
+                `type=ws&` +
+                `host=${伪装域名}&` +
+                `path=${encodeURIComponent(最终路径)}` +
+                `#${encodeURIComponent(addressid + 节点备注)}`;
+
+			return secureProtoLink;
+
+		}).join('\n');
+
+	}
+
+	const uniqueAddresses = [...new Set(addresses)];
+
+	const responseBody = uniqueAddresses.map(address => {
+		let port = "-1";
+		let addressid = address;
+
+		const match = addressid.match(regex);
+		if (!match) {
+			if (address.includes(':') && address.includes('#')) {
+				const parts = address.split(':');
+				address = parts[0];
+				const subParts = parts[1].split('#');
+				port = subParts[0];
+				addressid = subParts[1];
+			} else if (address.includes(':')) {
+				const parts = address.split(':');
+				address = parts[0];
+				port = parts[1];
+			} else if (address.includes('#')) {
+				const parts = address.split('#');
+				address = parts[0];
+				addressid = parts[1];
+			}
+
+			if (addressid.includes(':')) {
+				addressid = addressid.split(':')[0];
+			}
+		} else {
+			address = match[1];
+			port = match[2] || port;
+			addressid = match[3] || address;
+		}
+		
+		const localHttpsPorts = httpsPorts.length > 0 ? httpsPorts : ["443", "2053", "2083", "2087", "2096", "8443"];
+		if (!isValidIPv4(address) && port == "-1") {
+			for (let httpsPort of localHttpsPorts) {
+				if (address.includes(httpsPort)) {
+					port = httpsPort;
+					break;
+				}
+			}
+		}
+		if (port == "-1") port = "443";
+
+		let 伪装域名 = host;
+		let 最终路径 = generateRandomPath(); // <-- 每个节点都有自己的随机路径
+		let 节点备注 = '';
+		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
+		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
+
+		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
+			最终路径 = `/${伪装域名}${最终路径}`;
+			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
+			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
+		}
+
+		const 协议类型 = atob(protocolEncodedFlag);
+
+		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` +
+			`encryption=none&` +
+			`security=tls&` +
+			`sni=${伪装域名}&` +
+			`fp=${getRandomFingerprint()}&` + // <-- 使用随机指纹
+			`alpn=h3&` +
+			`type=ws&` +
+			`host=${伪装域名}&` +
+            `path=${encodeURIComponent(最终路径)}` +
+			`#${encodeURIComponent(addressid + 节点备注)}`;
+
+		return secureProtoLink;
+	}).join('\n');
+
+	let base64Response = responseBody;
+	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
+	if (link.length > 0) base64Response += '\n' + link.join('\n');
+	return btoa(base64Response);
 }
-
-/**
- * 根据节点对象数组生成 Base64 编码的订阅内容
- * @param {Array} nodeObjects - 由 prepareNodeList 生成的节点对象数组
- * @returns {string} - Base64 编码后的订阅链接字符串
- */
-function 生成本地订阅(nodeObjects) {
-	const 协议类型 = atob(protocolEncodedFlag);
-    const secureProtoLinks = nodeObjects.map(node => {
-        const link = `${协议类型}://${node.uuid}@${node.server}:${node.port}?` +
-            `encryption=none&` +
-            `security=${node.tls ? 'tls' : 'none'}&` +
-            `${node.tls ? `sni=${node.servername}&` : ''}` +
-            `${node.tls ? `fp=${node['client-fingerprint']}&` : ''}` +
-            `type=${node.network}&` +
-            `host=${node.servername}&` +
-            `path=${encodeURIComponent(node['ws-opts'].path)}` +
-            `#${encodeURIComponent(node.name)}`;
-        return link;
-    }).join('\n');
-    
-    let finalLinks = secureProtoLinks;
-    if (link.length > 0) {
-        finalLinks += '\n' + link.join('\n');
-    }
-	return btoa(finalLinks);
-}
-
-/**
- * 生成Clash配置
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - YAML 格式的 Clash 配置
- */
-function generateClashConfig(nodeObjects) {
-    // 生成 proxies 部分的 YAML 字符串
-    const proxiesYaml = nodeObjects.map(p => {
-        let proxyString = `  - name: ${JSON.stringify(p.name)}\n`;
-        proxyString += `    type: ${p.type}\n`;
-        proxyString += `    server: ${p.server}\n`;
-        proxyString += `    port: ${p.port}\n`;
-        proxyString += `    uuid: ${p.uuid}\n`;
-        proxyString += `    network: ${p.network}\n`;
-        proxyString += `    tls: ${p.tls}\n`;
-        proxyString += `    udp: true\n`;
-        if (p.tls) {
-            proxyString += `    servername: ${p.servername}\n`;
-            if (p['client-fingerprint']) {
-                proxyString += `    client-fingerprint: ${p['client-fingerprint']}\n`;
-            }
-        }
-        if (p['ws-opts']) {
-            proxyString += `    ws-opts:\n`;
-            proxyString += `      path: ${JSON.stringify(p['ws-opts'].path)}\n`;
-            if (p['ws-opts'].headers && p['ws-opts'].headers.Host) {
-                proxyString += `      headers:\n`;
-                proxyString += `        Host: ${p['ws-opts'].headers.Host}\n`;
-            }
-        }
-        return proxyString;
-    }).join('');
-
-    const proxyNames = nodeObjects.map(p => p.name);
-    
-    // 定义规范化的代理组名称
-    const autoSelectGroupName = "🚀 自动选择";
-    const manualSelectGroupName = "手动选择";
-
-    // --- START: 将规则定义为数组以确保正确格式化 ---
-    const customRulesArray = [
-        `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
-        `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
-        `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
-        'GEOSITE,category-ads-all,REJECT',
-        'GEOSITE,private,DIRECT',
-        'GEOIP,private,DIRECT,no-resolve',
-        'GEOSITE,cn,DIRECT',
-        'GEOIP,CN,DIRECT',
-        `MATCH,${manualSelectGroupName}`
-    ];
-    // 将规则数组转换为格式正确的YAML字符串
-    const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
-    // --- END: 修正 ---
-
-    // 拼接完整的 YAML 配置
-    const config = `
-port: 7890
-socks-port: 7891
-allow-lan: true
-mode: rule
-log-level: info
-external-controller: 127.0.0.1:9090
-dns:
-  enable: true
-  listen: 0.0.0.0:53
-  default-nameserver: [223.5.5.5, 119.29.29.29, 8.8.8.8]
-  nameserver: ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query']
-  fallback: []
-  
-proxies:
-${proxiesYaml}
-proxy-groups:
-  - name: ${JSON.stringify(autoSelectGroupName)}
-    type: url-test
-    proxies:
-${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
-    url: 'http://www.gstatic.com/generate_204'
-    interval: 300
-    
-  - name: ${JSON.stringify(manualSelectGroupName)}
-    type: select
-    proxies:
-      - ${JSON.stringify(autoSelectGroupName)}
-      - DIRECT
-      - REJECT
-${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
-
-rules:
-${rulesYaml}
-`;
-    return config.trim();
-}
-
-
-/**
- * 生成Sing-box配置
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - JSON 格式的 Sing-box 配置
- */
-function generateSingboxConfig(nodeObjects) {
-    const outbounds = nodeObjects.map(p => {
-        let outbound = {
-            type: p.type,
-            tag: p.name,
-            server: p.server,
-            server_port: p.port,
-            uuid: p.uuid,
-            transport: {
-                type: p.network,
-                path: p['ws-opts'].path,
-                headers: {
-                    Host: p.servername
-                }
-            }
-        };
-
-        if (p.tls) {
-            outbound.tls = {
-                enabled: true,
-                server_name: p.servername,
-                utls: {
-                    enabled: true,
-                    fingerprint: p['client-fingerprint']
-                }
-            };
-        }
-        return outbound;
-    });
-    
-    const proxyNames = outbounds.map(o => o.tag);
-
-    const config = {
-        "log": {
-            "level": "info",
-            "timestamp": true
-        },
-        "dns": {
-            "servers": [
-                { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://8.8.8.8/dns-query" }
-            ]
-        },
-        "inbounds": [
-            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
-        ],
-        "outbounds": [
-            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
-            { 
-              "type": "urltest", 
-              "tag": "auto-select", 
-              "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204", 
-              "interval": "5m" 
-            },
-            ...outbounds,
-            { "type": "direct", "tag": "direct" },
-            { "type": "block", "tag": "block" }
-        ],
-        "route": {
-            "rules": [
-                { "geoip": "cn", "outbound": "direct" }
-                
-            ],
-            "final": "manual-select", // 使用 final 替代 default_outbound
-            "auto_detect_interface": true
-        }
-    };
-    
-    return JSON.stringify(config, null, 2);
-}
-
-/**
- * 生成Loon配置 
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - .conf 格式的 Loon 配置
- */
-function generateLoonConfig(nodeObjects) {
-    // [Proxy] 部分
-    const proxiesConf = nodeObjects.map(p => {
-        let proxyLine = `${JSON.stringify(p.name)} = ${p.type}, ${p.server}, ${p.port}, uuid=${p.uuid}, ws=true`;
-        if (p.tls) {
-            proxyLine += `, tls=true, servername=${p.servername}, tls-fingerprint=${p['client-fingerprint']}`;
-        }
-        if (p['ws-opts']) {
-            proxyLine += `, ws-path=${JSON.stringify(p['ws-opts'].path)}, ws-headers="Host:${p['ws-opts'].headers.Host}"`;
-        }
-        return proxyLine;
-    }).join('\n');
-
-    const proxyNames = nodeObjects.map(p => JSON.stringify(p.name));
-
-    // 定义策略组名称
-    const autoSelectGroupName = "🚀 自动选择";
-    const manualSelectGroupName = "手机选择";
-
-    // [Proxy Group] 和 [Rule] 部分
-    const config = `
-[General]
-dns-server = 223.5.5.5, 8.8.8.8
-bypass-system = true
-
-[Proxy]
-${proxiesConf}
-
-[Proxy Group]
-${manualSelectGroupName} = select, ${autoSelectGroupName}, DIRECT, ${proxyNames.join(', ')}
-${autoSelectGroupName} = url-test, ${proxyNames.join(', ')}, url=http://www.gstatic.com/generate_204, interval=300, tolerance=100
-
-[Rule]
-GEOIP, CN, DIRECT
-FINAL, ${manualSelectGroupName}
-`;
-    return config.trim();
-}
-
 
 function 整理(内容) {
     return (内容 || '')
@@ -3075,9 +2799,9 @@ async function handleGetRequest(env) {
                     --border-color: #e0e0e0;
                     --text-color: #212529;
                     --background-color: #f5f5f5;
-                    --section-bg: white;
-                    --link-color: #1a0dab;
-                    --visited-link-color: #6c00a2;
+					--section-bg: white;
+					--link-color: #1a0dab;
+					--visited-link-color: #6c00a2;
                     --tab-inactive-bg: #f1f1f1;
                 }
 
@@ -3087,9 +2811,9 @@ async function handleGetRequest(env) {
                     --border-color: #3c3c3c;
                     --text-color: #e0e0e0;
                     --background-color: #1c1c1e;
-                    --section-bg: #2a2a2a;
-                    --link-color: #8ab4f8;
-                    --visited-link-color: #c58af9;
+					--section-bg: #2a2a2a;
+					--link-color: #8ab4f8;
+					--visited-link-color: #c58af9;
                     --tab-inactive-bg: #3a3a3a;
                 }
 
@@ -3100,8 +2824,8 @@ async function handleGetRequest(env) {
                     line-height: 1.6;
                     color: var(--text-color);
                     background-color: var(--background-color);
-                }
-                
+				}
+
                 .container {
                     max-width: 1000px;
                     margin: 0 auto;
@@ -3138,7 +2862,7 @@ async function handleGetRequest(env) {
                     font-size: 16px;
                     color: var(--text-color);
                 }
-
+                
                 .tab-container button:hover {
                     background-color: #ddd;
                 }
@@ -3152,7 +2876,7 @@ async function handleGetRequest(env) {
                     border-bottom: 2px solid var(--primary-color);
                     padding-bottom: 12px;
                 }
-
+				
                 .tab-content {
                     display: none;
                     padding: 20px;
@@ -3160,14 +2884,14 @@ async function handleGetRequest(env) {
                     border-top: none;
                     border-radius: 0 0 8px 8px;
                     animation: fadeEffect 0.5s;
-                }
+				}
                 
                 @keyframes fadeEffect {
                     from {opacity: 0;}
                     to {opacity: 1;}
                 }
                 /* --- End Tabbed Styles --- */
-                
+
                 .editor {
                     width: 100%;
                     height: 520px;
@@ -3176,7 +2900,7 @@ async function handleGetRequest(env) {
                     font-size: 14px; line-height: 1.5; resize: vertical;
                     background-color: var(--section-bg); color: var(--text-color);
                 }
-
+				
                 .editor:focus, .setting-editor:focus {
                     outline: none;
                     border-color: var(--primary-color);
@@ -3193,7 +2917,7 @@ async function handleGetRequest(env) {
                     font-family: Monaco, Consolas, "Courier New", monospace; font-size: 14px;
                     resize: vertical; background-color: var(--section-bg); color: var(--text-color);
                 }
-                
+
                 .button-group { display: flex; align-items: center; gap: 12px; margin-top: 15px; }
                 .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
                 .btn-primary { background: var(--primary-color); color: #fff; }
@@ -3208,7 +2932,7 @@ async function handleGetRequest(env) {
                 .test-status.success { color: #28a745; }
                 .test-status.error { color: #dc3545; }
                 .test-note { 
-                    font-size: 14px; 
+                    font-size: 14px;
                     color: #6c757d;
                     align-self: center;
                     padding-left: 5px;
@@ -3235,7 +2959,7 @@ async function handleGetRequest(env) {
                 }
                 .test-result-item .success { color: #28a745; font-weight: bold; }
                 .test-result-item .error { color: #dc3545; font-weight: bold; }
-
+				
                 .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; }
                 .checkbox-item { display: flex; align-items: center; gap: 5px; }
 
@@ -3257,8 +2981,8 @@ async function handleGetRequest(env) {
                     word-break: break-all;
                 }
                 html.dark-mode .notice-content {
-                    background: #3a3a3a;
-                }
+						background: #3a3a3a;
+				}
                 a { color: var(--link-color); text-decoration: none; }
                 a:visited { color: var(--visited-link-color); }
                 a:hover { text-decoration: underline; }
@@ -3316,7 +3040,7 @@ async function handleGetRequest(env) {
                     <button class="tab-link" onclick="openTab(event, 'tab-proxy')">代理设置</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-sub')">订阅设置</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-network')">网络设置</button>
-                </div>
+                    </div>
 
                 <div id="tab-main" class="tab-content" style="display: block;">
                     ${hasKV ? `
@@ -3338,35 +3062,35 @@ async function handleGetRequest(env) {
                 </div>
 
                 <div id="tab-proxy" class="tab-content">
-                    <div class="setting-item">
+                        <div class="setting-item">
                         <h4>PROXYIP</h4>
-                        <p>每行一个IP，格式：IP:端口(可不添加端口)</p>
-                        <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E4MApwcml2YXRlLmV4YW1wbGUuY29tJTNBMjA1Mg=='))}">${proxyIPContent}</textarea>
+                                <p>每行一个IP，格式：IP:端口(可不添加端口)</p>
+                                <textarea id="proxyip" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCjEuMi4zLjQlM0E4MApwcml2YXRlLmV4YW1wbGUuY29tJTNBMjA1Mg=='))}">${proxyIPContent}</textarea>
                         <div class="test-group">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'proxyip')">测试连接</button>
-                            <span id="proxyip-status" class="test-status"></span>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'proxyip')">测试连接</button>
+                                <span id="proxyip-status" class="test-status"></span>
                             <span class="test-note">（批量测试并自动移除失败地址）</span>
-                        </div>
+                            </div>
                         <div id="proxyip-results" class="test-results-container"></div>
-                    </div>
-                    <div class="setting-item">
-                        <h4>SOCKS5</h4>
-                        <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
-                        <textarea id="socks5" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
-                         <div class="test-group">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'socks5')">测试连接</button>
-                            <span id="socks5-status" class="test-status"></span>
-                            <span class="test-note">（批量测试并自动移除失败地址）</span>
                         </div>
-                        <div id="socks5-results" class="test-results-container"></div>
-                    </div>
-                     <div class="setting-item">
-                        <h4>HTTP </h4>
-                        <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
-                        <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
+                        <div class="setting-item">
+                        <h4>SOCKS5</h4>
+                                <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <textarea id="socks5" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXIlM0FwYXNzJTQwMTI3LjAuMC4xJTNBMTA4MAoxMjcuMC4wLjElM0ExMDgw'))}">${socks5Content}</textarea>
                          <div class="test-group">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'http')">测试连接</button>
-                            <span id="http-status" class="test-status"></span>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'socks5')">测试连接</button>
+                                <span id="socks5-status" class="test-status"></span>
+                            <span class="test-note">（批量测试并自动移除失败地址）</span>
+                            </div>
+                        <div id="socks5-results" class="test-results-container"></div>
+                        </div>
+                        <div class="setting-item">
+                        <h4>HTTP </h4>
+                                <p>每行一个地址，格式：[用户名:密码@]主机:端口</p>
+                                <textarea id="httpproxy" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnVzZXI6cGFzc0AxLjIuMy40OjgwODAKMS4yLjMuNDo4MDgw'))}">${httpProxyContent}</textarea>
+                         <div class="test-group">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'http')">测试连接</button>
+                                <span id="http-status" class="test-status"></span>
                             <span class="test-note">（批量测试并自动移除失败地址）</span>
                         </div>
                         <div id="http-results" class="test-results-container"></div>
@@ -3375,82 +3099,82 @@ async function handleGetRequest(env) {
                         <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                         <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存</button>
                         <span class="save-status" id="proxy-save-status"></span>
-                    </div>
-                </div>
+                            </div>
+                        </div>
 
                 <div id="tab-sub" class="tab-content">
-                     <div class="setting-item">
+                        <div class="setting-item">
                         <h4>SUB (优选订阅生成器)</h4>
-                        <p>只支持单个优选订阅生成器地址</p>
-                        <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
-                    </div>
-                    <div class="setting-item">
+                                <p>只支持单个优选订阅生成器地址</p>
+                                <textarea id="sub" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCnN1Yi5nb29nbGUuY29tCnN1Yi5leGFtcGxlLmNvbQ=='))}">${subContent}</textarea>
+                            </div>
+                        <div class="setting-item">
                         <h4>SUBAPI (订阅转换后端)</h4>
-                        <p>订阅转换后端地址</p>
-                        <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
-                    </div>
-                    <div class="setting-item">
+                                <p>订阅转换后端地址</p>
+                                <textarea id="subapi" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmFwaS52MS5tawpzdWIueGV0b24uZGV2'))}">${subAPIContent}</textarea>
+                            </div>
+                        <div class="setting-item">
                         <h4>SUBCONFIG (订阅转换配置)</h4>
-                        <p>订阅转换配置文件地址</p>
-                        <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
-                    </div>
+                                <p>订阅转换配置文件地址</p>
+                                <textarea id="subconfig" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBCmh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRkFDTDRTU1IlMkZBQ0w0U1NSJTI1MkZtYXN0ZXIlMkZDbGFzaCUyRmNvbmZpZyUyRkFDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ=='))}">${subConfigContent}</textarea>
+                            </div>
                     <div class="button-group">
                         <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                         <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存</button>
                         <span class="save-status" id="sub-save-status"></span>
                     </div>
-                </div>
+                        </div>
 
                 <div id="tab-network" class="tab-content">
-                    <div class="setting-item">
+                        <div class="setting-item">
                         <h4>NAT64/DNS64</h4>
-                        <p>
+                                <p>
                            <a id="nat64-link" target="_blank" style="margin-left: 10px;">自行查询</a>
                         </p>
-                        <script>
+						<script>
                             (function() {
-                                const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
-                                const decodedURL = atob(encodedURL);
+  							const encodedURL = 'aHR0cHM6Ly9uYXQ2NC54eXo=';
+  							const decodedURL = atob(encodedURL);
                                 const link = document.getElementById('nat64-link');
                                 if (link) {
                                     link.setAttribute('href', decodedURL);
                                 }
                             })();
-                        </script>
+						</script>
                         <textarea id="nat64" class="setting-editor" placeholder="${decodeURIComponent(atob('JUU0JUJFJThCJUU1JUE2JTgyJTNBJTBBZG5zNjQuZXhhbXBsZS5jb20lMEEyYTAxJTNBNGY4JTNBYzJjJTNBMTIzZiUzQSUzQSUyRjk2'))}">${nat64Content}</textarea>
                         <div class="test-group">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="testSetting(event, 'nat64')">测试连接</button>
                             <span id="nat64-status" class="test-status"></span>
                             <span class="test-note">（将尝试解析 www.cloudflare.com）</span>
-                        </div>
+                            </div>
                         <div id="nat64-results" class="test-results-container"></div>
-                    </div>
-                    <div class="setting-item">
+                                </div>
+                        <div class="setting-item">
                         <h4>随机节点端口设置</h4>
                         <p>启用 noTLS (将不使用 TLS 加密)</p>
-                        <div class="switch-container">
-                             <label class="theme-switch" for="notls-checkbox">
-                                <input type="checkbox" id="notls-checkbox" ${noTLSContent === 'true' ? 'checked' : ''}>
-                                <div class="slider round"></div>
-                            </label>
+                                <div class="switch-container">
+                                    <label class="theme-switch" for="notls-checkbox">
+                                        <input type="checkbox" id="notls-checkbox" ${noTLSContent === 'true' ? 'checked' : ''}>
+                                        <div class="slider round"></div>
+                                    </label>
                             <span>启用 noTLS</span>
                         </div>
-                        
+
                         <h5 style="margin-top: 15px; margin-bottom: 5px;">TLS 端口</h5>
                         <div class="checkbox-grid" id="httpsports-grid">${httpsCheckboxesHTML}</div>
                         
                         <h5 style="margin-top: 15px; margin-bottom: 5px;">noTLS 端口</h5>
                         <div class="checkbox-grid" id="httpports-grid">${httpCheckboxesHTML}</div>
-                    </div>
-                    <div class="button-group">
-                        <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
+                </div>
+                        <div class="button-group">
+                            <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                         <button class="btn btn-primary" onclick="saveAdvancedSettings()">保存</button>
                         <span class="save-status" id="network-save-status"></span>
-                    </div>
+                        </div>
                 </div>
 
                 <div class="footer">
-                    ${cmad}
+                        ${cmad}
                 </div>
             </div>
 
@@ -3578,21 +3302,21 @@ async function handleGetRequest(env) {
 
                     const testPromises = originalAddresses.map(async (address) => {
                         let result;
-                        try {
-                            const response = await fetch(window.location.href.split('?')[0] + '?action=test', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
+                    try {
+                        const response = await fetch(window.location.href.split('?')[0] + '?action=test', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ type: type, address: address })
-                            });
+                        });
                             result = await response.json();
                             
                             if (!response.ok) {
                                 throw new Error(result.message || \`服务器错误 \${response.status}\`);
-                            }
+                        }
 
-                        } catch (error) {
+                    } catch (error) {
                             result = { success: false, message: \`请求失败: \${error.message}\` };
-                        } finally {
+                    } finally {
                             completedCount++;
                             statusEl.textContent = \`测试中 (\${completedCount}/\${total})...\`;
                             
