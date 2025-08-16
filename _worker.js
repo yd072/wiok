@@ -183,10 +183,10 @@ async function loadConfigurations(env) {
     }
 
     // 4. 最终处理
-    if (subConverter.includes("http://")) {
+    if (subConverter && subConverter.includes("http://")) {
         subConverter = subConverter.split("//")[1];
         subProtocol = 'http';
-    } else {
+    } else if (subConverter) {
         subConverter = subConverter.split("//")[1] || subConverter;
     }
 
@@ -734,6 +734,11 @@ export default {
 					const uuid_to_use = (动态UUID && url.pathname === `/${动态UUID}`) ? 动态UUID : userID;
 					const secureProtoConfig = await 生成配置信息(uuid_to_use, request.headers.get('Host'), sub, UA, RproxyIP, url, fakeUserID, fakeHostName, env);
 
+                    // 如果 secureProtoConfig 是一个 Response 对象 (内置生成器返回的)，则直接返回它
+                    if (secureProtoConfig instanceof Response) {
+                        return secureProtoConfig;
+                    }
+                    
 					const now = Date.now();
 					const today = new Date(now);
 					today.setHours(0, 0, 0, 0);
@@ -2204,6 +2209,63 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		`;
 		return 节点配置页;
 	} else {
+        // --- START: 内置配置生成逻辑 ---
+        if (!subConverter || subConverter.trim() === '') {
+            let newAddressesapi = [];
+            let newAddressescsv = [];
+            let newAddressesnotlsapi = [];
+            let newAddressesnotlscsv = [];
+
+            if (hostName.includes(".workers.dev") || noTLS === 'true') {
+                noTLS = 'true';
+                fakeHostName = `${fakeHostName}.workers.dev`;
+                newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+                newAddressesnotlscsv = await 整理测速结果('FALSE');
+            } else if (hostName.includes(".pages.dev")) {
+                fakeHostName = `${fakeHostName}.pages.dev`;
+            } else if (hostName.includes("worker") || hostName.includes("notls")) {
+                noTLS = 'true';
+                fakeHostName = `notls${fakeHostName}.net`;
+                newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+                newAddressesnotlscsv = await 整理测速结果('FALSE');
+            } else {
+                fakeHostName = `${fakeHostName}.xyz`;
+            }
+
+            const base64Content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
+            const decodedContent = atob(base64Content);
+            const nodeUrls = decodedContent.split('\n').filter(Boolean);
+            const nodeObjects = nodeUrls.map(parseVlessURL);
+            
+            let configContent = '';
+            let contentType = 'text/plain;charset=utf-8';
+            
+            const wantsClash = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash');
+            const wantsSingbox = userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb');
+            const wantsLoon = userAgent.includes('loon') || _url.searchParams.has('loon');
+
+            if (wantsClash) {
+                configContent = generateClashConfig(nodeObjects);
+                contentType = 'application/x-yaml;charset=utf-8';
+            } else if (wantsSingbox) {
+                configContent = generateSingboxConfig(nodeObjects);
+                contentType = 'application/json;charset=utf-8';
+            } else if (wantsLoon) {
+                configContent = generateLoonConfig(nodeObjects);
+                 contentType = 'text/plain;charset=utf-8';
+            } else {
+                configContent = 恢复伪装信息(base64Content, userID, hostName, fakeUserID, fakeHostName, true);
+            }
+            
+            return new Response(configContent, {
+                headers: {
+                    "Content-Disposition": `attachment; filename=${FileName}`,
+                    "Content-Type": contentType,
+                }
+            });
+        }
+        // --- END: 内置配置生成逻辑 ---
+        
 		if (typeof fetch != 'function') {
 			return 'Error: fetch is not available in this environment.';
 		}
@@ -2282,28 +2344,9 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 		try {
 			let content;
-			// ############# START OF CHANGE #############
-			if (!subConverter || subConverter.trim() === '') {
-				console.log("subConverter is empty, using built-in config generator.");
-				
-				if (isBase64) {
-					// 如果是通用客户端或请求 b64，则生成 base64 节点列表
-					content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
-				} else {
-
-					const nodes = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv, true); // 获取节点对象
-					if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash')) {
-						content = generateClashConfig(nodes);
-					} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('sb') || _url.searchParams.has('singbox')) {
-						content = generateSingboxConfig(nodes);
-					} else if (userAgent.includes('loon') || _url.searchParams.has('loon')) {
-						content = generateLoonConfig(nodes);
-					} else {
-						content = btoa(nodes.map(n => n.vmesslink).join('\n'));
-					}
-				}
+			if ((!sub || sub == "") && isBase64 == true) {
+				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
 			} else {
-				console.log(`Using external subConverter: ${subConverter}`);
 				const response = await fetch(url, {
 					headers: {
 						'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
@@ -2311,7 +2354,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 				});
 				content = await response.text();
 			}
-			// ############## END OF CHANGE ##############
 
 			if (_url.pathname == `/${fakeUserID}`) return content;
 
@@ -2460,10 +2502,8 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv, returnObjects = false) {
+function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
 	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
-	let allNodes = [];
-
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
 	let notlsresponseBody;
@@ -2472,7 +2512,7 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
 		const uniqueAddressesnotls = [...new Set(addressesnotls)];
 
-		const notlsNodes = uniqueAddressesnotls.map(address => {
+		notlsresponseBody = uniqueAddressesnotls.map(address => {
 			let port = "-1";
 			let addressid = address;
 
@@ -2527,37 +2567,15 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
                 `path=${encodeURIComponent(最终路径)}` +
                 `#${encodeURIComponent(addressid + 节点备注)}`;
 
-			if (returnObjects) {
-                return {
-                    name: addressid + 节点备注,
-                    type: 协议类型,
-                    server: address,
-                    port: parseInt(port),
-                    uuid: UUID,
-                    network: 'ws',
-                    tls: false,
-                    servername: 伪装域名,
-                    'ws-opts': {
-                        path: 最终路径,
-                        headers: { Host: 伪装域名 }
-                    },
-					vmesslink: secureProtoLink
-                };
-            }
 			return secureProtoLink;
-		});
 
-		if (returnObjects) {
-			allNodes.push(...notlsNodes);
-		} else {
-			notlsresponseBody = notlsNodes.join('\n');
-		}
+		}).join('\n');
 
 	}
 
 	const uniqueAddresses = [...new Set(addresses)];
 
-	const tlsNodes = uniqueAddresses.map(address => {
+	const responseBody = uniqueAddresses.map(address => {
 		let port = "-1";
 		let addressid = address;
 
@@ -2612,267 +2630,25 @@ function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv,
 		}
 
 		const 协议类型 = atob(protocolEncodedFlag);
-		const fingerprint = getRandomFingerprint();
 
 		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` +
 			`encryption=none&` +
 			`security=tls&` +
 			`sni=${伪装域名}&` +
-			`fp=${fingerprint}&` + // <-- 使用随机指纹
+			`fp=${getRandomFingerprint()}&` + // <-- 使用随机指纹
 			`alpn=h3&` +
 			`type=ws&` +
 			`host=${伪装域名}&` +
             `path=${encodeURIComponent(最终路径)}` +
 			`#${encodeURIComponent(addressid + 节点备注)}`;
-		
-		if (returnObjects) {
-			return {
-				name: addressid + 节点备注,
-				type: 协议类型,
-				server: address,
-				port: parseInt(port),
-				uuid: UUID,
-				network: 'ws',
-				tls: true,
-				servername: 伪装域名,
-				'client-fingerprint': fingerprint,
-				'ws-opts': {
-					path: 最终路径,
-					headers: { Host: 伪装域名 }
-				},
-				vmesslink: secureProtoLink
-			};
-		}
+
 		return secureProtoLink;
-	});
+	}).join('\n');
 
-	if (returnObjects) {
-        allNodes.push(...tlsNodes);
-        // 如果有link，也需要处理，但link是完整的URL，转换为对象会比较复杂，这里暂时忽略
-        return allNodes;
-    }
-
-	let responseBody = tlsNodes.join('\n');
 	let base64Response = responseBody;
 	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
 	if (link.length > 0) base64Response += '\n' + link.join('\n');
 	return btoa(base64Response);
-}
-
-/**
- * 生成Clash配置
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - YAML 格式的 Clash 配置
- */
-function generateClashConfig(nodeObjects) {
-    // 生成 proxies 部分的 YAML 字符串
-    const proxiesYaml = nodeObjects.map(p => {
-        let proxyString = `  - name: ${JSON.stringify(p.name)}\n`;
-        proxyString += `    type: ${p.type}\n`;
-        proxyString += `    server: ${p.server}\n`;
-        proxyString += `    port: ${p.port}\n`;
-        proxyString += `    uuid: ${p.uuid}\n`;
-        proxyString += `    network: ${p.network}\n`;
-        proxyString += `    tls: ${p.tls}\n`;
-        proxyString += `    udp: true\n`;
-        if (p.tls) {
-            proxyString += `    servername: ${p.servername}\n`;
-            if (p['client-fingerprint']) {
-                proxyString += `    client-fingerprint: ${p['client-fingerprint']}\n`;
-            }
-        }
-        if (p['ws-opts']) {
-            proxyString += `    ws-opts:\n`;
-            proxyString += `      path: ${JSON.stringify(p['ws-opts'].path)}\n`;
-            if (p['ws-opts'].headers && p['ws-opts'].headers.Host) {
-                proxyString += `      headers:\n`;
-                proxyString += `        Host: ${p['ws-opts'].headers.Host}\n`;
-            }
-        }
-        return proxyString;
-    }).join('');
-
-    const proxyNames = nodeObjects.map(p => p.name);
-    
-    // 定义规范化的代理组名称
-    const autoSelectGroupName = "🚀 自动选择";
-    const manualSelectGroupName = "手动选择";
-
-    // --- START: 将规则定义为数组以确保正确格式化 ---
-    const customRulesArray = [
-        `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
-        `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
-        `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
-        'GEOSITE,category-ads-all,REJECT',
-        'GEOSITE,private,DIRECT',
-        'GEOIP,private,DIRECT,no-resolve',
-        'GEOSITE,cn,DIRECT',
-        'GEOIP,CN,DIRECT',
-        `MATCH,${manualSelectGroupName}`
-    ];
-    // 将规则数组转换为格式正确的YAML字符串
-    const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
-    // --- END: 修正 ---
-
-    // 拼接完整的 YAML 配置
-    const config = `
-port: 7890
-socks-port: 7891
-allow-lan: true
-mode: rule
-log-level: info
-external-controller: 127.0.0.1:9090
-dns:
-  enable: true
-  listen: 0.0.0.0:53
-  default-nameserver: [223.5.5.5, 119.29.29.29, 8.8.8.8]
-  nameserver: ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query']
-  fallback: []
-  
-proxies:
-${proxiesYaml}
-proxy-groups:
-  - name: ${JSON.stringify(autoSelectGroupName)}
-    type: url-test
-    proxies:
-${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
-    url: 'http://www.gstatic.com/generate_204'
-    interval: 300
-    
-  - name: ${JSON.stringify(manualSelectGroupName)}
-    type: select
-    proxies:
-      - ${JSON.stringify(autoSelectGroupName)}
-      - DIRECT
-      - REJECT
-${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
-
-rules:
-${rulesYaml}
-`;
-    return config.trim();
-}
-
-
-/**
- * 生成Sing-box配置
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - JSON 格式的 Sing-box 配置
- */
-function generateSingboxConfig(nodeObjects) {
-    const outbounds = nodeObjects.map(p => {
-        let outbound = {
-            type: p.type,
-            tag: p.name,
-            server: p.server,
-            server_port: p.port,
-            uuid: p.uuid,
-            transport: {
-                type: p.network,
-                path: p['ws-opts'].path,
-                headers: {
-                    Host: p.servername
-                }
-            }
-        };
-
-        if (p.tls) {
-            outbound.tls = {
-                enabled: true,
-                server_name: p.servername,
-                utls: {
-                    enabled: true,
-                    fingerprint: p['client-fingerprint']
-                }
-            };
-        }
-        return outbound;
-    });
-    
-    const proxyNames = outbounds.map(o => o.tag);
-
-    const config = {
-        "log": {
-            "level": "info",
-            "timestamp": true
-        },
-        "dns": {
-            "servers": [
-                { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://8.8.8.8/dns-query" }
-            ]
-        },
-        "inbounds": [
-            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
-        ],
-        "outbounds": [
-            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
-            { 
-              "type": "urltest", 
-              "tag": "auto-select", 
-              "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204", 
-              "interval": "5m" 
-            },
-            ...outbounds,
-            { "type": "direct", "tag": "direct" },
-            { "type": "block", "tag": "block" }
-        ],
-        "route": {
-            "rules": [
-                { "geoip": "cn", "outbound": "direct" }
-                
-            ],
-            "final": "manual-select", // 使用 final 替代 default_outbound
-            "auto_detect_interface": true
-        }
-    };
-    
-    return JSON.stringify(config, null, 2);
-}
-
-/**
- * 生成Loon配置 
- * @param {Array} nodeObjects - 节点对象数组
- * @returns {string} - .conf 格式的 Loon 配置
- */
-function generateLoonConfig(nodeObjects) {
-    // [Proxy] 部分
-    const proxiesConf = nodeObjects.map(p => {
-        let proxyLine = `${JSON.stringify(p.name)} = ${p.type}, ${p.server}, ${p.port}, uuid=${p.uuid}, ws=true`;
-        if (p.tls) {
-            proxyLine += `, tls=true, servername=${p.servername}, tls-fingerprint=${p['client-fingerprint']}`;
-        }
-        if (p['ws-opts']) {
-            proxyLine += `, ws-path=${JSON.stringify(p['ws-opts'].path)}, ws-headers="Host:${p['ws-opts'].headers.Host}"`;
-        }
-        return proxyLine;
-    }).join('\n');
-
-    const proxyNames = nodeObjects.map(p => JSON.stringify(p.name));
-
-    // 定义策略组名称
-    const autoSelectGroupName = "🚀 自动选择";
-    const manualSelectGroupName = "手机选择";
-
-    // [Proxy Group] 和 [Rule] 部分
-    const config = `
-[General]
-dns-server = 223.5.5.5, 8.8.8.8
-bypass-system = true
-
-[Proxy]
-${proxiesConf}
-
-[Proxy Group]
-${manualSelectGroupName} = select, ${autoSelectGroupName}, DIRECT, ${proxyNames.join(', ')}
-${autoSelectGroupName} = url-test, ${proxyNames.join(', ')}, url=http://www.gstatic.com/generate_204, interval=300, tolerance=100
-
-[Rule]
-GEOIP, CN, DIRECT
-FINAL, ${manualSelectGroupName}
-`;
-    return config.trim();
 }
 
 function 整理(内容) {
@@ -3825,4 +3601,262 @@ async function handleTestConnection(request) {
     } finally {
         clearTimeout(timeoutId);
     }
+}
+/**
+ * 解析 Vless URL 为一个结构化的节点对象
+ * @param {string} url - Vless 链接
+ * @returns {object | null} - 节点对象或 null
+ */
+function parseVlessURL(url) {
+    if (!url.startsWith('vless://')) {
+        return null;
+    }
+    try {
+        const urlObj = new URL(url);
+        const params = urlObj.searchParams;
+
+        const node = {
+            name: decodeURIComponent(urlObj.hash.substring(1)) || `${urlObj.hostname}:${urlObj.port}`,
+            type: 'vless',
+            server: urlObj.hostname,
+            port: parseInt(urlObj.port, 10),
+            uuid: urlObj.username,
+            network: params.get('type') || 'ws',
+            tls: params.get('security') === 'tls',
+            udp: true, 
+        };
+
+        if (node.tls) {
+            node.servername = params.get('sni') || node.server;
+            node['client-fingerprint'] = params.get('fp') || 'chrome';
+        }
+
+        if (node.network === 'ws') {
+            node['ws-opts'] = {
+                path: params.get('path') || '/',
+                headers: {
+                    Host: params.get('host') || node.server
+                }
+            };
+        }
+
+        return node;
+    } catch (e) {
+        console.error("解析 Vless URL 失败:", url, e);
+        return null;
+    }
+}
+
+/**
+ * 生成Clash配置
+ * @param {Array} nodeObjects - 节点对象数组
+ * @returns {string} - YAML 格式的 Clash 配置
+ */
+function generateClashConfig(nodeObjects) {
+    // 生成 proxies 部分的 YAML 字符串
+    const proxiesYaml = nodeObjects.map(p => {
+        if (!p) return '';
+        let proxyString = `  - name: ${JSON.stringify(p.name)}\n`;
+        proxyString += `    type: ${p.type}\n`;
+        proxyString += `    server: ${p.server}\n`;
+        proxyString += `    port: ${p.port}\n`;
+        proxyString += `    uuid: ${p.uuid}\n`;
+        proxyString += `    network: ${p.network}\n`;
+        proxyString += `    tls: ${p.tls}\n`;
+        proxyString += `    udp: true\n`;
+        if (p.tls) {
+            proxyString += `    servername: ${p.servername}\n`;
+            if (p['client-fingerprint']) {
+                proxyString += `    client-fingerprint: ${p['client-fingerprint']}\n`;
+            }
+        }
+        if (p['ws-opts']) {
+            proxyString += `    ws-opts:\n`;
+            proxyString += `      path: ${JSON.stringify(p['ws-opts'].path)}\n`;
+            if (p['ws-opts'].headers && p['ws-opts'].headers.Host) {
+                proxyString += `      headers:\n`;
+                proxyString += `        Host: ${p['ws-opts'].headers.Host}\n`;
+            }
+        }
+        return proxyString;
+    }).join('');
+
+    const proxyNames = nodeObjects.filter(Boolean).map(p => p.name);
+    
+    // 定义规范化的代理组名称
+    const autoSelectGroupName = "🚀 自动选择";
+    const manualSelectGroupName = "手动选择";
+
+    const customRulesArray = [
+        `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
+        `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
+        `DOMAIN-KEYWORD,google,${manualSelectGroupName}`,
+        'GEOSITE,category-ads-all,REJECT',
+        'GEOSITE,private,DIRECT',
+        'GEOIP,private,DIRECT,no-resolve',
+        'GEOSITE,cn,DIRECT',
+        'GEOIP,CN,DIRECT',
+        `MATCH,${manualSelectGroupName}`
+    ];
+    const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
+
+    // 拼接完整的 YAML 配置
+    const config = `
+port: 7890
+socks-port: 7891
+allow-lan: true
+mode: rule
+log-level: info
+external-controller: 127.0.0.1:9090
+dns:
+  enable: true
+  listen: 0.0.0.0:53
+  default-nameserver: [223.5.5.5, 119.29.29.29, 8.8.8.8]
+  nameserver: ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query']
+  fallback: []
+  
+proxies:
+${proxiesYaml}
+proxy-groups:
+  - name: ${JSON.stringify(autoSelectGroupName)}
+    type: url-test
+    proxies:
+${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
+    url: 'http://www.gstatic.com/generate_204'
+    interval: 300
+    
+  - name: ${JSON.stringify(manualSelectGroupName)}
+    type: select
+    proxies:
+      - ${JSON.stringify(autoSelectGroupName)}
+      - DIRECT
+      - REJECT
+${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
+
+rules:
+${rulesYaml}
+`;
+    return config.trim();
+}
+
+
+/**
+ * 生成Sing-box配置
+ * @param {Array} nodeObjects - 节点对象数组
+ * @returns {string} - JSON 格式的 Sing-box 配置
+ */
+function generateSingboxConfig(nodeObjects) {
+    const outbounds = nodeObjects.filter(Boolean).map(p => {
+        let outbound = {
+            type: p.type,
+            tag: p.name,
+            server: p.server,
+            server_port: p.port,
+            uuid: p.uuid,
+            transport: {
+                type: p.network,
+                path: p['ws-opts'].path,
+                headers: {
+                    Host: p.servername
+                }
+            }
+        };
+
+        if (p.tls) {
+            outbound.tls = {
+                enabled: true,
+                server_name: p.servername,
+                utls: {
+                    enabled: true,
+                    fingerprint: p['client-fingerprint']
+                }
+            };
+        }
+        return outbound;
+    });
+    
+    const proxyNames = outbounds.map(o => o.tag);
+
+    const config = {
+        "log": {
+            "level": "info",
+            "timestamp": true
+        },
+        "dns": {
+            "servers": [
+                { "address": "https://223.5.5.5/dns-query" },
+                { "address": "https://8.8.8.8/dns-query" }
+            ]
+        },
+        "inbounds": [
+            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
+        ],
+        "outbounds": [
+            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
+            { 
+              "type": "urltest", 
+              "tag": "auto-select", 
+              "outbounds": proxyNames,
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
+            },
+            ...outbounds,
+            { "type": "direct", "tag": "direct" },
+            { "type": "block", "tag": "block" }
+        ],
+        "route": {
+            "rules": [
+                { "geoip": "cn", "outbound": "direct" }
+                
+            ],
+            "final": "manual-select",
+            "auto_detect_interface": true
+        }
+    };
+    
+    return JSON.stringify(config, null, 2);
+}
+
+/**
+ * 生成Loon配置 
+ * @param {Array} nodeObjects - 节点对象数组
+ * @returns {string} - .conf 格式的 Loon 配置
+ */
+function generateLoonConfig(nodeObjects) {
+    // [Proxy] 部分
+    const proxiesConf = nodeObjects.filter(Boolean).map(p => {
+        let proxyLine = `${JSON.stringify(p.name)} = ${p.type}, ${p.server}, ${p.port}, uuid=${p.uuid}, ws=true`;
+        if (p.tls) {
+            proxyLine += `, tls=true, servername=${p.servername}, tls-fingerprint=${p['client-fingerprint']}`;
+        }
+        if (p['ws-opts']) {
+            proxyLine += `, ws-path=${JSON.stringify(p['ws-opts'].path)}, ws-headers="Host:${p['ws-opts'].headers.Host}"`;
+        }
+        return proxyLine;
+    }).join('\n');
+
+    const proxyNames = nodeObjects.filter(Boolean).map(p => JSON.stringify(p.name));
+
+    // 定义策略组名称
+    const autoSelectGroupName = "🚀 自动选择";
+    const manualSelectGroupName = "手机选择";
+
+    // [Proxy Group] 和 [Rule] 部分
+    const config = `
+[General]
+dns-server = 223.5.5.5, 8.8.8.8
+bypass-system = true
+
+[Proxy]
+${proxiesConf}
+
+[Proxy Group]
+${manualSelectGroupName} = select, ${autoSelectGroupName}, DIRECT, ${proxyNames.join(', ')}
+${autoSelectGroupName} = url-test, ${proxyNames.join(', ')}, url=http://www.gstatic.com/generate_204, interval=300, tolerance=100
+
+[Rule]
+GEOIP, CN, DIRECT
+FINAL, ${manualSelectGroupName}
+`;
+    return config.trim();
 }
