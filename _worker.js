@@ -2211,34 +2211,23 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 	} else {
         // --- START: 内置配置生成逻辑 ---
         if (!subConverter || subConverter.trim() === '') {
-            let newAddressesapi = [];
-            let newAddressescsv = [];
-            let newAddressesnotlsapi = [];
-            let newAddressesnotlscsv = [];
-
             if (hostName.includes(".workers.dev") || noTLS === 'true') {
                 noTLS = 'true';
                 fakeHostName = `${fakeHostName}.workers.dev`;
-                newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-                newAddressesnotlscsv = await 整理测速结果('FALSE');
             } else if (hostName.includes(".pages.dev")) {
                 fakeHostName = `${fakeHostName}.pages.dev`;
             } else if (hostName.includes("worker") || hostName.includes("notls")) {
                 noTLS = 'true';
                 fakeHostName = `notls${fakeHostName}.net`;
-                newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-                newAddressesnotlscsv = await 整理测速结果('FALSE');
             } else {
                 fakeHostName = `${fakeHostName}.xyz`;
             }
 
-            const base64Content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
-            const decodedContent = atob(base64Content);
-            const nodeUrls = decodedContent.split('\n').filter(Boolean);
-            const nodeObjects = nodeUrls.map(parseVlessURL).filter(Boolean); // 关键修复：过滤掉解析失败的null节点
+            const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
             
             let configContent = '';
             let contentType = 'text/plain;charset=utf-8';
+            let isBase64 = false;
             
             const wantsClash = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash');
             const wantsSingbox = userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb');
@@ -2252,13 +2241,15 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 contentType = 'application/json;charset=utf-8';
             } else if (wantsLoon) {
                 configContent = generateLoonConfig(nodeObjects);
-                 contentType = 'text/plain;charset=utf-8';
+                contentType = 'text/plain;charset=utf-8';
             } else {
-                // 默认返回恢复过的 base64
-                configContent = 恢复伪装信息(base64Content, userID, hostName, fakeUserID, fakeHostName, true);
+                configContent = 生成本地订阅(nodeObjects);
+                isBase64 = true;
             }
             
-            return new Response(configContent, {
+            const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, isBase64);
+
+            return new Response(finalContent, {
                 headers: {
                     "Content-Disposition": `attachment; filename=${FileName}`,
                     "Content-Type": contentType,
@@ -2346,7 +2337,9 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		try {
 			let content;
 			if ((!sub || sub == "") && isBase64 == true) {
-				content = await 生成本地订阅(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
+                // This old path is now handled by the new built-in generator logic
+                const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
+				content = 生成本地订阅(nodeObjects);
 			} else {
 				const response = await fetch(url, {
 					headers: {
@@ -2503,153 +2496,136 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
-function 生成本地订阅(host, UUID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv) {
-	const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
-	addresses = addresses.concat(newAddressesapi);
-	addresses = addresses.concat(newAddressescsv);
-	let notlsresponseBody;
-	if (noTLS == 'true') {
-		addressesnotls = addressesnotls.concat(newAddressesnotlsapi);
-		addressesnotls = addressesnotls.concat(newAddressesnotlscsv);
-		const uniqueAddressesnotls = [...new Set(addressesnotls)];
+/**
+ * 从各种来源收集和解析节点信息，生成一个结构化的节点对象数组
+ * @param {string} host - 用于SNI和Host头的域名
+ * @param {string} UUID - 用户的UUID
+ * @param {string} noTLS - 是否为 noTLS 模式 ('true' 或 'false')
+ * @returns {Promise<Array>} - 节点对象数组
+ */
+async function prepareNodeList(host, UUID, noTLS) {
+	let allAddresses = [];
+	
+    // 1. 获取所有地址源
+    let newAddressesapi = await 整理优选列表(addressesapi);
+    let newAddressescsv = await 整理测速结果('TRUE');
+    
+    let currentAddresses = [...new Set(addresses.concat(newAddressesapi).concat(newAddressescsv))];
+    
+    if (noTLS === 'true') {
+        let newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+        let newAddressesnotlscsv = await 整理测速结果('FALSE');
+        let currentAddressesnotls = [...new Set(addressesnotls.concat(newAddressesnotlsapi).concat(newAddressesnotlscsv))];
+        allAddresses.push(...currentAddressesnotls.map(addr => ({ address: addr, tls: false })));
+    }
+    
+    allAddresses.push(...currentAddresses.map(addr => ({ address: addr, tls: true })));
 
-		notlsresponseBody = uniqueAddressesnotls.map(address => {
-			let port = "-1";
-			let addressid = address;
+    // 2. 将地址字符串解析为节点对象
+	const nodeObjects = allAddresses.map(({ address: addressString, tls }) => {
+		const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
+        let server, port = "-1", name = addressString;
 
-			const match = addressid.match(regex);
-			if (!match) {
-				if (address.includes(':') && address.includes('#')) {
-					const parts = address.split(':');
-					address = parts[0];
-					const subParts = parts[1].split('#');
-					port = subParts[0];
-					addressid = subParts[1];
-				} else if (address.includes(':')) {
-					const parts = address.split(':');
-					address = parts[0];
-					port = parts[1];
-				} else if (address.includes('#')) {
-					const parts = address.split('#');
-					address = parts[0];
-					addressid = parts[1];
-				}
+        const match = addressString.match(regex);
+        if (!match) {
+            if (addressString.includes(':') && addressString.includes('#')) {
+                const parts = addressString.split(':');
+                server = parts[0];
+                const subParts = parts[1].split('#');
+                port = subParts[0];
+                name = subParts[1];
+            } else if (addressString.includes(':')) {
+                const parts = addressString.split(':');
+                server = parts[0];
+                port = parts[1];
+            } else if (addressString.includes('#')) {
+                const parts = addressString.split('#');
+                server = parts[0];
+                name = parts[1];
+            } else {
+                server = addressString;
+            }
 
-				if (addressid.includes(':')) {
-					addressid = addressid.split(':')[0];
-				}
-			} else {
-				address = match[1];
-				port = match[2] || port;
-				addressid = match[3] || address;
-			}
+            if (name.includes(':')) {
+                name = name.split(':')[0];
+            }
+        } else {
+            server = match[1];
+            port = match[2] || port;
+            name = match[3] || server;
+        }
 
-			const localHttpPorts = httpPorts.length > 0 ? httpPorts : ["80", "8080", "8880", "2052", "2082", "2086", "2095"];
-			if (!isValidIPv4(address) && port == "-1") {
-				for (let httpPort of localHttpPorts) {
-					if (address.includes(httpPort)) {
-						port = httpPort;
-						break;
-					}
-				}
-			}
-			if (port == "-1") port = "80";
-
-			let 伪装域名 = host;
-			let 最终路径 = generateRandomPath();
-			let 节点备注 = '';
-			const 协议类型 = atob(protocolEncodedFlag);
-
-            const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` +
-                `encryption=none&` +
-                `security=none&` +
-                `type=ws&` +
-                `host=${伪装域名}&` +
-                `path=${encodeURIComponent(最终路径)}` +
-                `#${encodeURIComponent(addressid + 节点备注)}`;
-
-			return secureProtoLink;
-
-		}).join('\n');
-
-	}
-
-	const uniqueAddresses = [...new Set(addresses)];
-
-	const responseBody = uniqueAddresses.map(address => {
-		let port = "-1";
-		let addressid = address;
-
-		const match = addressid.match(regex);
-		if (!match) {
-			if (address.includes(':') && address.includes('#')) {
-				const parts = address.split(':');
-				address = parts[0];
-				const subParts = parts[1].split('#');
-				port = subParts[0];
-				addressid = subParts[1];
-			} else if (address.includes(':')) {
-				const parts = address.split(':');
-				address = parts[0];
-				port = parts[1];
-			} else if (address.includes('#')) {
-				const parts = address.split('#');
-				address = parts[0];
-				addressid = parts[1];
-			}
-
-			if (addressid.includes(':')) {
-				addressid = addressid.split(':')[0];
-			}
-		} else {
-			address = match[1];
-			port = match[2] || port;
-			addressid = match[3] || address;
-		}
+        if (port === "-1") {
+            const portList = tls ? (httpsPorts.length > 0 ? httpsPorts : ["443", "2053", "2083", "2087", "2096", "8443"]) 
+                                 : (httpPorts.length > 0 ? httpPorts : ["80", "8080", "8880", "2052", "2082", "2086", "2095"]);
+            if (!isValidIPv4(server)) {
+                 for (let p of portList) {
+                    if (server.includes(p)) {
+                        port = p;
+                        break;
+                    }
+                }
+            }
+            if (port === "-1") port = tls ? "443" : "80";
+        }
 		
-		const localHttpsPorts = httpsPorts.length > 0 ? httpsPorts : ["443", "2053", "2083", "2087", "2096", "8443"];
-		if (!isValidIPv4(address) && port == "-1") {
-			for (let httpsPort of localHttpsPorts) {
-				if (address.includes(httpsPort)) {
-					port = httpsPort;
-					break;
-				}
-			}
-		}
-		if (port == "-1") port = "443";
+        let servername = host;
+        let finalPath = generateRandomPath();
+		
+        if (proxyhosts.length > 0 && servername.includes('.workers.dev')) {
+            finalPath = `/${servername}${finalPath}`;
+            servername = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
+            name += ` (via ${servername.substring(0,10)}...)`;
+        }
 
-		let 伪装域名 = host;
-		let 最终路径 = generateRandomPath(); // <-- 每个节点都有自己的随机路径
-		let 节点备注 = '';
-		const matchingProxyIP = proxyIPPool.find(proxyIP => proxyIP.includes(address));
-		if (matchingProxyIP) 最终路径 = `/?proxyip=${matchingProxyIP}`;
+		return {
+            name: name,
+            type: 'vless',
+            server: server,
+            port: parseInt(port, 10),
+            uuid: UUID,
+            network: 'ws',
+            tls: tls,
+            servername: servername,
+            'client-fingerprint': tls ? getRandomFingerprint() : '',
+            'ws-opts': {
+                path: finalPath,
+                headers: {
+                    Host: servername
+                }
+            }
+        };
+	});
 
-		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev'))) {
-			最终路径 = `/${伪装域名}${最终路径}`;
-			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
-			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
-		}
+	return nodeObjects.filter(Boolean); // 过滤掉可能解析失败的 null 值
+}
 
-		const 协议类型 = atob(protocolEncodedFlag);
 
-		const secureProtoLink = `${协议类型}://${UUID}@${address}:${port}?` +
-			`encryption=none&` +
-			`security=tls&` +
-			`sni=${伪装域名}&` +
-			`fp=${getRandomFingerprint()}&` + // <-- 使用随机指纹
-			`alpn=h3&` +
-			`type=ws&` +
-			`host=${伪装域名}&` +
-            `path=${encodeURIComponent(最终路径)}` +
-			`#${encodeURIComponent(addressid + 节点备注)}`;
-
-		return secureProtoLink;
-	}).join('\n');
-
-	let base64Response = responseBody;
-	if (noTLS == 'true') base64Response += `\n${notlsresponseBody}`;
-	if (link.length > 0) base64Response += '\n' + link.join('\n');
-	return btoa(base64Response);
+/**
+ * 根据节点对象数组生成 Base64 编码的订阅内容
+ * @param {Array} nodeObjects - 由 prepareNodeList 生成的节点对象数组
+ * @returns {string} - Base64 编码后的订阅链接字符串
+ */
+function 生成本地订阅(nodeObjects) {
+	const 协议类型 = atob(protocolEncodedFlag);
+    const secureProtoLinks = nodeObjects.map(node => {
+        const link = `${协议类型}://${node.uuid}@${node.server}:${node.port}?` +
+            `encryption=none&` +
+            `security=${node.tls ? 'tls' : 'none'}&` +
+            `${node.tls ? `sni=${node.servername}&` : ''}` +
+            `${node.tls ? `fp=${node['client-fingerprint']}&` : ''}` +
+            `type=${node.network}&` +
+            `host=${node.servername}&` +
+            `path=${encodeURIComponent(node['ws-opts'].path)}` +
+            `#${encodeURIComponent(node.name)}`;
+        return link;
+    }).join('\n');
+    
+    let finalLinks = secureProtoLinks;
+    if (link.length > 0) {
+        finalLinks += '\n' + link.join('\n');
+    }
+	return btoa(finalLinks);
 }
 
 function 整理(内容) {
@@ -3604,73 +3580,6 @@ async function handleTestConnection(request) {
     }
 }
 
-/**
- * 【关键修复】解析 Vless URL 为一个结构化的节点对象
- * @param {string} url - Vless 链接
- * @returns {object | null} - 节点对象或 null
- */
-function parseVlessURL(url) {
-    if (!url || !url.startsWith('vless://')) {
-        return null;
-    }
-    try {
-        // 使用正则表达式进行健壮的解析
-        const match = url.match(/^vless:\/\/([^@]+)@([^:?#]+):(\d+)/);
-        if (!match) {
-            console.error("无法解析VLESS URL的核心部分:", url);
-            return null;
-        }
-
-        const uuid = match[1];
-        const server = match[2];
-        const port = parseInt(match[3], 10);
-
-        // 提取查询参数和哈希（节点名）
-        const queryIndex = url.indexOf('?');
-        const hashIndex = url.indexOf('#');
-        
-        const queryPart = (queryIndex !== -1) 
-            ? url.substring(queryIndex + 1, (hashIndex !== -1) ? hashIndex : url.length) 
-            : '';
-        const hashPart = (hashIndex !== -1) 
-            ? url.substring(hashIndex + 1) 
-            : '';
-
-        const params = new URLSearchParams(queryPart);
-
-        const node = {
-            name: decodeURIComponent(hashPart) || `${server}:${port}`,
-            type: 'vless',
-            server: server,
-            port: port,
-            uuid: uuid,
-            network: params.get('type') || 'ws',
-            tls: params.get('security') === 'tls',
-            udp: true, 
-        };
-
-        if (node.tls) {
-            node.servername = params.get('sni') || node.server;
-            node['client-fingerprint'] = params.get('fp') || 'chrome';
-        }
-
-        if (node.network === 'ws') {
-            const encodedPath = params.get('path') || '/';
-            node['ws-opts'] = {
-                // 关键修复：解码路径
-                path: decodeURIComponent(encodedPath),
-                headers: {
-                    Host: params.get('host') || node.server
-                }
-            };
-        }
-
-        return node;
-    } catch (e) {
-        console.error("解析 Vless URL 时出现异常:", url, e);
-        return null;
-    }
-}
 
 /**
  * 生成Clash配置
@@ -3678,10 +3587,8 @@ function parseVlessURL(url) {
  * @returns {string} - YAML 格式的 Clash 配置
  */
 function generateClashConfig(nodeObjects) {
-    // 关键修复：过滤掉解析失败的空节点
-    const validNodes = nodeObjects.filter(Boolean);
-    
-    const proxiesYaml = validNodes.map(p => {
+    // 生成 proxies 部分的 YAML 字符串
+    const proxiesYaml = nodeObjects.map(p => {
         let proxyString = `  - name: ${JSON.stringify(p.name)}\n`;
         proxyString += `    type: ${p.type}\n`;
         proxyString += `    server: ${p.server}\n`;
@@ -3707,11 +3614,13 @@ function generateClashConfig(nodeObjects) {
         return proxyString;
     }).join('');
 
-    const proxyNames = validNodes.map(p => p.name);
+    const proxyNames = nodeObjects.map(p => p.name);
     
+    // 定义规范化的代理组名称
     const autoSelectGroupName = "🚀 自动选择";
     const manualSelectGroupName = "手动选择";
 
+    // --- START: 将规则定义为数组以确保正确格式化 ---
     const customRulesArray = [
         `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
         `DOMAIN-SUFFIX,gstatic.com,${manualSelectGroupName}`,
@@ -3723,8 +3632,11 @@ function generateClashConfig(nodeObjects) {
         'GEOIP,CN,DIRECT',
         `MATCH,${manualSelectGroupName}`
     ];
+    // 将规则数组转换为格式正确的YAML字符串
     const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
+    // --- END: 修正 ---
 
+    // 拼接完整的 YAML 配置
     const config = `
 port: 7890
 socks-port: 7891
@@ -3770,10 +3682,7 @@ ${rulesYaml}
  * @returns {string} - JSON 格式的 Sing-box 配置
  */
 function generateSingboxConfig(nodeObjects) {
-    // 关键修复：过滤掉解析失败的空节点
-    const validNodes = nodeObjects.filter(Boolean);
-
-    const outbounds = validNodes.map(p => {
+    const outbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
             tag: p.name,
@@ -3836,7 +3745,7 @@ function generateSingboxConfig(nodeObjects) {
                 { "geoip": "cn", "outbound": "direct" }
                 
             ],
-            "final": "manual-select",
+            "final": "manual-select", // 使用 final 替代 default_outbound
             "auto_detect_interface": true
         }
     };
@@ -3850,10 +3759,8 @@ function generateSingboxConfig(nodeObjects) {
  * @returns {string} - .conf 格式的 Loon 配置
  */
 function generateLoonConfig(nodeObjects) {
-    // 关键修复：过滤掉解析失败的空节点
-    const validNodes = nodeObjects.filter(Boolean);
-
-    const proxiesConf = validNodes.map(p => {
+    // [Proxy] 部分
+    const proxiesConf = nodeObjects.map(p => {
         let proxyLine = `${JSON.stringify(p.name)} = ${p.type}, ${p.server}, ${p.port}, uuid=${p.uuid}, ws=true`;
         if (p.tls) {
             proxyLine += `, tls=true, servername=${p.servername}, tls-fingerprint=${p['client-fingerprint']}`;
@@ -3864,11 +3771,13 @@ function generateLoonConfig(nodeObjects) {
         return proxyLine;
     }).join('\n');
 
-    const proxyNames = validNodes.map(p => JSON.stringify(p.name));
+    const proxyNames = nodeObjects.map(p => JSON.stringify(p.name));
 
+    // 定义策略组名称
     const autoSelectGroupName = "🚀 自动选择";
     const manualSelectGroupName = "手机选择";
 
+    // [Proxy Group] 和 [Rule] 部分
     const config = `
 [General]
 dns-server = 223.5.5.5, 8.8.8.8
