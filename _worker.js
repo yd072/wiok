@@ -2706,14 +2706,9 @@ ${rulesYaml}
     return config.trim();
 }
 
-/**
- * 生成符合新版 Sing-box 规范的配置文件 (高级版，已最终正确修复DNS初始化问题)
- * @param {Array<Object>} nodeObjects - 包含所有节点信息的对象数组
- * @returns {string} - 格式化后的 JSON 配置字符串
- */
+//Sing-box配置
 function generateSingboxConfig(nodeObjects) {
-    // 步骤 1: 动态生成 protocolEncodedFlag 出站节点列表
-    const protocolEncodedFlagOutbounds = nodeObjects.map(p => {
+    const outbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
             tag: p.name,
@@ -2742,131 +2737,109 @@ function generateSingboxConfig(nodeObjects) {
         return outbound;
     });
     
-    // 步骤 2: 提取所有节点的名称，用于策略组
-    const proxyNames = protocolEncodedFlagOutbounds.map(o => o.tag);
+    const proxyNames = outbounds.map(o => o.tag);
 
-    // 步骤 3: 组装完整的配置对象，包含最终正确的 DNS 修复
+    // 定义标准的策略组名称
+    const manualSelectTag = "手动选择";
+    const autoSelectTag = "自动选择";
+
     const config = {
-      "log": {
-        "disabled": false,
-        "level": "info",
-        "timestamp": true
-      },
-      "dns": {
-        "servers": [
-          // 1. 定义一个基于 IP 的引导解析器
-          {
-            "tag": "bootstrap-dns",
-            "address": "223.5.5.5",
-            "detour": "直连"
-          },
-          // 2. 定义主要的 DoH 服务器 (不再需要内部的 address_resolver)
-          {
-            "tag": "Ali-DoH",
-            "address": "https://223.5.5.5/dns-query",
-            "detour": "直连"
-          },
-          {
-            "tag": "Google-DoH",
-            "address": "https://dns.google/dns-query",
-            "detour": "直连"
-          }
-        ],
-        // 3. 核心修复：在顶层指定全局的引导解析器
-        "address_resolver": "bootstrap-dns",
-        
-        "strategy": "ipv4_only",
-        "final": "Ali-DoH"
-      },
-      "ntp": {
-        "enabled": true,
-        "server": "time.apple.com",
-        "server_port": "123"
-      },
-      "inbounds": [
+        "log": {
+            "level": "info",
+            "timestamp": true
+        },
+        "dns": {
+            "servers": [
+                {
+                    "type": "https",
+                    "tag": "dns-domestic",
+                    "server": "223.5.5.5",
+                    "server_port": "443",
+                    "path": "/dns-query",
+                    "detour": "DIRECT"
+                },
+                {
+                    "type": "https",
+                    "tag": "dns-foreign",
+                    "server": "dns.google",
+                    "server_port": "443",
+                    "path": "/dns-query",
+                    "detour": manualSelectTag
+                }
+            ],
+            "rules": [
+                {
+                    "rule_set": "geosite-cn",
+                    "server": "dns-domestic"
+                },
+                {
+                    "outbound": "any",
+                    "server": "dns-foreign"
+                }
+            ],
+            "strategy": "prefer_ipv4"
+        },
+        "inbounds": [
             {
-                "type": "tun",
-                "tag": "tun-in",
-                "interface_name": "tun0",
-                "address": [
-                    "172.19.0.1/30",
-                    "fdfe:dcba:9876::1/126"
-                ],
-                "route_address": [
-                    "0.0.0.0/1",
-                    "128.0.0.0/1",
-                    "::/1",
-                    "8000::/1"
-                ],
-                "route_exclude_address": [
-                    "192.168.0.0/16",
-                    "fc00::/7"
-                ]
+                "type": "mixed",
+                "tag": "mixed-in",
+                "listen": "0.0.0.0",
+                "listen_port": "7890"
+            }
+        ],
+        "outbounds": [
+            { 
+                "type": "selector", 
+                "tag": manualSelectTag, 
+                "outbounds": [autoSelectTag, "DIRECT", ...proxyNames] 
             },
-        {
-          "type": "mixed",
-          "tag": "mixed-in",
-          "listen": "0.0.0.0",
-          "listen_port": "7890"
-        }
-      ],
-      "outbounds": [
-        // 策略组
-        {
-          "type": "selector",
-          "tag": "代理选择",
-          "outbounds": ["自动选择", ...proxyNames, "直连", "拦截"]
-        },
-        {
-          "type": "urltest",
-          "tag": "自动选择",
-          "outbounds": proxyNames,
-          "url": "http://www.gstatic.com/generate_204",
-          "interval": "10m"
-        },
-        // 动态生成的 protocolEncodedFlag 节点
-        ...protocolEncodedFlagOutbounds,
-        // 内置出站
-        { "type": "direct", "tag": "直连" },
-        { "type": "block", "tag": "拦截" },
-        { "type": "dns", "tag": "dns-out" }
-      ],
-      "route": {
-        "rules": [
-          { "protocol": "dns", "outbound": "dns-out" },
-          { "ip_is_private": true, "outbound": "直连" },
-          { "rule_set": "geosite-cn", "outbound": "直连" },
-          { "rule_set": "geoip-cn", "outbound": "直连" }
+            { 
+              "type": "urltest", 
+              "tag": autoSelectTag, 
+              "outbounds": proxyNames,
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
+            },
+            ...outbounds,
+            { "type": "direct", "tag": "DIRECT" },
+            { "type": "block", "tag": "BLOCK" }
         ],
-        "rule_set": [
-          {
-            "tag": "geoip-cn",
-            "type": "remote",
-            "format": "binary",
-            "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-            "download_detour": "直连"
-          },
-          {
-            "tag": "geosite-cn",
-            "type": "remote",
-            "format": "binary",
-            "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-            "download_detour": "直连"
-          }
-        ],
-        "final": "代理选择"
-      },
-      "experimental": {
-        "cache_file": {
-          "enabled": true
+        "route": {
+            "rule_set": [
+              {
+                "tag": "geosite-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+                "download_detour": manualSelectTag
+              },
+              {
+                "tag": "geoip-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+                "download_detour": manualSelectTag
+              }
+            ],
+            "rules": [
+                {
+                    "protocol": "dns",
+                    "outbound": "dns-out"
+                },
+                { "ip_is_private": true, "outbound": "DIRECT" },
+                { "rule_set": "geosite-cn", "outbound": "DIRECT" },
+                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
+            ],
+            "final": manualSelectTag, 
+            "auto_detect_interface": true
         },
-        "clash_api": {
-            "external_controller": "127.0.0.1:9090"
+        "experimental": {
+            "cache_file": {
+                "enabled": true
+            }
         }
-      }
     };
-
-    // 步骤 4: 将配置对象转换为格式化的 JSON 字符串并返回
+    
     return JSON.stringify(config, null, 2);
 }
 
