@@ -2739,9 +2739,10 @@ function generateSingboxConfig(nodeObjects) {
     
     const proxyNames = outbounds.map(o => o.tag);
 
-    // 定义标准的策略组名称
     const manualSelectTag = "手动选择";
     const autoSelectTag = "自动选择";
+    const directTag = "DIRECT"; // 使用常量避免拼写错误
+    const blockTag = "BLOCK";
 
     const config = {
         "log": {
@@ -2750,102 +2751,50 @@ function generateSingboxConfig(nodeObjects) {
         },
         "dns": {
             "servers": [
-                {
-                    "type": "https",
-                    "tag": "dns-domestic",
-                    "server": "223.5.5.5",
-                    "server_port": 443,
-                    "path": "/dns-query"
-                },
-                {
-                    "type": "https",
-                    "tag": "dns-foreign",
-                    "server": "dns.google",
-                    "server_port": 443,
-                    "path": "/dns-query",
-                    "detour": manualSelectTag
-                }
+                { "type": "https", "tag": "dns-domestic", "server": "223.5.5.5", "server_port": 443, "path": "/dns-query" },
+                { "type": "https", "tag": "dns-foreign", "server": "dns.google", "server_port": 443, "path": "/dns-query", "detour": manualSelectTag }
             ],
             "rules": [
-                {
-                    "rule_set": "geosite-cn",
-                    "server": "dns-domestic"
-                },
-                {
-                    "server": "dns-foreign"
-                }
+                { "rule_set": ["geosite-cn", "geosite-google"], "server": "dns-domestic", "disable_cache": true }, // Google域名也用国内DNS防污染，反正流量要走代理
+                { "server": "dns-foreign" }
             ],
             "strategy": "prefer_ipv4"
         },
         "inbounds": [
-            {
-                "type": "tun",
-                "tag": "tun-in",
-                "interface_name": "tun0",
-                "inet4_address": "172.19.0.1/30",
-                "auto_route": true,
-                "strict_route": true,
-                "stack": "gvisor",
-                // 关键修正(1): 为TUN接口设置一个合理的MTU值
-                "mtu": 1500
-            }
+            { "type": "tun", "tag": "tun-in", "interface_name": "tun0", "inet4_address": "172.19.0.1/30", "mtu": 1500, "auto_route": true, "strict_route": true, "stack": "gvisor" }
         ],
         "outbounds": [
-            { 
-                "type": "selector", 
-                "tag": manualSelectTag, 
-                "outbounds": [autoSelectTag, "DIRECT", ...proxyNames] 
-            },
-            { 
-              "type": "urltest", 
-              "tag": autoSelectTag, 
-              "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204", 
-              "interval": "5m" 
-            },
+            { "type": "selector", "tag": manualSelectTag, "outbounds": [autoSelectTag, directTag, ...proxyNames] },
+            { "type": "urltest", "tag": autoSelectTag, "outbounds": proxyNames, "url": "http://www.gstatic.com/generate_204", "interval": "5m" },
             ...outbounds,
-            { "type": "direct", "tag": "DIRECT" },
-            { "type": "block", "tag": "BLOCK" }
+            { "type": "direct", "tag": directTag },
+            { "type": "block", "tag": blockTag }
         ],
         "route": {
             "default_domain_resolver": "dns-foreign",
             "rule_set": [
-              {
-                "tag": "geosite-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
-                "download_detour": "DIRECT"
-              },
-              {
-                "tag": "geoip-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-                "download_detour": "DIRECT"
-
-              }
-
+                { "tag": "geosite-google", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-google.srs", "download_detour": manualSelectTag, "auto_update": true, "update_interval": "24h" },
+                { "tag": "geosite-cn", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs", "download_detour": manualSelectTag, "auto_update": true, "update_interval": "24h" },
+                { "tag": "geoip-cn", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs", "download_detour": manualSelectTag, "auto_update": true, "update_interval": "24h" }
             ],
             "rules": [
-                {
-                    "protocol": "dns",
-                    "outbound": "dns-out"
-                },
-                // 白名单规则：明确规定哪些流量【不走代理】
-                { "ip_is_private": true, "outbound": "DIRECT" },
-                { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
+                { "protocol": "dns", "outbound": "dns-out" },
+                // 关键修正(1): 增加一条规则，在最前面直接禁用QUIC协议
+                { "protocol": "quic", "outbound": blockTag },
+                
+                // 白名单规则
+                { "ip_is_private": true, "outbound": directTag },
+                { "rule_set": "geoip-cn", "outbound": directTag },
+                { "rule_set": "geosite-cn", "outbound": directTag },
 
+                // 关键修正(2): 为谷歌流量上双保险，明确指定走代理
+                { "rule_set": "geosite-google", "outbound": manualSelectTag }
             ],
-                        "final": manualSelectTag, 
+            "final": manualSelectTag, 
             "auto_detect_interface": true
         },
         "experimental": {
-            "cache_file": {
-                "enabled": true
-            }
-        }
+            "cache_file": { "enabled": true } }
     };
     
     return JSON.stringify(config, null, 2);
