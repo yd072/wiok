@@ -2779,10 +2779,13 @@ function generateSingboxConfig(nodeObjects) {
         },
         "inbounds": [
             {
-                "type": "mixed",
-                "tag": "mixed-in",
-                "listen": "0.0.0.0",
-                "listen_port": 2345
+                "type": "tun",
+                "tag": "tun-in",
+                "interface_name": "tun0",
+                "inet4_address": "172.19.0.1/30",
+                "auto_route": true,
+                "strict_route": true,
+                "stack": "gvisor"
             }
         ],
         "outbounds": [
@@ -2829,18 +2832,20 @@ function generateSingboxConfig(nodeObjects) {
 
               }
             ],
+            // 关键修正: 调整路由规则顺序
             "rules": [
                 {
                     "protocol": "dns",
                     "outbound": "dns-out"
                 },
+                // 1. 优先匹配局域网和私有地址，直连
                 { "ip_is_private": true, "outbound": "DIRECT" },
+                // 2. 其次匹配非中国大陆域名，走代理
+                { "rule_set": "geosite-non-cn", "outbound": manualSelectTag },
+                // 3. 再次匹配中国大陆域名，直连
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" },
-                {
-                    "rule_set": "geosite-non-cn",
-                    "outbound": manualSelectTag
-                }
+                // 4. 最后匹配中国大陆IP，直连
+                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
             ],
             "final": manualSelectTag, 
             "auto_detect_interface": true
