@@ -2777,16 +2777,15 @@ function generateSingboxConfig(nodeObjects) {
             ],
             "strategy": "prefer_ipv4"
         },
-        // 关键修正：使用 "tun" 入站来创建系统级VPN
         "inbounds": [
             {
                 "type": "tun",
                 "tag": "tun-in",
                 "interface_name": "tun0",
-                "inet4_address": "172.19.0.1/30", // 分配一个虚拟IP地址
-                "auto_route": true, // 自动设置路由
-                "strict_route": true, // 严格路由，防止流量绕过
-                "stack": "gvisor" // 使用 gvisor 协议栈，兼容性好
+                "inet4_address": "172.19.0.1/30",
+                "auto_route": true,
+                "strict_route": true,
+                "stack": "gvisor"
             }
         ],
         "outbounds": [
@@ -2813,15 +2812,29 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "geosite-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
-                "download_detour": manualSelectTag
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+                "download_detour": manualSelectTag,
+                "auto_update": true,
+                "update_interval": "24h"
               },
               {
                 "tag": "geoip-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-                "download_detour": manualSelectTag
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+                "download_detour": manualSelectTag,
+                "auto_update": true,
+                "update_interval": "24h"
+              },
+              // 关键修正(1): 增加 "非中国大陆域名" 规则集
+              {
+                "tag": "geosite-non-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-!cn.srs", // 注意 URL 是 geolocation-!cn
+                "download_detour": manualSelectTag,
+                "auto_update": true,
+                "update_interval": "24h"
               }
             ],
             "rules": [
@@ -2831,7 +2844,12 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 { "ip_is_private": true, "outbound": "DIRECT" },
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
+                { "rule_set": "geoip-cn", "outbound": "DIRECT" },
+                // 关键修正(2): 增加一条路由规则，将非中国大陆域名导向代理
+                {
+                    "rule_set": "geosite-non-cn",
+                    "outbound": manualSelectTag
+                }
             ],
             "final": manualSelectTag, 
             "auto_detect_interface": true
