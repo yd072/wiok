@@ -2812,18 +2812,16 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "geosite-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
                 "download_detour": manualSelectTag,
-                "auto_update": true,
                 "update_interval": "24h"
               },
               {
                 "tag": "geoip-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
                 "download_detour": manualSelectTag,
-                "auto_update": true,
                 "update_interval": "24h"
               },
               // 关键修正(1): 增加 "非中国大陆域名" 规则集
@@ -2831,9 +2829,8 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "geosite-non-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-!cn.srs", // 注意 URL 是 geolocation-!cn
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs", // 注意 URL 是 geolocation-!cn
                 "download_detour": manualSelectTag,
-                "auto_update": true,
                 "update_interval": "24h"
               }
             ],
