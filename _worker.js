@@ -2789,7 +2789,6 @@ function generateSingboxConfig(nodeObjects) {
             }
         ],
         "outbounds": [
-            // 注意：虽然定义了这些出站，但路由规则已不再使用它们
             { 
                 "type": "selector", 
                 "tag": manualSelectTag, 
@@ -2809,7 +2808,6 @@ function generateSingboxConfig(nodeObjects) {
         "route": {
             "default_domain_resolver": "dns-foreign",
             "rule_set": [
-              // 您已经修改为直连下载，这是正确的
               {
                 "tag": "geosite-cn",
                 "type": "remote",
@@ -2824,15 +2822,8 @@ function generateSingboxConfig(nodeObjects) {
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
                 "download_detour": "DIRECT"
 
-              },
-              {
-                "tag": "geosite-non-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
-                "download_detour": "DIRECT"
-
               }
+
             ],
             "rules": [
                 {
@@ -2844,10 +2835,10 @@ function generateSingboxConfig(nodeObjects) {
                 { "rule_set": "geoip-cn", "outbound": "DIRECT" },
                 {
                     "rule_set": "geosite-non-cn",
-                    "outbound": "DIRECT" 
+                    "outbound": manualSelectTag
                 }
             ],
-            "final": "DIRECT", 
+            "final": manualSelectTag, 
             "auto_detect_interface": true
         },
         "experimental": {
