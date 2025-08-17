@@ -2715,6 +2715,7 @@ function generateSingboxConfig(nodeObjects) {
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
+            "domain_strategy": "use_domain", 
             transport: {
                 type: p.network,
                 path: p['ws-opts'].path,
@@ -2819,18 +2820,36 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "geoip-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
                 "download_detour": "DIRECT"
+
+              },
+              {
+                "tag": "geosite-non-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
+                "download_detour": "DIRECT"
+
               }
             ],
             "rules": [
+
+                {
+                    "protocol": "quic",
+                    "outbound": "BLOCK"
+                },
                 {
                     "protocol": "dns",
                     "outbound": "dns-out"
                 },
                 { "ip_is_private": true, "outbound": "DIRECT" },
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
+                { "rule_set": "geoip-cn", "outbound": "DIRECT" },
+                {
+                    "rule_set": "geosite-non-cn",
+                    "outbound": manualSelectTag
+                }
             ],
             "final": manualSelectTag, 
             "auto_detect_interface": true
