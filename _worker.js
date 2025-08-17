@@ -2749,7 +2749,6 @@ function generateSingboxConfig(nodeObjects) {
             "timestamp": true
         },
         "dns": {
-            // 1. 定义所有可用的上游DNS服务器
             "servers": [
                 {
                     "type": "https",
@@ -2767,25 +2766,27 @@ function generateSingboxConfig(nodeObjects) {
                     "detour": manualSelectTag
                 }
             ],
-            // 2. 定义全局DNS路由规则
             "rules": [
                 {
                     "rule_set": "geosite-cn",
                     "server": "dns-domestic"
                 },
                 {
-                    // 默认规则：其他所有查询都走国外DNS
-                    "server": "dns-foreign" 
+                    "server": "dns-foreign"
                 }
             ],
             "strategy": "prefer_ipv4"
         },
+        // 关键修正：使用 "tun" 入站来创建系统级VPN
         "inbounds": [
             {
-                "type": "mixed",
-                "tag": "mixed-in",
-                "listen": "0.0.0.0",
-                "listen_port": 7890
+                "type": "tun",
+                "tag": "tun-in",
+                "interface_name": "tun0",
+                "inet4_address": "172.19.0.1/30", // 分配一个虚拟IP地址
+                "auto_route": true, // 自动设置路由
+                "strict_route": true, // 严格路由，防止流量绕过
+                "stack": "gvisor" // 使用 gvisor 协议栈，兼容性好
             }
         ],
         "outbounds": [
@@ -2806,8 +2807,6 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "block", "tag": "BLOCK" }
         ],
         "route": {
-            // 3. 关键：设置所有出站节点默认使用 "dns-foreign" 来解析自己的服务器地址
-            // 这解决了代理连接前的 "鸡生蛋" 问题
             "default_domain_resolver": "dns-foreign",
             "rule_set": [
               {
