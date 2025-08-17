@@ -2822,7 +2822,6 @@ function generateSingboxConfig(nodeObjects) {
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
                 "download_detour": DIRECT,
-                "update_interval": "24h"
               },
               {
                 "tag": "geoip-cn",
@@ -2830,7 +2829,6 @@ function generateSingboxConfig(nodeObjects) {
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
                 "download_detour": DIRECT,
-                "update_interval": "24h"
               },
               // 关键修正(1): 增加 "非中国大陆域名" 规则集
               {
@@ -2839,7 +2837,6 @@ function generateSingboxConfig(nodeObjects) {
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs", // 注意 URL 是 geolocation-!cn
                 "download_detour": DIRECT,
-                "update_interval": "24h"
               }
             ],
             "rules": [
