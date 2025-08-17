@@ -2742,6 +2742,7 @@ function generateSingboxConfig(nodeObjects) {
     // 定义标准的策略组名称
     const manualSelectTag = "手动选择";
     const autoSelectTag = "自动选择";
+    const localDnsTag = "local-dns"; // 定义内部DNS的标签
 
     const config = {
         "log": {
@@ -2750,13 +2751,13 @@ function generateSingboxConfig(nodeObjects) {
         },
         "dns": {
             "servers": [
+                // 1. 定义上游DNS服务器 (数据源)
                 {
                     "type": "https",
                     "tag": "dns-domestic",
                     "server": "223.5.5.5",
                     "server_port": 443,
                     "path": "/dns-query"
-                    // 错误修正：对于可直连的DNS，移除多余的 "detour" 字段
                 },
                 {
                     "type": "https",
@@ -2764,19 +2765,26 @@ function generateSingboxConfig(nodeObjects) {
                     "server": "dns.google",
                     "server_port": 443,
                     "path": "/dns-query",
-                    "detour": manualSelectTag // 正确：国外DNS需要通过代理访问
-                }
-            ],
-            "rules": [
-                {
-                    "rule_set": "geosite-cn",
-                    "server": "dns-domestic"
+                    "detour": manualSelectTag
                 },
+                // 2. 定义内部 local DNS 解析器 (处理引擎)
                 {
-                    "outbound": "any",
-                    "server": "dns-foreign"
+                    "type": "local",
+                    "tag": localDnsTag,
+                    "rules": [
+                        {
+                            "rule_set": "geosite-cn",
+                            "server": "dns-domestic"
+                        },
+                        {
+                            "outbound": "any",
+                            "server": "dns-foreign"
+                        }
+                    ]
                 }
             ],
+            // 3. 设置默认解析器为我们定义的 local DNS
+            "final": localDnsTag,
             "strategy": "prefer_ipv4"
         },
         "inbounds": [
@@ -2805,6 +2813,8 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "block", "tag": "BLOCK" }
         ],
         "route": {
+            // 4. 设置所有出站默认使用 local DNS 来解析服务器地址
+            "default_domain_resolver": localDnsTag,
             "rule_set": [
               {
                 "tag": "geosite-cn",
