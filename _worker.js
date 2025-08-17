@@ -2778,24 +2778,12 @@ function generateSingboxConfig(nodeObjects) {
             "strategy": "prefer_ipv4"
         },
         "inbounds": [
-    {
-      "type": "tun",
-      "address": [
-        "172.19.0.1/30",
-        "fdfe:dcba:9876::1/126"
-      ],
-      "route_address": [
-        "0.0.0.0/1",
-        "128.0.0.0/1",
-        "::/1",
-        "8000::/1"
-      ],
-      "route_exclude_address": [
-        "192.168.0.0/16",
-        "fc00::/7"
-      ]
-    }
-
+            {
+                "type": "mixed",
+                "tag": "mixed-in",
+                "listen": "172.0.0.1",
+                "listen_port": 2345
+            }
         ],
         "outbounds": [
             { 
