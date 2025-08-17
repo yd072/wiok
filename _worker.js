@@ -2755,8 +2755,8 @@ function generateSingboxConfig(nodeObjects) {
                     "tag": "dns-domestic",
                     "server": "223.5.5.5",
                     "server_port": 443,
-                    "path": "/dns-query",
-                    "detour": "DIRECT"
+                    "path": "/dns-query"
+                    // 错误修正：对于可直连的DNS，移除多余的 "detour" 字段
                 },
                 {
                     "type": "https",
@@ -2764,7 +2764,7 @@ function generateSingboxConfig(nodeObjects) {
                     "server": "dns.google",
                     "server_port": 443,
                     "path": "/dns-query",
-                    "detour": manualSelectTag
+                    "detour": manualSelectTag // 正确：国外DNS需要通过代理访问
                 }
             ],
             "rules": [
@@ -2784,7 +2784,7 @@ function generateSingboxConfig(nodeObjects) {
                 "type": "mixed",
                 "tag": "mixed-in",
                 "listen": "0.0.0.0",
-                "listen_port": 7890
+                "listen_port": 2345
             }
         ],
         "outbounds": [
