@@ -2762,8 +2762,8 @@ function generateSingboxConfig(nodeObjects) {
                     "tag": "dns-foreign",
                     "server": "dns.google",
                     "server_port": 443,
-                    "path": "/dns-query",
-                    "detour": manualSelectTag
+                    "path": "/dns-query"
+                    // 关键修正(1): 移除 detour，让国外DNS也直连
                 }
             ],
             "rules": [
@@ -2789,9 +2789,10 @@ function generateSingboxConfig(nodeObjects) {
             }
         ],
         "outbounds": [
+            // 注意：虽然定义了这些出站，但路由规则已不再使用它们
             { 
                 "type": "selector", 
-                "tag": "manualSelectTag", 
+                "tag": manualSelectTag, 
                 "outbounds": [autoSelectTag, "DIRECT", ...proxyNames] 
             },
             { 
@@ -2808,6 +2809,7 @@ function generateSingboxConfig(nodeObjects) {
         "route": {
             "default_domain_resolver": "dns-foreign",
             "rule_set": [
+              // 您已经修改为直连下载，这是正确的
               {
                 "tag": "geosite-cn",
                 "type": "remote",
@@ -2832,20 +2834,18 @@ function generateSingboxConfig(nodeObjects) {
 
               }
             ],
-            // 关键修正: 调整路由规则顺序
             "rules": [
                 {
                     "protocol": "dns",
                     "outbound": "dns-out"
                 },
-                // 1. 优先匹配局域网和私有地址，直连
                 { "ip_is_private": true, "outbound": "DIRECT" },
-                // 2. 其次匹配非中国大陆域名，走代理
-                { "rule_set": "geosite-non-cn", "outbound": "DIRECT" },
-                // 3. 再次匹配中国大陆域名，直连
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                // 4. 最后匹配中国大陆IP，直连
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
+                { "rule_set": "geoip-cn", "outbound": "DIRECT" },
+                {
+                    "rule_set": "geosite-non-cn",
+                    "outbound": "DIRECT" 
+                }
             ],
             "final": "DIRECT", 
             "auto_detect_interface": true
