@@ -2707,15 +2707,15 @@ ${rulesYaml}
 }
 
 /**
- * 生成符合新版 Sing-box 规范的配置文件 (高级版)
+ * 生成符合新版 Sing-box 规范的配置文件 (高级版，已修复DNS bootstrap问题)
  * @param {Array<Object>} nodeObjects - 包含所有节点信息的对象数组
  * @returns {string} - 格式化后的 JSON 配置字符串
  */
 function generateSingboxConfig(nodeObjects) {
-
+    // 步骤 1: 动态生成 protocolEncodedFlag 出站节点列表
     const protocolEncodedFlagOutbounds = nodeObjects.map(p => {
         let outbound = {
-            type: p.type,
+            type: p.type, // p.type 将会是 "protocolEncodedFlag"
             tag: p.name,
             server: p.server,
             server_port: p.port,
@@ -2742,33 +2742,45 @@ function generateSingboxConfig(nodeObjects) {
         return outbound;
     });
     
-    // 步骤 2: 提取所有节点的名称，用于策略组 (与原版逻辑相同)
+    // 步骤 2: 提取所有节点的名称，用于策略组
     const proxyNames = protocolEncodedFlagOutbounds.map(o => o.tag);
 
-    // 步骤 3: 组装全新的、更详细的配置对象
+    // 步骤 3: 组装完整的配置对象，包含 DNS bootstrap 修复
     const config = {
       "log": {
         "disabled": false,
         "level": "info",
-        "output": "box.log", // 移动端此设置通常无效，但按模板保留
         "timestamp": true
       },
       "dns": {
         "servers": [
-          // 仍然使用简单且高效的 DoH 服务器
-          { "address": "https://223.5.5.5/dns-query", "tag": "ali-doh" },
-          { "address": "https://dns.google/dns-query", "tag": "google-doh" }
+          // 主要的 DoH (DNS over HTTPS) 服务器
+          {
+            "tag": "Ali-DoH",
+            "address": "https://223.5.5.5/dns-query",
+            "detour": "直连" // 关键：确保DNS查询本身不走代理
+          },
+          {
+            "tag": "Google-DoH",
+            "address": "https://dns.google/dns-query",
+            "detour": "直连"
+          }
         ],
-        "strategy": "ipv4_only" // 移动端网络建议优先使用 IPv4
+        // --- 核心修复：添加基于 IP 的引导 DNS ---
+        "bootstrap": [
+          "223.5.5.5",
+          "1.1.1.1",
+          "8.8.8.8"
+        ],
+        "strategy": "ipv4_only",
+        "final": "Ali-DoH" // 默认使用阿里DNS进行最终查询
       },
       "ntp": {
         "enabled": true,
         "server": "time.apple.com",
-        "server_port": 123,
-        "interval": "30m"
+        "server_port": 123
       },
       "inbounds": [
-        // 必须配置一个入站才能让客户端工作
         {
           "type": "mixed",
           "tag": "mixed-in",
@@ -2777,7 +2789,7 @@ function generateSingboxConfig(nodeObjects) {
         }
       ],
       "outbounds": [
-        // --- 策略组 ---
+        // 策略组
         {
           "type": "selector",
           "tag": "代理选择",
@@ -2786,43 +2798,23 @@ function generateSingboxConfig(nodeObjects) {
         {
           "type": "urltest",
           "tag": "自动选择",
-          "outbounds": proxyNames, // 对所有动态节点进行测速
+          "outbounds": proxyNames,
           "url": "http://www.gstatic.com/generate_204",
           "interval": "10m"
         },
+        // 动态生成的 protocolEncodedFlag 节点
         ...protocolEncodedFlagOutbounds,
-        // --- 内置出站 ---
-        {
-          "type": "direct",
-          "tag": "直连"
-        },
-        {
-          "type": "block",
-          "tag": "拦截"
-        },
-        {
-          "type": "dns",
-          "tag": "dns-out"
-        }
+        // 内置出站
+        { "type": "direct", "tag": "直连" },
+        { "type": "block", "tag": "拦截" },
+        { "type": "dns", "tag": "dns-out" }
       ],
       "route": {
         "rules": [
-          {
-            "protocol": "dns",
-            "outbound": "dns-out"
-          },
-          {
-            "ip_is_private": true,
-            "outbound": "直连"
-          },
-          {
-            "rule_set": "geosite-cn",
-            "outbound": "直连"
-          },
-          {
-            "rule_set": "geoip-cn",
-            "outbound": "直连"
-          }
+          { "protocol": "dns", "outbound": "dns-out" },
+          { "ip_is_private": true, "outbound": "直连" },
+          { "rule_set": "geosite-cn", "outbound": "直连" },
+          { "rule_set": "geoip-cn", "outbound": "直连" }
         ],
         "rule_set": [
           {
@@ -2830,27 +2822,24 @@ function generateSingboxConfig(nodeObjects) {
             "type": "remote",
             "format": "binary",
             "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-            "download_detour": "代理选择" // 更新规则时通过代理
+            "download_detour": "直连" // 更新规则时也建议直连
           },
           {
             "tag": "geosite-cn",
             "type": "remote",
             "format": "binary",
             "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-            "download_detour": "代理选择"
+            "download_detour": "直连"
           }
         ],
-        "final": "代理选择" // 所有未匹配规则的流量都走“代理选择”
+        "final": "代理选择"
       },
       "experimental": {
         "cache_file": {
-          "enabled": true,
-          "path": "cache.db"
+          "enabled": true
         },
         "clash_api": {
-            "external_controller": "127.0.0.1:9090",
-            "external_ui": "ui",
-            "secret": ""
+            "external_controller": "127.0.0.1:9090"
         }
       }
     };
