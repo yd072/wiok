@@ -2791,7 +2791,7 @@ function generateSingboxConfig(nodeObjects) {
         "outbounds": [
             { 
                 "type": "selector", 
-                "tag": "DIRECT", 
+                "tag": "manualSelectTag", 
                 "outbounds": [autoSelectTag, "DIRECT", ...proxyNames] 
             },
             { 
