@@ -2712,8 +2712,8 @@ ${rulesYaml}
  * @returns {string} - 格式化后的 JSON 配置字符串
  */
 function generateSingboxConfig(nodeObjects) {
-    // 步骤 1: 动态生成 VLESS 出站节点列表
-    const vlessOutbounds = nodeObjects.map(p => {
+    // 步骤 1: 动态生成 protocolEncodedFlag 出站节点列表
+    const protocolEncodedFlagOutbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
             tag: p.name,
@@ -2743,7 +2743,7 @@ function generateSingboxConfig(nodeObjects) {
     });
     
     // 步骤 2: 提取所有节点的名称，用于策略组
-    const proxyNames = vlessOutbounds.map(o => o.tag);
+    const proxyNames = protocolEncodedFlagOutbounds.map(o => o.tag);
 
     // 步骤 3: 组装完整的配置对象，包含最终正确的 DNS 修复
     const config = {
@@ -2805,8 +2805,8 @@ function generateSingboxConfig(nodeObjects) {
           "url": "http://www.gstatic.com/generate_204",
           "interval": "10m"
         },
-        // 动态生成的 VLESS 节点
-        ...vlessOutbounds,
+        // 动态生成的 protocolEncodedFlag 节点
+        ...protocolEncodedFlagOutbounds,
         // 内置出站
         { "type": "direct", "tag": "直连" },
         { "type": "block", "tag": "拦截" },
