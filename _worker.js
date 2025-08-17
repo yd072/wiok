@@ -2785,7 +2785,9 @@ function generateSingboxConfig(nodeObjects) {
                 "inet4_address": "172.19.0.1/30",
                 "auto_route": true,
                 "strict_route": true,
-                "stack": "gvisor"
+                "stack": "gvisor",
+                // 关键修正(1): 为TUN接口设置一个合理的MTU值
+                "mtu": 1500
             }
         ],
         "outbounds": [
@@ -2830,15 +2832,13 @@ function generateSingboxConfig(nodeObjects) {
                     "protocol": "dns",
                     "outbound": "dns-out"
                 },
+                // 白名单规则：明确规定哪些流量【不走代理】
                 { "ip_is_private": true, "outbound": "DIRECT" },
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" },
-                {
-                    "rule_set": "geosite-non-cn",
-                    "outbound": manualSelectTag
-                }
+                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
+
             ],
-            "final": manualSelectTag, 
+                        "final": manualSelectTag, 
             "auto_detect_interface": true
         },
         "experimental": {
@@ -2849,7 +2849,7 @@ function generateSingboxConfig(nodeObjects) {
     };
     
     return JSON.stringify(config, null, 2);
-}
+}}
 
 //Loon配置 
 function generateLoonConfig(nodeObjects) {
