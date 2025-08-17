@@ -2707,7 +2707,7 @@ ${rulesYaml}
 }
 
 /**
- * 生成符合新版 Sing-box 规范的配置文件 (高级版，已修复DNS bootstrap问题)
+ * 生成符合新版 Sing-box 规范的配置文件 (高级版，已正确修复DNS初始化问题)
  * @param {Array<Object>} nodeObjects - 包含所有节点信息的对象数组
  * @returns {string} - 格式化后的 JSON 配置字符串
  */
@@ -2715,7 +2715,7 @@ function generateSingboxConfig(nodeObjects) {
     // 步骤 1: 动态生成 protocolEncodedFlag 出站节点列表
     const protocolEncodedFlagOutbounds = nodeObjects.map(p => {
         let outbound = {
-            type: p.type, // p.type 将会是 "protocolEncodedFlag"
+            type: p.type,
             tag: p.name,
             server: p.server,
             server_port: p.port,
@@ -2745,7 +2745,7 @@ function generateSingboxConfig(nodeObjects) {
     // 步骤 2: 提取所有节点的名称，用于策略组
     const proxyNames = protocolEncodedFlagOutbounds.map(o => o.tag);
 
-    // 步骤 3: 组装完整的配置对象，包含 DNS bootstrap 修复
+    // 步骤 3: 组装完整的配置对象，包含正确的 DNS address_resolver 修复
     const config = {
       "log": {
         "disabled": false,
@@ -2754,26 +2754,28 @@ function generateSingboxConfig(nodeObjects) {
       },
       "dns": {
         "servers": [
-          // 主要的 DoH (DNS over HTTPS) 服务器
+          // --- 核心修复：第 1 步 - 定义一个基于 IP 的引导解析器 ---
+          {
+            "tag": "bootstrap-dns",
+            "address": "223.5.5.5"
+          },
+          // --- 核心修复：第 2 步 - 让 DoH 服务器使用上面的引导解析器 ---
           {
             "tag": "Ali-DoH",
             "address": "https://223.5.5.5/dns-query",
-            "detour": "直连" // 关键：确保DNS查询本身不走代理
+            "address_resolver": "bootstrap-dns", // 指向引导解析器
+            "detour": "直连"
           },
           {
             "tag": "Google-DoH",
             "address": "https://dns.google/dns-query",
+            "address_resolver": "bootstrap-dns", // 指向引导解析器
             "detour": "直连"
           }
         ],
-        // --- 核心修复：添加基于 IP 的引导 DNS ---
-        "bootstrap": [
-          "223.5.5.5",
-          "1.1.1.1",
-          "8.8.8.8"
-        ],
+        // 注意：顶层的 "bootstrap" 字段已被移除
         "strategy": "ipv4_only",
-        "final": "Ali-DoH" // 默认使用阿里DNS进行最终查询
+        "final": "Ali-DoH"
       },
       "ntp": {
         "enabled": true,
@@ -2785,7 +2787,7 @@ function generateSingboxConfig(nodeObjects) {
           "type": "mixed",
           "tag": "mixed-in",
           "listen": "0.0.0.0",
-          "listen_port": 2345 // 混合端口，同时支持 SOCKS5 和 HTTP
+          "listen_port": 2345
         }
       ],
       "outbounds": [
@@ -2822,7 +2824,7 @@ function generateSingboxConfig(nodeObjects) {
             "type": "remote",
             "format": "binary",
             "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-            "download_detour": "直连" // 更新规则时也建议直连
+            "download_detour": "直连"
           },
           {
             "tag": "geosite-cn",
