@@ -2821,14 +2821,14 @@ function generateSingboxConfig(nodeObjects) {
                 "type": "remote",
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
-                "download_detour": DIRECT,
+                "download_detour": DIRECT
               },
               {
                 "tag": "geoip-cn",
                 "type": "remote",
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-                "download_detour": DIRECT,
+                "download_detour": DIRECT
               },
               // 关键修正(1): 增加 "非中国大陆域名" 规则集
               {
@@ -2836,7 +2836,7 @@ function generateSingboxConfig(nodeObjects) {
                 "type": "remote",
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs", // 注意 URL 是 geolocation-!cn
-                "download_detour": DIRECT,
+                "download_detour": DIRECT
               }
             ],
             "rules": [
