@@ -2800,6 +2800,34 @@ function generateSingboxConfig(nodeObjects) {
             },
             ...outbounds,
             { "type": "direct", "tag": "DIRECT" },
+                    "server": "dns-foreign"
+                }
+            ],
+            "strategy": "prefer_ipv4"
+        },
+        "inbounds": [
+            {
+                "type": "mixed",
+                "tag": "mixed-in",
+                "listen": "0.0.0.0",
+                "listen_port": 2345
+            }
+        ],
+        "outbounds": [
+            { 
+                "type": "selector", 
+                "tag": manualSelectTag, 
+                "outbounds": [autoSelectTag, "DIRECT", ...proxyNames] 
+            },
+            { 
+              "type": "urltest", 
+              "tag": autoSelectTag, 
+              "outbounds": proxyNames,
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
+            },
+            ...outbounds,
+            { "type": "direct", "tag": "DIRECT" },
             { "type": "block", "tag": "BLOCK" }
         ],
         "route": {
@@ -2816,7 +2844,7 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "geoip-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
                 "download_detour": "DIRECT"
 
               },
