@@ -2706,14 +2706,9 @@ ${rulesYaml}
     return config.trim();
 }
 
-/**
- * 生成符合新版 Sing-box 规范的配置文件 (高级版，已正确修复DNS初始化问题)
- * @param {Array<Object>} nodeObjects - 包含所有节点信息的对象数组
- * @returns {string} - 格式化后的 JSON 配置字符串
- */
+//Sing-box配置
 function generateSingboxConfig(nodeObjects) {
-    // 步骤 1: 动态生成 protocolEncodedFlag 出站节点列表
-    const protocolEncodedFlagOutbounds = nodeObjects.map(p => {
+    const outbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
             tag: p.name,
@@ -2742,111 +2737,45 @@ function generateSingboxConfig(nodeObjects) {
         return outbound;
     });
     
-    // 步骤 2: 提取所有节点的名称，用于策略组
-    const proxyNames = protocolEncodedFlagOutbounds.map(o => o.tag);
+    const proxyNames = outbounds.map(o => o.tag);
 
-    // 步骤 3: 组装完整的配置对象，包含正确的 DNS address_resolver 修复
     const config = {
-      "log": {
-        "disabled": false,
-        "level": "info",
-        "timestamp": true
-      },
-      "dns": {
-        "servers": [
-          // --- 核心修复：第 1 步 - 定义一个基于 IP 的引导解析器 ---
-          {
-            "tag": "bootstrap-dns",
-            "address": "223.5.5.5"
-          },
-          // --- 核心修复：第 2 步 - 让 DoH 服务器使用上面的引导解析器 ---
-          {
-            "tag": "Ali-DoH",
-            "address": "https://223.5.5.5/dns-query",
-            "address_resolver": "bootstrap-dns", // 指向引导解析器
-            "detour": "直连"
-          },
-          {
-            "tag": "Google-DoH",
-            "address": "https://dns.google/dns-query",
-            "address_resolver": "bootstrap-dns", // 指向引导解析器
-            "detour": "直连"
-          }
+        "log": {
+            "level": "info",
+            "timestamp": true
+        },
+        "dns": {
+            "servers": [
+                { "address": "https://223.5.5.5/dns-query" },
+                { "address": "https://dns.google/dns-query" }
+            ]
+        },
+        "inbounds": [
+            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
         ],
-        // 注意：顶层的 "bootstrap" 字段已被移除
-        "strategy": "ipv4_only",
-        "final": "Ali-DoH"
-      },
-      "ntp": {
-        "enabled": true,
-        "server": "time.apple.com",
-        "server_port": 123
-      },
-      "inbounds": [
-        {
-          "type": "mixed",
-          "tag": "mixed-in",
-          "listen": "0.0.0.0",
-          "listen_port": 2345
+        "outbounds": [
+            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
+            { 
+              "type": "urltest", 
+              "tag": "auto-select", 
+              "outbounds": proxyNames,
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
+            },
+            ...outbounds,
+            { "type": "direct", "tag": "direct" },
+            { "type": "block", "tag": "block" }
+        ],
+        "route": {
+            "rules": [
+                { "geoip": "cn", "outbound": "direct" }
+                
+            ],
+            "final": "manual-select", 
+            "auto_detect_interface": true
         }
-      ],
-      "outbounds": [
-        // 策略组
-        {
-          "type": "selector",
-          "tag": "代理选择",
-          "outbounds": ["自动选择", ...proxyNames, "直连", "拦截"]
-        },
-        {
-          "type": "urltest",
-          "tag": "自动选择",
-          "outbounds": proxyNames,
-          "url": "http://www.gstatic.com/generate_204",
-          "interval": "10m"
-        },
-        // 动态生成的 protocolEncodedFlag 节点
-        ...protocolEncodedFlagOutbounds,
-        // 内置出站
-        { "type": "direct", "tag": "直连" },
-        { "type": "block", "tag": "拦截" },
-        { "type": "dns", "tag": "dns-out" }
-      ],
-      "route": {
-        "rules": [
-          { "protocol": "dns", "outbound": "dns-out" },
-          { "ip_is_private": true, "outbound": "直连" },
-          { "rule_set": "geosite-cn", "outbound": "直连" },
-          { "rule_set": "geoip-cn", "outbound": "直连" }
-        ],
-        "rule_set": [
-          {
-            "tag": "geoip-cn",
-            "type": "remote",
-            "format": "binary",
-            "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-            "download_detour": "直连"
-          },
-          {
-            "tag": "geosite-cn",
-            "type": "remote",
-            "format": "binary",
-            "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-            "download_detour": "直连"
-          }
-        ],
-        "final": "代理选择"
-      },
-      "experimental": {
-        "cache_file": {
-          "enabled": true
-        },
-        "clash_api": {
-            "external_controller": "127.0.0.1:9090"
-        }
-      }
     };
-
-    // 步骤 4: 将配置对象转换为格式化的 JSON 字符串并返回
+    
     return JSON.stringify(config, null, 2);
 }
 
