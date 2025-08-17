@@ -2715,8 +2715,7 @@ function generateSingboxConfig(nodeObjects) {
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
-            // 关键修正: 使用官方支持的 "as_is" 策略
-            "domain_strategy": "as_is", 
+            "domain_strategy": "use_domain", 
             transport: {
                 type: p.network,
                 path: p['ws-opts'].path,
@@ -2779,15 +2778,13 @@ function generateSingboxConfig(nodeObjects) {
             ],
             "strategy": "prefer_ipv4"
         },
+        // 关键修正：将 "tun" 入站改回 "mixed" 代理入站
         "inbounds": [
             {
-                "type": "tun",
-                "tag": "tun-in",
-                "interface_name": "tun0",
-                "inet4_address": "172.19.0.1/30",
-                "auto_route": true,
-                "strict_route": true,
-                "stack": "gvisor"
+                "type": "mixed",
+                "tag": "mixed-in",
+                "listen": "0.0.0.0", // 监听所有网络接口，允许局域网设备连接
+                "listen_port": 7890 // 监听的端口
             }
         ],
         "outbounds": [
@@ -2814,38 +2811,30 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "geosite-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-                "download_detour": manualSelectTag,
-                "auto_update": true,
-                "update_interval": "24h"
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
+                "download_detour": "DIRECT"
               },
               {
                 "tag": "geoip-cn",
                 "type": "remote",
                 "format": "binary",
                 "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-                "download_detour": manualSelectTag,
-                "auto_update": true,
-                "update_interval": "24h"
+                "download_detour": "DIRECT"
+
               },
               {
                 "tag": "geosite-non-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-!cn.srs",
-                "download_detour": manualSelectTag,
-                "auto_update": true,
-                "update_interval": "24h"
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
+                "download_detour": "DIRECT"
+
               }
             ],
             "rules": [
                 {
                     "protocol": "dns",
                     "outbound": "dns-out"
-                },
-                {
-                    "protocol": "quic",
-                    "outbound": "BLOCK"
                 },
                 { "ip_is_private": true, "outbound": "DIRECT" },
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
