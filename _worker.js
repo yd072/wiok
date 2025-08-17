@@ -2777,6 +2777,7 @@ function generateSingboxConfig(nodeObjects) {
             ],
             "strategy": "prefer_ipv4"
         },
+        // 关键修正：使用 "tun" 入站来创建系统级VPN
         "inbounds": [
             {
                 "type": "tun",
@@ -2820,13 +2821,6 @@ function generateSingboxConfig(nodeObjects) {
                 "type": "remote",
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-                "download_detour": manualSelectTag
-              },
-              {
-                "tag": "geosite-non-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs", // 注意 URL 是 geolocation-!cn
                 "download_detour": manualSelectTag
               }
             ],
