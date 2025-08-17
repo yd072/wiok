@@ -2753,40 +2753,65 @@ function generateSingboxConfig(nodeObjects) {
         "timestamp": true
       },
       "dns": {
-        "servers": [
-          // --- 核心修复：第 1 步 - 定义一个基于 IP 的引导解析器 ---
-               {
-                    "type": "https",
-                    "tag": "Google-DoH",
-                    "server": "dns.google",
-                    "server_port": "443",
-                    "path": "/dns-query",
-                    "headers": {
-                        "Host": "dns.google"
-                    },
-                    "tls": {
-                        "enabled": true,
-                        "server_name": "dns.google"
-                    },
-                     "address_resolver": "bootstrap-dns",
-                     "detour": "直连"   
-                    
-                }
+    "servers": [
+        // 第 1 步：定义一个基于 IP 的、最简单的引导解析器
+        {
+            "tag": "bootstrap-dns",
+            "address": "223.5.5.5",
+            "detour": "直连"
+        },
+        
+        // 第 2 步：定义主要的 DoH 服务器，并让它们使用上面的引导解析器
+        {
+            "tag": "Ali-DoH",
+            "type": "https",
+            "server": "223.5.5.5", // 阿里DNS的域名也是其IP，但为了规范，写上
+            "server_port": 443,
+            "path": "/dns-query",
+            "headers": {
+                "Host": "223.5.5.5" // 或者 "dns.alidns.com"
+            },
+            "tls": {
+                "enabled": true,
+                "server_name": "dns.alidns.com" // 必须是域名
+            },
+            "address_resolver": "bootstrap-dns",
+            "detour": "直连"
+        },
+        {
+            "tag": "Google-DoH",
+            "type": "https",
+            "server": "dns.google",
+            "server_port": "443",
+            "path": "/dns-query",
+            "headers": {
+                "Host": "dns.google"
+            },
+            "tls": {
+                "enabled": true,
+                "server_name": "dns.google"
+            },
+            "address_resolver": "bootstrap-dns",
+            "detour": "直连"
+             }
             ],
+            "strategy": "ipv4_only",
+            "final": "Ali-DoH" // 指定一个默认使用的 DNS
+
         // 注意：顶层的 "bootstrap" 字段已被移除
-        "strategy": "ipv4_only",
+
       },
       "ntp": {
         "enabled": true,
         "server": "time.apple.com",
-        "server_port": 123
+        "server_port": "123"
       },
       "inbounds": [
         {
           "type": "mixed",
           "tag": "mixed-in",
           "listen": "0.0.0.0",
-          "listen_port": 2345
+          "listen_port": "2345"
         }
       ],
       "outbounds": [
