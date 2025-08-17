@@ -2762,7 +2762,6 @@ function generateSingboxConfig(nodeObjects) {
             ],
         // 注意：顶层的 "bootstrap" 字段已被移除
         "strategy": "ipv4_only",
-        "final": "Ali-DoH"
       },
       "ntp": {
         "enabled": true,
