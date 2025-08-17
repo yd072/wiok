@@ -2749,6 +2749,7 @@ function generateSingboxConfig(nodeObjects) {
             "timestamp": true
         },
         "dns": {
+            // 1. 定义所有可用的上游DNS服务器
             "servers": [
                 {
                     "type": "https",
@@ -2766,40 +2767,25 @@ function generateSingboxConfig(nodeObjects) {
                     "detour": manualSelectTag
                 }
             ],
+            // 2. 定义全局DNS路由规则
             "rules": [
                 {
                     "rule_set": "geosite-cn",
                     "server": "dns-domestic"
                 },
                 {
+                    // 默认规则：其他所有查询都走国外DNS
                     "server": "dns-foreign" 
                 }
             ],
             "strategy": "prefer_ipv4"
         },
         "inbounds": [
-            // 1. 新增 TUN 入站，用于接管系统全局流量
             {
-                "type": "tun",
-                "tag": "tun-in",
-                "interface_name": "tun0",
-                "inet4_address": "172.19.0.1/30",
-                "auto_route": true,
-                "strict_route": true,
-                "endpoint_independent_nat": true,
-                // 关键：将捕获到的 DNS 流量（默认53端口）转发到我们自己定义的虚拟DNS服务器地址
-                "dns_server": "172.19.0.2"
-            },
-            // 2. 新增 Direct 入站，用来接收并处理 TUN 转发过来的 DNS 查询
-            {
-                "type": "direct",
-                "tag": "dns-in",
-                "listen": "172.19.0.2",
-                "listen_port": 53,
-                "network": "udp",
-                // 将接收到的流量交给 dns 模块处理
-                "override_address": "dns",
-                "override_port": 53
+                "type": "mixed",
+                "tag": "mixed-in",
+                "listen": "0.0.0.0",
+                "listen_port": 7890
             }
         ],
         "outbounds": [
@@ -2820,6 +2806,8 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "block", "tag": "BLOCK" }
         ],
         "route": {
+            // 3. 关键：设置所有出站节点默认使用 "dns-foreign" 来解析自己的服务器地址
+            // 这解决了代理连接前的 "鸡生蛋" 问题
             "default_domain_resolver": "dns-foreign",
             "rule_set": [
               {
@@ -2838,11 +2826,6 @@ function generateSingboxConfig(nodeObjects) {
               }
             ],
             "rules": [
-                // 3. 调整路由规则，优先处理 TUN 转发过来的 DNS 流量
-                {
-                    "inbound": "dns-in",
-                    "outbound": "dns-out"
-                },
                 {
                     "protocol": "dns",
                     "outbound": "dns-out"
