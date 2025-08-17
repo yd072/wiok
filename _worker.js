@@ -2757,7 +2757,20 @@ function generateSingboxConfig(nodeObjects) {
           // --- 核心修复：第 1 步 - 定义一个基于 IP 的引导解析器 ---
                {
                     "type": "https",
-                    "server": "8.8.8.8"
+                    "tag": "Google-DoH",
+                    "server": "dns.google",
+                    "server_port": "443",
+                    "path": "/dns-query",
+                    "headers": {
+                        "Host": "dns.google"
+                    },
+                    "tls": {
+                        "enabled": true,
+                        "server_name": "dns.google"
+                    },
+                     "address_resolver": "bootstrap-dns",
+                     "detour": "直连"   
+                    
                 }
             ],
         // 注意：顶层的 "bootstrap" 字段已被移除
