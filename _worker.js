@@ -2742,7 +2742,6 @@ function generateSingboxConfig(nodeObjects) {
     // 定义标准的策略组名称
     const manualSelectTag = "手动选择";
     const autoSelectTag = "自动选择";
-    const localDnsTag = "local-dns"; // 定义内部DNS的标签
 
     const config = {
         "log": {
@@ -2750,8 +2749,8 @@ function generateSingboxConfig(nodeObjects) {
             "timestamp": true
         },
         "dns": {
+            // 1. 定义所有可用的上游DNS服务器
             "servers": [
-                // 1. 定义上游DNS服务器 (数据源)
                 {
                     "type": "https",
                     "tag": "dns-domestic",
@@ -2766,25 +2765,19 @@ function generateSingboxConfig(nodeObjects) {
                     "server_port": 443,
                     "path": "/dns-query",
                     "detour": manualSelectTag
-                },
-                // 2. 定义内部 local DNS 解析器 (处理引擎)
-                {
-                    "type": "local",
-                    "tag": localDnsTag,
-                    "rules": [
-                        {
-                            "rule_set": "geosite-cn",
-                            "server": "dns-domestic"
-                        },
-                        {
-                            "outbound": "any",
-                            "server": "dns-foreign"
-                        }
-                    ]
                 }
             ],
-            // 3. 设置默认解析器为我们定义的 local DNS
-            "final": localDnsTag,
+            // 2. 定义全局DNS路由规则
+            "rules": [
+                {
+                    "rule_set": "geosite-cn",
+                    "server": "dns-domestic"
+                },
+                {
+                    // 默认规则：其他所有查询都走国外DNS
+                    "server": "dns-foreign" 
+                }
+            ],
             "strategy": "prefer_ipv4"
         },
         "inbounds": [
@@ -2813,8 +2806,9 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "block", "tag": "BLOCK" }
         ],
         "route": {
-            // 4. 设置所有出站默认使用 local DNS 来解析服务器地址
-            "default_domain_resolver": localDnsTag,
+            // 3. 关键：设置所有出站节点默认使用 "dns-foreign" 来解析自己的服务器地址
+            // 这解决了代理连接前的 "鸡生蛋" 问题
+            "default_domain_resolver": "dns-foreign",
             "rule_set": [
               {
                 "tag": "geosite-cn",
