@@ -2754,7 +2754,7 @@ function generateSingboxConfig(nodeObjects) {
                     "type": "https",
                     "tag": "dns-domestic",
                     "server": "223.5.5.5",
-                    "server_port": "443",
+                    "server_port": 443,
                     "path": "/dns-query",
                     "detour": "DIRECT"
                 },
@@ -2762,7 +2762,7 @@ function generateSingboxConfig(nodeObjects) {
                     "type": "https",
                     "tag": "dns-foreign",
                     "server": "dns.google",
-                    "server_port": "443",
+                    "server_port": 443,
                     "path": "/dns-query",
                     "detour": manualSelectTag
                 }
