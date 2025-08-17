@@ -2707,13 +2707,13 @@ ${rulesYaml}
 }
 
 /**
- * 生成符合新版 Sing-box 规范的配置文件 (高级版，已正确修复DNS初始化问题)
+ * 生成符合新版 Sing-box 规范的配置文件 (高级版，已最终正确修复DNS初始化问题)
  * @param {Array<Object>} nodeObjects - 包含所有节点信息的对象数组
  * @returns {string} - 格式化后的 JSON 配置字符串
  */
 function generateSingboxConfig(nodeObjects) {
-    // 步骤 1: 动态生成 protocolEncodedFlag 出站节点列表
-    const protocolEncodedFlagOutbounds = nodeObjects.map(p => {
+    // 步骤 1: 动态生成 VLESS 出站节点列表
+    const vlessOutbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
             tag: p.name,
@@ -2743,9 +2743,9 @@ function generateSingboxConfig(nodeObjects) {
     });
     
     // 步骤 2: 提取所有节点的名称，用于策略组
-    const proxyNames = protocolEncodedFlagOutbounds.map(o => o.tag);
+    const proxyNames = vlessOutbounds.map(o => o.tag);
 
-    // 步骤 3: 组装完整的配置对象，包含正确的 DNS address_resolver 修复
+    // 步骤 3: 组装完整的配置对象，包含最终正确的 DNS 修复
     const config = {
       "log": {
         "disabled": false,
@@ -2753,53 +2753,30 @@ function generateSingboxConfig(nodeObjects) {
         "timestamp": true
       },
       "dns": {
-    "servers": [
-        // 第 1 步：定义一个基于 IP 的、最简单的引导解析器
-        {
+        "servers": [
+          // 1. 定义一个基于 IP 的引导解析器
+          {
             "tag": "bootstrap-dns",
             "address": "223.5.5.5",
             "detour": "直连"
-        },
-        
-        // 第 2 步：定义主要的 DoH 服务器，并让它们使用上面的引导解析器
-        {
+          },
+          // 2. 定义主要的 DoH 服务器 (不再需要内部的 address_resolver)
+          {
             "tag": "Ali-DoH",
-            "type": "https",
-            "server": "223.5.5.5", // 阿里DNS的域名也是其IP，但为了规范，写上
-            "server_port": 443,
-            "path": "/dns-query",
-            "headers": {
-                "Host": "223.5.5.5" // 或者 "dns.alidns.com"
-            },
-            "tls": {
-                "enabled": true,
-                "server_name": "dns.alidns.com" // 必须是域名
-            },
-            "address_resolver": "bootstrap-dns",
+            "address": "https://223.5.5.5/dns-query",
             "detour": "直连"
-        },
-        {
+          },
+          {
             "tag": "Google-DoH",
-            "type": "https",
-            "server": "dns.google",
-            "server_port": "443",
-            "path": "/dns-query",
-            "headers": {
-                "Host": "dns.google"
-            },
-            "tls": {
-                "enabled": true,
-                "server_name": "dns.google"
-            },
-            "address_resolver": "bootstrap-dns",
+            "address": "https://dns.google/dns-query",
             "detour": "直连"
-             }
-            ],
-            "strategy": "ipv4_only",
-            "final": "Ali-DoH" // 指定一个默认使用的 DNS
-
-        // 注意：顶层的 "bootstrap" 字段已被移除
-
+          }
+        ],
+        // 3. 核心修复：在顶层指定全局的引导解析器
+        "address_resolver": "bootstrap-dns",
+        
+        "strategy": "ipv4_only",
+        "final": "Ali-DoH"
       },
       "ntp": {
         "enabled": true,
@@ -2828,8 +2805,8 @@ function generateSingboxConfig(nodeObjects) {
           "url": "http://www.gstatic.com/generate_204",
           "interval": "10m"
         },
-        // 动态生成的 protocolEncodedFlag 节点
-        ...protocolEncodedFlagOutbounds,
+        // 动态生成的 VLESS 节点
+        ...vlessOutbounds,
         // 内置出站
         { "type": "direct", "tag": "直连" },
         { "type": "block", "tag": "拦截" },
