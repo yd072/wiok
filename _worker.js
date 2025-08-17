@@ -2709,13 +2709,13 @@ ${rulesYaml}
 //Sing-box配置
 function generateSingboxConfig(nodeObjects) {
     const outbounds = nodeObjects.map(p => {
+        // 关键修正：移除所有我捏造的、不存在的 domain_strategy 字段
         let outbound = {
             type: p.type,
             tag: p.name,
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
-            "domain_strategy": "use_domain", 
             transport: {
                 type: p.network,
                 path: p['ws-opts'].path,
@@ -2778,13 +2778,12 @@ function generateSingboxConfig(nodeObjects) {
             ],
             "strategy": "prefer_ipv4"
         },
-        // 关键修正：将 "tun" 入站改回 "mixed" 代理入站
         "inbounds": [
             {
                 "type": "mixed",
                 "tag": "mixed-in",
-                "listen": "0.0.0.0", // 监听所有网络接口，允许局域网设备连接
-                "listen_port": 7890 // 监听的端口
+                "listen": "0.0.0.0",
+                "listen_port": 2345
             }
         ],
         "outbounds": [
