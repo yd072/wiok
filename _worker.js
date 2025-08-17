@@ -2706,9 +2706,14 @@ ${rulesYaml}
     return config.trim();
 }
 
-//Sing-box配置
+/**
+ * 生成符合新版 Sing-box 规范的配置文件 (高级版)
+ * @param {Array<Object>} nodeObjects - 包含所有节点信息的对象数组
+ * @returns {string} - 格式化后的 JSON 配置字符串
+ */
 function generateSingboxConfig(nodeObjects) {
-    const outbounds = nodeObjects.map(p => {
+
+    const protocolEncodedFlagOutbounds = nodeObjects.map(p => {
         let outbound = {
             type: p.type,
             tag: p.name,
@@ -2737,45 +2742,120 @@ function generateSingboxConfig(nodeObjects) {
         return outbound;
     });
     
-    const proxyNames = outbounds.map(o => o.tag);
+    // 步骤 2: 提取所有节点的名称，用于策略组 (与原版逻辑相同)
+    const proxyNames = protocolEncodedFlagOutbounds.map(o => o.tag);
 
+    // 步骤 3: 组装全新的、更详细的配置对象
     const config = {
-        "log": {
-            "level": "info",
-            "timestamp": true
-        },
-        "dns": {
-            "servers": [
-                { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://dns.google/dns-query" }
-            ]
-        },
-        "inbounds": [
-            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
+      "log": {
+        "disabled": false,
+        "level": "info",
+        "output": "box.log", // 移动端此设置通常无效，但按模板保留
+        "timestamp": true
+      },
+      "dns": {
+        "servers": [
+          // 仍然使用简单且高效的 DoH 服务器
+          { "address": "https://223.5.5.5/dns-query", "tag": "ali-doh" },
+          { "address": "https://dns.google/dns-query", "tag": "google-doh" }
         ],
-        "outbounds": [
-            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
-            { 
-              "type": "urltest", 
-              "tag": "auto-select", 
-              "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204", 
-              "interval": "5m" 
-            },
-            ...outbounds,
-            { "type": "direct", "tag": "direct" },
-            { "type": "block", "tag": "block" }
-        ],
-        "route": {
-            "rules": [
-                { "geoip": "cn", "outbound": "direct" }
-                
-            ],
-            "final": "manual-select", 
-            "auto_detect_interface": true
+        "strategy": "ipv4_only" // 移动端网络建议优先使用 IPv4
+      },
+      "ntp": {
+        "enabled": true,
+        "server": "time.apple.com",
+        "server_port": 123,
+        "interval": "30m"
+      },
+      "inbounds": [
+        // 必须配置一个入站才能让客户端工作
+        {
+          "type": "mixed",
+          "tag": "mixed-in",
+          "listen": "0.0.0.0",
+          "listen_port": 2345 // 混合端口，同时支持 SOCKS5 和 HTTP
         }
+      ],
+      "outbounds": [
+        // --- 策略组 ---
+        {
+          "type": "selector",
+          "tag": "代理选择",
+          "outbounds": ["自动选择", ...proxyNames, "直连", "拦截"]
+        },
+        {
+          "type": "urltest",
+          "tag": "自动选择",
+          "outbounds": proxyNames, // 对所有动态节点进行测速
+          "url": "http://www.gstatic.com/generate_204",
+          "interval": "10m"
+        },
+        ...protocolEncodedFlagOutbounds,
+        // --- 内置出站 ---
+        {
+          "type": "direct",
+          "tag": "直连"
+        },
+        {
+          "type": "block",
+          "tag": "拦截"
+        },
+        {
+          "type": "dns",
+          "tag": "dns-out"
+        }
+      ],
+      "route": {
+        "rules": [
+          {
+            "protocol": "dns",
+            "outbound": "dns-out"
+          },
+          {
+            "ip_is_private": true,
+            "outbound": "直连"
+          },
+          {
+            "rule_set": "geosite-cn",
+            "outbound": "直连"
+          },
+          {
+            "rule_set": "geoip-cn",
+            "outbound": "直连"
+          }
+        ],
+        "rule_set": [
+          {
+            "tag": "geoip-cn",
+            "type": "remote",
+            "format": "binary",
+            "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+            "download_detour": "代理选择" // 更新规则时通过代理
+          },
+          {
+            "tag": "geosite-cn",
+            "type": "remote",
+            "format": "binary",
+            "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+            "download_detour": "代理选择"
+          }
+        ],
+        "final": "代理选择" // 所有未匹配规则的流量都走“代理选择”
+      },
+      "experimental": {
+        "cache_file": {
+          "enabled": true,
+          "path": "cache.db"
+        },
+        "clash_api": {
+            "external_controller": "127.0.0.1:9090",
+            "external_ui": "ui",
+            "secret": ""
+        }
+      }
     };
-    
+
+    // 步骤 4: 将配置对象转换为格式化的 JSON 字符串并返回
     return JSON.stringify(config, null, 2);
 }
 
