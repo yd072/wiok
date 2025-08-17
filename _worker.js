@@ -2816,7 +2816,7 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "geoip-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
                 "download_detour": "DIRECT"
 
               },
