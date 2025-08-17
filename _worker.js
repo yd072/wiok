@@ -2784,11 +2784,30 @@ function generateSingboxConfig(nodeObjects) {
         "server_port": "123"
       },
       "inbounds": [
+            {
+                "type": "tun",
+                "tag": "tun-in",
+                "interface_name": "tun0",
+                "address": [
+                    "172.19.0.1/30",
+                    "fdfe:dcba:9876::1/126"
+                ],
+                "route_address": [
+                    "0.0.0.0/1",
+                    "128.0.0.0/1",
+                    "::/1",
+                    "8000::/1"
+                ],
+                "route_exclude_address": [
+                    "192.168.0.0/16",
+                    "fc00::/7"
+                ]
+            },
         {
           "type": "mixed",
           "tag": "mixed-in",
           "listen": "0.0.0.0",
-          "listen_port": "2345"
+          "listen_port": "7890"
         }
       ],
       "outbounds": [
