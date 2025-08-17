@@ -2762,8 +2762,8 @@ function generateSingboxConfig(nodeObjects) {
                     "tag": "dns-foreign",
                     "server": "dns.google",
                     "server_port": 443,
-                    "path": "/dns-query"
-                    // 关键修正(1): 移除 detour，让国外DNS也直连
+                    "path": "/dns-query",
+                    "detour": manualSelectTag
                 }
             ],
             "rules": [
