@@ -2780,12 +2780,20 @@ function generateSingboxConfig(nodeObjects) {
         "inbounds": [
             {
                 "type": "tun",
-                "tag": "tun-in",
-                "interface_name": "tun0",
-                "inet4_address": "172.19.0.1/30", // 分配一个虚拟IP地址
-                "auto_route": true, // 自动设置路由
-                "strict_route": true, // 严格路由，防止流量绕过
-                "stack": "gvisor" // 使用 gvisor 协议栈，兼容性好
+                "address": [
+                    "172.19.0.1/30",
+                    "fdfe:dcba:9876::1/126"
+                ],
+                "route_address": [
+                    "0.0.0.0/1",
+                    "128.0.0.0/1",
+                    "::/1",
+                    "8000::/1"
+                ],
+                    "route_exclude_address": [
+                    "192.168.0.0/16",
+                    "fc00::/7"
+                ]
             }
         ],
         "outbounds": [
@@ -2822,7 +2830,6 @@ function generateSingboxConfig(nodeObjects) {
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
                 "download_detour": DIRECT
               },
-              // 关键修正(1): 增加 "非中国大陆域名" 规则集
               {
                 "tag": "geosite-non-cn",
                 "type": "remote",
@@ -2839,11 +2846,6 @@ function generateSingboxConfig(nodeObjects) {
                 { "ip_is_private": true, "outbound": "DIRECT" },
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
                 { "rule_set": "geoip-cn", "outbound": "DIRECT" },
-                // 关键修正(2): 增加一条路由规则，将非中国大陆域名导向代理
-                {
-                    "rule_set": "geosite-non-cn",
-                    "outbound": manualSelectTag
-                }
             ],
             "final": manualSelectTag, 
             "auto_detect_interface": true
