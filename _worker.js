@@ -2777,16 +2777,15 @@ function generateSingboxConfig(nodeObjects) {
             ],
             "strategy": "prefer_ipv4"
         },
-        // 关键修正：使用 "tun" 入站来创建系统级VPN
         "inbounds": [
             {
                 "type": "tun",
                 "tag": "tun-in",
                 "interface_name": "tun0",
-                "inet4_address": "172.19.0.1/30", // 分配一个虚拟IP地址
-                "auto_route": true, // 自动设置路由
-                "strict_route": true, // 严格路由，防止流量绕过
-                "stack": "gvisor" // 使用 gvisor 协议栈，兼容性好
+                "inet4_address": "172.19.0.1/30",
+                "auto_route": true,
+                "strict_route": true,
+                "stack": "gvisor"
             }
         ],
         "outbounds": [
@@ -2814,14 +2813,14 @@ function generateSingboxConfig(nodeObjects) {
                 "type": "remote",
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
-                "download_detour": manualSelectTag
+                "download_detour": "DIRECT"
               },
               {
                 "tag": "geoip-cn",
                 "type": "remote",
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-                "download_detour": manualSelectTag
+                "download_detour": "DIRECT"
               }
             ],
             "rules": [
