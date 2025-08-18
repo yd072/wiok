@@ -2748,25 +2748,23 @@ function generateSingboxConfig(nodeObjects) {
             "level": "info",
             "timestamp": true
         },
-        // 关键修正(1): 完全采用您提供的高级DNS架构
         "dns": {
             "servers": [
                 {
                     "tag": "google",
                     "type": "tls",
                     "server": "8.8.8.8",
-                    "detour": manualSelectTag // DoT同样需要走代理
+                    "detour": manualSelectTag
                 },
                 {
                     "tag": "local",
                     "type": "https",
                     "server": "223.5.5.5",
-                    "server_port": 443, // 补全必要的字段
+                    "server_port": 443,
                     "path": "/dns-query"
                 }
             ],
             "rules": [
-                // 统一规则集标签为 geosite-cn
                 {
                     "rule_set": "geosite-cn",
                     "server": "local"
@@ -2786,7 +2784,6 @@ function generateSingboxConfig(nodeObjects) {
                 }
             ],
             "strategy": "prefer_ipv4"
-            // 默认解析器将是列表中的第一个 "google"
         },
         "inbounds": [
             {
@@ -2796,7 +2793,9 @@ function generateSingboxConfig(nodeObjects) {
                 "inet4_address": "172.19.0.1/30",
                 "auto_route": true,
                 "strict_route": true,
-                "stack": "gvisor"
+                "stack": "gvisor",
+                // 关键修正：开启嗅探功能，恢复域名信息
+                "sniff": true
             }
         ],
         "outbounds": [
@@ -2817,7 +2816,6 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "block", "tag": "BLOCK" }
         ],
         "route": {
-            // 关键修正(2): 将默认域名解析器指向新的国外DNS "google"
             "default_domain_resolver": "google",
             "rule_set": [
               {
@@ -2857,7 +2855,11 @@ function generateSingboxConfig(nodeObjects) {
         },
         "experimental": {
             "cache_file": {
-                "enabled": true
+                "enabled": true,
+                "store_rdrc": true
+            },
+            "clash_api": {
+                "default_mode": "Enhanced"
             }
         }
     };
