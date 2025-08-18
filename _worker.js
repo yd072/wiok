@@ -3335,7 +3335,7 @@ async function handleGetRequest(env) {
                 <div id="tab-official" class="tab-content">
                     ${hasKV ? `
                         <div class="notice-content" style="display:block; border-left-color: #17a2b8;">
-                           ${decodeURIComponent(atob('QUREUyVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQXZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEExMjcuMC4wLjElMjNDRm5hdCUwQSU1QjI2ODYlM0E0NzY2JTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYlMEFBRERBUEklRTclQTQlQkElRTQlQkUlOEIlRUYlQkMlOUElMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRnJlZnMlMkZoZWFkcyUyRm1haW4lMkZhZGRyZXNzZXNhcGkudHh0'))}
+                           ${decodeURIComponent(atob('JUU1JUFFJTk4JUU2JTk2JUI5JUU0JUJDJTk4JUU5JTgwJTg5JUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBJTBBdmlzYS5jbiUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSU5RiU5RiVFNSU5MCU4RCUwQTEyNy4wLjAuMSUyM0NGbmF0JTBBJTVCMjY4NiUzQTQ3NjYlM0ElM0ElNUQlM0EyMDUzJTIzSVB2NiUwQUFEREFQSSVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQ='))}
                         </div>
                         <textarea class="editor" id="adds" placeholder="ADDS 官方优选列表...">${addsContent}</textarea>
                         <div class="button-group">
