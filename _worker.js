@@ -2750,6 +2750,7 @@ function generateSingboxConfig(nodeObjects) {
         },
         "dns": {
             "servers": [
+                // 关键修正(1): 只定义真实的、上游的DNS服务器
                 {
                     "tag": "proxy-dns",
                     "type": "https",
@@ -2760,30 +2761,21 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "tag": "direct-dns",
-                    "type": "https",
+                    "type": "httpshttps",
                     "server": "223.5.5.5",
                     "server_port": 443,
                     "path": "/dns-query"
-                },
-                // 关键修正(1): 添加 Fake DNS 服务器
-                {
-                    "tag": "fakedns",
-                    "type": "fakedns"
                 }
             ],
+            // 关键修正(2): 这里的规则只用于指导后台真实解析的行为
             "rules": [
-                // 关键修正(2): 将国外域名查询指向 Fake DNS
-                {
-                    "rule_set": "geosite-non-cn",
-                    "server": "fakedns"
-                },
                 {
                     "rule_set": "geosite-cn",
                     "server": "direct-dns"
                 }
             ],
             "strategy": "prefer_ipv4",
-            "final": "proxy-dns"
+            "final": "proxy-dns" // 默认所有未匹配的后台解析都走代理DNS
         },
         "inbounds": [
             {
@@ -2791,7 +2783,7 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "tun-in",
                 "interface_name": "tun0",
                 "inet4_address": "172.19.0.1/30",
-                // 关键修正(3): 开启 Fake DNS 支持
+                // 关键修正(3): 在正确的位置开启 Fake DNS 功能
                 "fakedns": {
                     "enabled": true,
                     "inet4_range": "198.18.0.0/15"
@@ -2799,7 +2791,6 @@ function generateSingboxConfig(nodeObjects) {
                 "auto_route": true,
                 "strict_route": true,
                 "stack": "gvisor"
-                // "sniff": true, // Fake DNS 模式下不再需要嗅探
             }
         ],
         "outbounds": [
@@ -2849,7 +2840,7 @@ function generateSingboxConfig(nodeObjects) {
                     "protocol": "dns",
                     "outbound": "dns-out"
                 },
-                // 关键修正(4): 添加一条规则来处理发往 Fake IP 的流量
+                // 关键修正(4): 捕获发往 Fake IP 的流量，并将其导向代理
                 {
                     "ip_cidr": "198.18.0.0/15",
                     "outbound": manualSelectTag
