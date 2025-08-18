@@ -2778,15 +2778,12 @@ function generateSingboxConfig(nodeObjects) {
             "strategy": "prefer_ipv4"
         },
         "inbounds": [
-            {
-                "type": "tun",
-                "tag": "tun-in",
-                "interface_name": "tun0",
-                "inet4_address": "172.19.0.1/30",
-                "auto_route": true,
-                "strict_route": true,
-                "stack": "gvisor"
 
+            {
+                "type": "mixed",
+                "tag": "mixed-in",
+                "listen": "0.0.0.0",
+                "listen_port": 2345
             }
         ],
         "outbounds": [
@@ -2833,22 +2830,18 @@ function generateSingboxConfig(nodeObjects) {
 
               }
             ],
-            // 关键修正：调整路由规则的优先级
             "rules": [
                 {
                     "protocol": "dns",
                     "outbound": "dns-out"
                 },
                 { "ip_is_private": true, "outbound": "DIRECT" },
-                // 1. 优先匹配国外域名，确保它们一定走代理
+                { "rule_set": "geosite-cn", "outbound": "DIRECT" },
+                { "rule_set": "geoip-cn", "outbound": "DIRECT" },
                 {
                     "rule_set": "geosite-non-cn",
                     "outbound": manualSelectTag
-                },
-                // 2. 然后再匹配国内域名
-                { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                // 3. 最后才用 IP 规则作为补充
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
+                }
             ],
             "final": manualSelectTag, 
             "auto_detect_interface": true
