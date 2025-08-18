@@ -2754,15 +2754,11 @@ function generateSingboxConfig(nodeObjects) {
                     "type": "https",
                     "tag": "dns-domestic",
                     "server": "223.5.5.5",
-                    "server_port": 443,
-                    "path": "/dns-query"
                 },
                 {
                     "type": "https",
                     "tag": "dns-foreign",
                     "server": "dns.google",
-                    "server_port": 443,
-                    "path": "/dns-query",
                     "detour": manualSelectTag
                 }
             ],
@@ -2780,10 +2776,13 @@ function generateSingboxConfig(nodeObjects) {
         "inbounds": [
 
             {
-                "type": "mixed",
-                "tag": "mixed-in",
-                "listen": "0.0.0.0",
-                "listen_port": 2345
+                "type": "tun",
+                "tag": "tun-in",
+                "interface_name": "tun0",
+                "inet4_address": "172.19.0.1/30",
+                "auto_route": true,
+                "strict_route": true,
+                "stack": "gvisor"
             }
         ],
         "outbounds": [
