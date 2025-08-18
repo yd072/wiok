@@ -2824,10 +2824,10 @@ function generateSingboxConfig(nodeObjects) {
 
               },
               {
-                "tag": "geosite-non-cn",
+                "tag": "geoip-us",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-us.srs",
                 "download_detour": "DIRECT"
 
               }
