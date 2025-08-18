@@ -2751,18 +2751,13 @@ function generateSingboxConfig(nodeObjects) {
         "dns": {
             "servers": [
                 {
-                    "type": "https",
                     "tag": "dns-domestic",
-                    "server": "223.5.5.5",
-                    "server_port": 443,
-                    "path": "/dns-query"
+                    "address": "223.5.5.5",
+                    "detour": "DIRECT"
                 },
                 {
-                    "type": "https",
                     "tag": "dns-foreign",
-                    "server": "8.8.8.8",
-                    "server_port": 443,
-                    "path": "/dns-query",
+                    "address": "8.8.8.8",
                     "detour": manualSelectTag
                 }
             ],
@@ -2813,7 +2808,6 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "dns", "tag": "dns-out" }
         ],
         "route": {
-            "default_domain_resolver": "dns-foreign",
             "rule_set": [
               {
                 "tag": "geosite-cn",
@@ -2837,6 +2831,10 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "ip_is_private": true,
+                    "outbound": "DIRECT"
+                },
+                {
+                    "ip_cidr": ["223.5.5.5/32", "8.8.8.8/32"],
                     "outbound": "DIRECT"
                 },
                 {
