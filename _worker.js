@@ -2376,7 +2376,6 @@ async function 整理优选列表(api) {
 	let newapi = "";
 
 	const controller = new AbortController();
-
 	const timeout = setTimeout(() => {
 		controller.abort();
 	}, 2000);
@@ -2394,41 +2393,68 @@ async function 整理优选列表(api) {
 		for (const [index, response] of responses.entries()) {
 			if (response.status === 'fulfilled') {
 				const content = await response.value;
-
+				const currentApiUrl = api[index];
 				const lines = content.split(/\r?\n/);
 				let 节点备注 = '';
 				let 测速端口 = '443';
+				
+				const portMatchInUrl = currentApiUrl.match(/port=([^&]*)/);
+				const 链接指定端口 = portMatchInUrl ? portMatchInUrl[1] : null;
+
+				const idMatchInUrl = currentApiUrl.match(/id=([^&]*)/);
+				const 链接指定备注 = idMatchInUrl ? idMatchInUrl[1] : '';
 
 				if (lines[0].split(',').length > 3) {
-					const idMatch = api[index].match(/id=([^&]*)/);
-					if (idMatch) 节点备注 = idMatch[1];
-
-					const portMatch = api[index].match(/port=([^&]*)/);
-					if (portMatch) 测速端口 = portMatch[1];
+					// CSV 格式 API (例如 CloudflareSpeedTest)
+					测速端口 = 链接指定端口 || '443';
+					节点备注 = 链接指定备注;
 
 					for (let i = 1; i < lines.length; i++) {
 						const columns = lines[i].split(',')[0];
 						if (columns) {
 							newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
-							if (api[index].includes('proxyip=true')) proxyIPPool.push(`${columns}:${测速端口}`);
 						}
 					}
 				} else {
-					if (api[index].includes('proxyip=true')) {
-						proxyIPPool = proxyIPPool.concat((整理(content)).map(item => {
-							const baseItem = item.split('#')[0] || item;
-							if (baseItem.includes(':')) {
-								const port = baseItem.split(':')[1];
-								if (!httpsPorts.includes(port)) {
-									return baseItem;
-								}
-							} else {
-								return `${baseItem}:443`;
+					// 纯文本格式 API
+					const linesFromApi = content.split(/\r?\n/).filter(Boolean);
+
+					linesFromApi.forEach(line => {
+						let processedLine = line.trim();
+						const baseItem = processedLine.split('#')[0];
+						const originalRemark = processedLine.includes('#') ? processedLine.split('#')[1] : '';
+						
+						let finalRemark = 链接指定备注 || originalRemark;
+
+						if (!baseItem.includes(':') && 链接指定端口) {
+							processedLine = `${baseItem}:${链接指定端口}${finalRemark ? `#${finalRemark}` : ''}`;
+						} else if (finalRemark && !originalRemark) {
+							processedLine = `${baseItem}${finalRemark ? `#${finalRemark}` : ''}`;
+						}
+						
+						newapi += processedLine + '\n';
+					});
+				}
+				
+				// 处理 proxyip=true
+				if (currentApiUrl.includes('proxyip=true')) {
+					const linesForProxyIP = content.split(/\r?\n/).filter(Boolean);
+					proxyIPPool = proxyIPPool.concat(linesForProxyIP.map(item => {
+						let baseItem = (item.split('#')[0] || item).trim();
+						if (!baseItem.includes(':') && 链接指定端口) {
+							baseItem = `${baseItem}:${链接指定端口}`;
+						}
+						
+						if (baseItem.includes(':')) {
+							const port = baseItem.split(':')[1];
+							if (!httpsPorts.includes(port)) {
+								return baseItem;
 							}
-							return null;
-						}).filter(Boolean));
-					}
-					newapi += content + '\n';
+						} else {
+							return `${baseItem}:443`;
+						}
+						return null;
+					}).filter(Boolean));
 				}
 			}
 		}
@@ -2438,10 +2464,9 @@ async function 整理优选列表(api) {
 		clearTimeout(timeout);
 	}
 
-	const newAddressesapi = 整理(newapi);
-
-	return newAddressesapi;
+	return 整理(newapi);
 }
+
 
 async function 整理测速结果(tls) {
 	if (!addressescsv || addressescsv.length === 0) {
@@ -2505,28 +2530,28 @@ async function 整理测速结果(tls) {
 
 async function prepareNodeList(host, UUID, noTLS) {
     let nodeCounter = 1;
-    const sourceList = [];
+    const allSources = [];
 
-    // 1. 统一收集所有地址源
+    // 1. 统一收集所有地址源，并标记来源
     // 官方优选
-    [...new Set(ADDS)].forEach(addr => sourceList.push({ address: addr, source: 'adds' }));
+    [...new Set(ADDS)].forEach(addr => allSources.push({ address: addr, source: 'adds' }));
 
     // 用户优选 (TLS)
     const newAddressesapi = await 整理优选列表(addressesapi);
     const newAddressescsv = await 整理测速结果('TRUE');
     [...new Set(addresses.concat(newAddressesapi).concat(newAddressescsv))]
-        .forEach(addr => sourceList.push({ address: addr, source: 'add', tls: true }));
+        .forEach(addr => allSources.push({ address: addr, source: 'add', tls: true }));
 
     // 用户优选 (noTLS)
     if (noTLS === 'true') {
         const newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
         const newAddressesnotlscsv = await 整理测速结果('FALSE');
         [...new Set(addressesnotls.concat(newAddressesnotlsapi).concat(newAddressesnotlscsv))]
-            .forEach(addr => sourceList.push({ address: addr, source: 'add', tls: false }));
+            .forEach(addr => allSources.push({ address: addr, source: 'add', tls: false }));
     }
 
     // 2. 统一处理和生成节点
-    const finalNodeObjects = sourceList.flatMap(sourceItem => {
+    const finalNodeObjects = allSources.flatMap(sourceItem => {
         const { address: addressString, source } = sourceItem;
         const tls = source === 'adds' ? noTLS !== 'true' : sourceItem.tls;
         
@@ -2610,7 +2635,6 @@ async function prepareNodeList(host, UUID, noTLS) {
 
     return finalNodeObjects.filter(Boolean);
 }
-
 
 
 //根据节点对象数组生成 Base64 编码的订阅内容
