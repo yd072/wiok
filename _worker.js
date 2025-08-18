@@ -2763,7 +2763,6 @@ function generateSingboxConfig(nodeObjects) {
                     "server": "dns.google",
                     "server_port": 443,
                     "path": "/dns-query",
-                    "detour": manualSelectTag
                 }
             ],
             "rules": [
