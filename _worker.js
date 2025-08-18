@@ -2828,15 +2828,6 @@ function generateSingboxConfig(nodeObjects) {
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
                 "download_detour": "DIRECT"
-
-              },
-              {
-                "tag": "geosite-non-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
-                "download_detour": "DIRECT"
-
               }
             ],
             "rules": [
@@ -2844,12 +2835,13 @@ function generateSingboxConfig(nodeObjects) {
                     "protocol": "dns",
                     "outbound": "dns-out"
                 },
-                { "ip_is_private": true, "outbound": "DIRECT" },
-                { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" },
                 {
-                    "rule_set": "geosite-non-cn",
-                    "outbound": manualSelectTag
+                    "ip_is_private": true,
+                    "outbound": "DIRECT"
+                },
+                {
+                    "rule_set": "geoip-cn",
+                    "outbound": "DIRECT"
                 }
             ],
             "final": manualSelectTag,
@@ -2867,7 +2859,7 @@ function generateSingboxConfig(nodeObjects) {
     };
 
     return JSON.stringify(config, null, 2);
-}
+}}
 
 //Loon配置
 function generateLoonConfig(nodeObjects) {
