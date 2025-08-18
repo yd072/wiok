@@ -2781,8 +2781,8 @@ function generateSingboxConfig(nodeObjects) {
             {
                 "type": "mixed",
                 "tag": "mixed-in",
-                "listen": "0.0.0.0",
-                "listen_port": 2345
+                "listen": "127.0.0.1",
+                "listen_port": 7890
             }
         ],
         "outbounds": [
