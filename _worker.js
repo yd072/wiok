@@ -2778,17 +2778,6 @@ function generateSingboxConfig(nodeObjects) {
             "strategy": "prefer_ipv4"
         },
         "inbounds": [
-             "inet4_route_address",[
-                "198.18.0.0/15",
-                "91.105.192.0/23",
-                "91.108.4.0/22",
-                "91.108.8.0/21",
-                "91.108.16.0/21",
-                "91.108.56.0/22",
-                "95.161.64.0/20",
-                "149.154.160.0/20",
-                "185.76.151.0/24"
-                ],
             {
                 "type": "tun",
                 "tag": "tun-in",
@@ -2796,7 +2785,19 @@ function generateSingboxConfig(nodeObjects) {
                 "inet4_address": "172.19.0.1/30",
                 "auto_route": true,
                 "strict_route": true,
-                "stack": "gvisor"
+                "stack": "gvisor",
+                // 关键修正(1): 按照您的要求，添加 inet4_route_address
+                "inet4_route_address": [
+                    "198.18.0.0/15",
+                    "91.105.192.0/23",
+                    "91.108.4.0/22",
+                    "91.108.8.0/21",
+                    "91.108.16.0/21",
+                    "91.108.56.0/22",
+                    "95.161.64.0/20",
+                    "149.154.160.0/20",
+                    "185.76.151.0/24"
+                ]
             }
         ],
         "outbounds": [
@@ -2818,6 +2819,7 @@ function generateSingboxConfig(nodeObjects) {
         ],
         "route": {
             "default_domain_resolver": "dns-foreign",
+            // 关键修正(2): 保留您对规则集 URL 和下载方式的优化
             "rule_set": [
               {
                 "tag": "geosite-cn",
@@ -2835,10 +2837,10 @@ function generateSingboxConfig(nodeObjects) {
 
               },
               {
-                "tag": "geoip-us",
+                "tag": "geosite-non-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-us.srs",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
                 "download_detour": "DIRECT"
 
               }
@@ -2852,7 +2854,7 @@ function generateSingboxConfig(nodeObjects) {
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
                 { "rule_set": "geoip-cn", "outbound": "DIRECT" },
                 {
-                    "rule_set": "geoip-us",
+                    "rule_set": "geosite-non-cn",
                     "outbound": manualSelectTag
                 }
             ],
