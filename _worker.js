@@ -2748,33 +2748,47 @@ function generateSingboxConfig(nodeObjects) {
             "level": "info",
             "timestamp": true
         },
+        // 关键修正(1): 完全采用您提供的高级DNS架构
         "dns": {
             "servers": [
                 {
-                    "type": "https",
-                    "tag": "dns-domestic",
-                    "server": "223.5.5.5",
+                    "tag": "google",
+                    "type": "tls",
+                    "server": "8.8.8.8",
+                    "detour": manualSelectTag // DoT同样需要走代理
                 },
                 {
+                    "tag": "local",
                     "type": "https",
-                    "tag": "dns-foreign",
-                    "server": "dns.google",
-                    "detour": manualSelectTag
+                    "server": "223.5.5.5",
+                    "server_port": 443, // 补全必要的字段
+                    "path": "/dns-query"
                 }
             ],
             "rules": [
+                // 统一规则集标签为 geosite-cn
                 {
                     "rule_set": "geosite-cn",
-                    "server": "dns-domestic"
+                    "server": "local"
                 },
                 {
-                    "server": "dns-foreign"
+                    "type": "logical",
+                    "mode": "and",
+                    "rules": [
+                        {
+                            "rule_set": "geosite-cn"
+                        },
+                        {
+                            "rule_set": "geoip-cn"
+                        }
+                    ],
+                    "server": "local"
                 }
             ],
             "strategy": "prefer_ipv4"
+            // 默认解析器将是列表中的第一个 "google"
         },
         "inbounds": [
-
             {
                 "type": "tun",
                 "tag": "tun-in",
@@ -2803,7 +2817,8 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "block", "tag": "BLOCK" }
         ],
         "route": {
-            "default_domain_resolver": "dns-foreign",
+            // 关键修正(2): 将默认域名解析器指向新的国外DNS "google"
+            "default_domain_resolver": "google",
             "rule_set": [
               {
                 "tag": "geosite-cn",
@@ -2818,7 +2833,6 @@ function generateSingboxConfig(nodeObjects) {
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
                 "download_detour": "DIRECT"
-
               },
               {
                 "tag": "geosite-non-cn",
@@ -2826,7 +2840,6 @@ function generateSingboxConfig(nodeObjects) {
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
                 "download_detour": "DIRECT"
-
               }
             ],
             "rules": [
@@ -2835,12 +2848,9 @@ function generateSingboxConfig(nodeObjects) {
                     "outbound": "dns-out"
                 },
                 { "ip_is_private": true, "outbound": "DIRECT" },
+                { "rule_set": "geosite-non-cn", "outbound": manualSelectTag },
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" },
-                {
-                    "rule_set": "geosite-non-cn",
-                    "outbound": manualSelectTag
-                }
+                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
             ],
             "final": manualSelectTag, 
             "auto_detect_interface": true
