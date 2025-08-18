@@ -2811,22 +2811,21 @@ function generateSingboxConfig(nodeObjects) {
                 "type": "remote",
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
-                "download_detour": "DIRECT"
+                "download_detour": manualSelectTag,
               },
               {
                 "tag": "geoip-cn",
                 "type": "remote",
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-                "download_detour": "DIRECT"
-
+                "download_detour": manualSelectTag,
               },
               {
                 "tag": "geosite-non-cn",
                 "type": "remote",
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
-                "download_detour": "DIRECT"
+                "download_detour": manualSelectTag,
 
               }
             ],
