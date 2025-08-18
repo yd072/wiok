@@ -9,7 +9,7 @@ let userID = '';
 let proxyIP = '';
 //let sub = '';
 let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
-let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
+let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhcঽ/Y29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
 let socks5Address = '';
@@ -2503,154 +2503,115 @@ async function 整理测速结果(tls) {
 	return newAddressescsv;
 }
 
- //收集和解析节点信息
 async function prepareNodeList(host, UUID, noTLS) {
-    const nodeObjects = [];
+    let nodeCounter = 1;
+    const sourceList = [];
 
-    // 组 1: 处理 ADDS (官方优选) 列表
-    // 该组使用 UI 中可配置的端口
-    const officialAddresses = [...new Set(ADDS)];
-    officialAddresses.forEach(addressString => {
-        const tls = noTLS !== 'true';
-        let server, port = "-1", name = addressString;
+    // 1. 统一收集所有地址源
+    // 官方优选
+    [...new Set(ADDS)].forEach(addr => sourceList.push({ address: addr, source: 'adds' }));
 
-        // 解析地址字符串
+    // 用户优选 (TLS)
+    const newAddressesapi = await 整理优选列表(addressesapi);
+    const newAddressescsv = await 整理测速结果('TRUE');
+    [...new Set(addresses.concat(newAddressesapi).concat(newAddressescsv))]
+        .forEach(addr => sourceList.push({ address: addr, source: 'add', tls: true }));
+
+    // 用户优选 (noTLS)
+    if (noTLS === 'true') {
+        const newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+        const newAddressesnotlscsv = await 整理测速结果('FALSE');
+        [...new Set(addressesnotls.concat(newAddressesnotlsapi).concat(newAddressesnotlscsv))]
+            .forEach(addr => sourceList.push({ address: addr, source: 'add', tls: false }));
+    }
+
+    // 2. 统一处理和生成节点
+    const finalNodeObjects = sourceList.flatMap(sourceItem => {
+        const { address: addressString, source } = sourceItem;
+        const tls = source === 'adds' ? noTLS !== 'true' : sourceItem.tls;
+        
+        let server, initialPort = "-1", name = addressString;
+
+        // 解析地址、端口和备注
         const match = addressString.match(/^(.*?)(?::(\d+))?(?:#(.*))?$/);
         if (match) {
             server = match[1] || addressString;
-            port = match[2] || "-1";
+            initialPort = match[2] || "-1";
             name = match[3] || server;
         }
 
-        if (port === "-1") {
-            const portList = tls ? (httpsPorts.length > 0 ? httpsPorts : ["443"]) 
-                                 : (httpPorts.length > 0 ? httpPorts : ["80"]);
-            port = portList[Math.floor(Math.random() * portList.length)];
-        }
-        
-        let servername = host;
-        let finalPath = generateRandomPath();
-        
-        if (proxyhosts.length > 0 && servername.includes('.workers.dev')) {
-            finalPath = `/${servername}${finalPath}`;
-            servername = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
-            name += ` (via ${servername.substring(0,10)}...)`;
-        }
+        let portsToUse = [];
 
-        nodeObjects.push({
-            name: name,
-            type: atob(protocolEncodedFlag),
-            server: server,
-            port: parseInt(port, 10),
-            uuid: UUID,
-            network: 'ws',
-            tls: tls,
-            servername: servername,
-            'client-fingerprint': tls ? getRandomFingerprint() : '',
-            'ws-opts': {
-                path: finalPath,
-                headers: {
-                    Host: servername
-                }
-            }
-        });
-    });
-
-    // 组 2: 处理 ADD (用户优选) 列表
-    // 该组使用原始的、硬编码的端口逻辑
-    let allUserAddresses = [];
-    
-    let newAddressesapi = await 整理优选列表(addressesapi);
-    let newAddressescsv = await 整理测速结果('TRUE');
-    
-    let currentUserAddresses = [...new Set(addresses.concat(newAddressesapi).concat(newAddressescsv))];
-    
-    if (noTLS === 'true') {
-        let newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-        let newAddressesnotlscsv = await 整理测速结果('FALSE');
-        let currentAddressesnotls = [...new Set(addressesnotls.concat(newAddressesnotlsapi).concat(newAddressesnotlscsv))];
-        allUserAddresses.push(...currentAddressesnotls.map(addr => ({ address: addr, tls: false })));
-    }
-    
-    allUserAddresses.push(...currentUserAddresses.map(addr => ({ address: addr, tls: true })));
-
-    allUserAddresses.forEach(({ address: addressString, tls }) => {
-        const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
-        let server, port = "-1", name = addressString;
-
-        const match = addressString.match(regex);
-        if (!match) {
-            if (addressString.includes(':') && addressString.includes('#')) {
-                const parts = addressString.split(':');
-                server = parts[0];
-                const subParts = parts[1].split('#');
-                port = subParts[0];
-                name = subParts[1];
-            } else if (addressString.includes(':')) {
-                const parts = addressString.split(':');
-                server = parts[0];
-                port = parts[1];
-            } else if (addressString.includes('#')) {
-                const parts = addressString.split('#');
-                server = parts[0];
-                name = parts[1];
+        if (source === 'adds') {
+            // 官方列表逻辑：如果无端口，则为每个勾选的端口生成节点
+            if (initialPort !== "-1") {
+                portsToUse.push(initialPort);
             } else {
-                server = addressString;
+                const selectedPorts = tls 
+                    ? (httpsPorts.length > 0 ? httpsPorts : ["443"]) 
+                    : (httpPorts.length > 0 ? httpPorts : ["80"]);
+                portsToUse.push(...selectedPorts);
             }
-
-            if (name.includes(':')) {
-                name = name.split(':')[0];
-            }
-        } else {
-            server = match[1];
-            port = match[2] || port;
-            name = match[3] || server;
-        }
-
-        if (port === "-1") {
-            const portList = tls ? (["443", "2053", "2083", "2087", "2096", "8443"]) 
-                                 : (["80", "8080", "8880", "2052", "2082", "2086", "2095"]);
-            if (!isValidIPv4(server)) {
-                 for (let p of portList) {
-                    if (server.includes(p)) {
-                        port = p;
-                        break;
+        } else { // source === 'add'
+            // 用户列表逻辑：如果无端口，则按旧规则选择一个端口
+            if (initialPort !== "-1") {
+                portsToUse.push(initialPort);
+            } else {
+                let port = tls ? "443" : "80"; // 默认值
+                const portList = tls 
+                    ? ["443", "2053", "2083", "2087", "2096", "8443"] 
+                    : ["80", "8080", "8880", "2052", "2082", "2086", "2095"];
+                if (!isValidIPv4(server)) {
+                    for (let p of portList) {
+                        if (server.includes(p)) {
+                            port = p;
+                            break;
+                        }
                     }
                 }
+                portsToUse.push(port);
             }
-            if (port === "-1") port = tls ? "443" : "80";
-        }
-        
-        let servername = host;
-        let finalPath = generateRandomPath();
-        
-        if (proxyhosts.length > 0 && servername.includes('.workers.dev')) {
-            finalPath = `/${servername}${finalPath}`;
-            servername = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
-            name += ` (via ${servername.substring(0,10)}...)`;
         }
 
-        nodeObjects.push({
-            name: name,
-            type: atob(protocolEncodedFlag),
-            server: server,
-            port: parseInt(port, 10),
-            uuid: UUID,
-            network: 'ws',
-            tls: tls,
-            servername: servername,
-            'client-fingerprint': tls ? getRandomFingerprint() : '',
-            'ws-opts': {
-                path: finalPath,
-                headers: {
-                    Host: servername
-                }
+        // 为每个确定的端口创建节点对象
+        return portsToUse.map(port => {
+            let finalName = name;
+            let servername = host;
+            let finalPath = generateRandomPath();
+            
+            if (proxyhosts.length > 0 && servername.includes('.workers.dev')) {
+                finalPath = `/${servername}${finalPath}`;
+                servername = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
+                finalName += ` (via ${servername.substring(0,10)}...)`;
             }
+
+            // 附加全局唯一的编号
+            finalName = `${finalName} #${nodeCounter++}`;
+
+            return {
+                name: finalName,
+                type: atob(protocolEncodedFlag),
+                server: server,
+                port: parseInt(port, 10),
+                uuid: UUID,
+                network: 'ws',
+                tls: tls,
+                servername: servername,
+                'client-fingerprint': tls ? getRandomFingerprint() : '',
+                'ws-opts': {
+                    path: finalPath,
+                    headers: {
+                        Host: servername
+                    }
+                }
+            };
         });
     });
 
-    return nodeObjects.filter(Boolean); 
+    return finalNodeObjects.filter(Boolean);
 }
+
+
 
 //根据节点对象数组生成 Base64 编码的订阅内容
 function 生成本地订阅(nodeObjects) {
