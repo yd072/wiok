@@ -2785,18 +2785,8 @@ function generateSingboxConfig(nodeObjects) {
                 "inet4_address": "172.19.0.1/30",
                 "auto_route": true,
                 "strict_route": true,
-                "stack": "gvisor",
-                "inet4_route_address": [
-                    "198.18.0.0/15",
-                    "91.105.192.0/23",
-                    "91.108.4.0/22",
-                    "91.108.8.0/21",
-                    "91.108.16.0/21",
-                    "91.108.56.0/22",
-                    "95.161.64.0/20",
-                    "149.154.160.0/20",
-                    "185.76.151.0/24"
-                ]
+                "stack": "gvisor"
+
             }
         ],
         "outbounds": [
