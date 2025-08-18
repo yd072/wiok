@@ -3335,7 +3335,7 @@ async function handleGetRequest(env) {
                 <div id="tab-official" class="tab-content">
                     ${hasKV ? `
                         <div class="notice-content" style="display:block; border-left-color: #17a2b8;">
-                           ${decodeURIComponent(atob('JTNDc3Ryb25nJTNFQUREUyUyMCVFNSVCNyVCQSVFNCVCRiU4QiUyMCUyOCVFNiVCRCU4RiVFOCVBMWMIJUU0JUI4JTgwJUU0JUI4JUFFJTI5JTNBJTNDJTJGc3Ryb25nJTNFJTNDYnIlM0UxMjcuMC4wLjElMjNDRm5hdCUzQ2JyJTNFdmlzYS5jbiUyMyVFNCVCRCU5OCVFOSU4MCU4OSVFNSU5RiU5RiVFNSU5MCU4RCUzQ2JyJTNFJTNDYnIlM0UlM0NzdHJvbmclM0UlRTklOTklQUQlRTYlOTQlQUYlRTQlQkElOTYlMjBBUEklMjAlRTUlOUMlQjAlRTUlOUQlODAlMjAlMjglRTglQkYlOTQlRTUlOUIlOUUlMjBJUCUyMCVFNSU4OCU5NyVFOCVBRSU4QSUyOSUzQSUzQyUyRnN0cm9uZyUzRSUzQ2JyJTNFaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZyZWZzJTJGaGVhZHMlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dA=='))}
+                           ${decodeURIComponent(atob('QUREUyVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQXZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEExMjcuMC4wLjElMjNDRm5hdCUwQSU1QjI2ODYlM0E0NzY2JTNBJTNBJTVEJTNBMjA1MyUyM0lQdjYlMEFBRERBUEklRTclQTQlQkElRTQlQkUlOEIlRUYlQkMlOUElMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRnJlZnMlMkZoZWFkcyUyRm1haW4lMkZhZGRyZXNzZXNhcGkudHh0'))}
                         </div>
                         <textarea class="editor" id="adds" placeholder="ADDS 官方优选列表...">${addsContent}</textarea>
                         <div class="button-group">
