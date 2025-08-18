@@ -2761,7 +2761,7 @@ function generateSingboxConfig(nodeObjects) {
                 },
                 {
                     "tag": "direct-dns",
-                    "type": "httpshttps",
+                    "type": "https",
                     "server": "223.5.5.5",
                     "server_port": 443,
                     "path": "/dns-query"
