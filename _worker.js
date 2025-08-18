@@ -2750,9 +2750,8 @@ function generateSingboxConfig(nodeObjects) {
         },
         "dns": {
             "servers": [
-                // 关键修正：将 google DNS 从 DoT (tls) 改为 DoH (https)
                 {
-                    "tag": "google",
+                    "tag": "proxy-dns",
                     "type": "https",
                     "server": "dns.google",
                     "server_port": 443,
@@ -2760,33 +2759,31 @@ function generateSingboxConfig(nodeObjects) {
                     "detour": manualSelectTag
                 },
                 {
-                    "tag": "local",
+                    "tag": "direct-dns",
                     "type": "https",
                     "server": "223.5.5.5",
                     "server_port": 443,
                     "path": "/dns-query"
+                },
+                // 关键修正(1): 添加 Fake DNS 服务器
+                {
+                    "tag": "fakedns",
+                    "type": "fakedns"
                 }
             ],
             "rules": [
+                // 关键修正(2): 将国外域名查询指向 Fake DNS
                 {
-                    "rule_set": "geosite-cn",
-                    "server": "local"
+                    "rule_set": "geosite-non-cn",
+                    "server": "fakedns"
                 },
                 {
-                    "type": "logical",
-                    "mode": "and",
-                    "rules": [
-                        {
-                            "rule_set": "geosite-cn"
-                        },
-                        {
-                            "rule_set": "geoip-cn"
-                        }
-                    ],
-                    "server": "local"
+                    "rule_set": "geosite-cn",
+                    "server": "direct-dns"
                 }
             ],
-            "strategy": "prefer_ipv4"
+            "strategy": "prefer_ipv4",
+            "final": "proxy-dns"
         },
         "inbounds": [
             {
@@ -2794,10 +2791,15 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "tun-in",
                 "interface_name": "tun0",
                 "inet4_address": "172.19.0.1/30",
+                // 关键修正(3): 开启 Fake DNS 支持
+                "fakedns": {
+                    "enabled": true,
+                    "inet4_range": "198.18.0.0/15"
+                },
                 "auto_route": true,
                 "strict_route": true,
-                "stack": "gvisor",
-                "sniff": true
+                "stack": "gvisor"
+                // "sniff": true, // Fake DNS 模式下不再需要嗅探
             }
         ],
         "outbounds": [
@@ -2818,7 +2820,7 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "block", "tag": "BLOCK" }
         ],
         "route": {
-            "default_domain_resolver": "google",
+            "default_domain_resolver": "proxy-dns",
             "rule_set": [
               {
                 "tag": "geosite-cn",
@@ -2846,6 +2848,11 @@ function generateSingboxConfig(nodeObjects) {
                 {
                     "protocol": "dns",
                     "outbound": "dns-out"
+                },
+                // 关键修正(4): 添加一条规则来处理发往 Fake IP 的流量
+                {
+                    "ip_cidr": "198.18.0.0/15",
+                    "outbound": manualSelectTag
                 },
                 { "ip_is_private": true, "outbound": "DIRECT" },
                 { "rule_set": "geosite-non-cn", "outbound": manualSelectTag },
