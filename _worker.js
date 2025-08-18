@@ -2750,10 +2750,13 @@ function generateSingboxConfig(nodeObjects) {
         },
         "dns": {
             "servers": [
+                // 关键修正：将 google DNS 从 DoT (tls) 改为 DoH (https)
                 {
                     "tag": "google",
-                    "type": "tls",
-                    "server": "8.8.8.8",
+                    "type": "https",
+                    "server": "dns.google",
+                    "server_port": 443,
+                    "path": "/dns-query",
                     "detour": manualSelectTag
                 },
                 {
@@ -2794,7 +2797,6 @@ function generateSingboxConfig(nodeObjects) {
                 "auto_route": true,
                 "strict_route": true,
                 "stack": "gvisor",
-                // 关键修正：开启嗅探功能，恢复域名信息
                 "sniff": true
             }
         ],
