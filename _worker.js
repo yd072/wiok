@@ -2751,18 +2751,14 @@ function generateSingboxConfig(nodeObjects) {
         "dns": {
             "servers": [
                 {
-                    "type": "https",
                     "tag": "dns-domestic",
-                    "server": "223.5.5.5",
-                    "server_port": 443,
-                    "path": "/dns-query"
+                    "address": "223.5.5.5",
+                    "detour": "DIRECT"
                 },
                 {
-                    "type": "https",
                     "tag": "dns-foreign",
-                    "server": "8.8.8.8",
-                    "server_port": 443,
-                    "path": "/dns-query",
+                    "address": "8.8.8.8"
+                    // 关键修复：不能有 detour，否则会造成 DNS 死锁
                 }
             ],
             "rules": [
@@ -2771,6 +2767,7 @@ function generateSingboxConfig(nodeObjects) {
                     "server": "dns-domestic"
                 },
                 {
+                    "outbound": "any",
                     "server": "dns-foreign"
                 }
             ],
@@ -2784,7 +2781,8 @@ function generateSingboxConfig(nodeObjects) {
                 "inet4_address": "172.19.0.1/30",
                 "auto_route": true,
                 "strict_route": true,
-                "stack": "gvisor"
+                "stack": "gvisor",
+                "sniff": true // 开启流量嗅探以提高规则匹配精度
             }
         ],
         "outbounds": [
@@ -2802,11 +2800,10 @@ function generateSingboxConfig(nodeObjects) {
             },
             ...outbounds,
             { "type": "direct", "tag": "DIRECT" },
-            { "type": "block", "tag": "BLOCK" },
-            { "type": "dns", "tag": "dns-out" }
+            { "type": "dns", "tag": "dns-out"}, // 修复1：添加 dns-out
+            { "type": "block", "tag": "BLOCK" }
         ],
         "route": {
-            "default_domain_resolver": "dns-foreign",
             "rule_set": [
               {
                 "tag": "geosite-cn",
@@ -2821,15 +2818,21 @@ function generateSingboxConfig(nodeObjects) {
                 "format": "binary",
                 "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
                 "download_detour": "DIRECT"
-
               },
               {
-                "tag": "geosite-non-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
-                "download_detour": "DIRECT"
-
+                  // 关键修复：定义一个包含代理节点IP和DNS服务器IP的规则集
+                  "tag": "proxy-ips",
+                  "type": "local",
+                  "format": "text",
+                  "data": [
+                      // Cloudflare 的主要 IP 段，代理节点都在这里
+                      "104.16.0.0/12",
+                      "162.158.0.0/15",
+                      "172.64.0.0/13",
+                      // 谷歌和CF的公共DNS服务器
+                      "8.8.8.8/32",
+                      "1.1.1.1/32"
+                  ]
               }
             ],
             "rules": [
@@ -2837,25 +2840,17 @@ function generateSingboxConfig(nodeObjects) {
                     "protocol": "dns",
                     "outbound": "dns-out"
                 },
+                // 关键修复：将发往代理IP和DNS服务器的流量设置为直连，打破路由循环
+                { 
+                    "rule_set": "proxy-ips", 
+                    "outbound": "DIRECT"
+                },
                 { "ip_is_private": true, "outbound": "DIRECT" },
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" },
-                {
-                    "rule_set": "geosite-non-cn",
-                    "outbound": manualSelectTag
-                }
+                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
             ],
-            "final": manualSelectTag, 
+            "final": manualSelectTag, // 默认所有其他流量都走代理
             "auto_detect_interface": true
-        },
-        "experimental": {
-            "cache_file": {
-                "enabled": true,
-                "store_rdrc": true
-            },
-            "clash_api": {
-                "default_mode": "Enhanced"
-            }
         }
     };
     
