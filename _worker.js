@@ -3327,7 +3327,7 @@ async function handleGetRequest(env) {
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                             <button class="btn btn-primary" onclick="saveAdvancedSettings(this)">保存</button>
-                            <span class="save-status" id="saveStatus"></span>
+                            <span class="save-status" id="main-save-status"></span>
                         </div>
                     ` : '<p>未绑定KV空间</p>'}
                 </div>
@@ -3479,23 +3479,12 @@ async function handleGetRequest(env) {
                 function toggleNotice() {
                     const noticeContent = document.getElementById('noticeContent');
                     const noticeToggle = document.getElementById('noticeToggle');
-                    if (noticeContent.style.display === 'none') {
+                    if (noticeContent.style.display === 'none' || noticeContent.style.display === '') {
                         noticeContent.style.display = 'block';
                         noticeToggle.textContent = 'ℹ️ 注意事项 ∧';
                     } else {
                         noticeContent.style.display = 'none';
                         noticeToggle.textContent = 'ℹ️ 注意事项 ∨';
-                    }
-                }
-				
-                function toggleNoticeContent(element) {
-                    const content = element.nextElementSibling;
-                    if (content.style.display === 'none' || content.style.display === '') {
-                        content.style.display = 'block';
-                        element.innerHTML = 'ℹ️ 注意事项 ∧';
-                    } else {
-                        content.style.display = 'none';
-                        element.innerHTML = 'ℹ️ 注意事项 ∨';
                     }
                 }
 
@@ -3506,15 +3495,14 @@ async function handleGetRequest(env) {
                     window.location.href = newPath || '/';
                 }
                 
-                async function saveAdvancedSettings(triggeredButton) {
-                    const activeTab = document.querySelector('.tab-link.active').parentElement.parentElement;
-                    const button = triggeredButton || activeTab.querySelector('.btn-primary');
-                    const statusEl = activeTab.querySelector('.save-status');
-                    
-                    if (!button || !statusEl) {
-						console.error("Could not find button or status element for the active tab.");
-						return;
-					}
+                async function saveAdvancedSettings(buttonEl) {
+                    const buttonGroup = buttonEl.parentElement;
+                    const statusEl = buttonGroup.querySelector('.save-status');
+
+                    if (!buttonEl || !statusEl) {
+                        console.error("Could not find button or status element.");
+                        return;
+                    }
 
                     try {
                         const selectedHttpsPorts = Array.from(document.querySelectorAll('input[name="httpsports"]:checked')).map(cb => cb.value).join(',');
@@ -3522,7 +3510,7 @@ async function handleGetRequest(env) {
 
                         const settingsToSave = {
                             ADD: document.getElementById('content').value,
-                            ADDS: document.getElementById('adds').value, // 新增
+                            ADDS: document.getElementById('adds').value,
                             proxyip: document.getElementById('proxyip').value,
                             socks5: document.getElementById('socks5').value,
                             httpproxy: document.getElementById('httpproxy').value,
@@ -3534,7 +3522,7 @@ async function handleGetRequest(env) {
                             httpsports: selectedHttpsPorts,
                             httpports: selectedHttpPorts
                         };
-                        await saveData(button, statusEl, JSON.stringify(settingsToSave), '?type=advanced');
+                        await saveData(buttonEl, statusEl, JSON.stringify(settingsToSave), '?type=advanced');
                     } catch(error) {
                         statusEl.textContent = '❌ ' + error.message;
                         console.error('保存设置时发生错误:', error);
