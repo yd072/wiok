@@ -143,7 +143,7 @@ async function loadConfigurations(env) {
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
-                
+
                 // 将新配置存入内存缓存
                 cachedSettings = settings;
 
@@ -737,7 +737,7 @@ export default {
                     if (secureProtoConfig instanceof Response) {
                         return secureProtoConfig;
                     }
-                    
+
 					const now = Date.now();
 					const today = new Date(now);
 					today.setHours(0, 0, 0, 0);
@@ -914,10 +914,10 @@ async function secureProtoOverWSHandler(request) {
 }
 
 /**
- * 处理出站 
- * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
- * @param {ArrayBuffer} secureProtoResponseHeader 
- * @param {(string)=> void} log 
+ * 处理出站
+ * @param {import("@cloudflare/workers-types").WebSocket} webSocket
+ * @param {ArrayBuffer} secureProtoResponseHeader
+ * @param {(string)=> void} log
  */
 async function handleUDPOutBound(webSocket, secureProtoResponseHeader, log) {
 
@@ -1033,11 +1033,11 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
     async function tryConnectionStrategies(strategies) {
         if (!strategies || strategies.length === 0) {
             log('All connection strategies failed. Closing WebSocket.');
-            
+
             // 自愈机制
             log('Invalidating configuration cache due to connection failures.');
             cachedSettings = null;
-            
+
             safeCloseWebSocket(webSocket);
             return;
         }
@@ -1592,14 +1592,14 @@ async function 代理URL(request, 代理网址, 目标网址, 调试模式 = fal
 
         // 复制原始请求头，并可以进行一些清理
         const newHeaders = new Headers(request.headers);
-        newHeaders.set('Host', 解析后的网址.hostname); 
-        newHeaders.set('Referer', 解析后的网址.origin); 
+        newHeaders.set('Host', 解析后的网址.hostname);
+        newHeaders.set('Referer', 解析后的网址.origin);
 
         const 响应 = await fetch(目标URL.toString(), {
-            method: request.method, 
-            headers: newHeaders, 
-            body: request.body,  
-            redirect: 'manual' 
+            method: request.method,
+            headers: newHeaders,
+            body: request.body,
+            redirect: 'manual'
         });
 
         const 新响应 = new Response(响应.body, {
@@ -1893,11 +1893,11 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						word-break: break-all;
 						overflow-wrap: break-word;
 					}
-					
+
 					html.dark-mode .notice-content {
 						background: #3a3a3a;
 					}
-					
+
 					.config-info {
 						background: #f8f9fa;
 						padding: 15px;
@@ -1906,7 +1906,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						font-size: 13px;
 						overflow-x: auto;
 					}
-					
+
 					html.dark-mode .config-info {
 						background: #3a3a3a;
 					}
@@ -1926,7 +1926,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					.copy-button:hover {
 						background: var(--secondary-color);
 					}
-					
+
 					.theme-switch-wrapper {
 						display: flex;
 						align-items: center;
@@ -1986,8 +1986,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 					.subscription-buttons-container {
 						display: flex;
-						flex-wrap: wrap; 
-						gap: 12px; 
+						flex-wrap: wrap;
+						gap: 12px;
 						justify-content: center;
 						margin-top: 15px;
 					}
@@ -1997,10 +1997,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						flex-direction: column;
 						align-items: center;
 						gap: 8px;
-						padding: 12px; 
+						padding: 12px;
 						border-radius: 8px;
 						background-color: var(--section-bg);
-						min-width: 135px; 
+						min-width: 135px;
 						text-align: center;
 					}
 
@@ -2047,12 +2047,12 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 					</label>
 				</div>
 				<div class="container">
-					
+
 					<div class="section">
 						<div class="section-title">📋 一键复制订阅</div>
-						
+
 						<div class="subscription-buttons-container">
-							
+
 							<div class="subscription-button-item">
 								<span class="subscription-label">通用订阅</span>
 								<button class="copy-button" onclick="copyToClipboard('https://${proxyhost}${hostName}/${uuid}', 'qrcode_universal')">复制</button>
@@ -2152,7 +2152,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						document.querySelectorAll('.qrcode-container').forEach(el => {
 							el.innerHTML = '';
 						});
-						
+
 						const qrcodeDiv = document.getElementById(qrcodeId);
 						if(qrcodeDiv) {
 						new QRCode(qrcodeDiv, {
@@ -2178,16 +2178,16 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 							noticeToggle.textContent = '实用订阅技巧 ∨';
 						}
 					}
-					
+
 					const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
-					
+
 					(function() {
 						const currentTheme = localStorage.getItem('theme');
 						if (currentTheme === 'dark-mode') {
 							toggleSwitch.checked = true;
 						}
 					})();
-					
+
 
 					function switchTheme(e) {
 						if (e.target.checked) {
@@ -2196,7 +2196,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 						} else {
 							document.documentElement.classList.remove('dark-mode');
 							localStorage.setItem('theme', 'light-mode');
-						}    
+						}
 					}
 
 					toggleSwitch.addEventListener('change', switchTheme, false);
@@ -2222,12 +2222,12 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             }
 
             const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
-            
+
             let configContent = '';
             let contentType = 'text/plain;charset=utf-8';
             let isBase64 = false;
             let finalFileName = '';
-            
+
             const wantsClash = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash');
             const wantsSingbox = userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb');
             const wantsLoon = userAgent.includes('loon') || _url.searchParams.has('loon');
@@ -2250,7 +2250,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
                 return new Response(restoredConfig);
             }
-            
+
             const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, false); // 注意 isBase64 为 false
 
             return new Response(finalContent, {
@@ -2261,7 +2261,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             });
         }
         // ---配置生成逻辑 ---
-        
+
 		if (typeof fetch != 'function') {
 			return 'Error: fetch is not available in this environment.';
 		}
@@ -2287,7 +2287,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			fakeHostName = `${fakeHostName}.xyz`
 		}
 		console.log(`虚假HOST: ${fakeHostName}`);
-        
+
 		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`; // Path is now dynamic inside the node
 		let isBase64 = true;
 
@@ -2341,7 +2341,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		try {
 			let content;
 			if ((!sub || sub == "") && isBase64 == true) {
-                
+
                 const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
 				content = 生成本地订阅(nodeObjects);
 			} else {
@@ -2500,20 +2500,20 @@ async function 整理测速结果(tls) {
  //收集和解析节点信息
 async function prepareNodeList(host, UUID, noTLS) {
 	let allAddresses = [];
-	
+
     // 1. 获取所有地址源
     let newAddressesapi = await 整理优选列表(addressesapi);
     let newAddressescsv = await 整理测速结果('TRUE');
-    
+
     let currentAddresses = [...new Set(addresses.concat(newAddressesapi).concat(newAddressescsv))];
-    
+
     if (noTLS === 'true') {
         let newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
         let newAddressesnotlscsv = await 整理测速结果('FALSE');
         let currentAddressesnotls = [...new Set(addressesnotls.concat(newAddressesnotlsapi).concat(newAddressesnotlscsv))];
         allAddresses.push(...currentAddressesnotls.map(addr => ({ address: addr, tls: false })));
     }
-    
+
     allAddresses.push(...currentAddresses.map(addr => ({ address: addr, tls: true })));
 
     // 2. 将地址字符串解析为节点对象
@@ -2551,7 +2551,7 @@ async function prepareNodeList(host, UUID, noTLS) {
         }
 
         if (port === "-1") {
-            const portList = tls ? (httpsPorts.length > 0 ? httpsPorts : ["443", "2053", "2083", "2087", "2096", "8443"]) 
+            const portList = tls ? (httpsPorts.length > 0 ? httpsPorts : ["443", "2053", "2083", "2087", "2096", "8443"])
                                  : (httpPorts.length > 0 ? httpPorts : ["80", "8080", "8880", "2052", "2082", "2086", "2095"]);
             if (!isValidIPv4(server)) {
                  for (let p of portList) {
@@ -2563,10 +2563,10 @@ async function prepareNodeList(host, UUID, noTLS) {
             }
             if (port === "-1") port = tls ? "443" : "80";
         }
-		
+
         let servername = host;
         let finalPath = generateRandomPath();
-		
+
         if (proxyhosts.length > 0 && servername.includes('.workers.dev')) {
             finalPath = `/${servername}${finalPath}`;
             servername = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
@@ -2592,7 +2592,7 @@ async function prepareNodeList(host, UUID, noTLS) {
         };
 	});
 
-	return nodeObjects.filter(Boolean); 
+	return nodeObjects.filter(Boolean);
 }
 
 //根据节点对象数组生成 Base64 编码的订阅内容
@@ -2610,7 +2610,7 @@ function 生成本地订阅(nodeObjects) {
             `#${encodeURIComponent(node.name)}`;
         return link;
     }).join('\n');
-    
+
     let finalLinks = secureProtoLinks;
     if (link.length > 0) {
         finalLinks += '\n' + link.join('\n');
@@ -2647,7 +2647,7 @@ function generateClashConfig(nodeObjects) {
     }).join('');
 
     const proxyNames = nodeObjects.map(p => p.name);
-    
+
     // 定义规范化的代理组名称
     const autoSelectGroupName = "🚀 自动选择";
     const manualSelectGroupName = "手动选择";
@@ -2681,7 +2681,7 @@ dns:
   default-nameserver: [223.5.5.5, 119.29.29.29, 8.8.8.8]
   nameserver: ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query']
   fallback: ['https://dns.google/dns-query', 'https://cloudflare-dns.com/dns-query']
-  
+
 proxies:
 ${proxiesYaml}
 proxy-groups:
@@ -2691,7 +2691,7 @@ proxy-groups:
 ${proxyNames.map(name => `      - ${JSON.stringify(name)}`).join('\n')}
     url: 'http://www.gstatic.com/generate_204'
     interval: 300
-    
+
   - name: ${JSON.stringify(manualSelectGroupName)}
     type: select
     proxies:
@@ -2736,7 +2736,7 @@ function generateSingboxConfig(nodeObjects) {
         }
         return outbound;
     });
-    
+
     const proxyNames = outbounds.map(o => o.tag);
 
     // 定义标准的策略组名称
@@ -2781,26 +2781,36 @@ function generateSingboxConfig(nodeObjects) {
             {
                 "type": "mixed",
                 "tag": "mixed-in",
-                "listen": "127.0.0.1",
-                "listen_port": 7890
+                "listen": "0.0.0.0",
+                "listen_port": 2345
+            },
+            {
+                "type": "tun",
+                "tag": "tun-in",
+                "inet4_address": "172.19.0.1/30",
+                "auto_route": true,
+                "strict_route": true,
+                "stack": "system",
+                "sniff": true
             }
         ],
         "outbounds": [
-            { 
-                "type": "selector", 
-                "tag": manualSelectTag, 
-                "outbounds": [autoSelectTag, "DIRECT", ...proxyNames] 
+            {
+                "type": "selector",
+                "tag": manualSelectTag,
+                "outbounds": [autoSelectTag, "DIRECT", ...proxyNames]
             },
-            { 
-              "type": "urltest", 
-              "tag": autoSelectTag, 
+            {
+              "type": "urltest",
+              "tag": autoSelectTag,
               "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204", 
-              "interval": "5m" 
+              "url": "http://www.gstatic.com/generate_204",
+              "interval": "5m"
             },
             ...outbounds,
             { "type": "direct", "tag": "DIRECT" },
-            { "type": "block", "tag": "BLOCK" }
+            { "type": "block", "tag": "BLOCK" },
+            { "type": "dns", "tag": "dns-out" }
         ],
         "route": {
             "default_domain_resolver": "dns-foreign",
@@ -2842,7 +2852,7 @@ function generateSingboxConfig(nodeObjects) {
                     "outbound": manualSelectTag
                 }
             ],
-            "final": manualSelectTag, 
+            "final": manualSelectTag,
             "auto_detect_interface": true
         },
         "experimental": {
@@ -2855,11 +2865,11 @@ function generateSingboxConfig(nodeObjects) {
             }
         }
     };
-    
+
     return JSON.stringify(config, null, 2);
 }
 
-//Loon配置 
+//Loon配置
 function generateLoonConfig(nodeObjects) {
     const proxiesConf = nodeObjects.map(p => {
         let proxyLine = `${JSON.stringify(p.name)} = ${p.type}, ${p.server}, ${p.port}, uuid=${p.uuid}, ws=true`;
@@ -3052,7 +3062,7 @@ async function handlePostRequest(request, env) {
         // --- 清除内存缓存以实现即时生效 ---
 		cachedSettings = null;
 		console.log("配置已更新，内存缓存已清除。");
-		
+
         return new Response("保存成功");
     } catch (error) {
         console.error('保存KV时发生错误:', error);
@@ -3083,7 +3093,7 @@ async function handleGetRequest(env) {
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
             if (advancedSettingsJSON) {
                 const settings = JSON.parse(advancedSettingsJSON);
-                content = settings.ADD || ''; 
+                content = settings.ADD || '';
                 proxyIPContent = settings.proxyip || '';
                 socks5Content = settings.socks5 || '';
                 httpProxyContent = settings.httpproxy || '';
@@ -3103,7 +3113,7 @@ async function handleGetRequest(env) {
             content = '读取数据时发生错误: ' + error.message;
         }
     }
-	
+
 	// 为端口选择框生成HTML
     const defaultHttpsPorts = ["443", "2053", "2083", "2087", "2096", "8443"];
     const defaultHttpPorts = ["80", "8080", "8880", "2052", "2082", "2086", "2095"];
@@ -3206,7 +3216,7 @@ async function handleGetRequest(env) {
                     font-size: 16px;
                     color: var(--text-color);
                 }
-                
+
                 .tab-container button:hover {
                     background-color: #ddd;
                 }
@@ -3220,7 +3230,7 @@ async function handleGetRequest(env) {
                     border-bottom: 2px solid var(--primary-color);
                     padding-bottom: 12px;
                 }
-				
+
                 .tab-content {
                     display: none;
                     padding: 20px;
@@ -3229,7 +3239,7 @@ async function handleGetRequest(env) {
                     border-radius: 0 0 8px 8px;
                     animation: fadeEffect 0.5s;
 				}
-                
+
                 @keyframes fadeEffect {
                     from {opacity: 0;}
                     to {opacity: 1;}
@@ -3244,7 +3254,7 @@ async function handleGetRequest(env) {
                     font-size: 14px; line-height: 1.5; resize: vertical;
                     background-color: var(--section-bg); color: var(--text-color);
                 }
-				
+
                 .editor:focus, .setting-editor:focus {
                     outline: none;
                     border-color: var(--primary-color);
@@ -3275,14 +3285,14 @@ async function handleGetRequest(env) {
                 .test-status { font-size: 14px; font-weight: 500; }
                 .test-status.success { color: #28a745; }
                 .test-status.error { color: #dc3545; }
-                .test-note { 
+                .test-note {
                     font-size: 14px;
                     color: #6c757d;
                     align-self: center;
                     padding-left: 5px;
                 }
                 html.dark-mode .test-note { color: #aaa; }
-                
+
                 .test-results-container {
                     margin-top: 10px;
                     padding: 10px;
@@ -3303,7 +3313,7 @@ async function handleGetRequest(env) {
                 }
                 .test-result-item .success { color: #28a745; font-weight: bold; }
                 .test-result-item .error { color: #dc3545; font-weight: bold; }
-				
+
                 .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; }
                 .checkbox-item { display: flex; align-items: center; gap: 5px; }
 
@@ -3506,7 +3516,7 @@ async function handleGetRequest(env) {
 
                         <h5 style="margin-top: 15px; margin-bottom: 5px;">TLS 端口</h5>
                         <div class="checkbox-grid" id="httpsports-grid">${httpsCheckboxesHTML}</div>
-                        
+
                         <h5 style="margin-top: 15px; margin-bottom: 5px;">noTLS 端口</h5>
                         <div class="checkbox-grid" id="httpports-grid">${httpCheckboxesHTML}</div>
                 </div>
@@ -3560,12 +3570,12 @@ async function handleGetRequest(env) {
                     const saveStatus = document.getElementById('saveStatus');
                     await saveAdvancedSettings(button, saveStatus);
                 }
-                
+
                 async function saveAdvancedSettings(triggeredButton, triggeredStatusEl) {
                     const activeTab = document.querySelector('.tab-link.active').getAttribute('onclick').match(/'([^']*)'/)[1];
                     const button = triggeredButton || document.querySelector(\`#\${activeTab} .btn-primary\`);
                     const statusEl = triggeredStatusEl || document.querySelector(\`#\${activeTab} .save-status\`);
-                    
+
                     if (!button || !statusEl) return;
 
                     try {
@@ -3603,7 +3613,7 @@ async function handleGetRequest(env) {
                             body: body
                         });
                         if (!response.ok) throw new Error('保存失败: ' + await response.text());
-                        
+
                         statusEl.textContent = '保存成功';
                         setTimeout(() => { statusEl.textContent = ''; }, 3000);
                     } catch (error) {
@@ -3613,7 +3623,7 @@ async function handleGetRequest(env) {
                         button.disabled = false;
                     }
                 }
-                
+
                 async function testSetting(event, type) {
                     const elementId = type === 'http' ? 'httpproxy' : type;
                     const textarea = document.getElementById(elementId);
@@ -3637,7 +3647,7 @@ async function handleGetRequest(env) {
                     testButton.disabled = true;
                     statusEl.className = 'test-status';
                     resultsContainer.style.display = 'block';
-                    
+
                     let completedCount = 0;
                     let successCount = 0;
                     const successfulAddresses = [];
@@ -3653,7 +3663,7 @@ async function handleGetRequest(env) {
                                 body: JSON.stringify({ type: type, address: address })
                         });
                             result = await response.json();
-                            
+
                             if (!response.ok) {
                                 throw new Error(result.message || \`服务器错误 \${response.status}\`);
                         }
@@ -3663,7 +3673,7 @@ async function handleGetRequest(env) {
                     } finally {
                             completedCount++;
                             statusEl.textContent = \`测试中 (\${completedCount}/\${total})...\`;
-                            
+
                             const resultItem = document.createElement('div');
                             resultItem.className = 'test-result-item';
                             let statusSpan;
@@ -3675,7 +3685,7 @@ async function handleGetRequest(env) {
                             } else {
                                 statusSpan = \`<span class="error">❌ 失败:</span>\`;
                             }
-                            
+
                             resultItem.innerHTML = \`\${statusSpan} \${address} - \${result.message}\`;
                             resultsContainer.appendChild(resultItem);
                         }
@@ -3684,7 +3694,7 @@ async function handleGetRequest(env) {
                     await Promise.allSettled(testPromises);
 
                     textarea.value = successfulAddresses.sort().join('\\n');
-                    
+
                     const failedCount = total - successCount;
                     let finalStatusMessage = \`测试完成: \${successCount} / \${total} 成功。\`;
                     if (failedCount > 0) {
@@ -3695,8 +3705,8 @@ async function handleGetRequest(env) {
                     statusEl.className = successCount > 0 ? 'test-status success' : 'test-status error';
                     testButton.disabled = false;
 
-                    setTimeout(() => { 
-                        statusEl.textContent = ''; 
+                    setTimeout(() => {
+                        statusEl.textContent = '';
                     }, 15000);
                 }
 
@@ -3714,7 +3724,7 @@ async function handleGetRequest(env) {
                     } else {
                         document.documentElement.classList.remove('dark-mode');
                         localStorage.setItem('theme', 'light-mode');
-                    }    
+                    }
                 }
                 themeToggleSwitch.addEventListener('change', switchTheme, false);
             </script>
@@ -3778,7 +3788,7 @@ async function handleTestConnection(request) {
                     log(`PROXYIP Test: 步骤 2/2 - 正在发送 HTTP 路由探针...`);
                     const writer = testSocket.writable.getWriter();
                     const workerHostname = new URL(request.url).hostname;
-                    
+
                     const httpProbeRequest = [
                         `GET / HTTP/1.1`,
                         `Host: ${workerHostname}`,
@@ -3793,7 +3803,7 @@ async function handleTestConnection(request) {
 
                     const reader = testSocket.readable.getReader();
                     const { value, done } = await reader.read();
-                    
+
                     if (done || !value) {
                         throw new Error("连接已关闭，未收到任何响应。");
                     }
@@ -3807,7 +3817,7 @@ async function handleTestConnection(request) {
                     } else {
                         throw new Error("该IP可能无效。");
                     }
-                    
+
                     await testSocket.close();
                     reader.releaseLock();
 
@@ -3841,14 +3851,14 @@ async function handleTestConnection(request) {
 
                     await writer.write(new TextEncoder().encode(httpProbeRequest));
                     writer.releaseLock();
-                    
+
                     const reader = testSocket.readable.getReader();
                     const { value, done } = await reader.read();
 
                     if (done || !value) {
                         throw new Error("连接已关闭，未收到任何响应。");
                     }
-                    
+
                     const responseText = new TextDecoder().decode(value);
                     if (responseText.includes('h=www.cloudflare.com') && responseText.includes('colo=')) {
                         log(`NAT64 Test: /cdn-cgi/trace 响应有效。测试通过。`);
@@ -3867,18 +3877,18 @@ async function handleTestConnection(request) {
             default:
                 throw new Error('不支持的测试类型');
         }
-        
+
         log(`Test successful for ${type}: ${address}`);
-        return new Response(JSON.stringify({ success: true, message: successMessage }), { 
+        return new Response(JSON.stringify({ success: true, message: successMessage }), {
             status: 200,
-            headers: { 'Content-Type': 'application/json;charset=utf-8' } 
+            headers: { 'Content-Type': 'application/json;charset=utf-8' }
         });
 
     } catch (err) {
         console.error(`[TestConnection] Error: ${err.stack || err}`);
-        return new Response(JSON.stringify({ success: false, message: `测试失败: ${err.message}` }), { 
-            status: 200, 
-            headers: { 'Content-Type': 'application/json;charset=utf-8' } 
+        return new Response(JSON.stringify({ success: false, message: `测试失败: ${err.message}` }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json;charset=utf-8' }
         });
     } finally {
         clearTimeout(timeoutId);
