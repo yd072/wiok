@@ -2841,7 +2841,7 @@ function generateSingboxConfig(nodeObjects) {
                 { "rule_set": "geosite-cn", "outbound": "DIRECT" },
                 { "rule_set": "geoip-cn", "outbound": "DIRECT" },
                 {
-                    "rule_set": "geosite-non-cn",
+                    "rule_set": "geoip-us",
                     "outbound": manualSelectTag
                 }
             ],
