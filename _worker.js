@@ -3175,7 +3175,7 @@ async function handleGetRequest(env) {
                 .editor:focus, .setting-editor:focus {
                     outline: none;
                     border-color: var(--primary-color);
-                    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%, transparent);
+                    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%_transparent);
                 }
 
                 .setting-item { margin-bottom: 20px; }
@@ -3334,10 +3334,7 @@ async function handleGetRequest(env) {
 				
                 <div id="tab-official" class="tab-content">
                     ${hasKV ? `
-                        <div class="notice-content" style="display:block; border-left-color: #17a2b8;">
-                           ${decodeURIComponent(atob('JUU1JUFFJTk4JUU2JTk2JUI5JUU0JUJDJTk4JUU5JTgwJTg5JUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBJTBBdmlzYS5jbiUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSU5RiU5RiVFNSU5MCU4RCUwQTEyNy4wLjAuMSUyM0NGbmF0JTBBJTVCMjY4NiUzQTQ3NjYlM0ElM0ElNUQlM0EyMDUzJTIzSVB2NiUwQUFEREFQSSVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQ='))}
-                        </div>
-                        <textarea class="editor" id="adds" placeholder="ADDS 官方优选列表...">${addsContent}</textarea>
+                        <textarea class="editor" id="adds" placeholder="${decodeURIComponent(atob('JUU1JUFFJTk4JUU2JTk2JUI5JUU0JUJDJTk4JUU5JTgwJTg5JUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBJTBBdmlzYS5jbiUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSU5RiU5RiVFNSU5MCU4RCUwQTEyNy4wLjAuMSUyM0NGbmF0JTBBJTVCMjY4NiUzQTQ3NjYlM0ElM0ElNUQlM0EyMDUzJTIzSVB2NiUwQUFEREFQSSVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQ='))}">${addsContent}</textarea>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                             <button class="btn btn-primary" onclick="saveAdvancedSettings(this)">保存</button>
