@@ -2760,7 +2760,7 @@ function generateSingboxConfig(nodeObjects) {
                 {
                     "type": "https",
                     "tag": "dns-foreign",
-                    "server": "dns.google",
+                    "server": "8.8.8.8",
                     "server_port": 443,
                     "path": "/dns-query",
                 }
