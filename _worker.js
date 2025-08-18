@@ -2786,7 +2786,6 @@ function generateSingboxConfig(nodeObjects) {
                 "auto_route": true,
                 "strict_route": true,
                 "stack": "gvisor",
-                // 关键修正(1): 按照您的要求，添加 inet4_route_address
                 "inet4_route_address": [
                     "198.18.0.0/15",
                     "91.105.192.0/23",
@@ -2819,7 +2818,6 @@ function generateSingboxConfig(nodeObjects) {
         ],
         "route": {
             "default_domain_resolver": "dns-foreign",
-            // 关键修正(2): 保留您对规则集 URL 和下载方式的优化
             "rule_set": [
               {
                 "tag": "geosite-cn",
@@ -2845,18 +2843,22 @@ function generateSingboxConfig(nodeObjects) {
 
               }
             ],
+            // 关键修正：调整路由规则的优先级
             "rules": [
                 {
                     "protocol": "dns",
                     "outbound": "dns-out"
                 },
                 { "ip_is_private": true, "outbound": "DIRECT" },
-                { "rule_set": "geosite-cn", "outbound": "DIRECT" },
-                { "rule_set": "geoip-cn", "outbound": "DIRECT" },
+                // 1. 优先匹配国外域名，确保它们一定走代理
                 {
                     "rule_set": "geosite-non-cn",
                     "outbound": manualSelectTag
-                }
+                },
+                // 2. 然后再匹配国内域名
+                { "rule_set": "geosite-cn", "outbound": "DIRECT" },
+                // 3. 最后才用 IP 规则作为补充
+                { "rule_set": "geoip-cn", "outbound": "DIRECT" }
             ],
             "final": manualSelectTag, 
             "auto_detect_interface": true
