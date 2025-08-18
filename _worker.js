@@ -2859,7 +2859,7 @@ function generateSingboxConfig(nodeObjects) {
     };
 
     return JSON.stringify(config, null, 2);
-}}
+}
 
 //Loon配置
 function generateLoonConfig(nodeObjects) {
