@@ -1682,6 +1682,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
 
+    // 修正后的判断条件，加入了 ADDSAPI.length
 	if ((ADDS.length + ADDSAPI.length + addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
 	    		let cfips = [
 		            '104.16.0.0/14',
@@ -3376,6 +3377,25 @@ async function handleGetRequest(env) {
                 <div id="tab-adds" class="tab-content">
                     ${hasKV ? `
                         <textarea class="editor" id="adds_content" placeholder="${decodeURIComponent(atob('JUU1JUFFJTk4JUU2JTk2JUI5JUU0JUJDJTk4JUU5JTgwJTg5JUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBJTBBdmlzYS5jbiUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSU5RiU5RiVFNSU5MCU4RCUwQTEyNy4wLjAuMSUyM0NGbmF0JTBBJTVCMjY4NiUzQTQ3NjYlM0ElM0ElNUQlM0EyMDUzJTIzSVB2NiUwQUFEREFQSSVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQ='))}">${addsContent}</textarea>
+                        
+                        <div class="setting-item" style="margin-top:20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                            <h4>端口设置</h4>
+                            <p>启用 noTLS (将不使用 TLS 加密)</p>
+                            <div class="switch-container">
+                                <label class="theme-switch" for="notls-checkbox">
+                                    <input type="checkbox" id="notls-checkbox" ${noTLSContent === 'true' ? 'checked' : ''}>
+                                    <div class="slider round"></div>
+                                </label>
+                                <span>启用 noTLS</span>
+                            </div>
+
+                            <h5 style="margin-top: 15px; margin-bottom: 5px;">TLS 端口</h5>
+                            <div class="checkbox-grid" id="httpsports-grid">${httpsCheckboxesHTML}</div>
+                            
+                            <h5 style="margin-top: 15px; margin-bottom: 5px;">noTLS 端口</h5>
+                            <div class="checkbox-grid" id="httpports-grid">${httpCheckboxesHTML}</div>
+                        </div>
+
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                             <button class="btn btn-primary" onclick="saveAdvancedSettings(this)">保存</button>
@@ -3472,23 +3492,6 @@ async function handleGetRequest(env) {
                             </div>
                         <div id="nat64-results" class="test-results-container"></div>
                                 </div>
-                        <div class="setting-item">
-                        <h4>随机节点端口设置 (仅对“官方优选”生效)</h4>
-                        <p>启用 noTLS (将不使用 TLS 加密)</p>
-                                <div class="switch-container">
-                                    <label class="theme-switch" for="notls-checkbox">
-                                        <input type="checkbox" id="notls-checkbox" ${noTLSContent === 'true' ? 'checked' : ''}>
-                                        <div class="slider round"></div>
-                                    </label>
-                            <span>启用 noTLS</span>
-                        </div>
-
-                        <h5 style="margin-top: 15px; margin-bottom: 5px;">TLS 端口</h5>
-                        <div class="checkbox-grid" id="httpsports-grid">${httpsCheckboxesHTML}</div>
-                        
-                        <h5 style="margin-top: 15px; margin-bottom: 5px;">noTLS 端口</h5>
-                        <div class="checkbox-grid" id="httpports-grid">${httpCheckboxesHTML}</div>
-                </div>
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                         <button class="btn btn-primary" onclick="saveAdvancedSettings(this)">保存</button>
