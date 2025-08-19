@@ -2832,11 +2832,13 @@ function generateSingboxConfig(nodeObjects) {
             },
             {
                 "type": "tun",
+                "tag": "tun-in",
+                "interface_name": "tun0",
                 "address": [
                     "172.19.0.1/30",
                     "fdfe:dcba:9876::1/126"
                 ],
-                "route_address": [
+                "route_address": [ 
                     "0.0.0.0/1",
                     "128.0.0.0/1",
                     "::/1",
@@ -2845,8 +2847,12 @@ function generateSingboxConfig(nodeObjects) {
                 "route_exclude_address": [
                     "192.168.0.0/16",
                     "fc00::/7"
-                ]
-             }
+                ],
+                "auto_route": true,
+                "strict_route": true,
+                "sniff": true, 
+                "sniff_override_destination": true
+            }
         ],
         "outbounds": [
             {
