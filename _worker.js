@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2829,7 +2829,7 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "tun-in",
                 "interface_name": "tun0",
                 "inet4_address": "172.19.0.1/30",
-                "stack": "mixed",
+                "stack": "system",
                 "auto_route": true,
                 "strict_route": true,
                 "sniff": true, 
@@ -2847,7 +2847,7 @@ function generateSingboxConfig(nodeObjects) {
               "tag": autoSelectTag,
               "outbounds": proxyNames,
               "url": "http://www.gstatic.com/generate_204",
-              "interval": "5m"
+              "interval": "3m"
             },
             ...outbounds,
             { "type": "direct", "tag": "direct" }, 
