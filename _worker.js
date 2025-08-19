@@ -3348,7 +3348,7 @@ async function handleGetRequest(env) {
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
 
                 <div class="tab-container">
-                    <button class="tab-link active" onclick="openTab(event, 'tab-main')">优选列表 (ADD)</button>
+                    <button class="tab-link active" onclick="openTab(event, 'tab-main')">优选列表</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-adds')">官方优选</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-proxy')">代理设置</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-sub')">订阅设置</button>
