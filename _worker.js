@@ -2839,7 +2839,7 @@ function generateSingboxConfig(nodeObjects) {
                 "auto_route": true,
                 "strict_route": true,
                 "sniff": true, 
-                "sniff_override_destination": false
+                "sniff_override_destination": true
             }
         ],
         "outbounds": [
