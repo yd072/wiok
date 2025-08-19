@@ -2828,7 +2828,10 @@ function generateSingboxConfig(nodeObjects) {
                 "type": "mixed",
                 "tag": "mixed-in",
                 "listen": "0.0.0.0",
-                "listen_port": 2345
+                "listen_port": 2345,
+                "tcp_fast_open": false,
+                "tcp_multi_path": false,
+                "udp_fragment": false
             },
             {
                 "type": "tun",
