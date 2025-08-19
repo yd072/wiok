@@ -2376,84 +2376,65 @@ async function 整理优选列表(apiUrls) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
 
-    let processedAddresses = [];
+    const fetchPromises = apiUrls.map(url =>
+        fetch(url, {
+            method: 'get',
+            headers: { 'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1') },
+            signal: controller.signal
+        }).then(response => {
+            if (!response.ok) throw new Error(`status ${response.status}`);
+            return response.text();
+        }).then(content => ({ url, content }))
+    );
 
-    const fetchPromises = apiUrls.map(async (url) => {
-        try {
-            const response = await fetch(url, {
-                method: 'get',
-                headers: { 'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1') },
-                signal: controller.signal
-            });
+    const results = await Promise.allSettled(fetchPromises);
+    clearTimeout(timeout);
 
-            if (!response.ok) {
-                console.error(`Failed to fetch API: ${url}, status: ${response.status}`);
-                return; // Skip this URL
-            }
+    let allProcessedAddresses = [];
+    let allProxyIpCandidates = [];
 
-            const content = await response.text();
+    results.forEach(result => {
+        if (result.status === 'fulfilled') {
+            const { url, content } = result.value;
             const lines = content.split(/\r?\n/).filter(Boolean);
-
-            // Extract parameters from the URL itself
             const urlParams = new URL(url);
             const portFromUrl = urlParams.searchParams.get('port');
             const idFromUrl = urlParams.searchParams.get('id');
             const isProxyIpSource = urlParams.searchParams.get('proxyip') === 'true';
 
-            // Check if it's a CSV file from CloudflareSpeedTest
-            if (lines.length > 0 && lines[0].split(',').length > 3) {
-                const defaultPort = portFromUrl || '443';
-                for (let i = 1; i < lines.length; i++) {
-                    const ip = lines[i].split(',')[0].trim();
-                    if (ip) {
-                        const address = `${ip}:${defaultPort}`;
-                        processedAddresses.push(`${address}${idFromUrl ? `#${idFromUrl}` : ''}`);
-                        if (isProxyIpSource && !httpsPorts.includes(defaultPort)) {
-                             proxyIPPool.push(address);
+            const processedLines = lines.map(line => {
+                let baseAddress = line.trim().split('#')[0];
+                const originalRemark = line.trim().includes('#') ? line.trim().split('#')[1] : '';
+                const finalRemark = idFromUrl || originalRemark;
+
+                if (baseAddress && !baseAddress.includes(':') && portFromUrl) {
+                    baseAddress = `${baseAddress}:${portFromUrl}`;
+                }
+
+                if (baseAddress) {
+                    if (isProxyIpSource) {
+                        if (baseAddress.includes(':')) {
+                            const port = baseAddress.split(':')[1];
+                            if (!httpsPorts.includes(port)) {
+                                allProxyIpCandidates.push(baseAddress);
+                            }
+                        } else {
+                            allProxyIpCandidates.push(`${baseAddress}:443`);
                         }
                     }
+                    return `${baseAddress}${finalRemark ? `#${finalRemark}` : ''}`;
                 }
-            } else {
-                // It's a plain text file
-                lines.forEach(line => {
-                    const trimmedLine = line.trim();
-                    if (!trimmedLine) return;
+                return null;
+            }).filter(Boolean);
 
-                    let baseAddress = trimmedLine.split('#')[0];
-                    const originalRemark = trimmedLine.includes('#') ? trimmedLine.split('#')[1] : '';
-                    
-                    const finalRemark = idFromUrl || originalRemark;
-
-                    if (baseAddress && !baseAddress.includes(':') && portFromUrl) {
-                        baseAddress = `${baseAddress}:${portFromUrl}`;
-                    }
-                    
-                    if(baseAddress) {
-                       const finalAddress = `${baseAddress}${finalRemark ? `#${finalRemark}` : ''}`;
-                       processedAddresses.push(finalAddress);
-
-                       if (isProxyIpSource) {
-                           if (baseAddress.includes(':')) {
-                               const port = baseAddress.split(':')[1];
-                               if (!httpsPorts.includes(port)) {
-                                   proxyIPPool.push(baseAddress);
-                               }
-                           } else {
-                               proxyIPPool.push(`${baseAddress}:443`);
-                           }
-                       }
-                    }
-                });
-            }
-        } catch (error) {
-            console.error(`Error processing API URL ${url}:`, error);
+            allProcessedAddresses = allProcessedAddresses.concat(processedLines);
+        } else {
+            console.error(`Failed to process API URL: ${result.reason}`);
         }
     });
-
-    await Promise.allSettled(fetchPromises);
-    clearTimeout(timeout);
-
-    return processedAddresses; // Already an array, no need for `整理`
+    
+    proxyIPPool.push(...allProxyIpCandidates);
+    return allProcessedAddresses;
 }
 
 
