@@ -3394,7 +3394,7 @@ async function handleGetRequest(env) {
                             <div class="checkbox-grid" id="httpports-grid">${httpCheckboxesHTML}</div>
                         </div>
 
-                        <textarea class="editor" id="adds_content" placeholder="${decodeURIComponent(atob('JTBBJUU1JUFFJTk4JUU2JTk2JUI5JUU0JUJDJTk4JUU5JTgwJTg5JUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBJTBBdmlzYS5jbiUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSU5RiU5RiVFNSU5MCU4RCUwQTEyNy4wLjAuMSUyM0NGbmF0JTBBJTVCMjY4NiUzQTQ3NjYlM0ElM0ElNUQlMjNJUHY2JTBBJTBBJTBBQUREQVBJJUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBJTBBaHR0cHMlM0ElMkYlMkZyYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tJTJGY21saXUlMkZXb3JrZXJWbGVzczJzdWIlMkZyZWZzJTJGaGVhZHMlMkZtYWluJTJGYWRkcmVzc2VzYXBpLnR4dA=='))}">${addsContent}</textarea>
+                        <textarea class="editor" id="adds_content" placeholder="${decodeURIComponent(atob('JTBBQUREUyVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQXZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEExMjcuMC4wLjElMjNDRm5hdCUwQSU1QjI2ODYlM0E0NzY2JTNBJTNBJTVEJTIzSVB2NiUwQSUwQSUwQUFERFNBUEklRTclQTQlQkElRTQlQkUlOEIlRUYlQkMlOUElMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRnJlZnMlMkZoZWFkcyUyRm1haW4lMkZhZGRyZXNzZXNhcGkudHh0'))}">${addsContent}</textarea>
                         
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
