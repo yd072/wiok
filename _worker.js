@@ -2370,89 +2370,90 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 	}
 }
 
-async function 整理优选列表(api) {
-    if (!api || api.length === 0) return [];
+async function 整理优选列表(apiUrls) {
+    if (!apiUrls || apiUrls.length === 0) return [];
 
-    let newapi = "";
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
 
-    try {
-        const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
-            method: 'get',
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;',
-                'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
-            },
-            signal: controller.signal
-        }).then(response => response.ok ? response.text() : Promise.reject())));
+    let processedAddresses = [];
 
-        for (const [index, response] of responses.entries()) {
-            if (response.status === 'fulfilled') {
-                const content = response.value;
-                const currentApiUrl = api[index];
-                const lines = content.split(/\r?\n/);
+    const fetchPromises = apiUrls.map(async (url) => {
+        try {
+            const response = await fetch(url, {
+                method: 'get',
+                headers: { 'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1') },
+                signal: controller.signal
+            });
 
-                const portMatchInUrl = currentApiUrl.match(/port=([^&]*)/);
-                const 链接指定端口 = portMatchInUrl ? portMatchInUrl[1] : null;
+            if (!response.ok) {
+                console.error(`Failed to fetch API: ${url}, status: ${response.status}`);
+                return; // Skip this URL
+            }
 
-                const idMatchInUrl = currentApiUrl.match(/id=([^&]*)/);
-                const 链接指定备注 = idMatchInUrl ? idMatchInUrl[1] : '';
+            const content = await response.text();
+            const lines = content.split(/\r?\n/).filter(Boolean);
 
-                if (lines.length > 0 && lines[0].split(',').length > 3) {
-                    // CSV 格式处理
-                    const 测速端口 = 链接指定端口 || '443';
-                    const 节点备注 = 链接指定备注;
-                    for (let i = 1; i < lines.length; i++) {
-                        const columns = lines[i].split(',');
-                        if (columns[0]) {
-                            const addressWithPort = `${columns[0]}:${测速端口}`;
-                            newapi += `${addressWithPort}${节点备注 ? `#${节点备注}` : ''}\n`;
-                            if (currentApiUrl.includes('proxyip=true') && !httpsPorts.includes(测速端口)) {
-                                proxyIPPool.push(addressWithPort);
-                            }
+            // Extract parameters from the URL itself
+            const urlParams = new URL(url);
+            const portFromUrl = urlParams.searchParams.get('port');
+            const idFromUrl = urlParams.searchParams.get('id');
+            const isProxyIpSource = urlParams.searchParams.get('proxyip') === 'true';
+
+            // Check if it's a CSV file from CloudflareSpeedTest
+            if (lines.length > 0 && lines[0].split(',').length > 3) {
+                const defaultPort = portFromUrl || '443';
+                for (let i = 1; i < lines.length; i++) {
+                    const ip = lines[i].split(',')[0].trim();
+                    if (ip) {
+                        const address = `${ip}:${defaultPort}`;
+                        processedAddresses.push(`${address}${idFromUrl ? `#${idFromUrl}` : ''}`);
+                        if (isProxyIpSource && !httpsPorts.includes(defaultPort)) {
+                             proxyIPPool.push(address);
                         }
                     }
-                } else {
-                    // 纯文本格式处理
-                    const linesFromApi = content.split(/\r?\n/).filter(Boolean);
-                    linesFromApi.forEach(line => {
-                        const baseItem = line.trim().split('#')[0];
-                        const originalRemark = line.trim().includes('#') ? line.trim().split('#')[1] : '';
-                        
-                        const finalRemark = 链接指定备注 || originalRemark;
-                        
-                        let finalBaseItem = baseItem;
-                        if (baseItem && !baseItem.includes(':') && 链接指定端口) {
-                            finalBaseItem = `${baseItem}:${链接指定端口}`;
-                        }
-                        
-                        if (finalBaseItem) {
-                            const processedLine = `${finalBaseItem}${finalRemark ? `#${finalRemark}` : ''}`;
-                            newapi += processedLine + '\n';
-                            
-                            if (currentApiUrl.includes('proxyip=true')) {
-                                if (finalBaseItem.includes(':')) {
-                                    const port = finalBaseItem.split(':')[1];
-                                    if (!httpsPorts.includes(port)) {
-                                        proxyIPPool.push(finalBaseItem);
-                                    }
-                                } else {
-                                    proxyIPPool.push(`${finalBaseItem}:443`);
-                                }
-                            }
-                        }
-                    });
                 }
-            }
-        }
-    } catch (error) {
-        console.error(error);
-    } finally {
-        clearTimeout(timeout);
-    }
+            } else {
+                // It's a plain text file
+                lines.forEach(line => {
+                    const trimmedLine = line.trim();
+                    if (!trimmedLine) return;
 
-    return 整理(newapi);
+                    let baseAddress = trimmedLine.split('#')[0];
+                    const originalRemark = trimmedLine.includes('#') ? trimmedLine.split('#')[1] : '';
+                    
+                    const finalRemark = idFromUrl || originalRemark;
+
+                    if (baseAddress && !baseAddress.includes(':') && portFromUrl) {
+                        baseAddress = `${baseAddress}:${portFromUrl}`;
+                    }
+                    
+                    if(baseAddress) {
+                       const finalAddress = `${baseAddress}${finalRemark ? `#${finalRemark}` : ''}`;
+                       processedAddresses.push(finalAddress);
+
+                       if (isProxyIpSource) {
+                           if (baseAddress.includes(':')) {
+                               const port = baseAddress.split(':')[1];
+                               if (!httpsPorts.includes(port)) {
+                                   proxyIPPool.push(baseAddress);
+                               }
+                           } else {
+                               proxyIPPool.push(`${baseAddress}:443`);
+                           }
+                       }
+                    }
+                });
+            }
+        } catch (error) {
+            console.error(`Error processing API URL ${url}:`, error);
+        }
+    });
+
+    await Promise.allSettled(fetchPromises);
+    clearTimeout(timeout);
+
+    return processedAddresses; // Already an array, no need for `整理`
 }
 
 
