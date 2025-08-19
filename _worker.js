@@ -2833,7 +2833,6 @@ function generateSingboxConfig(nodeObjects) {
             {
                 "type": "tun",
                 "tag": "tun-in",
-                "interface_name": "tun0",
                 "inet4_address": "172.19.0.1/30",
                 "stack": "mixed",
                 "auto_route": true,
