@@ -103,7 +103,6 @@ function getRandomFingerprint() {
     return validFingerprints[Math.floor(Math.random() * validFingerprints.length)];
 }
 
-
 /**
  * 集中加载所有配置，严格执行 KV > 环境变量 > 默认值的优先级
  * @param {any} env
@@ -1682,7 +1681,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
 
-    // 修正后的判断条件，加入了 addsapi.length
 	if ((adds.length + addsapi.length + addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
 	    		let cfips = [
 		            '104.16.0.0/14',
@@ -2765,7 +2763,7 @@ function generateSingboxConfig(nodeObjects) {
                 type: p.network,
                 path: p['ws-opts'].path,
                 headers: {
-                    Host: p.servername
+                    host: p.servername 
                 }
             }
         };
@@ -2785,6 +2783,10 @@ function generateSingboxConfig(nodeObjects) {
     
     const proxyNames = outbounds.map(o => o.tag);
 
+    // 定义标准的策略组名称
+    const manualSelectTag = "手动选择";
+    const autoSelectTag = "自动选择";
+
     const config = {
         "log": {
             "level": "info",
@@ -2792,18 +2794,60 @@ function generateSingboxConfig(nodeObjects) {
         },
         "dns": {
             "servers": [
-                { "address": "https://223.5.5.5/dns-query" },
-                { "address": "https://dns.google/dns-query" }
-            ]
+                {
+                    "type": "https",
+                    "tag": "dns-domestic",
+                    "server": "223.5.5.5",
+                    "server_port": 443,
+                    "path": "/dns-query"
+                },
+                {
+                    "type": "https",
+                    "tag": "dns-foreign",
+                    "server": "8.8.8.8",
+                    "server_port": 443,
+                    "path": "/dns-query",
+                    "detour": manualSelectTag
+                }
+            ],
+            "rules": [
+                {
+                    "rule_set": "geosite-cn",
+                    "server": "dns-domestic"
+                },
+                {
+                    "server": "dns-foreign"
+                }
+            ],
+            "strategy": "prefer_ipv4"
         },
         "inbounds": [
-            { "type": "mixed", "listen": "0.0.0.0", "listen_port": 2345 }
+            {
+                "type": "mixed",
+                "tag": "mixed-in",
+                "listen": "0.0.0.0",
+                "listen_port": 2345
+            },
+            {
+                "type": "tun",
+                "tag": "tun-in",
+                "inet4_address": "172.19.0.1/30",
+                "stack": "mixed",
+                "auto_route": true,
+                "strict_route": true,
+                "sniff": true, 
+                "sniff_override_destination": true
+            }
         ],
         "outbounds": [
-            { "type": "selector", "tag": "manual-select", "outbounds": ["auto-select", "direct", ...proxyNames] },
+            {
+                "type": "selector",
+                "tag": manualSelectTag,
+                "outbounds": [autoSelectTag, "direct", ...proxyNames] 
+            },
             { 
               "type": "urltest", 
-              "tag": "auto-select", 
+              "tag": autoSelectTag,
               "outbounds": proxyNames,
               "url": "http://www.gstatic.com/generate_204", 
               "interval": "5m" 
@@ -2813,12 +2857,56 @@ function generateSingboxConfig(nodeObjects) {
             { "type": "block", "tag": "block" }
         ],
         "route": {
-            "rules": [
-                { "geoip": "cn", "outbound": "direct" }
-                
+            "default_domain_resolver": "dns-foreign",
+            "rule_set": [
+              {
+                "tag": "geosite-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
+                "download_detour": "direct" 
+              },
+              {
+                "tag": "geoip-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+                "download_detour": "direct" 
+
+              },
+              {
+                "tag": "geosite-non-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
+                "download_detour": "direct" 
+
+              }
             ],
-            "final": "manual-select", 
+            "rules": [
+                {
+                    "protocol": "dns",
+                    "outbound": "dns-out"
+                },
+                { "ip_is_private": true, "outbound": "direct" }, 
+                { "rule_set": "geosite-cn", "outbound": "direct" }, 
+                { "rule_set": "geoip-cn", "outbound": "direct" }, 
+                {
+                    "rule_set": "geosite-non-cn",
+                    "outbound": manualSelectTag
+                }
+            ],
+            "final": manualSelectTag,
             "auto_detect_interface": true
+        },
+        "experimental": {
+            "cache_file": {
+                "enabled": true,
+                "store_rdrc": true
+            },
+            "clash_api": {
+                "default_mode": "enhanced" 
+            }
         }
     };
     
@@ -3342,7 +3430,7 @@ async function handleGetRequest(env) {
                 <div class="title">📝 ${FileName} 优选订阅列表</div>
 
                 <div class="tab-container">
-                    <button class="tab-link active" onclick="openTab(event, 'tab-main')">优选列表 (ADD)</button>
+                    <button class="tab-link active" onclick="openTab(event, 'tab-main')">优选列表</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-adds')">官方优选</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-proxy')">代理设置</button>
                     <button class="tab-link" onclick="openTab(event, 'tab-sub')">订阅设置</button>
