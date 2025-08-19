@@ -2371,100 +2371,88 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 }
 
 async function 整理优选列表(api) {
-	if (!api || api.length === 0) return [];
+    if (!api || api.length === 0) return [];
 
-	let newapi = "";
+    let newapi = "";
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
 
-	const controller = new AbortController();
-	const timeout = setTimeout(() => {
-		controller.abort();
-	}, 2000);
+    try {
+        const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
+            method: 'get',
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;',
+                'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
+            },
+            signal: controller.signal
+        }).then(response => response.ok ? response.text() : Promise.reject())));
 
-	try {
-		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
-			method: 'get',
-			headers: {
-				'Accept': 'text/html,application/xhtml+xml,application/xml;',
-				'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
-			},
-			signal: controller.signal
-		}).then(response => response.ok ? response.text() : Promise.reject())));
+        for (const [index, response] of responses.entries()) {
+            if (response.status === 'fulfilled') {
+                const content = response.value;
+                const currentApiUrl = api[index];
+                const lines = content.split(/\r?\n/);
 
-		for (const [index, response] of responses.entries()) {
-			if (response.status === 'fulfilled') {
-				const content = await response.value;
-				const currentApiUrl = api[index];
-				const lines = content.split(/\r?\n/);
-				let 节点备注 = '';
-				let 测速端口 = '443';
-				
-				const portMatchInUrl = currentApiUrl.match(/port=([^&]*)/);
-				const 链接指定端口 = portMatchInUrl ? portMatchInUrl[1] : null;
+                const portMatchInUrl = currentApiUrl.match(/port=([^&]*)/);
+                const 链接指定端口 = portMatchInUrl ? portMatchInUrl[1] : null;
 
-				const idMatchInUrl = currentApiUrl.match(/id=([^&]*)/);
-				const 链接指定备注 = idMatchInUrl ? idMatchInUrl[1] : '';
+                const idMatchInUrl = currentApiUrl.match(/id=([^&]*)/);
+                const 链接指定备注 = idMatchInUrl ? idMatchInUrl[1] : '';
 
-				if (lines[0].split(',').length > 3) {
-					// CSV 格式 API (例如 CloudflareSpeedTest)
-					测速端口 = 链接指定端口 || '443';
-					节点备注 = 链接指定备注;
+                if (lines.length > 0 && lines[0].split(',').length > 3) {
+                    // CSV 格式处理
+                    const 测速端口 = 链接指定端口 || '443';
+                    const 节点备注 = 链接指定备注;
+                    for (let i = 1; i < lines.length; i++) {
+                        const columns = lines[i].split(',');
+                        if (columns[0]) {
+                            const addressWithPort = `${columns[0]}:${测速端口}`;
+                            newapi += `${addressWithPort}${节点备注 ? `#${节点备注}` : ''}\n`;
+                            if (currentApiUrl.includes('proxyip=true') && !httpsPorts.includes(测速端口)) {
+                                proxyIPPool.push(addressWithPort);
+                            }
+                        }
+                    }
+                } else {
+                    // 纯文本格式处理
+                    const linesFromApi = content.split(/\r?\n/).filter(Boolean);
+                    linesFromApi.forEach(line => {
+                        const baseItem = line.trim().split('#')[0];
+                        const originalRemark = line.trim().includes('#') ? line.trim().split('#')[1] : '';
+                        
+                        const finalRemark = 链接指定备注 || originalRemark;
+                        
+                        let finalBaseItem = baseItem;
+                        if (baseItem && !baseItem.includes(':') && 链接指定端口) {
+                            finalBaseItem = `${baseItem}:${链接指定端口}`;
+                        }
+                        
+                        if (finalBaseItem) {
+                            const processedLine = `${finalBaseItem}${finalRemark ? `#${finalRemark}` : ''}`;
+                            newapi += processedLine + '\n';
+                            
+                            if (currentApiUrl.includes('proxyip=true')) {
+                                if (finalBaseItem.includes(':')) {
+                                    const port = finalBaseItem.split(':')[1];
+                                    if (!httpsPorts.includes(port)) {
+                                        proxyIPPool.push(finalBaseItem);
+                                    }
+                                } else {
+                                    proxyIPPool.push(`${finalBaseItem}:443`);
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    } catch (error) {
+        console.error(error);
+    } finally {
+        clearTimeout(timeout);
+    }
 
-					for (let i = 1; i < lines.length; i++) {
-						const columns = lines[i].split(',')[0];
-						if (columns) {
-							newapi += `${columns}:${测速端口}${节点备注 ? `#${节点备注}` : ''}\n`;
-						}
-					}
-				} else {
-					// 纯文本格式 API
-					const linesFromApi = content.split(/\r?\n/).filter(Boolean);
-
-					linesFromApi.forEach(line => {
-						let processedLine = line.trim();
-						const baseItem = processedLine.split('#')[0];
-						const originalRemark = processedLine.includes('#') ? processedLine.split('#')[1] : '';
-						
-						let finalRemark = 链接指定备注 || originalRemark;
-
-						if (!baseItem.includes(':') && 链接指定端口) {
-							processedLine = `${baseItem}:${链接指定端口}${finalRemark ? `#${finalRemark}` : ''}`;
-						} else if (finalRemark && !originalRemark) {
-							processedLine = `${baseItem}${finalRemark ? `#${finalRemark}` : ''}`;
-						}
-						
-						newapi += processedLine + '\n';
-					});
-				}
-				
-				// 处理 proxyip=true
-				if (currentApiUrl.includes('proxyip=true')) {
-					const linesForProxyIP = content.split(/\r?\n/).filter(Boolean);
-					proxyIPPool = proxyIPPool.concat(linesForProxyIP.map(item => {
-						let baseItem = (item.split('#')[0] || item).trim();
-						if (!baseItem.includes(':') && 链接指定端口) {
-							baseItem = `${baseItem}:${链接指定端口}`;
-						}
-						
-						if (baseItem.includes(':')) {
-							const port = baseItem.split(':')[1];
-							if (!httpsPorts.includes(port)) {
-								return baseItem;
-							}
-						} else {
-							return `${baseItem}:443`;
-						}
-						return null;
-					}).filter(Boolean));
-				}
-			}
-		}
-	} catch (error) {
-		console.error(error);
-	} finally {
-		clearTimeout(timeout);
-	}
-
-	return 整理(newapi);
+    return 整理(newapi);
 }
 
 
