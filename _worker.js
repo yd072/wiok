@@ -2829,15 +2829,13 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "mixed-in",
                 "listen": "0.0.0.0",
                 "listen_port": 2345,
-                "tcp_fast_open": false,
-                "tcp_multi_path": false,
-                "udp_fragment": false
             },
             {
                 "type": "tun",
                 "tag": "tun-in",
                 "inet4_address": "172.19.0.1/30",
-                "stack": "mixed",
+                "stack": "system",
+                "mtu": 1420,
                 "auto_route": true,
                 "strict_route": true,
                 "sniff": true, 
@@ -2859,6 +2857,7 @@ function generateSingboxConfig(nodeObjects) {
             },
             ...outbounds,
             { "type": "direct", "tag": "direct" }, 
+            { "type": "direct", "tag": "dns-direct-out" },
             { "type": "block", "tag": "block" } 
         ],
         "route": {
@@ -2891,7 +2890,7 @@ function generateSingboxConfig(nodeObjects) {
             "rules": [
                 {
                     "protocol": "dns",
-                    "outbound": "dns-out"
+                    "outbound": "dns-direct-out"
                 },
                 { "ip_is_private": true, "outbound": "direct" }, 
                 { "rule_set": "geosite-cn", "outbound": "direct" }, 
