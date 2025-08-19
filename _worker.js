@@ -31,9 +31,9 @@ let go2Socks5s = [
 	'*.loadshare.org',
 ];
 let addresses = [];
-let ADDS = [];
+let adds = [];
 let addressesapi = [];
-let ADDSAPI = [];
+let addsapi = [];
 let addressesnotls = [];
 let addressesnotlsapi = [];
 let addressescsv = [];
@@ -125,7 +125,7 @@ async function loadConfigurations(env) {
     if (env.DNS64 || env.NAT64) DNS64Server = env.DNS64 || env.NAT64;
 
     if (env.ADD) addresses = 整理(env.ADD);
-    if (env.ADDS) ADDS = 整理(env.ADDS);
+    if (env.ADDS) adds = 整理(env.ADDS);
     if (env.ADDAPI) addressesapi = 整理(env.ADDAPI);
     if (env.ADDNOTLS) addressesnotls = 整理(env.ADDNOTLS);
     if (env.ADDNOTLSAPI) addressesnotlsapi = 整理(env.ADDNOTLSAPI);
@@ -191,8 +191,8 @@ async function loadConfigurations(env) {
                             官方分类地址.优选地址.add(元素);
                         }
                     }
-                    ADDSAPI = [...官方分类地址.接口地址];
-                    ADDS = [...官方分类地址.优选地址];
+                    addsapi = [...官方分类地址.接口地址];
+                    adds = [...官方分类地址.优选地址];
                 }
             }
         } catch (e) {
@@ -1682,8 +1682,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
 
-    // 修正后的判断条件，加入了 ADDSAPI.length
-	if ((ADDS.length + ADDSAPI.length + addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
+    // 修正后的判断条件，加入了 addsapi.length
+	if ((adds.length + addsapi.length + addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
 	    		let cfips = [
 		            '104.16.0.0/14',
 		            '104.21.0.0/16',
@@ -1796,8 +1796,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			if (enableSocks) 订阅器 += `CFCDN（访问方式）: Socks5<br>&nbsp;&nbsp;${newSocks5s.join('<br>&nbsp;&nbsp;')}<br>${socks5List}`;
 			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
-			订阅器 += `<br>您的订阅内容由 内置 ADDS/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
-			if (ADDS.length > 0 || ADDSAPI.length > 0) 订阅器 += `ADDS (官方优选): <br>&nbsp;&nbsp;${[...ADDS, ...ADDSAPI].join('<br>&nbsp;&nbsp;')}<br>`;
+			订阅器 += `<br>您的订阅内容由 内置 adds/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
+			if (adds.length > 0 || addsapi.length > 0) 订阅器 += `ADDS (官方优选): <br>&nbsp;&nbsp;${[...adds, ...addsapi].join('<br>&nbsp;&nbsp;')}<br>`;
 			if (addresses.length > 0 || addressesapi.length > 0) 订阅器 += `ADD (TLS优选域名&IP): <br>&nbsp;&nbsp;${[...addresses, ...addressesapi].join('<br>&nbsp;&nbsp;')}<br>`;
 			if (addressesnotls.length > 0 || addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLS (noTLS优选域名&IP): <br>&nbsp;&nbsp;${[...addressesnotls, ...addressesnotlsapi].join('<br>&nbsp;&nbsp;')}<br>`;
 			if (addressescsv.length > 0) 订阅器 += `ADDCSV（IPTest测速csv文件 限速 ${DLS} ）: <br>&nbsp;&nbsp;${addressescsv.join('<br>&nbsp;&nbsp;')}<br>`;
@@ -2534,10 +2534,10 @@ async function prepareNodeList(host, UUID, noTLS) {
 
     // 1. 统一收集所有地址源，并标记来源
     // 官方优选 (直连地址)
-    [...new Set(ADDS)].forEach(addr => allSources.push({ address: addr, source: 'adds' }));
+    [...new Set(adds)].forEach(addr => allSources.push({ address: addr, source: 'adds' }));
     
     // 官方优选 (API地址)
-    const newAddsApi = await 整理优选列表(ADDSAPI);
+    const newAddsApi = await 整理优选列表(addsapi);
     [...new Set(newAddsApi)].forEach(addr => allSources.push({ address: addr, source: 'adds' }));
 
     // 用户优选 (TLS)
