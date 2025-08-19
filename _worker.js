@@ -33,6 +33,7 @@ let go2Socks5s = [
 let addresses = [];
 let ADDS = [];
 let addressesapi = [];
+let ADDSAPI = [];
 let addressesnotls = [];
 let addressesnotlsapi = [];
 let addressescsv = [];
@@ -166,6 +167,7 @@ async function loadConfigurations(env) {
 				if (settings.notls) {
                     noTLS = settings.notls;
                 }
+
                 if (settings.ADD) {
                     const 优选地址数组 = 整理(settings.ADD);
                     const 分类地址 = { 接口地址: new Set(), 链接地址: new Set(), 优选地址: new Set() };
@@ -178,8 +180,19 @@ async function loadConfigurations(env) {
                     link = [...分类地址.链接地址];
                     addresses = [...分类地址.优选地址];
                 }
+
                 if (settings.ADDS) {
-                    ADDS = 整理(settings.ADDS);
+                    const 官方优选数组 = 整理(settings.ADDS);
+                    const 官方分类地址 = { 接口地址: new Set(), 优选地址: new Set() };
+                     for (const 元素 of 官方优选数组) {
+                        if (元素.startsWith('https://')) {
+                            官方分类地址.接口地址.add(元素);
+                        } else {
+                            官方分类地址.优选地址.add(元素);
+                        }
+                    }
+                    ADDSAPI = [...官方分类地址.接口地址];
+                    ADDS = [...官方分类地址.优选地址];
                 }
             }
         } catch (e) {
@@ -1783,11 +1796,9 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			else if (proxyIP && proxyIP != '') 订阅器 += `CFCDN（访问方式）: ProxyIP<br>&nbsp;&nbsp;${proxyIPs.join('<br>&nbsp;&nbsp;')}<br>`;
 			else 订阅器 += `CFCDN（访问方式）: 无法访问, 需要您设置 proxyIP/PROXYIP ！！！<br>`;
 			订阅器 += `<br>您的订阅内容由 内置 ADDS/ADD* 参数变量提供${判断是否绑定KV空间}<br>`;
-			if (ADDS.length > 0) 订阅器 += `ADDS (官方优选): <br>&nbsp;&nbsp;${ADDS.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addresses.length > 0) 订阅器 += `ADD (TLS优选域名&IP): <br>&nbsp;&nbsp;${addresses.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesnotls.length > 0) 订阅器 += `ADDNOTLS (noTLS优选域名&IP): <br>&nbsp;&nbsp;${addressesnotls.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesapi.length > 0) 订阅器 += `ADDAPI (TLS优选域名&IP 的 API): <br>&nbsp;&nbsp;${addressesapi.join('<br>&nbsp;&nbsp;')}<br>`;
-			if (addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLSAPI (noTLS优选域名&IP 的 API): <br>&nbsp;&nbsp;${addressesnotlsapi.join('<br>&nbsp;&nbsp;')}<br>`;
+			if (ADDS.length > 0 || ADDSAPI.length > 0) 订阅器 += `ADDS (官方优选): <br>&nbsp;&nbsp;${[...ADDS, ...ADDSAPI].join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addresses.length > 0 || addressesapi.length > 0) 订阅器 += `ADD (TLS优选域名&IP): <br>&nbsp;&nbsp;${[...addresses, ...addressesapi].join('<br>&nbsp;&nbsp;')}<br>`;
+			if (addressesnotls.length > 0 || addressesnotlsapi.length > 0) 订阅器 += `ADDNOTLS (noTLS优选域名&IP): <br>&nbsp;&nbsp;${[...addressesnotls, ...addressesnotlsapi].join('<br>&nbsp;&nbsp;')}<br>`;
 			if (addressescsv.length > 0) 订阅器 += `ADDCSV（IPTest测速csv文件 限速 ${DLS} ）: <br>&nbsp;&nbsp;${addressescsv.join('<br>&nbsp;&nbsp;')}<br>`;
 		}
 
@@ -2370,71 +2381,89 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 	}
 }
 
-async function 整理优选列表(apiUrls) {
-    if (!apiUrls || apiUrls.length === 0) return [];
+async function 整理优选列表(api) {
+    if (!api || api.length === 0) return [];
 
+    let newapi = "";
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
 
-    const fetchPromises = apiUrls.map(url =>
-        fetch(url, {
+    try {
+        const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
             method: 'get',
-            headers: { 'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1') },
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;',
+                'User-Agent': atob('Q0YtV29ya2Vycy1lZGdldHVubmVsL2NtbGl1')
+            },
             signal: controller.signal
-        }).then(response => {
-            if (!response.ok) throw new Error(`status ${response.status}`);
-            return response.text();
-        }).then(content => ({ url, content }))
-    );
+        }).then(response => response.ok ? response.text() : Promise.reject())));
 
-    const results = await Promise.allSettled(fetchPromises);
-    clearTimeout(timeout);
+        for (const [index, response] of responses.entries()) {
+            if (response.status === 'fulfilled') {
+                const content = response.value;
+                const currentApiUrl = api[index];
+                const lines = content.split(/\r?\n/);
 
-    let allProcessedAddresses = [];
-    let allProxyIpCandidates = [];
+                const portMatchInUrl = currentApiUrl.match(/port=([^&]*)/);
+                const 链接指定端口 = portMatchInUrl ? portMatchInUrl[1] : null;
 
-    results.forEach(result => {
-        if (result.status === 'fulfilled') {
-            const { url, content } = result.value;
-            const lines = content.split(/\r?\n/).filter(Boolean);
-            const urlParams = new URL(url);
-            const portFromUrl = urlParams.searchParams.get('port');
-            const idFromUrl = urlParams.searchParams.get('id');
-            const isProxyIpSource = urlParams.searchParams.get('proxyip') === 'true';
+                const idMatchInUrl = currentApiUrl.match(/id=([^&]*)/);
+                const 链接指定备注 = idMatchInUrl ? idMatchInUrl[1] : '';
 
-            const processedLines = lines.map(line => {
-                let baseAddress = line.trim().split('#')[0];
-                const originalRemark = line.trim().includes('#') ? line.trim().split('#')[1] : '';
-                const finalRemark = idFromUrl || originalRemark;
-
-                if (baseAddress && !baseAddress.includes(':') && portFromUrl) {
-                    baseAddress = `${baseAddress}:${portFromUrl}`;
-                }
-
-                if (baseAddress) {
-                    if (isProxyIpSource) {
-                        if (baseAddress.includes(':')) {
-                            const port = baseAddress.split(':')[1];
-                            if (!httpsPorts.includes(port)) {
-                                allProxyIpCandidates.push(baseAddress);
+                if (lines.length > 0 && lines[0].split(',').length > 3) {
+                    // CSV 格式处理
+                    const 测速端口 = 链接指定端口 || '443';
+                    const 节点备注 = 链接指定备注;
+                    for (let i = 1; i < lines.length; i++) {
+                        const columns = lines[i].split(',');
+                        if (columns[0]) {
+                            const addressWithPort = `${columns[0]}:${测速端口}`;
+                            newapi += `${addressWithPort}${节点备注 ? `#${节点备注}` : ''}\n`;
+                            if (currentApiUrl.includes('proxyip=true') && !httpsPorts.includes(测速端口)) {
+                                proxyIPPool.push(addressWithPort);
                             }
-                        } else {
-                            allProxyIpCandidates.push(`${baseAddress}:443`);
                         }
                     }
-                    return `${baseAddress}${finalRemark ? `#${finalRemark}` : ''}`;
+                } else {
+                    // 纯文本格式处理
+                    const linesFromApi = content.split(/\r?\n/).filter(Boolean);
+                    linesFromApi.forEach(line => {
+                        const baseItem = line.trim().split('#')[0];
+                        const originalRemark = line.trim().includes('#') ? line.trim().split('#')[1] : '';
+                        
+                        const finalRemark = 链接指定备注 || originalRemark;
+                        
+                        let finalBaseItem = baseItem;
+                        if (baseItem && !baseItem.includes(':') && 链接指定端口) {
+                            finalBaseItem = `${baseItem}:${链接指定端口}`;
+                        }
+                        
+                        if (finalBaseItem) {
+                            const processedLine = `${finalBaseItem}${finalRemark ? `#${finalRemark}` : ''}`;
+                            newapi += processedLine + '\n';
+                            
+                            if (currentApiUrl.includes('proxyip=true')) {
+                                if (finalBaseItem.includes(':')) {
+                                    const port = finalBaseItem.split(':')[1];
+                                    if (!httpsPorts.includes(port)) {
+                                        proxyIPPool.push(finalBaseItem);
+                                    }
+                                } else {
+                                    proxyIPPool.push(`${finalBaseItem}:443`);
+                                }
+                            }
+                        }
+                    });
                 }
-                return null;
-            }).filter(Boolean);
-
-            allProcessedAddresses = allProcessedAddresses.concat(processedLines);
-        } else {
-            console.error(`Failed to process API URL: ${result.reason}`);
+            }
         }
-    });
-    
-    proxyIPPool.push(...allProxyIpCandidates);
-    return allProcessedAddresses;
+    } catch (error) {
+        console.error(error);
+    } finally {
+        clearTimeout(timeout);
+    }
+
+    return 整理(newapi);
 }
 
 
@@ -2503,8 +2532,12 @@ async function prepareNodeList(host, UUID, noTLS) {
     const allSources = [];
 
     // 1. 统一收集所有地址源，并标记来源
-    // 官方优选
+    // 官方优选 (直连地址)
     [...new Set(ADDS)].forEach(addr => allSources.push({ address: addr, source: 'adds' }));
+    
+    // 官方优选 (API地址)
+    const newAddsApi = await 整理优选列表(ADDSAPI);
+    [...new Set(newAddsApi)].forEach(addr => allSources.push({ address: addr, source: 'adds' }));
 
     // 用户优选 (TLS)
     const newAddressesapi = await 整理优选列表(addressesapi);
