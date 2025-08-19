@@ -3376,9 +3376,7 @@ async function handleGetRequest(env) {
 
                 <div id="tab-adds" class="tab-content">
                     ${hasKV ? `
-                        <textarea class="editor" id="adds_content" placeholder="${decodeURIComponent(atob('JUU1JUFFJTk4JUU2JTk2JUI5JUU0JUJDJTk4JUU5JTgwJTg5JUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBJTBBdmlzYS5jbiUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSU5RiU5RiVFNSU5MCU4RCUwQTEyNy4wLjAuMSUyM0NGbmF0JTBBJTVCMjY4NiUzQTQ3NjYlM0ElM0ElNUQlM0EyMDUzJTIzSVB2NiUwQUFEREFQSSVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQ='))}">${addsContent}</textarea>
-                        
-                        <div class="setting-item" style="margin-top:20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                        <div class="setting-item" style="border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 20px;">
                             <h4>端口设置</h4>
                             <p>启用 noTLS (将不使用 TLS 加密)</p>
                             <div class="switch-container">
@@ -3396,6 +3394,8 @@ async function handleGetRequest(env) {
                             <div class="checkbox-grid" id="httpports-grid">${httpCheckboxesHTML}</div>
                         </div>
 
+                        <textarea class="editor" id="adds_content" placeholder="${decodeURIComponent(atob('JUU1JUFFJTk4JUU2JTk2JUI5JUU0JUJDJTk4JUU5JTgwJTg5JUU3JUE0JUJBJUU0JUJFJThCJUVGJUJDJTlBJTBBdmlzYS5jbiUyMyVFNCVCQyU5OCVFOSU4MCU4OSVFNSU5RiU5RiVFNSU5MCU4RCUwQTEyNy4wLjAuMSUyM0NGbmF0JTBBJTVCMjY4NiUzQTQ3NjYlM0ElM0ElNUQlM0EyMDUzJTIzSVB2NiUwQUFEREFQSSVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQWh0dHBzJTNBJTJGJTJGcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQ='))}">${addsContent}</textarea>
+                        
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
                             <button class="btn btn-primary" onclick="saveAdvancedSettings(this)">保存</button>
