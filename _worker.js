@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -1682,7 +1682,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		sub = subs.length > 1 ? subs[0] : sub;
 	}
 
-    // 修正后的判断条件，加入了 addsapi.length
 	if ((adds.length + addsapi.length + addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
 	    		let cfips = [
 		            '104.16.0.0/14',
@@ -2782,7 +2781,7 @@ function generateSingboxConfig(nodeObjects) {
         }
         return outbound;
     });
-
+    
     const proxyNames = outbounds.map(o => o.tag);
 
     // 定义标准的策略组名称
@@ -2828,14 +2827,13 @@ function generateSingboxConfig(nodeObjects) {
                 "type": "mixed",
                 "tag": "mixed-in",
                 "listen": "0.0.0.0",
-                "listen_port": 2345,
+                "listen_port": 2345
             },
             {
                 "type": "tun",
                 "tag": "tun-in",
                 "inet4_address": "172.19.0.1/30",
-                "stack": "system",
-                "mtu": 1420,
+                "stack": "mixed",
                 "auto_route": true,
                 "strict_route": true,
                 "sniff": true, 
@@ -2848,22 +2846,21 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": manualSelectTag,
                 "outbounds": [autoSelectTag, "direct", ...proxyNames] 
             },
-            {
-              "type": "urltest",
+            { 
+              "type": "urltest", 
               "tag": autoSelectTag,
               "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204",
-              "interval": "5m"
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
             },
             ...outbounds,
-            { "type": "direct", "tag": "direct" }, 
-            { "type": "direct", "tag": "dns-direct-out" },
-            { "type": "block", "tag": "block" } 
+            { "type": "direct", "tag": "direct" },
+            { "type": "block", "tag": "block" }
         ],
         "route": {
             "default_domain_resolver": "dns-foreign",
             "rule_set": [
-              {
+                {
                 "tag": "geosite-cn",
                 "type": "remote",
                 "format": "binary",
@@ -2890,7 +2887,7 @@ function generateSingboxConfig(nodeObjects) {
             "rules": [
                 {
                     "protocol": "dns",
-                    "outbound": "dns-direct-out"
+                    "outbound": "dns-out"
                 },
                 { "ip_is_private": true, "outbound": "direct" }, 
                 { "rule_set": "geosite-cn", "outbound": "direct" }, 
@@ -2913,7 +2910,7 @@ function generateSingboxConfig(nodeObjects) {
             }
         }
     };
-
+    
     return JSON.stringify(config, null, 2);
 }
 
@@ -3460,7 +3457,7 @@ async function handleGetRequest(env) {
 
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
-                            <button class="btn btn-primary" onclick="saveAdvancedSettings(this)">保存</button>
+                            <button class="btn btn-primary" onclick="saveContent(this)">保存</button>
                             <span class="save-status" id="saveStatus"></span>
                         </div>
                     ` : '<p>未绑定KV空间</p>'}
@@ -3629,9 +3626,17 @@ async function handleGetRequest(env) {
                     const newPath = pathParts.join('/');
                     window.location.href = newPath || '/';
                 }
+
+                async function saveContent(button) {
+                    const saveStatus = document.getElementById('saveStatus');
+                    await saveAdvancedSettings(button, saveStatus);
+                }
                 
-                async function saveAdvancedSettings(button) {
-                    const statusEl = button.parentElement.querySelector('.save-status');
+                async function saveAdvancedSettings(triggeredButton, triggeredStatusEl) {
+                    const activeTab = document.querySelector('.tab-link.active').getAttribute('onclick').match(/'([^']*)'/)[1];
+                    const button = triggeredButton || document.querySelector(\`#\${activeTab} .btn-primary\`);
+                    const statusEl = triggeredStatusEl || document.querySelector(\`#\${activeTab} .save-status\`);
+                    
                     if (!button || !statusEl) return;
 
                     try {
