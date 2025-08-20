@@ -2797,12 +2797,17 @@ function generateSingboxConfig(nodeObjects) {
                 {
                     "type": "https",
                     "tag": "dns-domestic",
-                    "address": "https://223.5.5.5/dns-query" // 推荐使用 address 字段
+                    "server": "223.5.5.5",
+                    "server_port": 443,
+                    "path": "/dns-query"
                 },
                 {
                     "type": "https",
                     "tag": "dns-foreign",
-                    "address": "https://8.8.8.8/dns-query" // 推荐使用 address 字段
+                    "server": "8.8.8.8",
+                    "server_port": 443,
+                    "path": "/dns-query",
+                    "detour": manualSelectTag
                 }
             ],
             "rules": [
