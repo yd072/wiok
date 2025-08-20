@@ -2750,96 +2750,142 @@ ${rulesYaml}
     return config.trim();
 }
 
-// 移动端优化版 Sing-box 配置生成器
-function generateMobileSingboxConfig(nodeObjects) {
-  const outbounds = nodeObjects.map(p => {
-    let outbound = {
-      type: p.type,
-      tag: p.name,
-      server: p.server,
-      server_port: p.port,
+// 鲁棒的 Sing-box 配置生成函数
+function generateSingboxConfig(nodeObjects) {
+    // 生成 outbounds
+    const outbounds = nodeObjects.map(p => {
+        const outbound = {
+            type: p.type || "vmess",
+            tag: p.name || `node-${Math.random().toString(36).substr(2, 5)}`,
+            server: p.server,
+            server_port: p.port,
+            uuid: p.uuid,
+            transport: {
+                type: p.network || "tcp",
+                path: p['ws-opts']?.path || "/",
+                headers: {
+                    host: p.servername || p.server
+                }
+            }
+        };
+
+        if (p.tls) {
+            outbound.tls = {
+                enabled: true,
+                server_name: p.servername || p.server,
+                utls: {
+                    enabled: true,
+                    fingerprint: p['client-fingerprint'] || "chrome"
+                }
+            };
+        }
+
+        return outbound;
+    });
+
+    const proxyNames = outbounds.map(o => o.tag);
+
+    // 策略组名称
+    const manualSelectTag = "手动选择";
+    const autoSelectTag = "自动选择";
+
+    const config = {
+        log: {
+            level: "info",
+            timestamp: true
+        },
+        dns: {
+            servers: [
+                {
+                    type: "https",
+                    tag: "dns-domestic",
+                    server: "223.5.5.5",
+                    server_port: 443,
+                    path: "/dns-query"
+                },
+                {
+                    type: "https",
+                    tag: "dns-foreign",
+                    server: "8.8.8.8",
+                    server_port: 443,
+                    path: "/dns-query"
+                }
+            ],
+            rules: [
+                { rule_set: "geosite-cn", server: "dns-domestic" },
+                { server: "dns-foreign" }
+            ],
+            strategy: "prefer_ipv4"
+        },
+        inbounds: [
+            {
+                type: "mixed",
+                tag: "mixed-in",
+                listen: "0.0.0.0",
+                listen_port: 7890
+            }
+        ],
+        outbounds: [
+            {
+                type: "selector",
+                tag: manualSelectTag,
+                outbounds: proxyNames.length > 0 ? [autoSelectTag, "direct", ...proxyNames] : ["direct"]
+            },
+            {
+                type: "urltest",
+                tag: autoSelectTag,
+                outbounds: proxyNames.length > 0 ? proxyNames : ["direct"],
+                url: "http://www.gstatic.com/generate_204",
+                interval: "5m"
+            },
+            ...outbounds,
+            { type: "direct", tag: "direct" },
+            { type: "block", tag: "block" },
+            { type: "dns", tag: "dns-out", server: "dns-foreign" }
+        ],
+        route: {
+            default_domain_resolver: "dns-foreign",
+            rule_set: [
+                {
+                    tag: "geosite-cn",
+                    type: "remote",
+                    format: "binary",
+                    url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
+                    download_detour: "direct"
+                },
+                {
+                    tag: "geoip-cn",
+                    type: "remote",
+                    format: "binary",
+                    url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+                    download_detour: "direct"
+                },
+                {
+                    tag: "geosite-non-cn",
+                    type: "remote",
+                    format: "binary",
+                    url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
+                    download_detour: "direct"
+                }
+            ],
+            rules: [
+                { protocol: "dns", outbound: "dns-out" },
+                { ip_is_private: true, outbound: "direct" },
+                { rule_set: "geosite-cn", outbound: "direct" },
+                { rule_set: "geoip-cn", outbound: "direct" },
+                { rule_set: "geosite-non-cn", outbound: manualSelectTag }
+            ],
+            final: autoSelectTag,
+            auto_detect_interface: true
+        },
+        experimental: {
+            cache_file: { enabled: true, store_rdrc: true }
+        }
     };
 
-    // UUID / password 等字段根据节点类型选择性添加
-    if (p.uuid) outbound.uuid = p.uuid;
-    if (p.password) outbound.password = p.password;
-
-    // Transport 配置
-    if (p.network) {
-      outbound.transport = {
-        type: p.network
-      };
-      if (p.network === "ws" && p['ws-opts'] && p['ws-opts'].path) {
-        outbound.transport.path = p['ws-opts'].path;
-        if (p.servername) {
-          outbound.transport.headers = { host: p.servername };
-        }
-      }
-    }
-
-    // TLS 配置
-    if (p.tls) {
-      outbound.tls = { enabled: true };
-      if (p.servername) outbound.tls.server_name = p.servername;
-      if (p['client-fingerprint']) {
-        outbound.tls.utls = {
-          enabled: true,
-          fingerprint: p['client-fingerprint']
-        };
-      }
-    }
-
-    return outbound;
-  });
-
-  const proxyNames = outbounds.map(o => o.tag);
-
-  const manualSelectTag = "手动选择";
-  const autoSelectTag = "自动选择";
-
-  const config = {
-    log: { level: "info", timestamp: true },
-    dns: {
-      servers: [
-        { type: "https", tag: "dns-domestic", server: "223.5.5.5", server_port: 443, path: "/dns-query" },
-        { type: "https", tag: "dns-foreign", server: "8.8.8.8", server_port: 443, path: "/dns-query", detour: manualSelectTag }
-      ],
-      rules: [
-        { rule_set: "geosite-cn", server: "dns-domestic" },
-        { server: "dns-foreign" }
-      ],
-      strategy: "prefer_ipv4"
-    },
-    outbounds: [
-      { type: "selector", tag: manualSelectTag, outbounds: [autoSelectTag, "direct", ...proxyNames] },
-      { type: "urltest", tag: autoSelectTag, outbounds: proxyNames, url: "http://www.gstatic.com/generate_204", interval: "5m" },
-      ...outbounds,
-      { type: "direct", tag: "direct" },
-      { type: "block", tag: "block" }
-    ],
-    route: {
-      default_domain_resolver: "dns-foreign",
-      rule_set: [
-        { tag: "geosite-cn", type: "remote", format: "binary", url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs", download_detour: "direct" },
-        { tag: "geoip-cn", type: "remote", format: "binary", url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs", download_detour: "direct" },
-        { tag: "geosite-non-cn", type: "remote", format: "binary", url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs", download_detour: "direct" }
-      ],
-      rules: [
-        { ip_is_private: true, outbound: "direct" },
-        { rule_set: "geosite-cn", outbound: "direct" },
-        { rule_set: "geoip-cn", outbound: "direct" },
-        { rule_set: "geosite-non-cn", outbound: manualSelectTag }
-      ],
-      final: manualSelectTag,
-      auto_detect_interface: true
-    },
-    experimental: {
-      cache_file: { enabled: true, store_rdrc: true },
-    }
-  };
-
-  return JSON.stringify(config, null, 2);
+    return JSON.stringify(config, null, 2);
 }
+
 
 //Loon配置 
 function generateLoonConfig(nodeObjects) {
