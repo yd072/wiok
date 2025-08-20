@@ -2754,17 +2754,17 @@ ${rulesYaml}
 function generateSingboxConfig(nodeObjects) {
     // 生成 outbounds
     const outbounds = nodeObjects.map(p => {
-        const outbound = {
-            type: p.type || "vmess",
-            tag: p.name || `node-${Math.random().toString(36).substr(2, 5)}`,
+        let outbound = {
+            type: p.type,
+            tag: p.name,
             server: p.server,
             server_port: p.port,
             uuid: p.uuid,
             transport: {
-                type: p.network || "tcp",
-                path: p['ws-opts']?.path || "/",
+                type: p.network,
+                path: p['ws-opts'].path,
                 headers: {
-                    host: p.servername || p.server
+                    host: p.servername 
                 }
             }
         };
@@ -2772,14 +2772,13 @@ function generateSingboxConfig(nodeObjects) {
         if (p.tls) {
             outbound.tls = {
                 enabled: true,
-                server_name: p.servername || p.server,
+                server_name: p.servername,
                 utls: {
                     enabled: true,
-                    fingerprint: p['client-fingerprint'] || "chrome"
+                    fingerprint: p['client-fingerprint']
                 }
             };
         }
-
         return outbound;
     });
 
