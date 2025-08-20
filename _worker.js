@@ -2750,17 +2750,17 @@ ${rulesYaml}
     return config.trim();
 }
 
-// Sing-box 配置生成器
+// Sing-box 配置
 function generateSingboxConfig(nodeObjects) {
   const outbounds = nodeObjects.map(p => {
     let outbound = {
-      type: p.type,             
-      tag: p.name,             
-      server: p.server,         
-      server_port: p.port,     
-      uuid: p.uuid,             
+      type: p.type,          
+      tag: p.name,          
+      server: p.server,
+      server_port: p.port,
+      uuid: p.uuid,
       transport: {
-        type: p.network,        
+        type: p.network,
         path: p['ws-opts']?.path || "/",
         headers: { host: p.servername }
       }
@@ -2771,7 +2771,7 @@ function generateSingboxConfig(nodeObjects) {
         enabled: true,
         server_name: p.servername,
         utls: {
-          enabled: !!p['client-fingerprint'],  
+          enabled: !!p['client-fingerprint'],
           fingerprint: p['client-fingerprint'] || ""
         }
       };
@@ -2785,10 +2785,7 @@ function generateSingboxConfig(nodeObjects) {
   const autoSelectTag = "自动选择";
 
   const config = {
-    log: {
-      level: "info",
-      timestamp: true
-    },
+    log: { level: "info", timestamp: true },
     dns: {
       servers: [
         {
@@ -2818,7 +2815,7 @@ function generateSingboxConfig(nodeObjects) {
         type: "mixed",
         tag: "mixed-in",
         listen: "0.0.0.0",
-        listen_port: 2345,
+        listen_port: 2345
       }
     ],
     outbounds: [
@@ -2835,8 +2832,7 @@ function generateSingboxConfig(nodeObjects) {
         interval: "5m"
       },
       ...outbounds,
-      { type: "direct", tag: "direct" },
-      { type: "dns", tag: "dns-out" }
+      { type: "direct", tag: "direct" }  
     ],
     route: {
       default_domain_resolver: "dns-foreign",
@@ -2864,24 +2860,22 @@ function generateSingboxConfig(nodeObjects) {
         }
       ],
       rules: [
-        { protocol: "dns", outbound: "dns-out" },
-        { ip_is_private: true, outbound: "direct" },
-        { rule_set: "geosite-cn", outbound: "direct" },
-        { rule_set: "geoip-cn", outbound: "direct" },
-        { rule_set: "geosite-non-cn", outbound: manualSelectTag }
+        { protocol: "dns", action: "hijack-dns", outbound: "dns-foreign" }, // 替代 legacy dns 出站
+        { ip_is_private: true, action: "accept", outbound: "direct" },
+        { rule_set: "geosite-cn", action: "accept", outbound: "direct" },
+        { rule_set: "geoip-cn", action: "accept", outbound: "direct" },
+        { rule_set: "geosite-non-cn", action: "select", outbound: manualSelectTag }
       ],
       final: autoSelectTag,
       auto_detect_interface: true
     },
     experimental: {
-      cache_file: { enabled: true, store_rdrc: true },
-      clash_api: { default_mode: "enhanced" }
+      cache_file: { enabled: true, store_rdrc: true }
     }
   };
 
   return JSON.stringify(config, null, 2);
 }
-
 
 //Loon配置 
 function generateLoonConfig(nodeObjects) {
