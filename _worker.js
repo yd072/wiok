@@ -2806,8 +2806,7 @@ function generateSingboxConfig(nodeObjects) {
                     "tag": "dns-foreign",
                     "server": "8.8.8.8",
                     "server_port": 443,
-                    "path": "/dns-query",
-                    "detour":"/dns-query"
+                    "path": "/dns-query"
                 }
             ],
             "rules": [
