@@ -2824,17 +2824,10 @@ function generateSingboxConfig(nodeObjects) {
         "inbounds": [
             {
                 "type": "mixed",
+                "tag": "mixed-in",
                 "listen": "0.0.0.0",
                 "listen_port": 2345
             },
-            {
-                "type": "tun",
-                "tag": "tun-in",
-                "inet4_address": "172.19.0.1/30",
-                "auto_route": true,
-                "strict_route": true,
-                "sniff_override_destination": true
-            }
         ],
         "outbounds": [
             {
