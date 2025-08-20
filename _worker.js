@@ -2826,8 +2826,7 @@ function generateSingboxConfig(nodeObjects) {
                 "type": "mixed",
                 "tag": "mixed-in",
                 "listen": "0.0.0.0",
-                "listen_port": 2345,
-				"set_system_proxy": true
+                "listen_port": 2345
             },
         ],
         "outbounds": [
