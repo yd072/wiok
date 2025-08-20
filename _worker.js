@@ -2843,7 +2843,6 @@ function generateSingboxConfig(nodeObjects) {
             },
             ...outbounds,
             { "type": "direct", "tag": "direct" },
-            { "type": "block", "tag": "block" },
             { "type": "dns", "tag": "dns-out" }
         ],
         "route": {
