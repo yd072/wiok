@@ -2844,7 +2844,7 @@ function generateSingboxConfig(nodeObjects) {
             ...outbounds,
             { "type": "direct", "tag": "direct" },
             { "type": "block", "tag": "block" },
-            { "type": "dns", "tag": "dns-out", "server": "dns-foreign" }
+            { "type": "dns", "tag": "dns-out" }
         ],
         "route": {
             "default_domain_resolver": "dns-foreign",
