@@ -2832,8 +2832,7 @@ function generateSingboxConfig(nodeObjects) {
         interval: "5m"
       },
       ...outbounds,
-            { "type": "direct", "tag": "direct" },
-            { "type": "block", "tag": "block" }
+      { type: "direct", tag: "direct" }  
     ],
     route: {
       default_domain_resolver: "dns-foreign",
@@ -2861,7 +2860,7 @@ function generateSingboxConfig(nodeObjects) {
         }
       ],
       rules: [
-        { protocol: "dns", action: "hijack-dns", outbound: "dns-foreign" }, // 替代 legacy dns 出站
+        { protocol: "dns", action: "hijack-dns"}, 
         { ip_is_private: true, action: "accept", outbound: "direct" },
         { rule_set: "geosite-cn", action: "accept", outbound: "direct" },
         { rule_set: "geoip-cn", action: "accept", outbound: "direct" },
