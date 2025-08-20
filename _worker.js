@@ -2750,17 +2750,17 @@ ${rulesYaml}
     return config.trim();
 }
 
-// Sing-box 配置
+// Sing-box 配置生成器（移动端优化 + 1.13.0+ 兼容版）
 function generateSingboxConfig(nodeObjects) {
   const outbounds = nodeObjects.map(p => {
     let outbound = {
-      type: p.type,          
-      tag: p.name,          
-      server: p.server,
-      server_port: p.port,
-      uuid: p.uuid,
+      type: p.type,            
+      tag: p.name,             
+      server: p.server,         
+      server_port: p.port,      
+      uuid: p.uuid,             
       transport: {
-        type: p.network,
+        type: p.network,        
         path: p['ws-opts']?.path || "/",
         headers: { host: p.servername }
       }
@@ -2780,97 +2780,106 @@ function generateSingboxConfig(nodeObjects) {
   });
 
   const proxyNames = outbounds.map(o => o.tag);
-
   const manualSelectTag = "手动选择";
   const autoSelectTag = "自动选择";
 
   const config = {
-    log: { level: "info", timestamp: true },
-    dns: {
-      servers: [
-        {
-          type: "https",
-          tag: "dns-domestic",
-          server: "223.5.5.5",
-          server_port: 443,
-          path: "/dns-query"
+        "log": {
+            "level": "info",
+            "timestamp": true
         },
-        {
-          type: "https",
-          tag: "dns-foreign",
-          server: "8.8.8.8",
-          server_port: 443,
-          path: "/dns-query",
-          detour: manualSelectTag
-        }
+        "dns": {
+            "servers": [
+                {
+                    "type": "https",
+                    "tag": "dns-domestic",
+                    "server": "223.5.5.5",
+                    "server_port": 443,
+                    "path": "/dns-query"
+                },
+                {
+                    "type": "https",
+                    "tag": "dns-foreign",
+                    "server": "8.8.8.8",
+                    "server_port": 443,
+                    "path": "/dns-query",
+                    "detour": manualSelectTag
+                }
       ],
-      rules: [
-        { rule_set: "geosite-cn", server: "dns-domestic" },
-        { server: "dns-foreign" }
+            "rules": [
+                {
+                    "rule_set": "geosite-cn",
+                    "server": "dns-domestic"
+                },
+                {
+                    "server": "dns-foreign"
+                }
       ],
-      strategy: "prefer_ipv4"
+            "strategy": "prefer_ipv4"
     },
-    inbounds: [
+        "inbounds": [
       {
-        type: "mixed",
-        tag: "mixed-in",
-        listen: "0.0.0.0",
-        listen_port: 2345
-      }
+                "type": "mixed",
+                "tag": "mixed-in",
+                "listen": "0.0.0.0",
+                "listen_port": 2345
+            },
     ],
-    outbounds: [
-      {
-        type: "selector",
-        tag: manualSelectTag,
-        outbounds: [autoSelectTag, "direct", ...proxyNames]
-      },
-      {
-        type: "urltest",
-        tag: autoSelectTag,
-        outbounds: proxyNames,
-        url: "http://www.gstatic.com/generate_204",
-        interval: "5m"
-      },
+        "outbounds": [
+            {
+                "type": "selector",
+                "tag": manualSelectTag,
+                "outbounds": [autoSelectTag, "direct", ...proxyNames] 
+            },
+            { 
+              "type": "urltest", 
+              "tag": autoSelectTag,
+              "outbounds": proxyNames,
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
+            },
       ...outbounds,
-      { type: "direct", tag: "direct" }  
+       { "type": "direct", "tag": "direct" },
     ],
-    route: {
-      default_domain_resolver: "dns-foreign",
-      rule_set: [
-        {
-          tag: "geosite-cn",
-          type: "remote",
-          format: "binary",
-          url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
-          download_detour: "direct"
-        },
-        {
-          tag: "geoip-cn",
-          type: "remote",
-          format: "binary",
-          url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-          download_detour: "direct"
-        },
-        {
-          tag: "geosite-non-cn",
-          type: "remote",
-          format: "binary",
-          url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
-          download_detour: "direct"
-        }
+        "route": {
+            "default_domain_resolver": "dns-foreign",
+            "rule_set": [
+              {
+                "tag": "geosite-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
+                "download_detour": "direct" 
+              },
+              {
+                "tag": "geoip-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+                "download_detour": "direct" 
+
+              },
+              {
+                "tag": "geosite-non-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
+                "download_detour": "direct" 
+
+              }
       ],
       rules: [
-        { protocol: "dns", action: "hijack-dns"}, 
-        { ip_is_private: true, action: "accept", outbound: "direct" },
-        { rule_set: "geosite-cn", action: "accept", outbound: "direct" },
-        { rule_set: "geoip-cn", action: "accept", outbound: "direct" },
-        { rule_set: "geosite-non-cn", action: "select", outbound: manualSelectTag }
+        { "protocol": "dns", "action": "hijack-dns" }, 
+        { "ip_is_private": true, "action": "direct" },
+        { "rule_set": "geosite-cn", "action": "direct" },
+        { "rule_set": "geoip-cn", "action": "direct" },
+        { "rule_set": "geosite-non-cn", "action": "select", "selector": manualSelectTag } 
       ],
-      final: autoSelectTag,
-      auto_detect_interface: true
+      "final": autoSelectTag,
+      "auto_detect_interface": true
     },
-    experimental: {
-      cache_file: { enabled: true, store_rdrc: true }
+    "experimental": {
+      "cache_file": {" enabled": true, "store_rdrc": true },
     }
   };
 
