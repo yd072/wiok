@@ -2826,7 +2826,7 @@ function generateSingboxConfig(nodeObjects) {
                 "type": "mixed",
                 "tag": "mixed-in",
                 "listen": "0.0.0.0",
-                "listen_port": 2345
+                "listen_port": 7890
             },
         ],
         "outbounds": [
@@ -2884,7 +2884,6 @@ function generateSingboxConfig(nodeObjects) {
                     "rule_set": "geosite-non-cn",
                     "outbound": manualSelectTag
                 }
-
             ],
             "final": autoSelectTag,
             "auto_detect_interface": true
