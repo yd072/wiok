@@ -2843,8 +2843,7 @@ function generateSingboxConfig(nodeObjects) {
               "interval": "5m"
             },
             ...outbounds,
-            { "type": "direct", "tag": "direct" },
-            { "type": "dns", "tag": "dns-out" }
+            { "type": "direct", "tag": "direct" }
         ],
         "route": {
             "default_domain_resolver": "dns-foreign",
