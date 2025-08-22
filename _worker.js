@@ -2763,7 +2763,7 @@ function generateSingboxConfig(nodeObjects) {
                 type: p.network,
                 path: p['ws-opts'].path,
                 headers: {
-                    host: p.servername
+                    host: p.servername 
                 }
             }
         };
@@ -2780,7 +2780,7 @@ function generateSingboxConfig(nodeObjects) {
         }
         return outbound;
     });
-
+    
     const proxyNames = outbounds.map(o => o.tag);
 
     // 定义标准的策略组名称
@@ -2833,14 +2833,14 @@ function generateSingboxConfig(nodeObjects) {
             {
                 "type": "selector",
                 "tag": manualSelectTag,
-                "outbounds": [autoSelectTag, "direct", ...proxyNames]
+                "outbounds": [autoSelectTag, "direct", ...proxyNames] 
             },
-            {
-              "type": "urltest",
+            { 
+              "type": "urltest", 
               "tag": autoSelectTag,
               "outbounds": proxyNames,
-              "url": "http://www.gstatic.com/generate_204",
-              "interval": "5m"
+              "url": "http://www.gstatic.com/generate_204", 
+              "interval": "5m" 
             },
             ...outbounds,
             { "type": "direct", "tag": "direct" }
@@ -2848,38 +2848,38 @@ function generateSingboxConfig(nodeObjects) {
         "route": {
             "default_domain_resolver": "dns-foreign",
             "rule_set": [
-                {
+              {
                 "tag": "geosite-cn",
                 "type": "remote",
                 "format": "binary",
                 "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs",
-                "download_detour": "direct"
-                },
-                {
+                "download_detour": "direct" 
+              },
+              {
                 "tag": "geoip-cn",
                 "type": "remote",
                 "format": "binary",
                 "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs",
-                "download_detour": "direct"
+                "download_detour": "direct" 
 
-                },
-                {
+              },
+              {
                 "tag": "geosite-non-cn",
                 "type": "remote",
                 "format": "binary",
                 "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-geolocation-!cn.srs",
-                "download_detour": "direct"
+                "download_detour": "direct" 
 
-                }
+              }
             ],
             "rules": [
                 {
                     "protocol": "dns",
-                    "outbound": "dns-out" 
+                    "outbound": "dns-out"
                 },
-                { "ip_is_private": true, "outbound": "direct" },
-                { "rule_set": "geosite-cn", "outbound": "direct" },
-                { "rule_set": "geoip-cn", "outbound": "direct" },
+                { "ip_is_private": true, "outbound": "direct" }, 
+                { "rule_set": "geosite-cn", "outbound": "direct" }, 
+                { "rule_set": "geoip-cn", "outbound": "direct" }, 
                 {
                     "rule_set": "geosite-non-cn",
                     "outbound": manualSelectTag
@@ -2895,7 +2895,7 @@ function generateSingboxConfig(nodeObjects) {
             }
         }
     };
-
+    
     return JSON.stringify(config, null, 2);
 }
 
@@ -3167,7 +3167,7 @@ async function handleGetRequest(env) {
 
     const html = `
         <!DOCTYPE html>
-        <html>
+        <html lang="zh-CN">
         <head>
             <title>优选订阅列表</title>
             <meta charset="utf-8">
