@@ -1241,12 +1241,20 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
+    let remoteToWsController = new AbortController();
+    let wsToRemoteController = new AbortController();
+
     try {
-        await remoteSocket.readable.pipeTo(
+        const remoteToWsPromise = remoteSocket.readable.pipeTo(
             new WritableStream({
+                start() {
+                    log('开始将远程服务器数据流式传输到客户端 WebSocket。');
+                },
                 async write(chunk) {
                     hasIncomingData = true;
+
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+                        remoteToWsController.abort('WebSocket 过早关闭。');
                         return;
                     }
                     if (header) {
@@ -1260,22 +1268,35 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     }
                 },
                 close() {
-                    log(`远程连接的数据流已正常关闭, 是否接收到数据: ${hasIncomingData}`);
+                    log('远程服务器关闭了其发送流 (readable)。');
                 },
                 abort(reason) {
-                    console.error(`远程连接的数据流被中断:`, reason);
-                },
-            })
+                    console.error('从远程到 WebSocket 的管道被中止:', reason);
+                }
+            }),
+            { signal: remoteToWsController.signal }
         );
-        log('远程服务器已关闭其可读流，正在关闭客户端 WebSocket 以完成信号传递。');
-        safeCloseWebSocket(webSocket);
-    } catch (error) {
-        console.error(`数据流传输时发生异常 (remoteSocketToWS):`, error.stack || error);
-        safeCloseWebSocket(webSocket, 1011, `remoteSocketToWS pipe error: ${error.message}`);
-    }
 
+        const wsToRemotePromise = webSocket.readable.pipeTo(
+            remoteSocket.writable,
+            { signal: wsToRemoteController.signal }
+        ).catch(error => {
+            log(`客户端到远程的管道失败: ${error.message}。这通常是正常现象。`);
+        });
+        await Promise.all([remoteToWsPromise, wsToRemotePromise]);
+
+        log('两个方向的数据流均已结束。');
+
+    } catch (error) {
+        console.error('双向管道传输过程中发生错误:', error.stack || error);
+    } finally {
+        safeCloseWebSocket(webSocket);
+        if (remoteSocket.abort) {
+            remoteSocket.abort();
+        }
+    }
     if (!hasIncomingData && retry) {
-        log(`连接成功但未收到任何数据，触发重试机制...`);
+        log(`连接已建立，但未从远程接收到初始数据。触发重试。`);
         retry();
     }
 }
