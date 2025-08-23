@@ -868,9 +868,9 @@ async function secureProtoOverWSHandler(request) {
             }
             if (remoteSocketWrapper.value) {
                 try {
-                    const writer = remoteSocketWrapper.value.writable.getWriter();
-                    await writer.write(chunk);
-                    writer.releaseLock();
+                const writer = remoteSocketWrapper.value.writable.getWriter();
+                await writer.write(chunk);
+                writer.releaseLock();
                 } catch (error) {
                     log(`写入远程套接字时出错: ${error.message}。`);
                     controller.error(error);
@@ -927,7 +927,7 @@ async function secureProtoOverWSHandler(request) {
         abort(reason) {
             log(`客户端 WebSocket 的可读流被中止 (异常)。`, JSON.stringify(reason));
             if (remoteSocketWrapper.value) {
-                log('客户端流异常，正在中止远程连接...');
+                 log('客户端流异常，正在中止远程连接...');
                 remoteSocketWrapper.value.abort(reason);
             }
         },
@@ -1032,7 +1032,9 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 			} else {
 				tcpSocketPromise = connect({
 					hostname: address,
-					port: port,
+					port: port
+                }, {
+                    noDelay: true,
 					allowHalfOpen: false,
                     keepAlive: true,
                     signal: controller.signal
@@ -1266,7 +1268,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     console.error(`远程服务器的数据流被中断:`, reason);
                 },
             })
-        );        
+        );
     } catch (error) {
         console.error(`从远程到客户端的数据流传输发生错误:`, error.stack || error);
         safeCloseWebSocket(webSocket, 1011, `remoteSocketToWS pipe error: ${error.message}`);
