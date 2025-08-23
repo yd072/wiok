@@ -2823,10 +2823,10 @@ function generateSingboxConfig(nodeObjects) {
                     "fdfe:dcba:9876::1/126"
                 ]
             }, {
-                "clash_mode": "Direct",
+                "clash_mode": "直连模式",
                 "server": "direct-dns"
             }, {
-                "clash_mode": "Global",
+                "clash_mode": "全局模式",
                 "server": "proxy-dns"
             }],
             "strategy": "prefer_ipv4",
@@ -2921,7 +2921,7 @@ function generateSingboxConfig(nodeObjects) {
                 "action": "hijack-dns",
                 "protocol": "dns"
             }, {
-                "ip_is_private": true, // 增加私有地址直连规则
+                "ip_is_private": true, 
                 "outbound": "direct"
             }, {
                 "clash_mode": "Direct",
