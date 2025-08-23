@@ -1267,6 +1267,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 },
             })
         );
+        log('远程服务器已关闭其可读流，正在关闭客户端 WebSocket 以完成信号传递。');
         safeCloseWebSocket(webSocket);
     } catch (error) {
         console.error(`数据流传输时发生异常 (remoteSocketToWS):`, error.stack || error);
