@@ -2924,7 +2924,7 @@ function generateSingboxConfig(nodeObjects) {
                 "ip_is_private": true, 
                 "outbound": "direct"
             }, {
-                "clash_mode": "Direct",
+                "clash_mode": "直连模式",
                 "outbound": "direct"
             }, {
                 "outbound": "direct",
@@ -2936,7 +2936,7 @@ function generateSingboxConfig(nodeObjects) {
                 "outbound": "block",
                 "rule_set": "geosite-ads"
             }, {
-                "clash_mode": "Global",
+                "clash_mode": "全局模式",
                 "outbound": "proxy"
             }]
         },
