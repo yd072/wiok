@@ -2874,7 +2874,7 @@ function generateSingboxConfig(nodeObjects) {
                 "tolerance": 50,
                 "interrupt_exist_connections": false
             },
-            ...outbounds, // 将生成的 VLESS 节点信息放在这里
+            ...outbounds, 
             {
                 "type": "direct",
                 "tag": "direct",
