@@ -868,11 +868,11 @@ async function secureProtoOverWSHandler(request) {
             }
             if (remoteSocketWrapper.value) {
                 try {
-                const writer = remoteSocketWrapper.value.writable.getWriter();
-                await writer.write(chunk);
-                writer.releaseLock();
+                    const writer = remoteSocketWrapper.value.writable.getWriter();
+                    await writer.write(chunk);
+                    writer.releaseLock();
                 } catch (error) {
-                    log(`写入远程套接字时出错: ${error.message}, 中止客户端流。`);
+                    log(`写入远程套接字时出错: ${error.message}。`);
                     controller.error(error);
                 }
                 return;
@@ -913,28 +913,28 @@ async function secureProtoOverWSHandler(request) {
                 throw new Error('Domain is blocked');
             }
             log(`Handling TCP outbound for ${addressRemote}:${portRemote}`);
-            await handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
+            handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
         },
         close() {
-            log(`客户端 WebSocket 的可读流已关闭。`);
+            log(`客户端 WebSocket 的可读流已关闭 (正常关闭)。`);
             if (remoteSocketWrapper.value) {
-                log('客户端已断开，正在关闭远程连接...');
+                log('客户端已断开，正在关闭远程连接的写入端...');
                 const writer = remoteSocketWrapper.value.writable.getWriter();
                 writer.close();
                 writer.releaseLock();
             }
         },
         abort(reason) {
-            log(`客户端 WebSocket 的可读流被中止。`, JSON.stringify(reason));
+            log(`客户端 WebSocket 的可读流被中止 (异常)。`, JSON.stringify(reason));
             if (remoteSocketWrapper.value) {
-                 log('客户端流异常，正在中止远程连接...');
+                log('客户端流异常，正在中止远程连接...');
                 remoteSocketWrapper.value.abort(reason);
             }
         },
     })).catch((err) => {
-        log(`客户端到远程的管道发生错误: ${err.message}`);
+        log(`客户端到远程的管道发生致命错误: ${err.message}`);
         if (remoteSocketWrapper.value) {
-            remoteSocketWrapper.value.abort(err.message || 'pipe error');
+            remoteSocketWrapper.value.abort(`Upstream error: ${err.message}`);
         }
         safeCloseWebSocket(webSocket, 1011, `Pipe error: ${err.message}`);
     });
@@ -1241,20 +1241,12 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
     let hasIncomingData = false;
     let header = responseHeader;
-    let remoteToWsController = new AbortController();
-    let wsToRemoteController = new AbortController();
-
     try {
-        const remoteToWsPromise = remoteSocket.readable.pipeTo(
+        await remoteSocket.readable.pipeTo(
             new WritableStream({
-                start() {
-                    log('开始将远程服务器数据流式传输到客户端 WebSocket。');
-                },
                 async write(chunk) {
                     hasIncomingData = true;
-
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        remoteToWsController.abort('WebSocket 过早关闭。');
                         return;
                     }
                     if (header) {
@@ -1268,35 +1260,20 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                     }
                 },
                 close() {
-                    log('远程服务器关闭了其发送流 (readable)。');
+                    log(`远程服务器的数据流已正常关闭。`);
                 },
                 abort(reason) {
-                    console.error('从远程到 WebSocket 的管道被中止:', reason);
-                }
-            }),
-            { signal: remoteToWsController.signal }
-        );
-
-        const wsToRemotePromise = webSocket.readable.pipeTo(
-            remoteSocket.writable,
-            { signal: wsToRemoteController.signal }
-        ).catch(error => {
-            log(`客户端到远程的管道失败: ${error.message}。这通常是正常现象。`);
-        });
-        await Promise.all([remoteToWsPromise, wsToRemotePromise]);
-
-        log('两个方向的数据流均已结束。');
-
+                    console.error(`远程服务器的数据流被中断:`, reason);
+                },
+            })
+        );        
     } catch (error) {
-        console.error('双向管道传输过程中发生错误:', error.stack || error);
-    } finally {
-        safeCloseWebSocket(webSocket);
-        if (remoteSocket.abort) {
-            remoteSocket.abort();
-        }
+        console.error(`从远程到客户端的数据流传输发生错误:`, error.stack || error);
+        safeCloseWebSocket(webSocket, 1011, `remoteSocketToWS pipe error: ${error.message}`);
     }
+
     if (!hasIncomingData && retry) {
-        log(`连接已建立，但未从远程接收到初始数据。触发重试。`);
+        log(`连接成功但未收到任何数据，触发重试机制...`);
         retry();
     }
 }
