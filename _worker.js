@@ -1032,9 +1032,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 			} else {
 				tcpSocketPromise = connect({
 					hostname: address,
-					port: port
-                }, {
-                    noDelay: true,
+					port: port,
 					allowHalfOpen: false,
                     keepAlive: true,
                     signal: controller.signal
