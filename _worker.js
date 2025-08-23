@@ -868,9 +868,9 @@ async function secureProtoOverWSHandler(request) {
             }
             if (remoteSocketWrapper.value) {
                 try {
-                    const writer = remoteSocketWrapper.value.writable.getWriter();
-                    await writer.write(chunk);
-                    writer.releaseLock();
+                const writer = remoteSocketWrapper.value.writable.getWriter();
+                await writer.write(chunk);
+                writer.releaseLock();
                 } catch (error) {
                     log(`写入远程套接字时出错: ${error.message}, 中止客户端流。`);
                     controller.error(error);
@@ -1267,6 +1267,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
                 },
             })
         );
+        safeCloseWebSocket(webSocket);
     } catch (error) {
         console.error(`数据流传输时发生异常 (remoteSocketToWS):`, error.stack || error);
         safeCloseWebSocket(webSocket, 1011, `remoteSocketToWS pipe error: ${error.message}`);
