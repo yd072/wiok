@@ -59,10 +59,6 @@ let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 let DNS64Server = '';
 const validFingerprints = ['chrome', 'random', 'randomized'];
 
-// --- 新增：地区路由规则全局变量 ---
-let bypassIran = 'false';
-let bypassRussia = 'false';
-
 /**
  * 辅助工具函数
  */
@@ -170,10 +166,6 @@ async function loadConfigurations(env) {
 				if (settings.notls) {
                     noTLS = settings.notls;
                 }
-                // --- START: 加载新的地区规则配置 ---
-                if (settings.bypassIran) bypassIran = settings.bypassIran;
-                if (settings.bypassRussia) bypassRussia = settings.bypassRussia;
-                // --- END: 加载结束 ---
 
                 if (settings.ADD) {
                     const 优选地址数组 = 整理(settings.ADD);
@@ -2722,26 +2714,10 @@ function generateClashConfig(nodeObjects) {
         'GEOSITE,category-ads-all,REJECT',
         'GEOSITE,private,DIRECT',
         'GEOIP,private,DIRECT,no-resolve',
-    ];
-
-    // --- START: 条件性添加地区规则 (全部使用内置数据库) ---
-    if (bypassIran === 'true') {
-        // **关键修改：伊朗规则直接写入**
-        customRulesArray.push('GEOSITE,ir,DIRECT', 'GEOIP,ir,DIRECT');
-    }
-    if (bypassRussia === 'true') {
-        // **关键修改：俄罗斯规则直接写入**
-        customRulesArray.push('GEOSITE,category-ru,DIRECT', 'GEOIP,ru,DIRECT');
-    }
-    // --- END: 条件性添加 ---
-
-    customRulesArray.push(
         'GEOSITE,cn,DIRECT',
-        'GEOIP,CN,DIRECT', // 注意：Clash 核心对中国大陆的 GEOIP 代码通常使用大写的 "CN"
+        'GEOIP,CN,DIRECT',
         `MATCH,${manualSelectGroupName}`
-    );
-    // --- END ---
-    
+    ];
     // 将规则数组转换为格式正确的YAML字符串
     const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
 
@@ -2759,7 +2735,7 @@ dns:
   default-nameserver: [223.5.5.5, 119.29.29.29, 8.8.8.8]
   nameserver: ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query']
   fallback: ['https://dns.google/dns-query', 'https://cloudflare-dns.com/dns-query']
-
+  
 proxies:
 ${proxiesYaml}
 proxy-groups:
@@ -2797,7 +2773,7 @@ function generateSingboxConfig(nodeObjects) {
                 type: p.network,
                 path: p['ws-opts'].path,
                 headers: {
-                    Host: p.servername 
+                    Host: p.servername // 保持首字母大写
                 }
             }
         };
@@ -2837,7 +2813,21 @@ function generateSingboxConfig(nodeObjects) {
                 "server": "8.8.8.8",
                 "type": "tcp"
             }],
-            "rules": [], 
+            "rules": [{
+                "rule_set": "geosite-cn", 
+            }, {
+                "server": "proxy-dns",
+                "source_ip_cidr": [
+                    "172.19.0.1/30",
+                    "fdfe:dcba:9876::1/126"
+                ]
+            }, {
+                "clash_mode": "直连模式",
+                "server": "direct-dns"
+            }, {
+                "clash_mode": "全局模式",
+                "server": "proxy-dns"
+            }],
             "strategy": "prefer_ipv4",
             "final": "proxy-dns",
             "independent_cache": true
@@ -2935,6 +2925,18 @@ function generateSingboxConfig(nodeObjects) {
             }, {
                 "clash_mode": "直连模式",
                 "outbound": "direct"
+            }, {
+                "outbound": "direct",
+                "rule_set": [
+                    "geosite-cn",
+                    "geoip-cn"
+                ]
+            }, {
+                "outbound": "block",
+                "rule_set": "geosite-ads"
+            }, {
+                "clash_mode": "全局模式",
+                "outbound": "proxy"
             }]
         },
         "experimental": {
@@ -2943,68 +2945,6 @@ function generateSingboxConfig(nodeObjects) {
             }
         }
     };
-
-    // --- START: 关键修复与修改 ---
-
-    // 1. 基础 DNS 规则
-    config.dns.rules.push(
-        { "rule_set": "geosite-cn", "server": "direct-dns" }, 
-        { "server": "proxy-dns", "source_ip_cidr": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"] },
-        { "clash_mode": "直连模式", "server": "direct-dns" },
-        { "clash_mode": "全局模式", "server": "proxy-dns" }
-    );
-
-    // 2. 条件性地添加地区规则集 (Rule Sets) 和路由规则 (Routing Rules)
-    if (bypassIran === 'true') {
-        config.route.rule_set.push(
-            {
-                "tag": "geosite-ir", "type": "remote", "format": "binary",
-                "url": "https://cdn.jsdelivr.net/gh/Chocolate4U/Iran-sing-box-rules@rule-set/geosite-ir.srs",
-                "download_detour": "direct"
-            },
-            {
-                "tag": "geoip-ir", "type": "remote", "format": "binary",
-                "url": "https://cdn.jsdelivr.net/gh/Chocolate4U/Iran-sing-box-rules@rule-set/geoip-ir.srs",
-                "download_detour": "direct"
-            }
-        );
-        config.route.rules.push({
-            "outbound": "direct",
-            "rule_set": ["geosite-ir", "geoip-ir"]
-        });
-        // 同样为 DNS 添加规则
-        config.dns.rules.push({ "rule_set": ["geosite-ir", "geoip-ir"], "server": "direct-dns" });
-    }
-
-    if (bypassRussia === 'true') {
-        config.route.rule_set.push(
-            {
-                "tag": "geosite-ru", "type": "remote", "format": "binary",
-                "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ru.srs",
-                "download_detour": "direct"
-            },
-            {
-                "tag": "geoip-ru", "type": "remote", "format": "binary",
-                "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-ru.srs",
-                "download_detour": "direct"
-            }
-        );
-        config.route.rules.push({
-            "outbound": "direct",
-            "rule_set": ["geosite-ru", "geoip-ru"]
-        });
-        // 同样为 DNS 添加规则
-        config.dns.rules.push({ "rule_set": ["geosite-ru", "geoip-ru"], "server": "direct-dns" });
-    }
-
-    // 3. 将原有的规则和其他兜底规则添加到数组末尾，确保正确的匹配顺序
-    config.route.rules.push(
-        { "outbound": "direct", "rule_set": ["geosite-cn", "geoip-cn"] },
-        { "outbound": "block", "rule_set": "geosite-ads" },
-        { "clash_mode": "全局模式", "outbound": "proxy" }
-    );
-
-    // --- END: 修改结束 ---
 
     return JSON.stringify(config, null, 2);
 }
@@ -3222,9 +3162,6 @@ async function handleGetRequest(env) {
 	let httpsPortsContent = '';
     let httpPortsContent = '';
     let noTLSContent = 'false';
-    let bypassIran = 'false';
-    let bypassRussia = 'false';
-
 
     if (hasKV) {
         try {
@@ -3243,9 +3180,6 @@ async function handleGetRequest(env) {
 				httpsPortsContent = settings.httpsports || httpsPorts.join(',');
                 httpPortsContent = settings.httpports || httpPorts.join(',');
                 noTLSContent = settings.notls || 'false';
-                bypassIran = settings.bypassIran || 'false';
-                bypassRussia = settings.bypassRussia || 'false';
-
             } else {
 				httpsPortsContent = httpsPorts.join(',');
 				httpPortsContent = httpPorts.join(',');
@@ -3456,8 +3390,8 @@ async function handleGetRequest(env) {
                 .test-result-item .success { color: #28a745; font-weight: bold; }
                 .test-result-item .error { color: #dc3545; font-weight: bold; }
 				
-                .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 10px; }
-                .checkbox-item { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+                .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; }
+                .checkbox-item { display: flex; align-items: center; gap: 5px; }
 
                 /* --- Notice Styles --- */
                 .notice-toggle {
@@ -3653,20 +3587,6 @@ async function handleGetRequest(env) {
                         </div>
 
                 <div id="tab-network" class="tab-content">
-						<div class="setting-item" style="border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 20px;">
-                            <h4>路由规则</h4>
-                            <p>启用对应规则</p>
-                            <div class="checkbox-grid">
-                                <div class="checkbox-item">
-                                    <input type="checkbox" id="bypassIran-checkbox" name="bypassIran" value="true" ${bypassIran === 'true' ? 'checked' : ''}>
-                                    <label for="bypassIran-checkbox">伊朗 (Iran)</label>
-                                </div>
-                                <div class="checkbox-item">
-                                    <input type="checkbox" id="bypassRussia-checkbox" name="bypassRussia" value="true" ${bypassRussia === 'true' ? 'checked' : ''}>
-                                    <label for="bypassRussia-checkbox">俄罗斯 (Russia)</label>
-                                </div>
-                            </div>
-                        </div>
                         <div class="setting-item">
                         <h4>NAT64/DNS64</h4>
                                 <p>
@@ -3782,9 +3702,7 @@ async function handleGetRequest(env) {
                 async function saveNetworkTab(button) {
                     const statusEl = button.parentElement.querySelector('.save-status');
                     const payload = {
-                        nat64: document.getElementById('nat64').value,
-                        bypassIran: document.getElementById('bypassIran-checkbox').checked.toString(),
-                        bypassRussia: document.getElementById('bypassRussia-checkbox').checked.toString()
+                        nat64: document.getElementById('nat64').value
                     };
                     await saveData(button, statusEl, JSON.stringify(payload));
                 }
