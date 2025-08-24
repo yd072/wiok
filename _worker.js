@@ -2966,13 +2966,6 @@ function generateSingboxConfig(nodeObjects) {
                     "format": "binary",
                     "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs",
                     "download_detour": "direct"
-                },
-                {
-                    "tag": "geoip-cn",
-                    "type": "remote",
-                    "format": "binary",
-                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs",
-                    "download_detour": "direct"
                 }
             ],
             "rules": [{
@@ -3001,18 +2994,13 @@ function generateSingboxConfig(nodeObjects) {
         config.route.rule_set.push(
             {
                 "tag": "geosite-ir", "type": "remote", "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ir.srs",
-                "download_detour": "direct"
-            },
-            {
-                "tag": "geoip-ir", "type": "remote", "format": "binary",
-                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/ir.srs",
+                "url": "https://cdn.jsdelivr.net/gh/Chocolate4U/Iran-sing-box-rules@rule-set/geosite-ir.srs",
                 "download_detour": "direct"
             }
         );
         config.route.rules.push({
             "outbound": "direct",
-            "rule_set": ["geosite-ir", "geoip-ir"]
+            "rule_set": ["geosite-ir"]
         });
     }
     if (bypassRussia === 'true') {
@@ -3021,23 +3009,18 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "geosite-ru", "type": "remote", "format": "binary",
                 "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ru.srs",
                 "download_detour": "direct"
-            },
-            {
-                "tag": "geoip-ru", "type": "remote", "format": "binary",
-                "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-ru.srs",
-                "download_detour": "direct"
             }
         );
-        config.route.rule_set.push({
+        config.route.rules.push({
             "outbound": "direct",
-            "rule_set": ["geosite-ru", "geoip-ru"]
+            "rule_set": ["geosite-ru"]
         });
     }
     // --- END: 条件性添加 ---
 
     // 将原有的中国规则和其他规则添加到数组末尾，以确保顺序
-    config.route.rule_set.push(
-        { "outbound": "direct", "rule_set": ["geosite-cn", "geoip-cn"] },
+    config.route.rules.push(
+        { "outbound": "direct", "rule_set": ["geosite-cn"] },
         { "outbound": "block", "rule_set": "geosite-ads" },
         { "clash_mode": "全局模式", "outbound": "proxy" }
     );
