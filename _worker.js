@@ -4117,4 +4117,3 @@ async function handleTestConnection(request) {
         clearTimeout(timeoutId);
     }
 }
-```
