@@ -2801,7 +2801,7 @@ function generateSingboxConfig(nodeObjects) {
         "dns": {
             "servers": [{
                 "tag": "proxy-dns",
-                "server": "8.8.8.8",
+                "server": "223.5.5.5",
                 "detour": "proxy",
                 "type": "https"
             }, {
@@ -2810,7 +2810,7 @@ function generateSingboxConfig(nodeObjects) {
                 "detour": "direct"
             }, {
                 "tag": "direct-dns",
-                "server": "223.5.5.5",
+                "server": "8.8.8.8",
                 "type": "https"
             }],
             "rules": [{
