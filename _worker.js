@@ -2822,6 +2822,8 @@ ${rulesYaml}
     return config.trim();
 }
 
+// --- START: 将整个旧的 generateSingboxConfig 函数替换为这个新版本 ---
+
 //Sing-box配置
 function generateSingboxConfig(nodeObjects) {
     const outbounds = nodeObjects.map(p => {
@@ -2954,7 +2956,8 @@ function generateSingboxConfig(nodeObjects) {
             "default_domain_resolver": "direct-dns",
             "final": "proxy",
             "override_android_vpn": true,
-            "rule_set": [{
+            "rule_set": [
+                {
                     "tag": "geosite-ads",
                     "type": "remote",
                     "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs",
@@ -2975,19 +2978,12 @@ function generateSingboxConfig(nodeObjects) {
                     "download_detour": "direct"
                 }
             ],
-            "rules": [{
-                "action": "sniff",
-                "timeout": "1s"
-            }, {
-                "action": "hijack-dns",
-                "protocol": "dns"
-            }, {
-                "ip_is_private": true, 
-                "outbound": "direct"
-            }, {
-                "clash_mode": "直连模式",
-                "outbound": "direct"
-            }]
+            "rules": [
+                { "action": "sniff", "timeout": "1s" },
+                { "action": "hijack-dns", "protocol": "dns" },
+                { "ip_is_private": true, "outbound": "direct" },
+                { "clash_mode": "直连模式", "outbound": "direct" },
+            ]
         },
         "experimental": {
             "cache_file": {
@@ -2995,9 +2991,8 @@ function generateSingboxConfig(nodeObjects) {
             }
         }
     };
-
-    // --- 修改部分 START ---
-    // 根据后台设置，条件性地添加伊朗和俄罗斯的规则集和路由规则
+    
+    // --- START: 条件性地添加地区规则集和路由规则 ---
     if (bypassIran === 'true') {
         config.route.rule_set.push(
             {
@@ -3011,13 +3006,11 @@ function generateSingboxConfig(nodeObjects) {
                 "download_detour": "direct"
             }
         );
-        // 将 geosite 和 geoip 合并到一个 rule_set 规则中
         config.route.rules.push({
             "outbound": "direct",
             "rule_set": ["geosite-ir", "geoip-ir"]
         });
     }
-
     if (bypassRussia === 'true') {
         config.route.rule_set.push(
             {
@@ -3031,15 +3024,14 @@ function generateSingboxConfig(nodeObjects) {
                 "download_detour": "direct"
             }
         );
-        // 将 geosite 和 geoip 合并到一个 rule_set 规则中
         config.route.rules.push({
             "outbound": "direct",
             "rule_set": ["geosite-ru", "geoip-ru"]
         });
     }
-    // --- 修改部分 END ---
+    // --- END: 条件性添加 ---
 
-    // 将原有的中国规则和其他规则添加到数组末尾，以确保顺序和逻辑正确
+    // 将原有的中国规则和其他兜底规则添加到数组末尾，以确保正确的匹配顺序
     config.route.rules.push(
         { "outbound": "direct", "rule_set": ["geosite-cn", "geoip-cn"] },
         { "outbound": "block", "rule_set": "geosite-ads" },
