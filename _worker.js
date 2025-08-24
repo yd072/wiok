@@ -2803,7 +2803,7 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "proxy-dns",
                 "server": "223.5.5.5",
                 "detour": "proxy",
-                "type": "https"
+                "type": "tcp"
             }, {
                 "tag": "local-dns",
                 "type": "local",
