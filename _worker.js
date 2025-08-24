@@ -2835,7 +2835,7 @@ function generateSingboxConfig(nodeObjects) {
                 type: p.network,
                 path: p['ws-opts'].path,
                 headers: {
-                    Host: p.servername 
+                    Host: p.servername // 保持首字母大写
                 }
             }
         };
@@ -2875,21 +2875,7 @@ function generateSingboxConfig(nodeObjects) {
                 "server": "8.8.8.8",
                 "type": "tcp"
             }],
-            "rules": [{
-                "rule_set": "geosite-cn", 
-            }, {
-                "server": "proxy-dns",
-                "source_ip_cidr": [
-                    "172.19.0.1/30",
-                    "fdfe:dcba:9876::1/126"
-                ]
-            }, {
-                "clash_mode": "直连模式",
-                "server": "direct-dns"
-            }, {
-                "clash_mode": "全局模式",
-                "server": "proxy-dns"
-            }],
+            "rules": [], // 将在这里动态构建规则
             "strategy": "prefer_ipv4",
             "final": "proxy-dns",
             "independent_cache": true
@@ -2996,7 +2982,17 @@ function generateSingboxConfig(nodeObjects) {
         }
     };
 
-    // --- START: 条件性添加 Sing-box 规则 ---
+    // --- START: 关键修复与修改 ---
+
+    // 1. 修复并定义基础 DNS 规则
+    config.dns.rules.push(
+        { "rule_set": "geosite-cn", "server": "direct-dns" }, // 修复：为中国规则添加 server
+        { "server": "proxy-dns", "source_ip_cidr": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"] },
+        { "clash_mode": "直连模式", "server": "direct-dns" },
+        { "clash_mode": "全局模式", "server": "proxy-dns" }
+    );
+
+    // 2. 条件性地添加地区规则集 (Rule Sets) 和路由规则 (Routing Rules)
     if (bypassIran === 'true') {
         config.route.rule_set.push(
             {
@@ -3014,7 +3010,10 @@ function generateSingboxConfig(nodeObjects) {
             "outbound": "direct",
             "rule_set": ["geosite-ir", "geoip-ir"]
         });
+        // 同样为 DNS 添加规则
+        config.dns.rules.push({ "rule_set": ["geosite-ir", "geoip-ir"], "server": "direct-dns" });
     }
+
     if (bypassRussia === 'true') {
         config.route.rule_set.push(
             {
@@ -3032,15 +3031,18 @@ function generateSingboxConfig(nodeObjects) {
             "outbound": "direct",
             "rule_set": ["geosite-ru", "geoip-ru"]
         });
+        // 同样为 DNS 添加规则
+        config.dns.rules.push({ "rule_set": ["geosite-ru", "geoip-ru"], "server": "direct-dns" });
     }
-    // --- END: 条件性添加 ---
 
-    // 将原有的中国规则和其他规则添加到数组末尾，以确保顺序
+    // 3. 将原有的中国规则和其他兜底规则添加到数组末尾，确保正确的匹配顺序
     config.route.rules.push(
         { "outbound": "direct", "rule_set": ["geosite-cn", "geoip-cn"] },
         { "outbound": "block", "rule_set": "geosite-ads" },
         { "clash_mode": "全局模式", "outbound": "proxy" }
     );
+
+    // --- END: 修改结束 ---
 
     return JSON.stringify(config, null, 2);
 }
