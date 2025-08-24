@@ -2714,46 +2714,6 @@ function generateClashConfig(nodeObjects) {
     const autoSelectGroupName = "🚀 自动选择";
     const manualSelectGroupName = "手动选择";
 
-    // --- START: 条件性生成规则提供者 ---
-    let ruleProvidersYaml = '\nrule-providers:\n';
-    if (bypassIran === 'true') {
-        ruleProvidersYaml += `
-  ir-geosite:
-    type: http
-    behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/Chocolate4U/Iran-clash-rules@release/ir.txt"
-    path: ./ruleset/ir.txt
-    interval: 86400
-  ir-geoip:
-    type: http
-    behavior: ipcidr
-    url: "https://cdn.jsdelivr.net/gh/Chocolate4U/Iran-clash-rules@release/ircidr.txt"
-    path: ./ruleset/ircidr.txt
-    interval: 86400
-`;
-    }
-    if (bypassRussia === 'true') {
-        ruleProvidersYaml += `
-  ru-geosite:
-    type: http
-    behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-ru.yaml"
-    path: ./ruleset/ru.yaml
-    interval: 86400
-  ru-geoip:
-    type: http
-    behavior: ipcidr
-    url: "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/ru.yaml"
-    path: ./ruleset/ru-cidr.yaml
-    interval: 86400
-`;
-    }
-    // 如果两个都未启用，则不生成 rule-providers 节
-    if (ruleProvidersYaml === '\nrule-providers:\n') {
-        ruleProvidersYaml = '';
-    }
-    // --- END: 条件性生成 ---
-
     // --- START: 将规则定义为数组以确保正确格式化 ---
     const customRulesArray = [
         `DOMAIN-SUFFIX,googleapis.cn,${manualSelectGroupName}`,
@@ -2764,18 +2724,20 @@ function generateClashConfig(nodeObjects) {
         'GEOIP,private,DIRECT,no-resolve',
     ];
 
-    // --- START: 条件性添加规则 ---
+    // --- START: 条件性添加地区规则 (全部使用内置数据库) ---
     if (bypassIran === 'true') {
-        customRulesArray.push('RULE-SET,ir-geosite,DIRECT', 'RULE-SET,ir-geoip,DIRECT');
+        // **关键修改：伊朗规则直接写入**
+        customRulesArray.push('GEOSITE,ir,DIRECT', 'GEOIP,ir,DIRECT');
     }
     if (bypassRussia === 'true') {
-        customRulesArray.push('RULE-SET,ru-geosite,DIRECT', 'RULE-SET,ru-geoip,DIRECT');
+        // **关键修改：俄罗斯规则直接写入**
+        customRulesArray.push('GEOSITE,category-ru,DIRECT', 'GEOIP,ru,DIRECT');
     }
     // --- END: 条件性添加 ---
 
     customRulesArray.push(
         'GEOSITE,cn,DIRECT',
-        'GEOIP,CN,DIRECT',
+        'GEOIP,CN,DIRECT', // 注意：Clash 核心对中国大陆的 GEOIP 代码通常使用大写的 "CN"
         `MATCH,${manualSelectGroupName}`
     );
     // --- END ---
@@ -2797,7 +2759,7 @@ dns:
   default-nameserver: [223.5.5.5, 119.29.29.29, 8.8.8.8]
   nameserver: ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query']
   fallback: ['https://dns.google/dns-query', 'https://cloudflare-dns.com/dns-query']
-${ruleProvidersYaml}
+
 proxies:
 ${proxiesYaml}
 proxy-groups:
