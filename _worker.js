@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2987,12 +2987,6 @@ function generateSingboxConfig(nodeObjects) {
             }, {
                 "clash_mode": "直连模式",
                 "outbound": "direct"
-            }, {
-                "clash_mode": "全局模式",
-                "outbound": "proxy"
-            }, {
-                "outbound": "block",
-                "rule_set": "geosite-ads"
             }]
         },
         "experimental": {
@@ -3001,44 +2995,26 @@ function generateSingboxConfig(nodeObjects) {
             }
         }
     };
-    
-    // --- START: Sing-box 地区规则选择器逻辑 ---
-    
-    // 1. 定义可选的地区规则出站
-    const regionalRuleOutbounds = [];
-    const regionalSelectorOptions = [];
 
-    // 默认的中国规则
-    regionalRuleOutbounds.push({
-        "type": "direct",
-        "tag": "规则-中国大陆",
-        "domain_resolver": { "server": "local-dns", "strategy": "prefer_ipv4" },
-        "routing_rules": [{ "rule_set": ["geosite-cn", "geoip-cn"] }]
-    });
-    regionalSelectorOptions.push("规则-中国大陆");
-
+    // --- START: 条件性添加 Sing-box 规则 ---
     if (bypassIran === 'true') {
         config.route.rule_set.push(
             {
                 "tag": "geosite-ir", "type": "remote", "format": "binary",
-                "url": "https://cdn.jsdelivr.net/gh/Chocolate4U/Iran-sing-box-rules@rule-set/geosite-ir.srs",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ir.srs",
                 "download_detour": "direct"
             },
             {
                 "tag": "geoip-ir", "type": "remote", "format": "binary",
-                "url": "https://cdn.jsdelivr.net/gh/Chocolate4U/Iran-sing-box-rules@rule-set/geoip-ir.srs",
+                "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/ir.srs",
                 "download_detour": "direct"
             }
         );
-        regionalRuleOutbounds.push({
-            "type": "direct",
-            "tag": "规则-伊朗",
-            "domain_resolver": { "server": "local-dns", "strategy": "prefer_ipv4" },
-            "routing_rules": [{ "rule_set": ["geosite-ir", "geoip-ir"] }]
+        config.route.rules.push({
+            "outbound": "direct",
+            "rule_set": ["geosite-ir", "geoip-ir"]
         });
-        regionalSelectorOptions.push("规则-伊朗");
     }
-    
     if (bypassRussia === 'true') {
         config.route.rule_set.push(
             {
@@ -3052,36 +3028,19 @@ function generateSingboxConfig(nodeObjects) {
                 "download_detour": "direct"
             }
         );
-        regionalRuleOutbounds.push({
-            "type": "direct",
-            "tag": "规则-俄罗斯",
-            "domain_resolver": { "server": "local-dns", "strategy": "prefer_ipv4" },
-            "routing_rules": [{ "rule_set": ["geosite-ru", "geoip-ru"] }]
+        config.route.rules.push({
+            "outbound": "direct",
+            "rule_set": ["geosite-ru", "geoip-ru"]
         });
-        regionalSelectorOptions.push("规则-俄罗斯");
     }
+    // --- END: 条件性添加 ---
 
-    // 2. 将这些规则出站和新的选择器添加到主配置的 outbounds 数组中
-    config.outbounds.push(...regionalRuleOutbounds);
-    config.outbounds.unshift({ // 使用 unshift 将其放在最前面，方便客户端展示
-        "type": "selector",
-        "tag": "🌏 地区规则",
-        "outbounds": regionalSelectorOptions,
-        "default": "规则-中国大陆" // 默认使用中国规则
-    });
-
-    // 3. 修改主路由规则，使其指向新的地区规则选择器
-    // 注意：我们不再直接添加地区规则，而是通过一个总的规则来指向选择器
-    config.route.rules.push({
-        "rule_set": [
-            "geosite-cn", "geoip-cn",
-            ...(bypassIran === 'true' ? ["geosite-ir", "geoip-ir"] : []),
-            ...(bypassRussia === 'true' ? ["geosite-ru", "geoip-ru"] : [])
-        ],
-        "outbound": "🌏 地区规则"
-    });
-
-    // --- END: Sing-box 地区规则选择器逻辑 ---
+    // 将原有的中国规则和其他规则添加到数组末尾，以确保顺序
+    config.route.rules.push(
+        { "outbound": "direct", "rule_set": ["geosite-cn", "geoip-cn"] },
+        { "outbound": "block", "rule_set": "geosite-ads" },
+        { "clash_mode": "全局模式", "outbound": "proxy" }
+    );
 
     return JSON.stringify(config, null, 2);
 }
