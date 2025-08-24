@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
+let subConverter = '';
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2835,7 +2835,7 @@ function generateSingboxConfig(nodeObjects) {
                 type: p.network,
                 path: p['ws-opts'].path,
                 headers: {
-                    Host: p.servername // 保持首字母大写
+                    Host: p.servername 
                 }
             }
         };
@@ -2966,6 +2966,13 @@ function generateSingboxConfig(nodeObjects) {
                     "format": "binary",
                     "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs",
                     "download_detour": "direct"
+                },
+                {
+                    "tag": "geoip-cn",
+                    "type": "remote",
+                    "format": "binary",
+                    "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs",
+                    "download_detour": "direct"
                 }
             ],
             "rules": [{
@@ -2996,11 +3003,16 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "geosite-ir", "type": "remote", "format": "binary",
                 "url": "https://cdn.jsdelivr.net/gh/Chocolate4U/Iran-sing-box-rules@rule-set/geosite-ir.srs",
                 "download_detour": "direct"
+            },
+            {
+                "tag": "geoip-ir", "type": "remote", "format": "binary",
+                "url": "https://cdn.jsdelivr.net/gh/Chocolate4U/Iran-sing-box-rules@rule-set/geoip-ir.srs",
+                "download_detour": "direct"
             }
         );
         config.route.rules.push({
             "outbound": "direct",
-            "rule_set": ["geosite-ir"]
+            "rule_set": ["geosite-ir", "geoip-ir"]
         });
     }
     if (bypassRussia === 'true') {
@@ -3009,18 +3021,23 @@ function generateSingboxConfig(nodeObjects) {
                 "tag": "geosite-ru", "type": "remote", "format": "binary",
                 "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ru.srs",
                 "download_detour": "direct"
+            },
+            {
+                "tag": "geoip-ru", "type": "remote", "format": "binary",
+                "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-ru.srs",
+                "download_detour": "direct"
             }
         );
         config.route.rules.push({
             "outbound": "direct",
-            "rule_set": ["geosite-ru"]
+            "rule_set": ["geosite-ru", "geoip-ru"]
         });
     }
     // --- END: 条件性添加 ---
 
     // 将原有的中国规则和其他规则添加到数组末尾，以确保顺序
     config.route.rules.push(
-        { "outbound": "direct", "rule_set": ["geosite-cn"] },
+        { "outbound": "direct", "rule_set": ["geosite-cn", "geoip-cn"] },
         { "outbound": "block", "rule_set": "geosite-ads" },
         { "clash_mode": "全局模式", "outbound": "proxy" }
     );
