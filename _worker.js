@@ -2801,17 +2801,17 @@ function generateSingboxConfig(nodeObjects) {
         "dns": {
             "servers": [{
                 "tag": "proxy-dns",
-                "server": "223.5.5.5",
+                "server": "https://dns.google/dns-query",
                 "detour": "proxy",
-                "type": "tcp"
+                "type": "doh"
             }, {
                 "tag": "local-dns",
                 "type": "local",
                 "detour": "direct"
             }, {
                 "tag": "direct-dns",
-                "server": "8.8.8.8",
-                "type": "tcp"
+                "server": "https://dns.alidns.com/dns-query",
+                "type": "doh"
             }],
             "rules": [{
                 "rule_set": "geosite-cn", 
