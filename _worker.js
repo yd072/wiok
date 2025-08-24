@@ -2801,7 +2801,7 @@ function generateSingboxConfig(nodeObjects) {
         "dns": {
             "servers": [{
                 "tag": "proxy-dns",
-                "server": "8.8.4.4",
+                "server": "8.8.8.8",
                 "detour": "proxy",
                 "type": "https"
             }, {
