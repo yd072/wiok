@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2779,7 +2779,7 @@ function generateClashConfig(nodeObjects) {
         `MATCH,${manualSelectGroupName}`
     );
     // --- END ---
-
+    
     // 将规则数组转换为格式正确的YAML字符串
     const rulesYaml = customRulesArray.map(rule => `  - ${rule}`).join('\n');
 
@@ -2835,7 +2835,7 @@ function generateSingboxConfig(nodeObjects) {
                 type: p.network,
                 path: p['ws-opts'].path,
                 headers: {
-                    Host: p.servername // 保持首字母大写
+                    Host: p.servername 
                 }
             }
         };
@@ -2995,7 +2995,7 @@ function generateSingboxConfig(nodeObjects) {
             }
         }
     };
-    
+
     // --- START: 条件性添加 Sing-box 规则 ---
     if (bypassIran === 'true') {
         config.route.rule_set.push(
@@ -3035,7 +3035,7 @@ function generateSingboxConfig(nodeObjects) {
     }
     // --- END: 条件性添加 ---
 
-    // 将原有的规则和其他规则添加到数组末尾，以确保顺序
+    // 将原有的中国规则和其他规则添加到数组末尾，以确保顺序
     config.route.rules.push(
         { "outbound": "direct", "rule_set": ["geosite-cn", "geoip-cn"] },
         { "outbound": "block", "rule_set": "geosite-ads" },
@@ -3261,6 +3261,7 @@ async function handleGetRequest(env) {
     let bypassIran = 'false';
     let bypassRussia = 'false';
 
+
     if (hasKV) {
         try {
             const advancedSettingsJSON = await env.KV.get('settinggs.txt');
@@ -3280,6 +3281,7 @@ async function handleGetRequest(env) {
                 noTLSContent = settings.notls || 'false';
                 bypassIran = settings.bypassIran || 'false';
                 bypassRussia = settings.bypassRussia || 'false';
+
             } else {
 				httpsPortsContent = httpsPorts.join(',');
 				httpPortsContent = httpPorts.join(',');
@@ -3490,8 +3492,8 @@ async function handleGetRequest(env) {
                 .test-result-item .success { color: #28a745; font-weight: bold; }
                 .test-result-item .error { color: #dc3545; font-weight: bold; }
 				
-                .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; }
-                .checkbox-item { display: flex; align-items: center; gap: 5px; }
+                .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 10px; }
+                .checkbox-item { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 
                 /* --- Notice Styles --- */
                 .notice-toggle {
@@ -4115,3 +4117,4 @@ async function handleTestConnection(request) {
         clearTimeout(timeoutId);
     }
 }
+```
