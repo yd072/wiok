@@ -2835,7 +2835,7 @@ function generateSingboxConfig(nodeObjects) {
                 type: p.network,
                 path: p['ws-opts'].path,
                 headers: {
-                    Host: p.servername // 保持首字母大写
+                    Host: p.servername 
                 }
             }
         };
@@ -2875,7 +2875,7 @@ function generateSingboxConfig(nodeObjects) {
                 "server": "8.8.8.8",
                 "type": "tcp"
             }],
-            "rules": [], // 将在这里动态构建规则
+            "rules": [], 
             "strategy": "prefer_ipv4",
             "final": "proxy-dns",
             "independent_cache": true
@@ -2984,9 +2984,9 @@ function generateSingboxConfig(nodeObjects) {
 
     // --- START: 关键修复与修改 ---
 
-    // 1. 修复并定义基础 DNS 规则
+    // 1. 基础 DNS 规则
     config.dns.rules.push(
-        { "rule_set": "geosite-cn", "server": "direct-dns" }, // 修复：为中国规则添加 server
+        { "rule_set": "geosite-cn", "server": "direct-dns" }, 
         { "server": "proxy-dns", "source_ip_cidr": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"] },
         { "clash_mode": "直连模式", "server": "direct-dns" },
         { "clash_mode": "全局模式", "server": "proxy-dns" }
@@ -3692,8 +3692,8 @@ async function handleGetRequest(env) {
 
                 <div id="tab-network" class="tab-content">
 						<div class="setting-item" style="border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 20px;">
-                            <h4>地区路由规则 (直连)</h4>
-                            <p>勾选以启用对应地区的直连规则，让相关流量不走代理。</p>
+                            <h4>路由规则</h4>
+                            <p>启用对应规则</p>
                             <div class="checkbox-grid">
                                 <div class="checkbox-item">
                                     <input type="checkbox" id="bypassIran-checkbox" name="bypassIran" value="true" ${bypassIran === 'true' ? 'checked' : ''}>
