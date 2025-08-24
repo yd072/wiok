@@ -2896,7 +2896,7 @@ function generateSingboxConfig(nodeObjects) {
             "rule_set": [{
                     "tag": "geosite-ads",
                     "type": "remote",
-                    "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs",
+                    "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs",
                     "download_detour": "direct"
                 },
                 {
