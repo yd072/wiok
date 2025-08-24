@@ -3028,7 +3028,7 @@ function generateSingboxConfig(nodeObjects) {
                 "download_detour": "direct"
             }
         );
-        config.route.rules.push({
+        config.route.rule_set.push({
             "outbound": "direct",
             "rule_set": ["geosite-ru", "geoip-ru"]
         });
@@ -3036,7 +3036,7 @@ function generateSingboxConfig(nodeObjects) {
     // --- END: 条件性添加 ---
 
     // 将原有的中国规则和其他规则添加到数组末尾，以确保顺序
-    config.route.rules.push(
+    config.route.rule_set.push(
         { "outbound": "direct", "rule_set": ["geosite-cn", "geoip-cn"] },
         { "outbound": "block", "rule_set": "geosite-ads" },
         { "clash_mode": "全局模式", "outbound": "proxy" }
