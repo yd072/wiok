@@ -9,7 +9,7 @@ let userID = '';
 let proxyIP = '';
 //let sub = '';
 let subConverter = '';
-let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
+let subConfig = '';
 let subProtocol = 'https';
 let subEmoji = 'true';
 let socks5Address = '';
