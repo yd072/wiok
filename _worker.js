@@ -1693,8 +1693,8 @@ function parseSecureProtoLinks(secureProtoLinksText) {
             const url = new URL(link);
             const params = new URLSearchParams(url.search);
 
-            // 从链接中提取必要信息
-            const uuid = url.username;
+            // 从链接中提取信息
+            // const uuid = url.username; // 旧的、错误的方式
             const server = url.hostname;
             const port = parseInt(url.port, 10);
             const name = decodeURIComponent(url.hash.substring(1)) || `${server}:${port}`;
@@ -1711,7 +1711,8 @@ function parseSecureProtoLinks(secureProtoLinksText) {
                 type: protocol,
                 server: server,
                 port: port,
-                uuid: uuid,
+                // 关键修正：忽略链接中的UUID，强制使用当前Worker的认证ID
+                uuid: userID, 
                 network: params.get('type') || 'ws', // 默认为 ws
                 tls: tls,
                 servername: servername,
