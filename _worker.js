@@ -8,8 +8,8 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
-let subConfig = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
+let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
 let socks5Address = '';
@@ -2234,7 +2234,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		return 节点配置页;
 	} else {
         // --- START逻辑 ---
-        if (!subConverter || subConverter.trim() === '') {
+        const useInternalGenerator = (!sub || sub.trim() === '') && (!subConverter || subConverter.trim() === '');
+        if (useInternalGenerator) {
             if (hostName.includes(".workers.dev") || noTLS === 'true') {
                 noTLS = 'true';
                 fakeHostName = `${fakeHostName}.workers.dev`;
@@ -2271,13 +2272,12 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 contentType = 'text/plain;charset=utf-8';
                 finalFileName = 'loon.conf';
             } else {
-                // Base64 格式，直接返回内容，不触发下载
                 const base64Config = 生成本地订阅(nodeObjects);
                 const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
                 return new Response(restoredConfig);
             }
             
-            const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, false); // 注意 isBase64 为 false
+            const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, false);
 
             return new Response(finalContent, {
                 headers: {
@@ -2285,108 +2285,108 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                     "Content-Type": contentType,
                 }
             });
+        } else {
+            // ---配置生成逻辑 ---
+            if (typeof fetch != 'function') {
+                return 'Error: fetch is not available in this environment.';
+            }
+
+            // 如果用户只提供了 sub 而没有提供 subConverter，则自动为其配置一个默认的
+            if ((!subConverter || subConverter.trim() === '') && (sub && sub.trim() !== '')) {
+                subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ=');
+            }
+
+            let newAddressesapi = [];
+            let newAddressescsv = [];
+            let newAddressesnotlsapi = [];
+            let newAddressesnotlscsv = [];
+
+            if (hostName.includes(".workers.dev") || noTLS === 'true') {
+                noTLS = 'true';
+                fakeHostName = `${fakeHostName}.workers.dev`;
+                newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+                newAddressesnotlscsv = await 整理测速结果('FALSE');
+            } else if (hostName.includes(".pages.dev")) {
+                fakeHostName = `${fakeHostName}.pages.dev`;
+            } else if (hostName.includes("worker") || hostName.includes("notls")) {
+                noTLS = 'true';
+                fakeHostName = `notls${fakeHostName}.net`;
+                newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+                newAddressesnotlscsv = await 整理测速结果('FALSE');
+            } else {
+                fakeHostName = `${fakeHostName}.xyz`
+            }
+            console.log(`虚假HOST: ${fakeHostName}`);
+            
+            let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`;
+            let isBase64 = true;
+
+            if (!sub || sub == "") {
+                if (hostName.includes('workers.dev')) {
+                    if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
+                        try {
+                            const response = await fetch(proxyhostsURL);
+                            if (!response.ok) {
+                                console.error('获取地址时出错:', response.status, response.statusText);
+                                return;
+                            }
+                            const text = await response.text();
+                            const lines = text.split('\n');
+                            const nonEmptyLines = lines.filter(line => line.trim() !== '');
+                            proxyhosts = proxyhosts.concat(nonEmptyLines);
+                        } catch (error) {
+                            console.error('获取地址时出错:', error);
+                        }
+                    }
+                    proxyhosts = [...new Set(proxyhosts)];
+                }
+
+                newAddressesapi = await 整理优选列表(addressesapi);
+                newAddressescsv = await 整理测速结果('TRUE');
+                url = `https://${hostName}/${fakeUserID + _url.search}`;
+                if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
+                    if (_url.search) url += '&notls';
+                    else url += '?notls';
+                }
+                console.log(`虚假订阅: ${url}`);
+            }
+
+            if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
+                if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
+                    url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                    isBase64 = false;
+                } else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
+                    url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                    isBase64 = false;
+                } else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
+                    url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                    isBase64 = false;
+                }
+            }
+
+            try {
+                let content;
+                if ((!sub || sub == "") && isBase64 == true) {
+                    const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
+                    content = 生成本地订阅(nodeObjects);
+                } else {
+                    const response = await fetch(url, {
+                        headers: {
+                            'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
+                        }
+                    });
+                    content = await response.text();
+                }
+
+                if (_url.pathname == `/${fakeUserID}`) return content;
+
+                return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
+
+            } catch (error) {
+                console.error('Error fetching content:', error);
+                return `Error fetching content: ${error.message}`;
+            }
         }
-        // ---配置生成逻辑 ---
-        
-		if (typeof fetch != 'function') {
-			return 'Error: fetch is not available in this environment.';
-		}
-
-		let newAddressesapi = [];
-		let newAddressescsv = [];
-		let newAddressesnotlsapi = [];
-		let newAddressesnotlscsv = [];
-
-		if (hostName.includes(".workers.dev") || noTLS === 'true') {
-			noTLS = 'true';
-			fakeHostName = `${fakeHostName}.workers.dev`;
-			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-			newAddressesnotlscsv = await 整理测速结果('FALSE');
-		} else if (hostName.includes(".pages.dev")) {
-			fakeHostName = `${fakeHostName}.pages.dev`;
-		} else if (hostName.includes("worker") || hostName.includes("notls")) {
-			noTLS = 'true';
-			fakeHostName = `notls${fakeHostName}.net`;
-			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
-			newAddressesnotlscsv = await 整理测速结果('FALSE');
-		} else {
-			fakeHostName = `${fakeHostName}.xyz`
-		}
-		console.log(`虚假HOST: ${fakeHostName}`);
-        
-		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`; // Path is now dynamic inside the node
-		let isBase64 = true;
-
-		if (!sub || sub == "") {
-			if (hostName.includes('workers.dev')) {
-				if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
-					try {
-						const response = await fetch(proxyhostsURL);
-
-						if (!response.ok) {
-							console.error('获取地址时出错:', response.status, response.statusText);
-							return;
-						}
-
-						const text = await response.text();
-						const lines = text.split('\n');
-						const nonEmptyLines = lines.filter(line => line.trim() !== '');
-
-						proxyhosts = proxyhosts.concat(nonEmptyLines);
-					} catch (error) {
-						console.error('获取地址时出错:', error);
-					}
-				}
-				proxyhosts = [...new Set(proxyhosts)];
-			}
-
-			newAddressesapi = await 整理优选列表(addressesapi);
-			newAddressescsv = await 整理测速结果('TRUE');
-			url = `https://${hostName}/${fakeUserID + _url.search}`;
-			if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
-				if (_url.search) url += '&notls';
-				else url += '?notls';
-			}
-			console.log(`虚假订阅: ${url}`);
-		}
-
-		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
-			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
-				url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
-				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			} else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
-				// 添加Loon支持
-				url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			}
-		}
-
-		try {
-			let content;
-			if ((!sub || sub == "") && isBase64 == true) {
-                
-                const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
-				content = 生成本地订阅(nodeObjects);
-			} else {
-				const response = await fetch(url, {
-					headers: {
-						'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
-					}
-				});
-				content = await response.text();
-			}
-
-			if (_url.pathname == `/${fakeUserID}`) return content;
-
-			return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
-
-		} catch (error) {
-			console.error('Error fetching content:', error);
-			return `Error fetching content: ${error.message}`;
-		}
 	}
 }
 
