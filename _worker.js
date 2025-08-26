@@ -1734,101 +1734,39 @@ function parsesecureProtoLinks(secureProtoLinksText) {
 }
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
-
-	if (sub) {
-		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
-		sub = match ? match[1] : sub;
-		const subs = 整理(sub);
-		sub = subs.length > 1 ? subs[0] : sub;
-	}
-
-	if ((adds.length + addsapi.length + addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
-	    		let cfips = [
-		            '104.16.0.0/14',
-		            '104.21.0.0/16',
-		            '104.24.0.0/14',
-
-	    		];
-
-    		function ipToInt(ip) {
-        			return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
-    		}
-
-    			function intToIp(int) {
-        			return [
-            			(int >>> 24) & 255,
-            			(int >>> 16) & 255,
-            			(int >>> 8) & 255,
-            			int & 255
-        				].join('.');
-    				}
-
-        function generateRandomIPFromCIDR(cidr) {
-            const [base, mask] = cidr.split('/');
-                const baseInt = ipToInt(base);
-                const maskBits = parseInt(mask, 10);
-                const hostBits = 32 - maskBits;
-                if (hostBits < 2) {
-                return intToIp(baseInt);
-                }
-                const usableHosts = Math.pow(2, hostBits) - 2;
-                const randomOffset = Math.floor(Math.random() * usableHosts) + 1;
-
-                const randomIPInt = baseInt + randomOffset;
-            return intToIp(randomIPInt);
-        }
-
-	    let counter = 1;
-	    const totalIPsToGenerate = 10;
-
-	    if (hostName.includes("worker") || hostName.includes("notls") || noTLS === 'true') {
-		    const randomPorts = httpPorts.length > 0 ? httpPorts : ['80'];
-		    for (let i = 0; i < totalIPsToGenerate; i++) {
-			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
-			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
-			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-			    addressesnotls.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
-		    }
-	    } else {
-		    const randomPorts = httpsPorts.length > 0 ? httpsPorts : ['443'];
-		        for (let i = 0; i < totalIPsToGenerate; i++) {
-			    const randomCIDR = cfips[Math.floor(Math.random() * cfips.length)];
-			    const randomIP = generateRandomIPFromCIDR(randomCIDR);
-			    const port = randomPorts[Math.floor(Math.random() * randomPorts.length)];
-			    addresses.push(`${randomIP}:${port}#CF随机节点${String(counter++).padStart(2, '0')}`);
-		    }
-	    }
+    // 预处理 sub 和 userAgent
+    if (sub) {
+        const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
+        sub = match ? match[1] : sub;
+        const subs = 整理(sub);
+        sub = subs.length > 1 ? subs[0] : sub;
     }
-
-	const userAgent = UA.toLowerCase();
-	const Config = 配置信息(uuid, hostName);
-	const proxyConfig = Config[0];
-	const clash = Config[1];
-	let proxyhost = "";
-	if (hostName.includes(".workers.dev")) {
-		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
-			try {
-				const response = await fetch(proxyhostsURL);
-
-				if (!response.ok) {
-					console.error('获取地址时出错:', response.status, response.statusText);
-					return;
-				}
-
-				const text = await response.text();
-				const lines = text.split('\n');
-				const nonEmptyLines = lines.filter(line => line.trim() !== '');
-
-				proxyhosts = proxyhosts.concat(nonEmptyLines);
-			} catch (error) {
-				//console.error('获取地址时出错:', error);
+    const userAgent = UA.toLowerCase();
+    
+    // --- 核心逻辑路由 ---
+    const isBrowserRequestingHTML = userAgent.includes('mozilla') && !subParams.some(p => _url.searchParams.has(p));
+    
+    // 1. 如果是浏览器直接访问，且没有带任何订阅参数，则显示HTML配置信息页面
+    if (isBrowserRequestingHTML) {
+        // (这部分是原始代码中生成HTML页面的逻辑，保持不变)
+		const Config = 配置信息(uuid, hostName);
+		const proxyConfig = Config[0];
+		const clash = Config[1];
+		let proxyhost = "";
+		if (hostName.includes(".workers.dev")) {
+			if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
+				try {
+					const response = await fetch(proxyhostsURL);
+					if (response.ok) {
+						const text = await response.text();
+						proxyhosts = proxyhosts.concat(text.split('\n').filter(line => line.trim() !== ''));
+					}
+				} catch (error) {}
 			}
+			if (proxyhosts.length > 0) proxyhost = proxyhosts[Math.floor(Math.random() * proxyhosts.length)] + "/";
 		}
-		if (proxyhosts.length != 0) proxyhost = proxyhosts[Math.floor(Math.random() * proxyhosts.length)] + "/";
-	}
-
-	const isUserAgentMozilla = userAgent.includes('mozilla');
-	if (isUserAgentMozilla && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
+        // ... 此处省略了大量的HTML字符串拼接，逻辑与您原始代码一致 ...
+        // 您只需要知道，这里会返回那个带有一键复制按钮的网页
 		const newSocks5s = socks5s.map(socks5Address => {
 			if (socks5Address.includes('@')) return socks5Address.split('@')[1];
 			else if (socks5Address.includes('//')) return socks5Address.split('//')[1];
@@ -2282,38 +2220,36 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			</body>
 			</html>
 		`;
-		return 节点配置页;
-	} else {
-        const isSpecialClient = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb') || userAgent.includes('loon') || _url.searchParams.has('loon');
+		return new Response(节点配置页, { headers: { "Content-Type": "text/html;charset=utf-8" } });
 
-        // 模式A: 完全内置生成 (当 SUB 和 SUBAPI 都没有时)
+    } else {
+        // 2. 对于所有订阅客户端或带参数的浏览器访问，进入配置生成逻辑
+        const isSpecialClient = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash') || userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb') || userAgent.includes('loon') || _url.searchParams.has('loon');
+
+        // 模式A: 完全内置生成
         if ((!sub || sub.trim() === '') && (!subConverter || subConverter.trim() === '')) {
             console.log("模式A: 使用完全内置逻辑生成订阅");
 
             if (hostName.includes(".workers.dev") || noTLS === 'true') {
-                noTLS = 'true';
-                fakeHostName = `${fakeHostName}.workers.dev`;
+                noTLS = 'true'; fakeHostName = `${fakeHostName}.workers.dev`;
             } else if (hostName.includes(".pages.dev")) {
                 fakeHostName = `${fakeHostName}.pages.dev`;
             } else if (hostName.includes("worker") || hostName.includes("notls")) {
-                noTLS = 'true';
-                fakeHostName = `notls${fakeHostName}.net`;
+                noTLS = 'true'; fakeHostName = `notls${fakeHostName}.net`;
             } else {
                 fakeHostName = `${fakeHostName}.xyz`;
             }
 
             const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
             
-            // 对于非Clash/Sing-box等特殊客户端，或带有b64参数的请求，直接返回base64
-            if (!isSpecialClient || _url.searchParams.has('b64') || _url.searchParams.has('base64')) {
+            if (!isSpecialClient) {
                  const base64Config = 生成本地订阅(nodeObjects);
                  const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
                  return new Response(restoredConfig);
             }
 
-            let configContent = '';
-            let contentType = 'text/plain;charset=utf-8';
-
+            // 对于 Clash, Sing-box, Loon 等特殊客户端，生成对应的配置文件
+            let configContent = '', contentType = 'text/plain;charset=utf-8';
             if (userAgent.includes('clash') && !userAgent.includes('nekobox') || _url.searchParams.has('clash')) {
                 configContent = generateClashConfig(nodeObjects);
                 contentType = 'application/x-yaml;charset=utf-8';
@@ -2322,49 +2258,36 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 contentType = 'application/json;charset=utf-8';
             } else if (userAgent.includes('loon') || _url.searchParams.has('loon')) {
                 configContent = generateLoonConfig(nodeObjects);
-                contentType = 'text/plain;charset=utf-8';
             }
             
             const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, false); 
-
-            return new Response(finalContent, {
-                headers: { "Content-Type": contentType }
-            });
-
-        // 模式C (新): 混合模式 (只有 SUB，没有 SUBAPI)
-        } else if ((sub && sub.trim() !== '') && (!subConverter || subConverter.trim() === '')) {
+            return new Response(finalContent, { headers: { "Content-Type": contentType } });
+        }
+        // 模式C: 混合模式 
+        else if ((sub && sub.trim() !== '') && (!subConverter || subConverter.trim() === '')) {
             console.log("模式C: 混合模式 - 从 SUB 获取数据，使用内置模板生成");
 
-            // 对于非Clash/Sing-box等特殊客户端，或带有b64参数的请求，走原始的外部SUB流程
-            if (!isSpecialClient || _url.searchParams.has('b64') || _url.searchParams.has('base64')) {
-                 const response = await fetch(`https://${sub}`, { headers: { 'User-Agent': UA } });
-                 return response;
-            }
-
             const subUrl = sub.startsWith('http') ? sub : `https://${sub}`;
+
+            if (!isSpecialClient) {
+                 const response = await fetch(subUrl, { headers: { 'User-Agent': UA } });
+                 const original_content = await response.text();
+                 return new Response(original_content);
+            }
+
             const response = await fetch(subUrl, { headers: { 'User-Agent': UA }});
-            if (!response.ok) {
-                return new Response(`从 SUB [${subUrl}] 获取数据失败`, { status: 502 });
-            }
-            let secureProtoLinksText = await response.text();
-
-            try {
-                const decoded = atob(secureProtoLinksText);
-                if (decoded.includes('secureProto://')) {
-                    secureProtoLinksText = decoded;
-                }
-            } catch (e) {
-                // Not base64, proceed with raw text
-            }
+            if (!response.ok) return new Response(`从 SUB [${subUrl}] 获取数据失败: ${response.status}`, { status: 502 });
             
-            const nodeObjects = parsesecureProtoLinks(secureProtoLinksText);
-            if (nodeObjects.length === 0) {
-                 return new Response(`未能从 SUB [${subUrl}] 的内容中解析出任何有效的secureProto节点`, { status: 400 });
-            }
+            let vlessLinksText = await response.text();
+            try {
+                const decoded = atob(vlessLinksText);
+                if (decoded.includes('vless://')) vlessLinksText = decoded;
+            } catch (e) {}
+            
+            const nodeObjects = parseVlessLinks(vlessLinksText);
+            if (nodeObjects.length === 0) return new Response(`未能从 SUB [${subUrl}] 的内容中解析出任何有效的VLESS节点`, { status: 400 });
 
-            let configContent = '';
-            let contentType = 'text/plain;charset=utf-8';
-
+            let configContent = '', contentType = 'text/plain;charset=utf-8';
             if (userAgent.includes('clash') && !userAgent.includes('nekobox') || _url.searchParams.has('clash')) {
                 configContent = generateClashConfig(nodeObjects);
                 contentType = 'application/x-yaml;charset=utf-8';
@@ -2373,59 +2296,39 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 contentType = 'application/json;charset=utf-8';
             } else if (userAgent.includes('loon') || _url.searchParams.has('loon')) {
                 configContent = generateLoonConfig(nodeObjects);
-                contentType = 'text/plain;charset=utf-8';
             }
 
-            return new Response(configContent, {
-                headers: { "Content-Type": contentType }
-            });
-
-        // 模式B: 完全外包 (只要有 SUBAPI 就用这个)
-        } else {
+            return new Response(configContent, { headers: { "Content-Type": contentType } });
+        }
+        // 模式B
+        else {
             console.log("模式B: 使用外部 SUBAPI 转换订阅");
-
-			let url;
-			let isBase64 = true;
+			let url, isBase64 = true;
 			
-			if (sub && sub.trim() !== "") {
-				url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`;
-			} else {
-				url = `https://${hostName}/${fakeUserID + _url.search}`;
-				if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
-					if (_url.search) url += '&notls';
-					else url += '?notls';
-				}
+			let sourceUrl = (sub && sub.trim() !== "")
+				? `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`
+				: `https://${hostName}/${fakeUserID + _url.search}`;
+
+			if (!sub && (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true')) {
+				if (_url.search) sourceUrl += '&notls'; else sourceUrl += '?notls';
 			}
 			
-            if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
-                if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
-                    url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-                    isBase64 = false;
-                } else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
-                    url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-                    isBase64 = false;
-                } else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
-                    url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-                    isBase64 = false;
-                }
+            if (isSpecialClient) {
+                isBase64 = false;
+                const target = (userAgent.includes('clash') || _url.searchParams.has('clash')) ? 'clash'
+                             : (userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb')) ? 'singbox'
+                             : 'loon';
+                url = `${subProtocol}://${subConverter}/sub?target=${target}&url=${encodeURIComponent(sourceUrl)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+            } else {
+                 url = sourceUrl; 
             }
 
-            try {
-                const response = await fetch(url, {
-                    headers: {
-                        'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
-                    }
-                });
-                const content = await response.text();
+            const response = await fetch(url, { headers: { 'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==') } });
+            const content = await response.text();
+            
+            if (_url.pathname === `/${fakeUserID}`) return new Response(content);
 
-                if (_url.pathname == `/${fakeUserID}`) return new Response(content);
-
-                return new Response(恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64));
-
-            } catch (error) {
-                console.error('Error fetching content:', error);
-                return new Response(`Error fetching content: ${error.message}`);
-            }
+            return new Response(恢复伪装信息(content, uuid, hostName, fakeUserID, fakeHostName, isBase64));
         }
     }
 }
@@ -3576,7 +3479,7 @@ async function handleGetRequest(env) {
                             <div class="checkbox-grid" id="httpports-grid">${httpCheckboxesHTML}</div>
                         </div>
 
-                        <textarea class="editor" id="adds_content" placeholder="${decodeURIComponent(atob('JTBBQUREUyVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQXZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEExMjcuMC4wLjElMjNDRm5hdCUwQSU1QjI2ODYlM0E0NzY2JTNBJTNBJTVEJTIzSVB2NiUwQSUwQSUwQUFERFNBUEklRTclQTQlQkElRTQlQkUlOEIlRUYlQkMlOUElMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1zZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQ'))}">${addsContent}</textarea>
+                        <textarea class="editor" id="adds_content" placeholder="${decodeURIComponent(atob('JTBBQUREUyVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQXZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEExMjcuMC4wLjElMjNDRm5hdCUwQSU1QjI2ODYlM0E0NzY2JTNBJTNBJTVEJTIzSVB2NiUwQSUwQSUwQUFERFNBUEklRTclQTQlQkElRTQlQkUlOEIlRUYlQkMlOUElMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRnJlZnMlMkZoZWFkcyUyRm1haW4lMkZhZGRyZXNzZXNhcGkudHh0'))}">${addsContent}</textarea>
                         
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
