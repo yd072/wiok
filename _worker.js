@@ -2346,7 +2346,10 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             console.log("模式C: 混合模式 - 从 SUB 获取数据，使用内置模板生成");
 
             const subUrl = sub.startsWith('http') ? sub : `https://${sub}`;
-            const response = await fetch(subUrl, { headers: { 'User-Agent': UA } });
+            // ******************** 关键修正 ********************
+            // 使用一个中立的 User-Agent 去获取订阅内容
+            const response = await fetch(subUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+            // ***********************************************
 
             if (!response.ok) {
                 return new Response(`从 SUB [${subUrl}] 获取数据失败: ${response.status}`, { status: 502 });
