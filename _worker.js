@@ -1715,7 +1715,7 @@ function parsesecureProtoLinks(secureProtoLinksText) {
                 server: server,
                 port: port,
                 uuid: uuid,
-                network: params.get('type') || 'ws', 
+                network: params.get('type') || 'ws', // 默认为 ws
                 tls: tls,
                 servername: servername,
                 'client-fingerprint': tls ? fingerprint : '',
@@ -1728,18 +1728,18 @@ function parsesecureProtoLinks(secureProtoLinksText) {
             };
         } catch (error) {
             console.error(`解析 secureProto 链接失败: ${link}`, error);
-            return null; 
+            return null; // 如果某个链接格式错误，则跳过
         }
-    }).filter(Boolean); 
+    }).filter(Boolean); // 过滤掉解析失败的 null 值
 }
 
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 
 	if (sub) {
 		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
-		if (match) sub = match[0]; // 保持 http/https 协议头
+		sub = match ? match[1] : sub;
 		const subs = 整理(sub);
-		sub = subs.length > 0 ? subs[0] : sub;
+		sub = subs.length > 1 ? subs[0] : sub;
 	}
 
 	if ((adds.length + addsapi.length + addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
@@ -1747,6 +1747,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		            '104.16.0.0/14',
 		            '104.21.0.0/16',
 		            '104.24.0.0/14',
+
 	    		];
 
     		function ipToInt(ip) {
@@ -1811,12 +1812,14 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
 				if (!response.ok) {
 					console.error('获取地址时出错:', response.status, response.statusText);
-				} else {
-					const text = await response.text();
-					const lines = text.split('\n');
-					const nonEmptyLines = lines.filter(line => line.trim() !== '');
-					proxyhosts = proxyhosts.concat(nonEmptyLines);
+					return;
 				}
+
+				const text = await response.text();
+				const lines = text.split('\n');
+				const nonEmptyLines = lines.filter(line => line.trim() !== '');
+
+				proxyhosts = proxyhosts.concat(nonEmptyLines);
 			} catch (error) {
 				//console.error('获取地址时出错:', error);
 			}
@@ -2279,129 +2282,152 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 			</body>
 			</html>
 		`;
-		return new Response(节点配置页);
+		return 节点配置页;
 	} else {
-		// 1. 定义客户端类型
-		const isClash = (userAgent.includes('clash') && !userAgent.includes('nekobox') && !userAgent.includes('v2rayn')) || _url.searchParams.has('clash');
-		const isSingbox = userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb');
-		const isLoon = userAgent.includes('loon') || _url.searchParams.has('loon');
-		const isSpecialClient = isClash || isSingbox || isLoon;
+        const isSpecialClient = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb') || userAgent.includes('loon') || _url.searchParams.has('loon');
 
-		// 2. 根据不同模式处理请求
-		// 模式A: 完全内置 (无 SUB, 无 SUBAPI)
-		if ((!sub || sub.trim() === '') && (!subConverter || subConverter.trim() === '')) {
-			console.log("模式A: 完全内置");
+        // 模式A: 完全内置生成 (当 SUB 和 SUBAPI 都没有时)
+        if ((!sub || sub.trim() === '') && (!subConverter || subConverter.trim() === '')) {
+            console.log("模式A: 使用完全内置逻辑生成订阅");
 
-			if (hostName.includes(".workers.dev") || noTLS === 'true') {
-				noTLS = 'true'; fakeHostName = `${fakeHostName}.workers.dev`;
-			} else if (hostName.includes(".pages.dev")) {
-				fakeHostName = `${fakeHostName}.pages.dev`;
-			} else if (hostName.includes("worker") || hostName.includes("notls")) {
-				noTLS = 'true'; fakeHostName = `notls${fakeHostName}.net`;
-			} else {
-				fakeHostName = `${fakeHostName}.xyz`;
-			}
+            if (hostName.includes(".workers.dev") || noTLS === 'true') {
+                noTLS = 'true';
+                fakeHostName = `${fakeHostName}.workers.dev`;
+            } else if (hostName.includes(".pages.dev")) {
+                fakeHostName = `${fakeHostName}.pages.dev`;
+            } else if (hostName.includes("worker") || hostName.includes("notls")) {
+                noTLS = 'true';
+                fakeHostName = `notls${fakeHostName}.net`;
+            } else {
+                fakeHostName = `${fakeHostName}.xyz`;
+            }
 
-			const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
+            const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
+            
+            // 对于非Clash/Sing-box等特殊客户端，或带有b64参数的请求，直接返回base64
+            if (!isSpecialClient || _url.searchParams.has('b64') || _url.searchParams.has('base64')) {
+                 const base64Config = 生成本地订阅(nodeObjects);
+                 const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
+                 return new Response(restoredConfig);
+            }
 
-			if (isSpecialClient) {
-				let configContent = '';
-				let contentType = 'text/plain;charset=utf-8';
-				if (isClash) {
-					configContent = generateClashConfig(nodeObjects); contentType = 'application/x-yaml;charset=utf-8';
-				} else if (isSingbox) {
-					configContent = generateSingboxConfig(nodeObjects); contentType = 'application/json;charset=utf-8';
-				} else if (isLoon) {
-					configContent = generateLoonConfig(nodeObjects);
-				}
-				const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, false);
-				return new Response(finalContent, { headers: { "Content-Type": contentType } });
-			} else {
-				const base64Config = 生成本地订阅(nodeObjects);
-				const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
-				return new Response(restoredConfig);
-			}
-		}
-		// 模式C: 混合模式 (有 SUB, 无 SUBAPI)
-		else if ((sub && sub.trim() !== '') && (!subConverter || subConverter.trim() === '')) {
-			console.log("模式C: 混合模式");
-			
-			// 如果是特殊客户端，则获取SUB内容并用内置模板转换
-			if (isSpecialClient) {
-				const subUrl = sub.startsWith('http') ? sub : `https://${sub}`;
-				const response = await fetch(subUrl, { headers: { 'User-Agent': UA }});
-				if (!response.ok) return new Response(`模式C: 从 SUB [${subUrl}] 获取失败`, { status: 502 });
-				
-				let vlessLinksText = await response.text();
-				try {
-					const decoded = atob(vlessLinksText);
-					if (decoded.includes('vless://')) vlessLinksText = decoded;
-				} catch (e) { /* Not base64 */ }
-				
-				const nodeObjects = parseVlessLinks(vlessLinksText);
-				if (nodeObjects.length === 0) return new Response(`模式C: 未能从 SUB 内容解析出节点`, { status: 400 });
+            let configContent = '';
+            let contentType = 'text/plain;charset=utf-8';
 
-				let configContent = '';
-				let contentType = 'text/plain;charset=utf-8';
-				if (isClash) {
-					configContent = generateClashConfig(nodeObjects); contentType = 'application/x-yaml;charset=utf-8';
-				} else if (isSingbox) {
-					configContent = generateSingboxConfig(nodeObjects); contentType = 'application/json;charset=utf-8';
-				} else if (isLoon) {
-					configContent = generateLoonConfig(nodeObjects);
-				}
-				return new Response(configContent, { headers: { "Content-Type": contentType } });
-			} 
-			// 如果是普通客户端 (如V2RayN)，则直接请求 SUB 并返回其内容
-			else {
-				 console.log("模式C: V2RayN 请求，直接代理 SUB 内容");
-				 const subUrl = sub.startsWith('http') ? sub : `https://${sub}`;
-				 const response = await fetch(subUrl, { headers: { 'User-Agent': UA } });
-				 return response; // 直接返回 SUB 的响应
-			}
-		}
-		// 模式B: 完全外包 (有 SUBAPI)
-		else {
-			console.log("模式B: 完全外包");
+            if (userAgent.includes('clash') && !userAgent.includes('nekobox') || _url.searchParams.has('clash')) {
+                configContent = generateClashConfig(nodeObjects);
+                contentType = 'application/x-yaml;charset=utf-8';
+            } else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb')) {
+                configContent = generateSingboxConfig(nodeObjects);
+                contentType = 'application/json;charset=utf-8';
+            } else if (userAgent.includes('loon') || _url.searchParams.has('loon')) {
+                configContent = generateLoonConfig(nodeObjects);
+                contentType = 'text/plain;charset=utf-8';
+            }
+            
+            const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, false); 
+
+            return new Response(finalContent, {
+                headers: { "Content-Type": contentType }
+            });
+
+        // 模式C (新): 混合模式 (只有 SUB，没有 SUBAPI)
+        } else if ((sub && sub.trim() !== '') && (!subConverter || subConverter.trim() === '')) {
+            console.log("模式C: 混合模式 - 从 SUB 获取数据，使用内置模板生成");
+
+            // 对于非Clash/Sing-box等特殊客户端，或带有b64参数的请求，走原始的外部SUB流程
+            if (!isSpecialClient || _url.searchParams.has('b64') || _url.searchParams.has('base64')) {
+                 const response = await fetch(`https://${sub}`, { headers: { 'User-Agent': UA } });
+                 return response;
+            }
+
+            const subUrl = sub.startsWith('http') ? sub : `https://${sub}`;
+            const response = await fetch(subUrl, { headers: { 'User-Agent': UA }});
+            if (!response.ok) {
+                return new Response(`从 SUB [${subUrl}] 获取数据失败`, { status: 502 });
+            }
+            let secureProtoLinksText = await response.text();
+
+            try {
+                const decoded = atob(secureProtoLinksText);
+                if (decoded.includes('secureProto://')) {
+                    secureProtoLinksText = decoded;
+                }
+            } catch (e) {
+                // Not base64, proceed with raw text
+            }
+            
+            const nodeObjects = parsesecureProtoLinks(secureProtoLinksText);
+            if (nodeObjects.length === 0) {
+                 return new Response(`未能从 SUB [${subUrl}] 的内容中解析出任何有效的secureProto节点`, { status: 400 });
+            }
+
+            let configContent = '';
+            let contentType = 'text/plain;charset=utf-8';
+
+            if (userAgent.includes('clash') && !userAgent.includes('nekobox') || _url.searchParams.has('clash')) {
+                configContent = generateClashConfig(nodeObjects);
+                contentType = 'application/x-yaml;charset=utf-8';
+            } else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb')) {
+                configContent = generateSingboxConfig(nodeObjects);
+                contentType = 'application/json;charset=utf-8';
+            } else if (userAgent.includes('loon') || _url.searchParams.has('loon')) {
+                configContent = generateLoonConfig(nodeObjects);
+                contentType = 'text/plain;charset=utf-8';
+            }
+
+            return new Response(configContent, {
+                headers: { "Content-Type": contentType }
+            });
+
+        // 模式B: 完全外包 (只要有 SUBAPI 就用这个)
+        } else {
+            console.log("模式B: 使用外部 SUBAPI 转换订阅");
 
 			let url;
 			let isBase64 = true;
 			
-			let subSourceUrl;
 			if (sub && sub.trim() !== "") {
-				subSourceUrl = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`;
+				url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`;
 			} else {
-				subSourceUrl = `https://${hostName}/${fakeUserID + _url.search}`;
+				url = `https://${hostName}/${fakeUserID + _url.search}`;
 				if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
-					if (_url.search) subSourceUrl += '&notls'; else subSourceUrl += '?notls';
+					if (_url.search) url += '&notls';
+					else url += '?notls';
 				}
 			}
+			
+            if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
+                if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
+                    url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                    isBase64 = false;
+                } else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
+                    url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                    isBase64 = false;
+                } else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
+                    url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+                    isBase64 = false;
+                }
+            }
 
-			if (isSpecialClient) {
-				let target = '';
-				if (isClash) target = 'clash';
-				if (isSingbox) target = 'singbox';
-				if (isLoon) target = 'loon';
-				
-				url = `${subProtocol}://${subConverter}/sub?target=${target}&url=${encodeURIComponent(subSourceUrl)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-				isBase64 = false;
-			} else {
-				url = subSourceUrl;
-			}
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
+                    }
+                });
+                const content = await response.text();
 
-			try {
-				const response = await fetch(url, {
-					headers: { 'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==') }
-				});
-				const content = await response.text();
-				if (_url.pathname == `/${fakeUserID}`) return new Response(content);
-				return new Response(恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64));
-			} catch (error) {
-				console.error('模式B: 获取内容失败:', error);
-				return new Response(`模式B: 获取内容失败: ${error.message}`);
-			}
-		}
-	}
+                if (_url.pathname == `/${fakeUserID}`) return new Response(content);
+
+                return new Response(恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64));
+
+            } catch (error) {
+                console.error('Error fetching content:', error);
+                return new Response(`Error fetching content: ${error.message}`);
+            }
+        }
+    }
 }
 
 async function 整理优选列表(api) {
@@ -3550,7 +3576,7 @@ async function handleGetRequest(env) {
                             <div class="checkbox-grid" id="httpports-grid">${httpCheckboxesHTML}</div>
                         </div>
 
-                        <textarea class="editor" id="adds_content" placeholder="${decodeURIComponent(atob('JTBBQUREUyVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQXZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEExMjcuMC4wLjElMjNDRm5hdCUwQSU1QjI2ODYlM0E0NzY2JTNBJTNBJTVEJTIzSVB2NiUwQSUwQSUwQUFERFNBUEklRTclQTQlQkElRTQlQkUlOEIlRUYlQkMlOUElMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1c2VyY29udGVudC5jb20lMkZjbWxpdSUyRldvcmtlclZsZXNzMnN1YiUyRnJlZnMlMkZoZWFkcyUyRm1haW4lMkZhZGRyZXNzZXNhcGkudHh0'))}">${addsContent}</textarea>
+                        <textarea class="editor" id="adds_content" placeholder="${decodeURIComponent(atob('JTBBQUREUyVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU5QSUwQXZpc2EuY24lMjMlRTQlQkMlOTglRTklODAlODklRTUlOUYlOUYlRTUlOTAlOEQlMEExMjcuMC4wLjElMjNDRm5hdCUwQSU1QjI2ODYlM0E0NzY2JTNBJTNBJTVEJTIzSVB2NiUwQSUwQSUwQUFERFNBUEklRTclQTQlQkElRTQlQkUlOEIlRUYlQkMlOUElMEFodHRwcyUzQSUyRiUyRnJhdy5naXRodWJ1zZXJjb250ZW50LmNvbSUyRmNtbGl1JTJGV29ya2VyVmxlc3Myc3ViJTJGcmVmcyUyRmhlYWRzJTJGbWFpbiUyRmFkZHJlc3Nlc2FwaS50eHQ'))}">${addsContent}</textarea>
                         
                         <div class="button-group">
                             <button class="btn btn-secondary" onclick="goBack()">返回配置页</button>
