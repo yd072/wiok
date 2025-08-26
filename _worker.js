@@ -8,7 +8,7 @@ let cachedSettings = null;       // 用于存储从KV读取的配置对象
 let userID = '';
 let proxyIP = '';
 //let sub = '';
-let subConverter = '';
+let subConverter = atob('U1VCQVBJLkNNTGl1c3Nzcy5uZXQ='); 
 let subConfig = atob('aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDTDRTU1IvQUNMNFNTUi9tYXN0ZXIvQ2xhc2gvY29uZmlnL0FDTDRTU1JfT25saW5lX01pbmlfTXVsdGlNb2RlLmluaQ==');
 let subProtocol = 'https';
 let subEmoji = 'true';
@@ -2234,7 +2234,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		return 节点配置页;
 	} else {
         // --- START逻辑 ---
-        if (sub && sub.trim() !== '' && (!subConverter || subConverter.trim() === '')) {
+        const useInternalGenerator = (!sub || sub.trim() === '') && (!subConverter || subConverter.trim() === '');
+        if (useInternalGenerator) {
             if (hostName.includes(".workers.dev") || noTLS === 'true') {
                 noTLS = 'true';
                 fakeHostName = `${fakeHostName}.workers.dev`;
@@ -2271,7 +2272,6 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 contentType = 'text/plain;charset=utf-8';
                 finalFileName = 'loon.conf';
             } else {
-                // Base64 格式，直接返回内容，不触发下载
                 const base64Config = 生成本地订阅(nodeObjects);
                 const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
                 return new Response(restoredConfig);
@@ -2285,7 +2285,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                     "Content-Type": contentType,
                 }
             });
-        }
+        } else {
             // ---配置生成逻辑 ---
         
             if (typeof fetch != 'function') {
@@ -2389,6 +2389,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             }
         }
 	}
+}
 
 async function 整理优选列表(api) {
     if (!api || api.length === 0) return [];
