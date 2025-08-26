@@ -2284,7 +2284,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		`;
 		return 节点配置页;
 	} else {
-        const isSpecialClient = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb') || userAgent.includes('loon') || _url.searchParams.has('loon');
+        const isSpecialClient = (userAgent.includes('clash') && !userAgent.includes('nekobox') && !userAgent.includes('v2rayn')) || userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb') || userAgent.includes('loon') || _url.searchParams.has('loon');
 
         // 模式A: 完全内置生成 
         if ((!sub || sub.trim() === '') && (!subConverter || subConverter.trim() === '')) {
