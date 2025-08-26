@@ -662,6 +662,14 @@ async function resolveToIPv6(target) {
 export default {
 	async fetch(request, env, ctx) {
 		try {
+            const urlForDebug = new URL(request.url);
+            if (urlForDebug.pathname.toLowerCase().endsWith('/debug')) {
+                const uaForDebug = request.headers.get('User-Agent') || 'User-Agent not found';
+                return new Response(`Your Worker is LIVE.\n\nDetected User-Agent:\n${uaForDebug}`, {
+                    status: 200,
+                    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+                });
+            } 
             // 1. 统一加载所有配置 (此函数现在使用内存缓存)
             await loadConfigurations(env);
 
