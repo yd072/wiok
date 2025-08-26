@@ -1711,7 +1711,7 @@ function parsesecureProtoLinks(secureProtoLinksText) {
             // 构建符合内部格式的 nodeObject
             return {
                 name: `${name} #${nodeCounter++}`,
-                type: 'protocolEncodedFlag', 
+                type: 'atob(protocolEncodedFlag)', 
                 server: server,
                 port: port,
                 uuid: uuid,
