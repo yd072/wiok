@@ -58,7 +58,6 @@ let link = [];
 let banHosts = [atob('c3BlZWQuY2xvdWRmbGFyZS5jb20=')];
 let DNS64Server = '';
 const validFingerprints = ['chrome', 'random', 'randomized'];
-const protocolEncodedFlag = 'dmxlc3M='; 
 
 /**
  * 辅助工具函数
@@ -1649,20 +1648,25 @@ async function 代理URL(request, 代理网址, 目标网址, 调试模式 = fal
     }
 }
 
-
+const protocolEncodedFlag = atob('ZG14bGMzTT0=');
 function 配置信息(UUID, 域名地址) {
 	const 协议类型 = atob(protocolEncodedFlag);
+
 	const 别名 = FileName;
 	let 地址 = 域名地址;
 	let 端口 = 443;
+
 	const 用户ID = UUID;
 	const 加密方式 = 'none';
+
 	const 传输层协议 = 'ws';
 	const 伪装域名 = 域名地址;
 	const 路径 = generateRandomPath(); // 使用随机路径
 	const 指纹 = getRandomFingerprint(); // 使用随机指纹
+
 	let 传输层安全 = ['tls', true];
 	const SNI = 域名地址;
+
 
 	if (域名地址.includes('.workers.dev') || noTLS === 'true') {
 		地址 = atob('dmlzYS5jbg==');
@@ -1671,71 +1675,20 @@ function 配置信息(UUID, 域名地址) {
 	}
 
 	const 威图瑞 = `${协议类型}://${用户ID}@${地址}:${端口}\u003f\u0065\u006e\u0063\u0072\u0079` + 'p' + `${atob('dGlvbj0=') + 加密方式}\u0026\u0073\u0065\u0063\u0075\u0072\u0069\u0074\u0079\u003d${传输层安全[0]}&sni=${SNI}&fp=${指纹}&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`;
-	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {Host: "${伪装域名}"}}}`;
+	const 猫猫猫 = `- {name: ${FileName}, server: ${地址}, port: ${端口}, type: ${协议类型}, uuid: ${用户ID}, tls: ${传输层安全[1]}, alpn: [h3], udp: false, sni: ${SNI}, tfo: false, skip-cert-verify: true, servername: ${伪装域名}, client-fingerprint: ${指纹}, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {${伪装域名}}}}`;
 	return [威图瑞, 猫猫猫];
 }
 
 let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb', 'loon'];
 const cmad = decodeURIComponent(atob('dGVsZWdyYW0lMjAlRTQlQkElQTQlRTYlQjUlODElRTclQkUlQTQlMjAlRTYlOEElODAlRTYlOUMlQUYlRTUlQTQlQTclRTQlQkQlQUMlN0UlRTUlOUMlQTglRTclQkElQkYlRTUlOEYlOTElRTclODklOEMhJTNDYnIlM0UKJTNDYSUyMGhyZWYlM0QlMjdodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlMjclM0VodHRwcyUzQSUyRiUyRnQubWUlMkZDTUxpdXNzc3MlM0MlMkZhJTNFJTNDYnIlM0UKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tJTNDYnIlM0UKZ2l0aHViJTIwJUU5JUExJUI5JUU3JTlCJUFFJUU1JTlDJUIwJUU1JTlEJTgwJTIwU3RhciFTdGFyIVN0YXIhISElM0NiciUzRQolM0NhJTIwaHJlZiUzRCUyN2h0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUyNyUzRWh0dHBzJTNBJTJGJTJGZ2l0aHViLmNvbSUyRmNtbGl1JTJGZWRnZXR1bm5lbCUzQyUyRmElM0UlM0NiciUzRQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0lM0NiciUzRQo='));
 
-/**
- * 新增函数：解析安全协议链接文本为 nodeObjects 数组
- * @param {string} secureProtoLinksText - 从 SUB 获取到的、以换行符分隔的链接文本
- * @returns {Array<object>} - 符合脚本内部格式的节点对象数组
- */
-function parseSecureProtoLinks(secureProtoLinksText) {
-    const protocol = atob(protocolEncodedFlag);
-    const links = secureProtoLinksText.split(/[\r\n]+/).filter(line => line.trim().startsWith(protocol + '://'));
-    let nodeCounter = 1;
-
-    return links.map(link => {
-        try {
-            const url = new URL(link);
-            const params = new URLSearchParams(url.search);
-
-            // 从链接中提取必要信息
-            const uuid = url.username;
-            const server = url.hostname;
-            const port = parseInt(url.port, 10);
-            const name = decodeURIComponent(url.hash.substring(1)) || `${server}:${port}`;
-
-            const tls = params.get('security') === 'tls';
-            const servername = params.get('sni') || params.get('host') || server;
-            const fingerprint = params.get('fp') || 'random';
-            const path = decodeURIComponent(params.get('path') || '/');
-            const hostHeader = params.get('host') || servername;
-
-            // 构建符合内部格式的 nodeObject
-            return {
-                name: `${name} #${nodeCounter++}`,
-                type: protocol,
-                server: server,
-                port: port,
-                uuid: uuid,
-                network: params.get('type') || 'ws', // 默认为 ws
-                tls: tls,
-                servername: servername,
-                'client-fingerprint': tls ? fingerprint : '',
-                'ws-opts': {
-                    path: path,
-                    headers: {
-                        Host: hostHeader
-                    }
-                }
-            };
-        } catch (error) {
-            console.error(`解析安全协议链接失败: ${link}`, error);
-            return null; // 如果某个链接格式错误，则跳过
-        }
-    }).filter(Boolean); // 过滤掉解析失败的 null 值
-}
-
-
 async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeUserID, fakeHostName, env) {
 
 	if (sub) {
-		const match = sub.match(/^(?:https?:\/\/)?(.+)/);
+		const match = sub.match(/^(?:https?:\/\/)?([^\/]+)/);
 		sub = match ? match[1] : sub;
+		const subs = 整理(sub);
+		sub = subs.length > 1 ? subs[0] : sub;
 	}
 
 	if ((adds.length + addsapi.length + addresses.length + addressesapi.length + addressesnotls.length + addressesnotlsapi.length + addressescsv.length) == 0) {
@@ -1824,9 +1777,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 	}
 
 	const isUserAgentMozilla = userAgent.includes('mozilla');
-    const isSpecialClient = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || userAgent.includes('sing-box') || userAgent.includes('singbox') || userAgent.includes('loon');
-
-	if (isUserAgentMozilla && !isSpecialClient && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
+	if (isUserAgentMozilla && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
 		const newSocks5s = socks5s.map(socks5Address => {
 			if (socks5Address.includes('@')) return socks5Address.split('@')[1];
 			else if (socks5Address.includes('//')) return socks5Address.split('//')[1];
@@ -2282,16 +2233,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 		`;
 		return 节点配置页;
 	} else {
-        const wantsClash = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash');
-        const wantsSingbox = userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb');
-        const wantsLoon = userAgent.includes('loon') || _url.searchParams.has('loon');
-        const isSpecialFormatClient = wantsClash || wantsSingbox || wantsLoon;
-
         // --- START逻辑 ---
-        // 模式A: 完全内置生成 (当 SUB 和 SUBAPI 都没有时)
-        if ((!sub || sub.trim() === '') && (!subConverter || subConverter.trim() === '')) {
-            console.log("模式A: 使用完全内置逻辑生成订阅");
-
+        if ((!sub || sub.trim() === '') && (!subConverter || subConverter.trim() === ''))  {
             if (hostName.includes(".workers.dev") || noTLS === 'true') {
                 noTLS = 'true';
                 fakeHostName = `${fakeHostName}.workers.dev`;
@@ -2306,13 +2249,15 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
             const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
             
-            if (!isSpecialFormatClient) {
-                const base64Config = 生成本地订阅(nodeObjects);
-                const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
-                return new Response(restoredConfig);
-            }
+            let configContent = '';
+            let contentType = 'text/plain;charset=utf-8';
+            let isBase64 = false;
+            let finalFileName = '';
+            
+            const wantsClash = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash');
+            const wantsSingbox = userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb');
+            const wantsLoon = userAgent.includes('loon') || _url.searchParams.has('loon');
 
-            let configContent = '', contentType = 'text/plain;charset=utf-8', finalFileName = '';
             if (wantsClash) {
                 configContent = generateClashConfig(nodeObjects);
                 contentType = 'application/x-yaml;charset=utf-8';
@@ -2325,96 +2270,123 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 configContent = generateLoonConfig(nodeObjects);
                 contentType = 'text/plain;charset=utf-8';
                 finalFileName = 'loon.conf';
+            } else {
+                // Base64 格式，直接返回内容，不触发下载
+                const base64Config = 生成本地订阅(nodeObjects);
+                const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
+                return new Response(restoredConfig);
             }
             
             const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, false); 
-            return new Response(finalContent, { headers: { "Content-Disposition": `attachment; filename=${finalFileName}; filename*=utf-8''${encodeURIComponent(finalFileName)}`, "Content-Type": contentType } });
 
-        // 模式C (新): 混合模式 (只有 SUB，没有 SUBAPI)
-        } else if ((sub && sub.trim() !== '') && (!subConverter || subConverter.trim() === '')) {
-            console.log("模式C: 混合模式 - 从 SUB 获取数据，使用内置模板生成");
-
-            const subUrl = sub.startsWith('http') ? sub : `https://${sub}`;
-            // 使用伪装的浏览器 User-Agent 来请求 SUB 地址
-            const browserUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36';
-            const response = await fetch(subUrl, { headers: { 'User-Agent': browserUA } });
-
-            if (!response.ok) {
-                return new Response(`Error: Failed to fetch from SUB URL [${subUrl}]. Status: ${response.status}`, { status: 502 });
-            }
-            const responseText = await response.text();
-
-            // 如果是需要特殊格式的客户端 (Clash, Sing-box), 则解析并生成配置
-            if (isSpecialFormatClient) {
-                let secureProtoLinksText = responseText;
-                try {
-                    const decoded = atob(secureProtoLinksText);
-                    if (decoded.includes(atob(protocolEncodedFlag) + '://')) {
-                        secureProtoLinksText = decoded;
-                    }
-                } catch (e) { /* Not base64, proceed with plain text */ }
-
-                const nodeObjects = parseSecureProtoLinks(secureProtoLinksText);
-                if (nodeObjects.length === 0) {
-                    return new Response(`Error: Could not parse any valid nodes from SUB URL [${subUrl}]`, { status: 400 });
+            return new Response(finalContent, {
+                headers: {
+                    "Content-Disposition": `attachment; filename=${finalFileName}; filename*=utf-8''${encodeURIComponent(finalFileName)}`,
+                    "Content-Type": contentType,
                 }
-
-                let configContent = '', contentType = 'text/plain;charset=utf-8', finalFileName = '';
-                if (wantsClash) {
-                    configContent = generateClashConfig(nodeObjects);
-                    contentType = 'application/x-yaml;charset=utf-8';
-                    finalFileName  = 'clash.yaml';
-                } else if (wantsSingbox) {
-                    configContent = generateSingboxConfig(nodeObjects);
-                    contentType = 'application/json;charset=utf-8';
-                    finalFileName = 'singbox.json';
-                } else if (wantsLoon) {
-                    configContent = generateLoonConfig(nodeObjects);
-                    contentType = 'text/plain;charset=utf-8';
-                    finalFileName = 'loon.conf';
-                }
-                return new Response(configContent, { headers: { "Content-Disposition": `attachment; filename=${finalFileName}; filename*=utf-8''${encodeURIComponent(finalFileName)}`, "Content-Type": contentType } });
-            
-            // 否则 (例如 V2RayN)，直接返回从 SUB 获取的原始内容
-            } else {
-                return new Response(responseText);
-            }
-
-        // 模式B: 完全外包 (只要有 SUBAPI 就用这个)
-        } else {
-            console.log("模式B: 使用外部 SUBAPI 转换订阅");
-            
-            let url;
-            let isBase64 = true;
-
-            // 如果没有设置 sub, 则使用内置节点列表作为源
-            if (!sub || sub.trim() === '') {
-                 if (hostName.includes(".workers.dev") || noTLS === 'true') noTLS = 'true';
-                 url = `https://${hostName}/${fakeUserID}${_url.search}`;
-                 if (noTLS === 'true') {
-                    url += (_url.search ? '&' : '?') + 'notls';
-                 }
-            } else {
-                url = sub.startsWith('http') ? sub : `https://${sub}`;
-            }
-
-            if (!_url.searchParams.has('b64') && !_url.searchParams.has('base64')) {
-                const target = wantsClash ? 'clash' : wantsSingbox ? 'singbox' : wantsLoon ? 'loon' : '';
-                if (target) {
-                    url = `${subProtocol}://${subConverter}/sub?target=${target}&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
-                    isBase64 = false;
-                }
-            }
-            
-            const response = await fetch(url, { headers: { 'User-Agent': UA + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==') } });
-            const content = await response.text();
-
-            if (isBase64) {
-                 return new Response(恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, true));
-            } else {
-                 return new Response(content);
-            }
+            });
         }
+        // ---配置生成逻辑 ---
+        
+		if (typeof fetch != 'function') {
+			return 'Error: fetch is not available in this environment.';
+		}
+
+		let newAddressesapi = [];
+		let newAddressescsv = [];
+		let newAddressesnotlsapi = [];
+		let newAddressesnotlscsv = [];
+
+		if (hostName.includes(".workers.dev") || noTLS === 'true') {
+			noTLS = 'true';
+			fakeHostName = `${fakeHostName}.workers.dev`;
+			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+			newAddressesnotlscsv = await 整理测速结果('FALSE');
+		} else if (hostName.includes(".pages.dev")) {
+			fakeHostName = `${fakeHostName}.pages.dev`;
+		} else if (hostName.includes("worker") || hostName.includes("notls")) {
+			noTLS = 'true';
+			fakeHostName = `notls${fakeHostName}.net`;
+			newAddressesnotlsapi = await 整理优选列表(addressesnotlsapi);
+			newAddressesnotlscsv = await 整理测速结果('FALSE');
+		} else {
+			fakeHostName = `${fakeHostName}.xyz`
+		}
+		console.log(`虚假HOST: ${fakeHostName}`);
+        
+		let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID + atob('JmVkZ2V0dW5uZWw9Y21saXUmcHJveHlpcD0=') + RproxyIP}&path=${encodeURIComponent('/')}`; 
+		let isBase64 = true;
+
+		if (!sub || sub == "") {
+			if (hostName.includes('workers.dev')) {
+				if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
+					try {
+						const response = await fetch(proxyhostsURL);
+
+						if (!response.ok) {
+							console.error('获取地址时出错:', response.status, response.statusText);
+							return;
+						}
+
+						const text = await response.text();
+						const lines = text.split('\n');
+						const nonEmptyLines = lines.filter(line => line.trim() !== '');
+
+						proxyhosts = proxyhosts.concat(nonEmptyLines);
+					} catch (error) {
+						console.error('获取地址时出错:', error);
+					}
+				}
+				proxyhosts = [...new Set(proxyhosts)];
+			}
+
+			newAddressesapi = await 整理优选列表(addressesapi);
+			newAddressescsv = await 整理测速结果('TRUE');
+			url = `https://${hostName}/${fakeUserID + _url.search}`;
+			if (hostName.includes("worker") || hostName.includes("notls") || noTLS == 'true') {
+				if (_url.search) url += '&notls';
+				else url += '?notls';
+			}
+			console.log(`虚假订阅: ${url}`);
+		}
+
+		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase()) && !_url.searchParams.has('b64')  && !_url.searchParams.has('base64')) {
+			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
+				url = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+				isBase64 = false;
+			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((_url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
+				url = `${subProtocol}://${subConverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+				isBase64 = false;
+			} else if (userAgent.includes('loon') || (_url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
+				// 添加Loon支持
+				url = `${subProtocol}://${subConverter}/sub?target=loon&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=${subEmoji}&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+				isBase64 = false;
+			}
+		}
+
+		try {
+			let content;
+			if ((!sub || sub == "") && isBase64 == true) {
+                
+                const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS, newAddressesapi, newAddressescsv, newAddressesnotlsapi, newAddressesnotlscsv);
+				content = 生成本地订阅(nodeObjects);
+			} else {
+				const response = await fetch(url, {
+					headers: {
+						'User-Agent': (isBase64 ? 'v2rayN' : UA) + atob('IENGLVdvcmtlcnMtZWRnZXR1bm5lbC9jbWxpdQ==')
+					}
+				});
+				content = await response.text();
+			}
+
+			if (_url.pathname == `/${fakeUserID}`) return content;
+
+			return 恢复伪装信息(content, userID, hostName, fakeUserID, fakeHostName, isBase64);
+
+		} catch (error) {
+			console.error('Error fetching content:', error);
+			return `Error fetching content: ${error.message}`;
+		}
 	}
 }
 
@@ -2603,9 +2575,7 @@ async function prepareNodeList(host, UUID, noTLS) {
             server = match[1] || addressString;
             initialPort = match[2] || "-1";
             name = match[3] || server;
-        } else {
-			server = addressString.split('#')[0];
-		}
+        }
 
         let portsToUse = [];
 
