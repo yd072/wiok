@@ -2250,50 +2250,34 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
             
             let configContent = '';
-            let contentType = 'text/plain;charset=utf-8';
-            let isBase64 = false;
-            let finalFileName = '';
-            
+
             const wantsClash = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash');
             const wantsSingbox = userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb');
             const wantsLoon = userAgent.includes('loon') || _url.searchParams.has('loon');
 
             if (wantsClash) {
                 configContent = generateClashConfig(nodeObjects);
-                contentType = 'application/x-yaml;charset=utf-8';
-                finalFileName  = 'clash.yaml';
             } else if (wantsSingbox) {
                 configContent = generateSingboxConfig(nodeObjects);
-                contentType = 'application/json;charset=utf-8';
-                finalFileName = 'singbox.json';
             } else if (wantsLoon) {
                 configContent = generateLoonConfig(nodeObjects);
-                contentType = 'text/plain;charset=utf-8';
-                finalFileName = 'loon.conf';
             } else {
-                // Base64 格式，直接返回内容，不触发下载
+                // Base64 格式，直接返回内容
                 const base64Config = 生成本地订阅(nodeObjects);
                 const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
-                return new Response(restoredConfig);
+                return new Response(restoredConfig, {
+                    headers: {
+                        "Content-Type": "text/plain;charset=utf-8",
+                    }
+                });
             }
             
             const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, false); 
 
-            const headers = {
-                "Content-Type": contentType,
-            };
-            
-            const isClientApp = userAgent.includes('clash') || 
-                                userAgent.includes('sing-box') || 
-                                userAgent.includes('singbox') || 
-                                userAgent.includes('loon');
-
-            if (isClientApp) {
-                headers["Content-Disposition"] = `attachment; filename=${finalFileName}; filename*=utf-8''${encodeURIComponent(finalFileName)}`;
-            }
-
             return new Response(finalContent, {
-                headers: headers
+                headers: {
+                    "Content-Type": "text/plain;charset=utf-8",
+                }
             });
         }
         // ---配置生成逻辑 ---
