@@ -2251,8 +2251,8 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             
             let configContent = '';
             let contentType = 'text/plain;charset=utf-8';
-            let isBase64 = false;
             let finalFileName = '';
+            const isBrowser = userAgent.includes('mozilla');
             
             const wantsClash = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash');
             const wantsSingbox = userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb');
@@ -2260,11 +2260,11 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
 
             if (wantsClash) {
                 configContent = generateClashConfig(nodeObjects);
-                contentType = 'application/x-yaml;charset=utf-8';
+                contentType = isBrowser ? 'text/plain;charset=utf-8' : 'application/x-yaml;charset=utf-8';
                 finalFileName  = 'clash.yaml';
             } else if (wantsSingbox) {
                 configContent = generateSingboxConfig(nodeObjects);
-                contentType = 'application/json;charset=utf-8';
+                contentType = isBrowser ? 'text/plain;charset=utf-8' : 'application/json;charset=utf-8';
                 finalFileName = 'singbox.json';
             } else if (wantsLoon) {
                 configContent = generateLoonConfig(nodeObjects);
@@ -2283,7 +2283,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 "Content-Type": contentType,
             };
 
-            if (!userAgent.includes('mozilla')) {
+            if (!isBrowser) {
                 headers["Content-Disposition"] = `attachment; filename=${finalFileName}; filename*=utf-8''${encodeURIComponent(finalFileName)}`;
             }
            
