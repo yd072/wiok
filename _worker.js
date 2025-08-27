@@ -2250,35 +2250,47 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
             const nodeObjects = await prepareNodeList(fakeHostName, fakeUserID, noTLS);
             
             let configContent = '';
-
+            let contentType = 'text/plain;charset=utf-8';
+            let isBase64 = false;
+            let finalFileName = '';
+            
             const wantsClash = (userAgent.includes('clash') && !userAgent.includes('nekobox')) || _url.searchParams.has('clash');
             const wantsSingbox = userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb');
             const wantsLoon = userAgent.includes('loon') || _url.searchParams.has('loon');
 
             if (wantsClash) {
                 configContent = generateClashConfig(nodeObjects);
+                contentType = 'application/x-yaml;charset=utf-8';
+                finalFileName  = 'clash.yaml';
             } else if (wantsSingbox) {
                 configContent = generateSingboxConfig(nodeObjects);
+                contentType = 'application/json;charset=utf-8';
+                finalFileName = 'singbox.json';
             } else if (wantsLoon) {
                 configContent = generateLoonConfig(nodeObjects);
+                contentType = 'text/plain;charset=utf-8';
+                finalFileName = 'loon.conf';
             } else {
-                // Base64 格式，直接返回内容
+                // Base64 格式，直接返回内容，不触发下载
                 const base64Config = 生成本地订阅(nodeObjects);
                 const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
-                return new Response(restoredConfig, {
-                    headers: {
-                        "Content-Type": "text/plain;charset=utf-8",
-                    }
-                });
+                return new Response(restoredConfig);
             }
             
             const finalContent = 恢复伪装信息(configContent, userID, hostName, fakeUserID, fakeHostName, false); 
 
-            // 修改：移除强制下载的Header，直接在浏览器中显示
+            const headers = {
+                "Content-Type": contentType,
+            };
+            
+            const isBrowser = userAgent.includes('mozilla');
+
+            if (!isBrowser) {
+                headers["Content-Disposition"] = `attachment; filename=${finalFileName}; filename*=utf-8''${encodeURIComponent(finalFileName)}`;
+            }
+
             return new Response(finalContent, {
-                headers: {
-                    "Content-Type": "text/plain;charset=utf-8",
-                }
+                headers: headers
             });
         }
         // ---配置生成逻辑 ---
