@@ -2283,9 +2283,12 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 "Content-Type": contentType,
             };
             
-            const isBrowser = userAgent.includes('mozilla');
+            const isClientApp = userAgent.includes('clash') || 
+                                userAgent.includes('sing-box') || 
+                                userAgent.includes('singbox') || 
+                                userAgent.includes('loon');
 
-            if (!isBrowser) {
+            if (isClientApp) {
                 headers["Content-Disposition"] = `attachment; filename=${finalFileName}; filename*=utf-8''${encodeURIComponent(finalFileName)}`;
             }
 
