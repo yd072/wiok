@@ -1127,33 +1127,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
     // 新的递归函数，用于按顺序尝试所有连接策略
     async function tryConnectionStrategies(strategies) {
-    // --- 在这里添加临时测试代码 ---
-    const TEST_MODE = true; 
-    if (TEST_MODE) {
-        log("--- RUNNING IN TEST MODE ---");
-        try {
-            // 强制连接到 Cloudflare 的“沉默”服务器
-            const tcpSocket = await createConnection('unrefl.cloudflare.com', 80, null); 
-            log(`Strategy 'TEST_UNREFL' connected successfully. Piping data.`);
-            
-            // 注意这里的 addressRemote 我们手动设置为两种情况
-            
-            // ===> 情况 A: 模拟访问 CF 网站
-            log("--- TESTING SCENARIO A (SHOULD RETRY) ---");
-            await remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, () => log("RETRY TRIGGERED! SUCCESS!"), log, 'speed.cloudflare.com');
-            
-            // ===> 情况 B: 模拟访问非 CF 网站 (需要重新连接，因为上面的调用不会返回)
-            const tcpSocket2 = await createConnection('unrefl.cloudflare.com', 80, null);
-            log("--- TESTING SCENARIO B (SHOULD NOT RETRY) ---");
-            await remoteSocketToWS(tcpSocket2, webSocket, secureProtoResponseHeader, () => log("RETRY TRIGGERED! ERROR!"), log, 'neverssl.com');
-
-        } catch (error) {
-            log(`Test connection failed: ${error.message}`);
-        }
-        safeCloseWebSocket(webSocket);
-        return; // 测试完成后直接返回，不执行正常逻辑
-    }
-    // --- 临时代码结束 ---        
         if (!strategies || strategies.length === 0) {
             log('All connection strategies failed. Closing WebSocket.');
             
