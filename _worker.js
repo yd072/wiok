@@ -535,11 +535,9 @@ async function isCloudflareDestination(address) {
         }
     };
 
-    // 1. 判断输入的是不是一个IPv4地址
     const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(address);
     let targetIp = address;
 
-    // 2. 如果输入的是域名，就去查询它的IP地址
     if (!isIp) {
         try {
             targetIp = await fetchIPv4(address);
@@ -549,14 +547,11 @@ async function isCloudflareDestination(address) {
         }
     }
 
-    // 3. 检查最终得到的IP地址是否在CF的IP段内
     for (const cidr of cloudflareCIDRs) {
         if (isIpInCidr(targetIp, cidr)) {
             return true; 
         }
     }
-
-    // 4. 如果都不匹配，则不是
     return false;
 }
 
@@ -1342,6 +1337,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }
         
     // --- 智能重试逻辑 ---
+        const isCF = await isCloudflareDestination(addressRemote);
+
+    // ★★★★★ 这就是我们添加的测试日志行 ★★★★★
+    console.log(`[DETECTION TEST] Testing '${addressRemote}': Result = ${isCF}`);
     if (!hasIncomingData && retry && (await isCloudflareDestination(addressRemote))) {
         log(`目标 [${addressRemote}] 自动检测为 Cloudflare 相关地址且未收到数据，触发重试机制...`);
         retry();
