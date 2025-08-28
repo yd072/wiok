@@ -1113,8 +1113,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
 			const writer = tcpSocket.writable.getWriter();
 			try {
-				//await writer.write(rawClientData);
-                 log('!!! [测试模式] 已阻止发送初始数据 !!!'); // 添加一个日志方便识别
+				await writer.write(rawClientData);
 			} finally {
 				writer.releaseLock();
 			}
@@ -1338,10 +1337,6 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
     }
         
     // --- 智能重试逻辑 ---
-        const isCF = await isCloudflareDestination(addressRemote);
-
-    // ★★★★★ 这就是我们添加的测试日志行 ★★★★★
-    console.log(`[DETECTION TEST] Testing '${addressRemote}': Result = ${isCF}`);
     if (!hasIncomingData && retry && (await isCloudflareDestination(addressRemote))) {
         log(`目标 [${addressRemote}] 自动检测为 Cloudflare 相关地址且未收到数据，触发重试机制...`);
         retry();
