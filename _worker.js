@@ -491,7 +491,6 @@ async function statusPage() {
 // #################################################################
 
 /**
- * 通过 DoH 查询域名的 A 记录 (IPv4)
  * @param {string} domain
  * @returns {Promise<string>}
  */
@@ -513,8 +512,7 @@ async function fetchIPv4(domain) {
 }
 
 /**
- * 自动检测目标地址是否与 Cloudflare 相关 (支持IPv4和IPv6)
- * @param {string} address - 目标主机名或 IP 地址
+ * @param {string} address 
  * @returns {Promise<boolean>}
  */
 async function isCloudflareDestination(address) {
@@ -1174,13 +1172,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
     // --- 组装策略列表 ---
     const connectionStrategies = [];
-    
-    // =================================================================
-    // ===========>  这里是核心修改：根据目标地址动态组装策略 <===========
-    // =================================================================
-
     if (await isCloudflareDestination(addressRemote)) {
-        // --- 目标是CF网站，按指定优先级组装策略，跳过直连 ---
         log(`目标 [${addressRemote}] 是CF相关网站，启用代理优先策略链。`);
 
         // 1. HTTP 代理
@@ -1195,7 +1187,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
             // 根据 go2Socks5s 规则决定 SOCKS5 优先级
             const shouldUseSocksEarly = go2Socks5s.some(pattern => new RegExp(`^${pattern.replace(/\*/g, '.*')}$`, 'i').test(addressRemote));
             if (shouldUseSocksEarly) {
-                connectionStrategies.unshift({ // 插入到最前面
+                connectionStrategies.unshift({ 
                     name: 'SOCKS5 Proxy (go2Socks5s)',
                     execute: () => createConnection(addressRemote, portRemote, { type: 'socks5' })
                 });
@@ -1249,8 +1241,8 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
         });
 
     } else {
-        // --- 目标是非CF网站，只使用直连 ---
-        log(`目标 [${addressRemote}] 是非CF网站，仅尝试直连。`);
+        // ---直连 ---
+        log(`目标 [${addressRemote}] ，仅尝试直连。`);
         connectionStrategies.push({
             name: 'Direct Connection',
             execute: () => createConnection(addressRemote, portRemote, null)
@@ -1368,10 +1360,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         
     // --- 智能重试逻辑 ---
     if (!hasIncomingData && retry && (await isCloudflareDestination(addressRemote))) {
-        log(`目标 [${addressRemote}] 自动检测为 Cloudflare 相关地址且未收到数据，触发重试机制...`);
+        log(`目标 [${addressRemote}] 自动检测未收到数据，触发重试机制...`);
         retry();
     } else if (!hasIncomingData) {
-        log(`目标 [${addressRemote}] 非 Cloudflare 地址或检测失败，即使无初始数据也视为连接成功。`);
+        log(`目标 [${addressRemote}] 检测失败，即使无初始数据也视为连接成功。`);
     }
 }
 
