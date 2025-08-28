@@ -486,6 +486,84 @@ async function statusPage() {
     });
 }
 
+// #################################################################
+// ############## START OF SMART RETRY MECHANISM ###################
+// #################################################################
+
+/**
+ * 通过 DoH 查询域名的 A 记录 (IPv4)
+ * @param {string} domain
+ * @returns {Promise<string>}
+ */
+async function fetchIPv4(domain) {
+    const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
+    const response = await fetch(url, {
+        headers: { 'Accept': 'application/dns-json' }
+    });
+
+    if (!response.ok) throw new Error('DNS查询失败');
+
+    const data = await response.json();
+    const ipv4s = (data.Answer || [])
+        .filter(record => record.type === 1)
+        .map(record => record.data);
+
+    if (ipv4s.length === 0) throw new Error('未找到IPv4地址');
+    return ipv4s[Math.floor(Math.random() * ipv4s.length)];
+}
+
+/**
+ * @param {string} address 
+ * @returns {Promise<boolean>}
+ */
+async function isCloudflareDestination(address) {
+    const cloudflareCIDRs = [
+        '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+        '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+        '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+        '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22'
+    ];
+
+    const isIpInCidr = (ip, cidr) => {
+        try {
+            const ipToLong = (ip) => ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0);
+            const [range, bits] = cidr.split('/');
+            const mask = ~((1 << (32 - parseInt(bits))) - 1);
+            return (ipToLong(ip) & mask) === (ipToLong(range) & mask);
+        } catch (e) {
+            return false;
+        }
+    };
+
+    // 1. 判断输入的是不是一个IPv4地址
+    const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(address);
+    let targetIp = address;
+
+    // 2. 如果输入的是域名，就去查询它的IP地址
+    if (!isIp) {
+        try {
+            targetIp = await fetchIPv4(address);
+        } catch (error) {
+            console.error(`Failed to resolve domain ${address}:`, error.message);
+            return false; 
+        }
+    }
+
+    // 3. 检查最终得到的IP地址是否在CF的IP段内
+    for (const cidr of cloudflareCIDRs) {
+        if (isIpInCidr(targetIp, cidr)) {
+            return true; 
+        }
+    }
+
+    // 4. 如果都不匹配，则不是
+    return false;
+}
+
+// #################################################################
+// ############### END OF SMART RETRY MECHANISM ####################
+// #################################################################
+
 async function resolveToIPv6(target) {
     // 检查是否为IPv4
     function isIPv4(str) {
@@ -499,24 +577,6 @@ async function resolveToIPv6(target) {
     // 检查是否为IPv6
     function isIPv6(str) {
         return str.includes(':') && /^[0-9a-fA-F:]+$/.test(str);
-    }
-
-    // 获取域名的IPv4地址
-    async function fetchIPv4(domain) {
-        const url = `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`;
-        const response = await fetch(url, {
-            headers: { 'Accept': 'application/dns-json' }
-        });
-
-        if (!response.ok) throw new Error('DNS查询失败');
-
-        const data = await response.json();
-        const ipv4s = (data.Answer || [])
-            .filter(record => record.type === 1)
-            .map(record => record.data);
-
-        if (ipv4s.length === 0) throw new Error('未找到IPv4地址');
-        return ipv4s[Math.floor(Math.random() * ipv4s.length)];
     }
 
     // 查询NAT64 IPv6地址
@@ -806,7 +866,6 @@ export default {
 						if (base64Regex.test(userPassword) && !userPassword.includes(':')) {
 							
 							try {
-
 								userPassword = atob(userPassword);
 							} catch (e) {
 								console.error(`SOCKS5 auth: Failed to decode Base64 string "${userPassword}". Using it as-is. Error: ${e.message}`);
@@ -827,7 +886,6 @@ export default {
 				} else {
 					enableSocks = false;
 				}
-
 
 				if (url.searchParams.has('proxyip')) {
 					proxyIP = url.searchParams.get('proxyip');
@@ -1094,7 +1152,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
             // 如果本次连接失败，重试函数将用剩余的策略继续尝试
             const retryNext = () => tryConnectionStrategies(nextStrategies);
-            remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log);
+            await remoteSocketToWS(tcpSocket, webSocket, secureProtoResponseHeader, retryNext, log, addressRemote);
 
         } catch (error) {
             log(`Strategy '${currentStrategy.name}' failed: ${error.message}. Trying next strategy...`);
@@ -1249,7 +1307,7 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
     };
 }
 
-async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
+async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log, addressRemote) {
     let hasIncomingData = false;
     let header = responseHeader;
     try {
@@ -1283,9 +1341,12 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         safeCloseWebSocket(webSocket, 1011, `remoteSocketToWS pipe error: ${error.message}`);
     }
         
-    if (!hasIncomingData && retry) {
-        log(`连接成功但未收到任何数据，触发重试机制...`);
-            retry();
+    // --- 智能重试逻辑 ---
+    if (!hasIncomingData && retry && (await isCloudflareDestination(addressRemote))) {
+        log(`目标 [${addressRemote}] 自动检测为 Cloudflare 相关地址且未收到数据，触发重试机制...`);
+        retry();
+    } else if (!hasIncomingData) {
+        log(`目标 [${addressRemote}] 非 Cloudflare 地址或检测失败，即使无初始数据也视为连接成功。`);
     }
 }
 
