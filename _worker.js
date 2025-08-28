@@ -1239,60 +1239,58 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
 }
 
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
-    let hasIncomingData = false; 
+    let hasIncomingData = false;
     let header = responseHeader;
     let initialDataReceived = false;
     const initialDataTimeout = setTimeout(() => {
         if (!initialDataReceived) {
-            log(`在3秒内未收到任何来自远程服务器的数据，正在关闭此连接以触发重试...`);
-
+            log(`在8秒内未收到任何来自远程服务器的数据，怀疑是僵尸连接，正在关闭此连接以触发重试...`);
             remoteSocket.close();
         }
-    }, 3000); 
+    }, 8000); 
 
     try {
         await remoteSocket.readable.pipeTo(
             new WritableStream({
+                start() {
+                },
                 async write(chunk) {
-
                     if (!initialDataReceived) {
                         initialDataReceived = true;
-                        clearTimeout(initialDataTimeout);
-                        log('已收到初始数据，连接被确认为有效。');
+                        clearTimeout(initialDataTimeout); 
                     }
-                    
                     hasIncomingData = true;
-                    if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-                        return;
-                    }
-                    if (header) {
-                        const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
-                        combinedData.set(new Uint8Array(header), 0);
-                        combinedData.set(new Uint8Array(chunk), header.byteLength);
-                        webSocket.send(combinedData);
-                        header = null;
-                    } else {
-                        webSocket.send(chunk);
+                    if (webSocket.readyState === WS_READY_STATE_OPEN) {
+                        if (header) {
+                            const combinedData = new Uint8Array(header.byteLength + chunk.byteLength);
+                            combinedData.set(new Uint8Array(header), 0);
+                            combinedData.set(new Uint8Array(chunk), header.byteLength);
+                            webSocket.send(combinedData);
+                            header = null;
+                        } else {
+                            webSocket.send(chunk);
+                        }
                     }
                 },
                 close() {
                     log(`远程服务器的数据流已正常关闭。`);
+                    clearTimeout(initialDataTimeout); 
                 },
                 abort(reason) {
                     console.error(`远程服务器的数据流被中断:`, reason);
+                    clearTimeout(initialDataTimeout); 
                 },
             })
         );
     } catch (error) {
         console.error(`从远程到客户端的数据流传输发生错误:`, error.stack || error);
+        
         if (!initialDataReceived && retry) {
             log(`连接因错误（或超时）而中断，且从未收到任何数据，触发重试机制...`);
             retry();
         } else {
             safeCloseWebSocket(webSocket, 1011, `remoteSocketToWS pipe error: ${error.message}`);
         }
-    } finally {
-        clearTimeout(initialDataTimeout);
     }
 }
 
