@@ -225,7 +225,6 @@ async function loadConfigurations(env) {
     }
 }
 
-
 /**
  * 解析 PROXYIP 字符串，提取地址和端口
  * @param {string} proxyString
@@ -257,7 +256,6 @@ function parseProxyIP(proxyString, defaultPort) {
 
     return { address: address.toLowerCase(), port: Number(port) };
 }
-
 
 // TransformStream
 function createWebSocketStream(webSocket, earlyDataHeader, log) {
