@@ -1113,7 +1113,8 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
 			const writer = tcpSocket.writable.getWriter();
 			try {
-				await writer.write(rawClientData);
+				//await writer.write(rawClientData);
+                 log('!!! [测试模式] 已阻止发送初始数据 !!!'); // 添加一个日志方便识别
 			} finally {
 				writer.releaseLock();
 			}
