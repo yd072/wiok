@@ -1239,12 +1239,28 @@ function processsecureProtoHeader(secureProtoBuffer, userID) {
 }
 
 async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, log) {
-    let hasIncomingData = false;
+    let hasIncomingData = false; 
     let header = responseHeader;
+    let initialDataReceived = false;
+    const initialDataTimeout = setTimeout(() => {
+        if (!initialDataReceived) {
+            log(`在3秒内未收到任何来自远程服务器的数据，正在关闭此连接以触发重试...`);
+
+            remoteSocket.close();
+        }
+    }, 3000); 
+
     try {
         await remoteSocket.readable.pipeTo(
             new WritableStream({
                 async write(chunk) {
+
+                    if (!initialDataReceived) {
+                        initialDataReceived = true;
+                        clearTimeout(initialDataTimeout);
+                        log('已收到初始数据，连接被确认为有效。');
+                    }
+                    
                     hasIncomingData = true;
                     if (webSocket.readyState !== WS_READY_STATE_OPEN) {
                         return;
@@ -1269,12 +1285,14 @@ async function remoteSocketToWS(remoteSocket, webSocket, responseHeader, retry, 
         );
     } catch (error) {
         console.error(`从远程到客户端的数据流传输发生错误:`, error.stack || error);
-        safeCloseWebSocket(webSocket, 1011, `remoteSocketToWS pipe error: ${error.message}`);
-    }
-
-    if (!hasIncomingData && retry) {
-        log(`连接成功但未收到任何数据，触发重试机制...`);
-        retry();
+        if (!initialDataReceived && retry) {
+            log(`连接因错误（或超时）而中断，且从未收到任何数据，触发重试机制...`);
+            retry();
+        } else {
+            safeCloseWebSocket(webSocket, 1011, `remoteSocketToWS pipe error: ${error.message}`);
+        }
+    } finally {
+        clearTimeout(initialDataTimeout);
     }
 }
 
@@ -2271,7 +2289,7 @@ async function 生成配置信息(uuid, hostName, sub, UA, RproxyIP, _url, fakeU
                 contentType = 'text/plain;charset=utf-8';
                 finalFileName = 'loon.conf';
             } else {
-                // Base64 格式，直接返回内容，不触发下载
+                
                 const base64Config = 生成本地订阅(nodeObjects);
                 const restoredConfig = 恢复伪装信息(base64Config, userID, hostName, fakeUserID, fakeHostName, true);
                 return new Response(restoredConfig);
