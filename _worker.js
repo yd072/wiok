@@ -939,65 +939,86 @@ async function secureProtoOverWSHandler(request) {
     const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
     const readableWebSocketStream = createWebSocketStream(webSocket, earlyDataHeader, log);
 
-    let remoteSocketWrapper = {
-        value: null
-    };
+    let remoteSocketWrapper = { value: null };
     let udpStreamProcessed = false;
     let secureProtoResponseHeader = null;
+    let headerParsed = false;
+    let receiveBuffer = new Uint8Array(0);
 
     readableWebSocketStream.pipeTo(new WritableStream({
         async write(chunk, controller) {
+            const newBuffer = new Uint8Array(receiveBuffer.length + chunk.length);
+            newBuffer.set(receiveBuffer);
+            newBuffer.set(chunk, receiveBuffer.length);
+            receiveBuffer = newBuffer;
+
             if (udpStreamProcessed) {
                 return;
             }
-            if (remoteSocketWrapper.value) {
-                try {
-                const writer = remoteSocketWrapper.value.writable.getWriter();
-                await writer.write(chunk);
-                writer.releaseLock();
-                } catch (error) {
-                    log(`写入远程套接字时出错: ${error.message}。`);
-                    controller.error(error);
+
+            if (!headerParsed) {
+                const result = processsecureProtoHeader(receiveBuffer, userID);
+
+                if (result.hasError) {
+                    if (result.message === 'Invalid user') {
+                        controller.error(new Error(result.message));
+                    }
+                    return;
                 }
-                return;
-            }
+                
+                headerParsed = true;
 
-            const {
-                hasError,
-                message,
-                addressType,
-                portRemote = 443,
-                addressRemote = '',
-                rawDataIndex,
-                secureProtoVersion = new Uint8Array([0, 0]),
-                isUDP,
-            } = processsecureProtoHeader(chunk, userID);
+                const {
+                    addressType,
+                    portRemote = 443,
+                    addressRemote = '',
+                    rawDataIndex,
+                    secureProtoVersion = new Uint8Array([0, 0]),
+                    isUDP,
+                } = result;
 
-            address = addressRemote;
-            portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
-            if (hasError) {
-                throw new Error(message);
-            }
+                address = addressRemote;
+                portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '} `;
 
-            secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
-            const rawClientData = chunk.slice(rawDataIndex);
+                secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
+                
+                const initialPayload = receiveBuffer.slice(rawDataIndex);
 
-            if (isUDP) {
-                if (portRemote === 53) {
-                    const udpHandler = await handleUDPOutBound(webSocket, secureProtoResponseHeader, log);
-                    udpHandler.write(rawClientData);
-                    udpStreamProcessed = true;
-                } else {
-                    throw new Error('UDP proxying is only enabled for DNS on port 53');
+                receiveBuffer = new Uint8Array(0);
+
+                if (isUDP) {
+                    if (portRemote === 53) {
+                        const udpHandler = await handleUDPOutBound(webSocket, secureProtoResponseHeader, log);
+                        if (initialPayload.byteLength > 0) {
+                            udpHandler.write(initialPayload);
+                        }
+                        udpStreamProcessed = true;
+                    } else {
+                        throw new Error('UDP proxying is only enabled for DNS on port 53');
+                    }
+                    return; 
                 }
-                return;
-            }
 
-            if (banHosts.includes(addressRemote)) {
-                throw new Error('Domain is blocked');
+                if (banHosts.includes(addressRemote)) {
+                    throw new Error('Domain is blocked');
+                }
+                log(`Handling TCP outbound for ${addressRemote}:${portRemote}`);
+                
+                handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, initialPayload, webSocket, secureProtoResponseHeader, log);
+            
+            } else {
+                if (remoteSocketWrapper.value) {
+                    try {
+                        const writer = remoteSocketWrapper.value.writable.getWriter();
+                        await writer.write(receiveBuffer);
+                        writer.releaseLock();
+                        receiveBuffer = new Uint8Array(0);
+                    } catch (error) {
+                        log(`写入远程套接字时出错: ${error.message}。`);
+                        controller.error(error);
+                    }
+                }
             }
-            log(`Handling TCP outbound for ${addressRemote}:${portRemote}`);
-            handleTCPOutBound(remoteSocketWrapper, addressType, addressRemote, portRemote, rawClientData, webSocket, secureProtoResponseHeader, log);
         },
         close() {
             log(`客户端 WebSocket 的可读流已关闭 (正常关闭)。`);
