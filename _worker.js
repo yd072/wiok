@@ -958,14 +958,14 @@ async function secureProtoOverWSHandler(request) {
 
             if (!headerParsed) {
                 const result = processsecureProtoHeader(receiveBuffer, userID);
-
                 if (result.hasError) {
-                    if (result.message === 'Invalid user') {
-                        controller.error(new Error(result.message));
-                    }
+                    if (result.message === 'Invalid data') {
+                        return; 
+                    }                    
+                    controller.error(new Error(`Header parsing error: ${result.message}`));
                     return;
                 }
-                
+
                 headerParsed = true;
 
                 const {
@@ -983,7 +983,6 @@ async function secureProtoOverWSHandler(request) {
                 secureProtoResponseHeader = new Uint8Array([secureProtoVersion[0], 0]);
                 
                 const initialPayload = receiveBuffer.slice(rawDataIndex);
-
                 receiveBuffer = new Uint8Array(0);
 
                 if (isUDP) {
@@ -996,7 +995,7 @@ async function secureProtoOverWSHandler(request) {
                     } else {
                         throw new Error('UDP proxying is only enabled for DNS on port 53');
                     }
-                    return; 
+                    return;
                 }
 
                 if (banHosts.includes(addressRemote)) {
